@@ -24,6 +24,7 @@ const NETWORK = "eip155:8453" as const; // Base mainnet
 const FACILITATOR_URL = "https://facilitator.xpay.sh";
 const DOH_URL = "https://cloudflare-dns.com/dns-query";
 const RDAP_URL = "https://rdap.org/domain";
+const POLYMARKET_URL = "https://gamma-api.polymarket.com/markets";
 
 // ---------------------------------------------------------------------------
 // App factory — called fresh per Worker request (Hono is stateless)
@@ -262,6 +263,46 @@ function makeRoutes(payTo: string) {
             ],
             tech_stack: ["nginx"],
           },
+        },
+      }),
+    },
+    "GET /pm/markets": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.005",
+        network: NETWORK,
+        payTo,
+      },
+      description:
+        "Query live Polymarket prediction markets — question, outcomes, live prices, volume, liquidity, end date. Filter by keyword.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        pathParams: {},
+        pathParamsSchema: {
+          properties: {
+            query: {
+              type: "string",
+              description: "Optional keyword filter matched against the market question",
+            },
+            limit: {
+              type: "number",
+              description: "Max number of markets to return (default 20, max 100)",
+            },
+          },
+        },
+        output: {
+          example: [
+            {
+              question: "Will X happen by 2026?",
+              slug: "will-x-happen-by-2026",
+              outcomes: ["Yes", "No"],
+              outcomePrices: [0.65, 0.35],
+              volume: 1234567.89,
+              liquidity: 45678.12,
+              endDate: "2026-12-31T12:00:00Z",
+              active: true,
+            },
+          ],
         },
       }),
     },
@@ -868,6 +909,104 @@ app.get("/enrich/domain", async (c) => {
   );
 
   return c.json(result);
+});
+
+// ---------------------------------------------------------------------------
+// GET /pm/markets  — Polymarket live prediction-market data  ($0.005)
+// Fixed upstream host only (no user-supplied URL) — SSRF-safe by construction.
+// ---------------------------------------------------------------------------
+
+interface GammaMarket {
+  question?: string;
+  slug?: string;
+  outcomes?: string;
+  outcomePrices?: string;
+  volumeNum?: number;
+  liquidityNum?: number;
+  endDate?: string;
+  active?: boolean;
+}
+
+interface PolymarketMarket {
+  question: string;
+  slug: string;
+  outcomes: string[];
+  outcomePrices: number[];
+  volume: number;
+  liquidity: number;
+  endDate: string | null;
+  active: boolean;
+}
+
+// Gamma's outcomes/outcomePrices fields are JSON-encoded strings (double-encoded).
+function parseJsonArray<T>(raw: string | undefined): T[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+// The Gamma /markets endpoint has no server-side keyword search, so when a
+// query is given we pull the top markets by volume and filter client-side.
+async function fetchPolymarketMarkets(
+  query: string | undefined,
+  limit: number,
+): Promise<PolymarketMarket[]> {
+  const fetchLimit = query ? 100 : limit;
+  const url = `${POLYMARKET_URL}?closed=false&limit=${fetchLimit}&order=volume&ascending=false`;
+
+  const res = await fetch(url, { headers: { accept: "application/json" } });
+  if (!res.ok) {
+    throw new Error(`Polymarket upstream error: ${res.status}`);
+  }
+  const raw = (await res.json()) as GammaMarket[];
+
+  const normalized: PolymarketMarket[] = raw.map((m) => ({
+    question: m.question ?? "",
+    slug: m.slug ?? "",
+    outcomes: parseJsonArray<string>(m.outcomes),
+    outcomePrices: parseJsonArray<string>(m.outcomePrices).map((p) => parseFloat(p)),
+    volume: m.volumeNum ?? 0,
+    liquidity: m.liquidityNum ?? 0,
+    endDate: m.endDate ?? null,
+    active: m.active ?? false,
+  }));
+
+  const filtered = query
+    ? normalized.filter((m) => m.question.toLowerCase().includes(query.toLowerCase()))
+    : normalized;
+
+  return filtered.slice(0, limit);
+}
+
+app.get("/pm/markets", async (c) => {
+  const query = c.req.query("query") || undefined;
+  const limitParam = c.req.query("limit");
+  let limit = limitParam ? parseInt(limitParam, 10) : 20;
+  if (!Number.isFinite(limit) || limit <= 0) limit = 20;
+  limit = Math.min(limit, 100);
+
+  try {
+    const markets = await fetchPolymarketMarkets(query, limit);
+
+    console.log(
+      JSON.stringify({
+        event: "paid_request",
+        endpoint: "/pm/markets",
+        query: query ?? null,
+        limit,
+        count: markets.length,
+        ts: new Date().toISOString(),
+      }),
+    );
+
+    return c.json(markets);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
 });
 
 // ---------------------------------------------------------------------------
