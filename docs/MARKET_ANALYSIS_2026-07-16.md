@@ -105,3 +105,30 @@ market **data**; the Bazaar distribution is the moat, not the data.
 - MCP Registry v1.1.0 (scanner description, latest), public repo
   `github.com/rezearcher/mcp-security-scanner`, Smithery
   `grey-ridge-signals-group/mcp-security-scanner`. Keep as free upside; **no further build cycles.**
+
+---
+
+## UPDATE (2026-07-16 late) — CDP Bazaar on-ramp: SOLVED, pending CDP async publish
+
+Wired the CDP facilitator and got our first proven-demand route (`GET /pm/markets`, $0.005
+Polymarket data) **accepted into the CDP Bazaar** — the discovery layer where paying agents shop.
+
+**The wall + the fix (see Division memory `cdp-bazaar-onramp-solved-ajv-workers-bypass-pattern`):**
+CF Workers block ajv `new Function`, which the `@x402` resource-server bazaar path uses on settle,
+and the SDK declaration is rejected as "invalid discovery configuration" (the `method`-setting
+enricher can't run on Workers). No clean OSS fix exists (x402 issues #2156/#2207/#2112). Invented
+the bypass: a Worker route (`/internal/cdp-settle-raw`) calls CDP `/verify`+`/settle` **raw** with a
+Worker-minted CDP JWT (`@coinbase/cdp-sdk/auth`, edge-safe), a hand-built discovery config
+(`method:GET`, `info.input.method` set, `output.example` an **object** not array, `serviceName`+`tags`,
+validated locally with `validateDiscoveryExtension`), and a **funded throwaway buyer wallet** (CDP
+rejects self-sends). 
+
+**Result:** bazaar extension status went **rejected → processing** (CDP accepted the listing). Real
+on-chain CDP settlements succeeded (tx `0xf5539d…`, `0x8761c9…`). The listing now sits in CDP's async
+publish pipeline; `/discovery/merchant?payTo=…` still shows 0 (known CDP indexing lag, ~hours / 6h
+quality recompute — #2207). **Autonomous monitor** `x402_bazaar_index_monitor.py` (Hermes cron, 20m)
+flips `alert=true` the instant we're published; the revenue monitor catches the first paid call.
+
+**Design note:** live routes stay UNDECLARED so real agent payments settle clean via xpay (declared
+routes hit the ajv wall on the normal middleware settle path). Cataloging is done once, out-of-band,
+via the raw CDP seed. Next crypto/PM endpoints catalog the same way (seed_raw_cdp.js template).
