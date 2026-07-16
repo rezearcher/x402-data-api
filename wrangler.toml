@@ -8,3 +8,7 @@ compatibility_flags = ["nodejs_compat"]
 PAY_TO = "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10"
 FACILITATOR_URL = "https://facilitator.xpay.sh"
 NETWORK = "eip155:8453"
+# "cdp" routes settlement through the Coinbase CDP facilitator so routes get
+# catalogued in the x402 Bazaar (CDP_API_KEY_ID/SECRET are Worker secrets).
+# Unset / any other value falls back to the xpay facilitator.
+FACILITATOR_MODE = "cdp"

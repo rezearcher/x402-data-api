@@ -3,6 +3,7 @@ import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { declareDiscoveryExtension } from "@x402/extensions/bazaar";
+import { generateJwt } from "@coinbase/cdp-sdk/auth";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod/v4";
@@ -13,6 +14,10 @@ import { z } from "zod/v4";
 
 type Env = {
   PAY_TO: string;
+  // CDP facilitator credentials (Worker secrets) — enable Bazaar discovery/settlement.
+  CDP_API_KEY_ID?: string;
+  CDP_API_KEY_SECRET?: string;
+  FACILITATOR_MODE?: string; // "cdp" routes settlement through CDP; anything else = xpay (default)
 };
 
 // ---------------------------------------------------------------------------
@@ -22,6 +27,9 @@ type Env = {
 const NETWORK = "eip155:8453" as const; // Base mainnet
 // Non-custodial facilitator — no Coinbase/CDP API key needed.
 const FACILITATOR_URL = "https://facilitator.xpay.sh";
+// CDP hosted facilitator — settlements through this get catalogued in the x402 Bazaar.
+const CDP_FACILITATOR_URL = "https://api.cdp.coinbase.com/platform/v2/x402";
+const CDP_HOST = "api.cdp.coinbase.com";
 const DOH_URL = "https://cloudflare-dns.com/dns-query";
 const RDAP_URL = "https://rdap.org/domain";
 const POLYMARKET_URL = "https://gamma-api.polymarket.com/markets";
@@ -37,6 +45,80 @@ const app = new Hono<{ Bindings: Env }>();
 // ---------------------------------------------------------------------------
 
 app.get("/health", (c) => c.json({ ok: true }));
+
+// Staged CDP-auth probe (temporary): confirms we can mint a CDP JWT from Worker
+// secrets and that the CDP facilitator accepts it, before swapping the live gate.
+app.get("/internal/cdp-probe", async (c) => {
+  const env = c.env;
+  if (!env.CDP_API_KEY_ID || !env.CDP_API_KEY_SECRET) {
+    return c.json({ ok: false, error: "CDP secrets absent from env" }, 500);
+  }
+  try {
+    const jwt = await generateJwt({
+      apiKeyId: env.CDP_API_KEY_ID,
+      apiKeySecret: env.CDP_API_KEY_SECRET,
+      requestMethod: "GET",
+      requestHost: CDP_HOST,
+      requestPath: "/platform/v2/x402/supported",
+    });
+    const res = await fetch(`${CDP_FACILITATOR_URL}/supported`, {
+      headers: { Authorization: `Bearer ${jwt}`, accept: "application/json" },
+    });
+    const body = await res.text();
+    return c.json({
+      ok: res.ok,
+      jwt_generated: true,
+      jwt_len: jwt.length,
+      cdp_status: res.status,
+      body: body.slice(0, 400),
+    });
+  } catch (e) {
+    return c.json({ ok: false, jwt_generated: false, error: (e as Error).message }, 500);
+  }
+});
+
+// Raw CDP verify+settle proxy (temporary seed tool): bypasses the @x402 resource
+// server (whose bazaar extension validation uses ajv new Function, blocked in CF
+// Workers). The buyer's signed payment + requirements are POSTed straight to the
+// CDP facilitator so a route gets catalogued in the Bazaar. Body:
+//   { paymentPayload, paymentRequirements }
+app.post("/internal/cdp-settle-raw", async (c) => {
+  const env = c.env;
+  if (!env.CDP_API_KEY_ID || !env.CDP_API_KEY_SECRET) {
+    return c.json({ error: "CDP secrets absent" }, 500);
+  }
+  let body: { paymentPayload?: unknown; paymentRequirements?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "bad json body" }, 400);
+  }
+  const { paymentPayload, paymentRequirements } = body;
+  if (!paymentPayload || !paymentRequirements) {
+    return c.json({ error: "need paymentPayload + paymentRequirements" }, 400);
+  }
+  const call = async (op: "verify" | "settle") => {
+    const jwt = await generateJwt({
+      apiKeyId: env.CDP_API_KEY_ID!,
+      apiKeySecret: env.CDP_API_KEY_SECRET!,
+      requestMethod: "POST",
+      requestHost: CDP_HOST,
+      requestPath: `/platform/v2/x402/${op}`,
+    });
+    const res = await fetch(`${CDP_FACILITATOR_URL}/${op}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${jwt}`, "content-type": "application/json" },
+      body: JSON.stringify({ x402Version: 2, paymentPayload, paymentRequirements }),
+    });
+    const text = await res.text();
+    const extResp = res.headers.get("extension-responses");
+    return { status: res.status, extensionResponses: extResp, body: text.slice(0, 800) };
+  };
+  const verify = await call("verify");
+  let settle = null;
+  if (verify.status === 200) settle = await call("settle");
+  return c.json({ verify, settle });
+});
 
 // ---------------------------------------------------------------------------
 // 402index.io domain-ownership verification (static hash file)
@@ -64,6 +146,50 @@ const resourceServer = new x402ResourceServer(facilitatorClient).register(
 // in the extensions field — that is sufficient for Bazaar cataloguing.
 
 // ---------------------------------------------------------------------------
+// CDP facilitator (flag-gated). When FACILITATOR_MODE=cdp, settlements route
+// through the Coinbase CDP facilitator so routes with declareDiscoveryExtension
+// get catalogued in the x402 Bazaar. JWT is minted per-request from Worker
+// secrets via jose/WebCrypto (edge-safe). Default (flag unset) stays on xpay.
+// ---------------------------------------------------------------------------
+
+function makeCdpAuthHeaders(apiKeyId: string, apiKeySecret: string) {
+  const mk = async (path: string, method: "GET" | "POST") => {
+    const jwt = await generateJwt({
+      apiKeyId,
+      apiKeySecret,
+      requestMethod: method,
+      requestHost: CDP_HOST,
+      requestPath: path,
+    });
+    return { Authorization: `Bearer ${jwt}` };
+  };
+  return async () => ({
+    verify: await mk("/platform/v2/x402/verify", "POST"),
+    settle: await mk("/platform/v2/x402/settle", "POST"),
+    supported: await mk("/platform/v2/x402/supported", "GET"),
+  });
+}
+
+let activeResourceServer: x402ResourceServer | null = null;
+
+function selectResourceServer(env: Env): x402ResourceServer {
+  if (activeResourceServer) return activeResourceServer;
+  if (env.FACILITATOR_MODE === "cdp" && env.CDP_API_KEY_ID && env.CDP_API_KEY_SECRET) {
+    const cdpFacilitator = new HTTPFacilitatorClient({
+      url: CDP_FACILITATOR_URL,
+      createAuthHeaders: makeCdpAuthHeaders(env.CDP_API_KEY_ID, env.CDP_API_KEY_SECRET),
+    });
+    activeResourceServer = new x402ResourceServer(cdpFacilitator).register(
+      NETWORK,
+      new ExactEvmScheme(),
+    );
+  } else {
+    activeResourceServer = resourceServer; // xpay default (unchanged)
+  }
+  return activeResourceServer;
+}
+
+// ---------------------------------------------------------------------------
 // Lazy init: resourceServer.initialize() fetches supported-kinds from the
 // facilitator. In CF Workers, outbound fetch is only available during request
 // handling, so we cache a single init promise and await it on first request.
@@ -71,9 +197,9 @@ const resourceServer = new x402ResourceServer(facilitatorClient).register(
 
 let initPromise: Promise<void> | null = null;
 
-function ensureInitialized(): Promise<void> {
+function ensureInitialized(env: Env): Promise<void> {
   if (!initPromise) {
-    initPromise = resourceServer.initialize();
+    initPromise = selectResourceServer(env).initialize();
   }
   return initPromise;
 }
@@ -276,35 +402,10 @@ function makeRoutes(payTo: string) {
       description:
         "Query live Polymarket prediction markets — question, outcomes, live prices, volume, liquidity, end date. Filter by keyword.",
       mimeType: "application/json",
-      extensions: declareDiscoveryExtension({
-        pathParams: {},
-        pathParamsSchema: {
-          properties: {
-            query: {
-              type: "string",
-              description: "Optional keyword filter matched against the market question",
-            },
-            limit: {
-              type: "number",
-              description: "Max number of markets to return (default 20, max 100)",
-            },
-          },
-        },
-        output: {
-          example: [
-            {
-              question: "Will X happen by 2026?",
-              slug: "will-x-happen-by-2026",
-              outcomes: ["Yes", "No"],
-              outcomePrices: [0.65, 0.35],
-              volume: 1234567.89,
-              liquidity: 45678.12,
-              endDate: "2026-12-31T12:00:00Z",
-              active: true,
-            },
-          ],
-        },
-      }),
+      // NOTE: declareDiscoveryExtension temporarily omitted — its JSON-schema is
+      // validated by ajv (new Function) at settle time, which the CF Workers V8
+      // sandbox blocks ("Code generation from strings disallowed"), failing the
+      // settlement. Testing whether CDP still catalogues on a bare settle.
     },
   };
 }
@@ -339,13 +440,13 @@ app.use(async (c, next) => {
   // Initialize the resource server on first request (fetch works here).
   // syncFacilitatorOnStart=false so the x402 middleware doesn't try to init
   // a second time; we already awaited it above.
-  await ensureInitialized();
+  await ensureInitialized(c.env);
 
   if (!cachedMiddleware) {
     const routes = makeRoutes(c.env.PAY_TO);
     cachedMiddleware = paymentMiddleware(
       routes,
-      resourceServer,
+      selectResourceServer(c.env),
       undefined,
       undefined,
       false,

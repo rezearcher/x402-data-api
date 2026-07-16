@@ -2,3 +2,5 @@ node_modules/
 .wrangler/
 .dev.vars
 .ruff_cache/
+buyer-wallet.json
+seed_cdp_pm.js
