@@ -132,3 +132,26 @@ flips `alert=true` the instant we're published; the revenue monitor catches the 
 **Design note:** live routes stay UNDECLARED so real agent payments settle clean via xpay (declared
 routes hit the ajv wall on the normal middleware settle path). Cataloging is done once, out-of-band,
 via the raw CDP seed. Next crypto/PM endpoints catalog the same way (seed_raw_cdp.js template).
+
+---
+
+## UPDATE 2 (2026-07-16 night) — LIVE ON THE CDP BAZAAR ✅
+
+`GET /pm/markets` is now **published and discoverable** on the CDP x402 Bazaar —
+`/discovery/merchant?payTo=0x5765…` returns it (price $0.005, Base, USDC, our payTo).
+Monitor fired "🎉 CATALOGUED ON THE x402 BAZAAR".
+
+**The final missing key:** CDP docs list `paymentPayload.resource` as a hard requirement for a
+settled listing to *publish* (not just settle). Our raw settle omitted it → stuck at "processing".
+Adding `paymentPayload.resource = <clean resource URL>` → published within ~60s. Full reusable
+pattern in Division memory `cdp-bazaar-onramp-solved-ajv-workers-bypass-pattern`.
+
+**Cold-start note:** the listing is published with a description but has 0 calls, so it ranks at the
+bottom of `/discovery/resources` and CDP's semantic `/discovery/search` (which returns 0 for
+"polymarket" even for incumbents — a CDP search quirk, not our config). `serviceName`/`tags` are read
+from `paymentPayload.resource` as an object (line 833 of @x402/extensions bazaar) — deferred to avoid
+risking the working publish. The first organic call breaks the cold-start and ranks us up.
+
+**End-to-end PROVEN:** a real payment settled via xpay returned live Polymarket data (200) — the
+earning loop works. We are now listed where paying agents shop; `x402_revenue_monitor` catches the
+first organic dollar.
