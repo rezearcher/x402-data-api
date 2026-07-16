@@ -161,7 +161,7 @@ app.get("/.well-known/x402", (c) => {
       description:
         "Pay-per-call x402 services on Base: live Polymarket prediction-market data, and MCP security scans (tool-poisoning / prompt-injection / exfiltration, OWASP LLM01/LLM08). No account, no key — agents pay inline in USDC.",
       website: BASE,
-      categories: ["prediction-markets", "crypto", "data", "security", "mcp"],
+      categories: ["prediction-markets", "crypto", "data", "security", "mcp", "funding", "yield", "token-price"],
     },
     name: "Grey Ridge Signals",
     provider: "Grey Ridge Signals Group LLC",
@@ -171,6 +171,9 @@ app.get("/.well-known/x402", (c) => {
     mcp_endpoint: `${BASE}/mcp`,
     resources: [
       mk("/pm/markets", "GET", "0.005", "5000", "Live Polymarket prediction markets — question, outcomes, live prices, volume, liquidity, end date. Filter by keyword.", ["prediction-markets", "polymarket", "markets", "crypto", "data"]),
+      mk("/crypto/funding", "GET", "0.001", "1000", "Cross-venue perp funding rates from Hyperliquid — top coins by 24h notional volume, hourly + annualized funding, mark/oracle prices, open interest.", ["crypto", "funding", "perps", "hyperliquid", "defi", "data"]),
+      mk("/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, APY breakdown, TVL. Filter by project, chain, or stablecoin-only.", ["defi", "yield", "lending", "apy", "tvl", "data"]),
+      mk("/crypto/prices", "GET", "0.001", "1000", "Spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "defi", "data"]),
       mk("/scan/mcp", "GET", "0.10", "100000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score.", ["security", "mcp", "audit", "prompt-injection"]),
       mk("/enrich/tech-risk", "GET", "0.05", "50000", "Tech-stack fingerprint -> CVE (NVD) + EPSS + CISA-KEV attack-surface risk for a domain.", ["security", "cve", "risk"]),
       mk("/enrich/domain", "GET", "0.01", "10000", "Firmographic + tech-stack enrichment for a domain (crt.sh, RDAP, DoH, HTTP fingerprint).", ["data", "domain", "enrichment"]),
@@ -471,6 +474,81 @@ function makeRoutes(payTo: string) {
         },
         output: {
           example: { question: "Will X happen by 2026?", slug: "will-x-happen-by-2026", outcomes: ["Yes", "No"], outcomePrices: [0.65, 0.35], volume: 1234567.89, liquidity: 45678.12, endDate: "2026-12-31T12:00:00Z", active: true },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /crypto/funding": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.001",
+        network: NETWORK,
+        payTo,
+      },
+      description:
+        "Cross-venue perp funding rates from Hyperliquid — top coins by 24h notional volume, hourly + annualized funding, mark/oracle prices, open interest.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { limit: "20" },
+        inputSchema: {
+          type: "object",
+          properties: {
+            limit: { type: "string", description: "Max coins to return (default 20, max 100)" },
+          },
+        },
+        output: {
+          example: { coin: "BTC", funding: 0.0000125, fundingAnnualizedPct: 10.95, markPx: 63730, oraclePx: 63750, openInterest: 37519.8698399999, dayNtlVlm: 1670654479.0625291 },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /defi/yields": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.001",
+        network: NETWORK,
+        payTo,
+      },
+      description:
+        "Top DeFi lending/LP yields — project, chain, symbol, APY breakdown, TVL. Filter by project, chain, or stablecoin-only.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { limit: "20", project: "aave-v3", chain: "Ethereum", stable: "true" },
+        inputSchema: {
+          type: "object",
+          properties: {
+            limit: { type: "string", description: "Max pools to return (default 20, max 100)" },
+            project: { type: "string", description: "Optional: filter to an exact project name (case-insensitive)" },
+            chain: { type: "string", description: "Optional: filter to an exact chain name (case-insensitive)" },
+            stable: { type: "string", description: "Optional: \"true\" to return only stablecoin pools" },
+          },
+        },
+        output: {
+          example: { project: "aave-v3", chain: "Ethereum", symbol: "USDC", apy: 4.21, apyBase: 3.1, apyReward: 1.11, tvlUsd: 512345678, stablecoin: true },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /crypto/prices": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.001",
+        network: NETWORK,
+        payTo,
+      },
+      description:
+        "Spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/symbol/confidence/timestamp.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { coins: "bitcoin,ethereum,solana" },
+        inputSchema: {
+          type: "object",
+          properties: {
+            coins: { type: "string", description: "Comma-separated CoinGecko ids (default bitcoin,ethereum,solana; max 25)" },
+          },
+        },
+        output: {
+          example: { id: "bitcoin", symbol: "BTC", price: 63731.496785708485, confidence: 0.99, timestamp: 1784244902 },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
@@ -1172,6 +1250,262 @@ app.get("/pm/markets", async (c) => {
     );
 
     return c.json(markets);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// CRYPTO/DEFI DATA — Hyperliquid funding, DefiLlama yields, DefiLlama prices.
+// All three upstreams are free + keyless; we cap/normalize and charge per call.
+// ---------------------------------------------------------------------------
+
+interface HlUniverseEntry {
+  name: string;
+  szDecimals: number;
+  maxLeverage: number;
+  isDelisted?: boolean;
+}
+
+interface HlAssetCtx {
+  funding: string;
+  openInterest: string;
+  prevDayPx: string;
+  dayNtlVlm: string;
+  premium: string;
+  oraclePx: string;
+  markPx: string;
+  midPx: string;
+}
+
+interface FundingRate {
+  coin: string;
+  funding: number;
+  fundingAnnualizedPct: number;
+  markPx: number;
+  oraclePx: number;
+  openInterest: number;
+  dayNtlVlm: number;
+}
+
+async function fetchFundingRates(limit: number): Promise<FundingRate[]> {
+  const res = await fetch("https://api.hyperliquid.xyz/info", {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({ type: "metaAndAssetCtxs" }),
+  });
+  if (!res.ok) {
+    throw new Error(`Hyperliquid upstream error: ${res.status}`);
+  }
+  const [meta, ctxs] = (await res.json()) as [{ universe: HlUniverseEntry[] }, HlAssetCtx[]];
+
+  const rates: FundingRate[] = [];
+  meta.universe.forEach((u, i) => {
+    if (u.isDelisted) return;
+    const ctx = ctxs[i];
+    if (!ctx) return;
+    const funding = parseFloat(ctx.funding);
+    rates.push({
+      coin: u.name,
+      funding,
+      fundingAnnualizedPct: Math.round(funding * 24 * 365 * 100 * 10000) / 10000,
+      markPx: parseFloat(ctx.markPx),
+      oraclePx: parseFloat(ctx.oraclePx),
+      openInterest: parseFloat(ctx.openInterest),
+      dayNtlVlm: parseFloat(ctx.dayNtlVlm),
+    });
+  });
+
+  rates.sort((a, b) => b.dayNtlVlm - a.dayNtlVlm);
+  return rates.slice(0, limit);
+}
+
+app.get("/crypto/funding", async (c) => {
+  const limitParam = c.req.query("limit");
+  let limit = limitParam ? parseInt(limitParam, 10) : 20;
+  if (!Number.isFinite(limit) || limit <= 0) limit = 20;
+  limit = Math.min(limit, 100);
+
+  try {
+    const rates = await fetchFundingRates(limit);
+
+    console.log(
+      JSON.stringify({
+        event: "paid_request",
+        endpoint: "/crypto/funding",
+        limit,
+        count: rates.length,
+        ts: new Date().toISOString(),
+      }),
+    );
+
+    return c.json(rates);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+interface DefiLlamaPool {
+  chain: string;
+  project: string;
+  symbol: string;
+  tvlUsd: number;
+  apyBase: number | null;
+  apyReward: number | null;
+  apy: number | null;
+  pool: string;
+  stablecoin: boolean;
+}
+
+interface YieldPool {
+  project: string;
+  chain: string;
+  symbol: string;
+  apy: number | null;
+  apyBase: number | null;
+  apyReward: number | null;
+  tvlUsd: number;
+  stablecoin: boolean;
+}
+
+async function fetchDefiYields(
+  limit: number,
+  project: string | undefined,
+  chain: string | undefined,
+  stableOnly: boolean,
+): Promise<YieldPool[]> {
+  const res = await fetch("https://yields.llama.fi/pools", { headers: { accept: "application/json" } });
+  if (!res.ok) {
+    throw new Error(`DefiLlama yields upstream error: ${res.status}`);
+  }
+  const raw = (await res.json()) as { status: string; data: DefiLlamaPool[] };
+
+  const normalized: YieldPool[] = raw.data
+    .slice()
+    .sort((a, b) => (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0))
+    .map((p) => ({
+      project: p.project,
+      chain: p.chain,
+      symbol: p.symbol,
+      apy: p.apy,
+      apyBase: p.apyBase,
+      apyReward: p.apyReward,
+      tvlUsd: p.tvlUsd ?? 0,
+      stablecoin: p.stablecoin ?? false,
+    }));
+
+  const filtered = normalized.filter((p) => {
+    if (project && p.project.toLowerCase() !== project.toLowerCase()) return false;
+    if (chain && p.chain.toLowerCase() !== chain.toLowerCase()) return false;
+    if (stableOnly && !p.stablecoin) return false;
+    return true;
+  });
+
+  return filtered.slice(0, limit);
+}
+
+app.get("/defi/yields", async (c) => {
+  const limitParam = c.req.query("limit");
+  let limit = limitParam ? parseInt(limitParam, 10) : 20;
+  if (!Number.isFinite(limit) || limit <= 0) limit = 20;
+  limit = Math.min(limit, 100);
+  const project = c.req.query("project") || undefined;
+  const chain = c.req.query("chain") || undefined;
+  const stable = c.req.query("stable") === "true";
+
+  try {
+    const pools = await fetchDefiYields(limit, project, chain, stable);
+
+    console.log(
+      JSON.stringify({
+        event: "paid_request",
+        endpoint: "/defi/yields",
+        limit,
+        project: project ?? null,
+        chain: chain ?? null,
+        stable,
+        count: pools.length,
+        ts: new Date().toISOString(),
+      }),
+    );
+
+    return c.json(pools);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+interface DefiLlamaPriceCoin {
+  price: number;
+  symbol: string;
+  timestamp: number;
+  confidence: number;
+}
+
+interface TokenPrice {
+  id: string;
+  symbol: string;
+  price: number;
+  confidence: number;
+  timestamp: number;
+}
+
+const COINGECKO_ID_RE = /^[a-z0-9-]{1,40}$/;
+
+async function fetchTokenPrices(ids: string[]): Promise<TokenPrice[]> {
+  const path = ids.map((id) => `coingecko:${id}`).join(",");
+  const res = await fetch(`https://coins.llama.fi/prices/current/${path}`, {
+    headers: { accept: "application/json" },
+  });
+  if (!res.ok) {
+    throw new Error(`DefiLlama prices upstream error: ${res.status}`);
+  }
+  const raw = (await res.json()) as { coins: Record<string, DefiLlamaPriceCoin> };
+
+  return ids
+    .map((id) => {
+      const coin = raw.coins[`coingecko:${id}`];
+      if (!coin) return null;
+      return {
+        id,
+        symbol: coin.symbol,
+        price: coin.price,
+        confidence: coin.confidence,
+        timestamp: coin.timestamp,
+      };
+    })
+    .filter((c): c is TokenPrice => c !== null);
+}
+
+app.get("/crypto/prices", async (c) => {
+  const coinsParam = c.req.query("coins") || "bitcoin,ethereum,solana";
+  const ids = coinsParam.split(",").map((s) => s.trim()).filter(Boolean);
+
+  if (ids.length === 0) {
+    return c.json({ error: "coins query param must contain at least one CoinGecko id" }, { status: 400 });
+  }
+  if (ids.length > 25) {
+    return c.json({ error: "coins query param accepts at most 25 ids" }, { status: 400 });
+  }
+  const invalid = ids.filter((id) => !COINGECKO_ID_RE.test(id));
+  if (invalid.length > 0) {
+    return c.json({ error: `invalid coingecko id(s): ${invalid.join(", ")}` }, { status: 400 });
+  }
+
+  try {
+    const prices = await fetchTokenPrices(ids);
+
+    console.log(
+      JSON.stringify({
+        event: "paid_request",
+        endpoint: "/crypto/prices",
+        coins: ids,
+        count: prices.length,
+        ts: new Date().toISOString(),
+      }),
+    );
+
+    return c.json(prices);
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
