@@ -9,6 +9,17 @@ proven-demand endpoint and **solved + executed the CDP Bazaar on-ramp** — `GET
 **live and published on the CDP Bazaar**. Earning loop **proven end-to-end** (real pay → real data →
 USDC). No external organic call yet (cold-start).
 
+## Service inventory — 9 paid services live+gated (verified 2026-07-16 18:27 CDT)
+One Cloudflare Worker (`x402-data-api.sigrunner.workers.dev`), all returning 402 = live+gated:
+- **6 paid HTTP:** `GET /pm/markets` ($0.005, Polymarket data — **ON CDP BAZAAR**), `GET /scan/mcp`
+  ($0.10, MCP security scan), `GET /enrich/tech-risk` ($0.05), `GET /enrich/domain` ($0.01),
+  `GET /dns/:domain` ($0.01), `GET /whois/:domain` ($0.02).
+- **1 MCP endpoint** (`POST /mcp`) → 4 tools: `scan_mcp_server` ($0.05), `enrich_tech_risk` ($0.05),
+  `enrich_domain` ($0.05), `scan_mcp_preview` (FREE).
+- **Free:** `/health`, `/.well-known/x402` (discovery manifest listing 4 endpoints).
+- **On CDP Bazaar (discoverable): 1** (`/pm/markets`). Others live+gated but not yet Bazaar-seeded —
+  seed each via `seed_raw_cdp.js` template to publish (bottom-ranked until organic volume ranks up).
+
 ## What is LIVE (deploy 6152ccea+)
 - **`GET /pm/markets`** ($0.005) — live Polymarket data. Declared, gated 402, settles clean via **xpay**.
   Proven end-to-end (seed_normal_xpay.js returned real data + 200).
