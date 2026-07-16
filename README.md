@@ -1,73 +1,105 @@
-# x402 Data API
+# MCP Security Scanner
 
-Cloudflare Worker selling security/enrichment data via the [x402 payment protocol](https://x402.org),
-**live on Base mainnet** (`eip155:8453`), settling through the non-custodial
-[xpay](https://facilitator.xpay.sh) facilitator (no Coinbase/CDP key required).
-Paid calls land real USDC at the receiving wallet in `PAY_TO`.
+**Audit any MCP server for tool-poisoning, prompt-injection, and data-exfiltration risk
+(OWASP LLM01 / LLM08) — before you connect an agent to it.**
 
-**Deployed:** https://x402-data-api.sigrunner.workers.dev
+Live, agent-native, pay-per-scan over the [x402 payment protocol](https://x402.org) on Base
+mainnet. No account, no API key, no subscription — an agent pays $0.05 USDC per scan inline
+and gets the report back in the same call.
 
-## Endpoints
+**Endpoint:** `https://x402-data-api.sigrunner.workers.dev/mcp`
+**MCP Registry:** `io.github.rezearcher/tech-risk`
 
-| Method | Path | Price | Description |
-|--------|------|-------|-------------|
-| GET | `/health` | free | Liveness check |
-| GET | `/dns/:domain` | $0.01 USDC | A/AAAA/MX/NS/TXT via Cloudflare DoH |
-| GET | `/whois/:domain` | $0.02 USDC | Registrar/created/expiry/registrant via RDAP |
-| GET | `/enrich/tech-risk?domain=…` | $0.05 USDC | Tech-stack fingerprint + CVE mapping (NVD) + EPSS + CISA KEV — attack-surface risk |
-| GET | `/enrich/domain?domain=…` | $0.01 USDC | Firmographic + tech-stack (crt.sh, RDAP, DoH, HTTP fingerprint) |
-| POST | `/mcp` | free discovery / $0.05 per `tools/call` | MCP server exposing `enrich_tech_risk` as a paid tool |
+---
 
-All paid endpoints return **HTTP 402** with an x402 `payment-required` header (base64
-JSON: network `eip155:8453`, real `payTo`, USDC asset, price) on unpaid requests.
+## Why
 
-## MCP server (`/mcp`)
+Agents are wiring themselves to third-party MCP servers at runtime. A malicious or careless
+server can hide instructions in a tool description (tool-poisoning), smuggle a prompt-injection
+payload through a tool's output, or quietly exfiltrate data. These are the top of the
+[OWASP LLM Top-10](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
+(LLM01 prompt-injection, LLM08 excessive agency / supply-chain). There is no clean way for an
+agent to check *the server it is about to trust* on its own.
 
-Streamable-HTTP MCP endpoint. **Discovery is free, execution is paid** (method-aware x402 gate):
-- `initialize` and `tools/list` → free (so agents can find the tool)
-- `tools/call` for `enrich_tech_risk` → **402** unless a valid `X-PAYMENT` proof is attached
+This tool is that check. Point it at an MCP server URL; it enumerates the server's tools and
+statically analyzes every tool schema for known poisoning / injection / exfiltration patterns,
+and returns a scored, itemized report.
+
+## Tools
+
+Discovery (`tools/list`) is **free** so agents can find the scanner. Two scan tools:
+
+| Tool | Price | Returns |
+|------|-------|---------|
+| `scan_mcp_preview` | **free** | Tool count, issue count, severity breakdown, risk score, one-line summary |
+| `scan_mcp_server` | **$0.05 USDC** | The full itemized report: every flagged tool, the exact pattern matched, severity, and remediation |
+
+The free preview tells you *whether* a server is risky and *how many* issues. The paid scan
+tells you *which* tool is poisoned and *how* — the detail you need to actually act.
+
+Both take a single argument:
+
+```json
+{ "url": "https://target-mcp-server.example.com/mcp" }
+```
+
+## Call it
 
 ```bash
+BASE=https://x402-data-api.sigrunner.workers.dev
+
 # discover (free)
-curl -s -X POST $BASE/mcp -H 'content-type: application/json' \
+curl -s -X POST $BASE/mcp \
+  -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-# call without payment → 402
-curl -i -X POST $BASE/mcp -H 'content-type: application/json' \
+
+# free preview — counts + risk score, no payment
+curl -s -X POST $BASE/mcp \
+  -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"enrich_tech_risk","arguments":{"domain":"example.com"}}}'
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"scan_mcp_preview","arguments":{"url":"https://mcp.deepwiki.com/mcp"}}}'
+
+# full scan — returns HTTP 402 with an x402 payment-required challenge until you attach payment
+curl -i -X POST $BASE/mcp \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"scan_mcp_server","arguments":{"url":"https://mcp.deepwiki.com/mcp"}}}'
 ```
 
-> **History:** the `tools/call` path originally shipped **without** a payment gate (served data
-> free). Fixed 2026-07-08 — see the payment-gate logic in `src/index.ts` (the `/mcp` branch of
-> the `app.use` middleware requires payment only when the JSON-RPC method is `tools/call`).
+Any x402-capable client (e.g. the [`x402`](https://www.npmjs.com/package/x402) libraries)
+handles the 402 → sign → retry automatically. Payment settles through the non-custodial
+[xpay](https://facilitator.xpay.sh) facilitator; no Coinbase/CDP account required.
 
-## Data sources (all free/keyless — $0 marginal cost)
+## What it detects
 
-NVD (CVEs), FIRST EPSS (scores), CISA KEV, crt.sh (CT logs), RDAP (WHOIS),
-Cloudflare DoH (DNS). No paid APIs.
+Static analysis of each advertised tool's name, description, and schema for:
 
-## Deploy
+- **Tool poisoning** — hidden/imperative instructions embedded in a tool description that try
+  to steer the calling agent.
+- **Prompt injection** — injection markers, role-override phrasing, and instruction smuggling.
+- **Data exfiltration** — tool shapes that solicit secrets, credentials, or full context and
+  ship them to an external sink.
+- **Invisible-unicode payloads** — tag-block / zero-width characters used to hide instructions
+  from a human reviewer.
+- **Dangerous capability** — over-broad tool surface (shell, file, network) advertised without
+  constraint.
 
-```bash
-# CF token needs Workers scope (the Pages-only token in black-box/.env WILL fail):
-export CLOUDFLARE_API_TOKEN=$(grep ^CF_WORKERS_TOKEN= ~/.hermes/.env | cut -d= -f2-)
-npx wrangler deploy
-```
+Each hit carries a severity; the report rolls them into a 0–100 risk score.
 
-Config lives in `wrangler.toml` (`[vars]` PAY_TO, NETWORK) and `src/index.ts`
-(`NETWORK`, `FACILITATOR_URL`).
+## Also included
 
-## Status (2026-07-08)
+Two enrichment tools on the same endpoint (tech-stack → CVE/EPSS/CISA-KEV risk, and domain
+firmographics) built on free/keyless sources (NVD, FIRST EPSS, CISA KEV, crt.sh, RDAP,
+Cloudflare DoH).
 
-- ✅ Live on Base mainnet, payment-gated (HTTP + MCP), returning real CVE/EPSS/KEV data, collecting to the real wallet.
-- ⚠️ **Settlement not yet proven end-to-end** — the 402 challenge is well-formed and payable, but no real signed-USDC → 200 round-trip has been tested.
-- ⚠️ **Distribution incomplete** — listed on [402index](https://402index.io) (pending review); the owned next step is publishing the MCP server to the [Official MCP Registry](https://registry.modelcontextprotocol.io) (needs interactive `mcp-publisher login` or a classic PAT with `read:org`+`read:user` — a fine-grained token can't publish).
-- First real dollar not yet earned (needs distribution + demand).
+## How it runs
 
-## Autonomy
+A single [Cloudflare Worker](./src/index.ts) implements the MCP endpoint and the method-aware
+x402 gate: `initialize` and `tools/list` are free; `tools/call` on a paid tool returns HTTP 402
+with a well-formed `payment-required` challenge until a valid `X-PAYMENT` proof is attached.
+Scan-target input is SSRF-guarded (internal/loopback/metadata addresses rejected).
 
-This project is shot #1 of the `prospector` ring — an autonomous systemd-timed loop
-(`~/.claude/scripts/prospector_routines.sh`, policy `~/.claude/skills/prospector-ring/SKILL.md`)
-that generates → builds → distributes → measures → kills x402 revenue plays via the Hermes
-kanban worker, bounded by the shared spend tripwire + `PAUSE_AUTOEXEC` kill-switch.
+## License
+
+MIT — see [LICENSE](./LICENSE).

@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.rezearcher/tech-risk",
-  "description": "MCP security scanner: audit any MCP server for tool-poisoning / prompt-injection / exfiltration / dangerous-capability (OWASP LLM01/LLM08). FREE preview (issue count + risk score) via scan_mcp_preview; paid itemized findings via scan_mcp_server ($0.05 USDC, x402). Also tech-stack -> CVE/EPSS/CISA-KEV enrichment.",
+  "description": "Scan any MCP server for tool-poisoning, prompt-injection & exfiltration risk (OWASP LLM01/LLM08).",
   "version": "1.1.0",
   "websiteUrl": "https://x402-data-api.sigrunner.workers.dev",
   "remotes": [
