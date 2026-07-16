@@ -74,9 +74,17 @@ async function main() {
   bazaar.routeTemplate = bazaar.routeTemplate || '/pm/markets';
   console.log('generated bazaar ext:', JSON.stringify(bazaar));
   paymentPayload.extensions = { ...(paymentPayload.extensions || {}), bazaar };
-  // CDP docs: paymentPayload.resource MUST be included or the listing settles but
-  // never publishes to /discovery. Set it to the clean resource URL.
-  paymentPayload.resource = RESOURCE;
+  // CDP docs: paymentPayload.resource MUST be included to publish. For x402v2 it is
+  // an OBJECT: resourceUrl = paymentPayload.resource.url, and serviceName/tags/desc
+  // (searchable metadata) are read from it too (@x402/extensions bazaar extractDiscoveryInfo).
+  paymentPayload.resource = {
+    url: RESOURCE,
+    resource: RESOURCE,
+    description: "Live Polymarket prediction-market data — question, outcomes, live prices, volume, liquidity, end date. Filter by keyword. Agent-native, pay-per-call via x402.",
+    mimeType: "application/json",
+    serviceName: "Polymarket Prediction Market Data",
+    tags: ["prediction-markets", "polymarket", "markets", "crypto", "data", "trading"],
+  };
 
   // 4. Build the single paymentRequirements CDP expects (flat, v2) + echo bazaar.
   const a = paymentRequired.accepts[0];
