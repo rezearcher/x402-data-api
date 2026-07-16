@@ -1,0 +1,4 @@
+# Copy to .dev.vars (gitignored) and fill in for local dev.
+# PAY_TO must be a valid EVM address you control.
+# On testnet any address works; for mainnet launch use your real Base wallet.
+PAY_TO=0x0000000000000000000000000000000000000000
