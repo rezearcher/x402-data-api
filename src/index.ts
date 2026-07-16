@@ -274,16 +274,25 @@ app.use(async (c, next) => {
   // JSON-RPC method to decide. Non-JSON (GET/SSE) → free.
   if (c.req.path === "/mcp") {
     let rpcMethod: string | undefined;
+    let toolName: string | undefined;
     try {
-      rpcMethod = ((await c.req.raw.clone().json()) as { method?: string })
-        .method;
+      const body = (await c.req.raw.clone().json()) as {
+        method?: string;
+        params?: { name?: string };
+      };
+      rpcMethod = body.method;
+      toolName = body.params?.name;
     } catch {
       /* not JSON-RPC → free pass */
     }
-    if (rpcMethod !== "tools/call") {
+    // Freemium: discovery + the free preview tool are FREE (so agents self-scan
+    // and SEE they're vulnerable); the full-detail tools are x402-gated (so they
+    // must pay to learn WHICH tools and HOW to fix). Free tools bypass the gate.
+    const FREE_TOOLS = new Set(["scan_mcp_preview"]);
+    if (rpcMethod !== "tools/call" || (toolName && FREE_TOOLS.has(toolName))) {
       return next();
     }
-    // tools/call → fall through to the x402 payment gate below
+    // paid tools/call → fall through to the x402 payment gate below
   }
 
   // Initialize the resource server on first request (fetch works here).
@@ -983,6 +992,43 @@ app.get("/scan/mcp", async (c) => {
   }
 });
 
+// FREE preview — the conversion hook. Reveals THAT the target is vulnerable
+// (counts + severity + risk score) but withholds WHICH tools and the evidence.
+// A self-scanning agent that sees "2 CRITICAL tool-poisoning issues" must pay
+// the full scan to learn where they are and how to fix them.
+function previewOf(r: McpScanResult) {
+  const by = { critical: 0, high: 0, medium: 0, low: 0 } as Record<string, number>;
+  for (const f of r.findings) by[f.severity]++;
+  const upsell =
+    r.findings.length === 0
+      ? "Clean on static checks. Run the full scan_mcp_server ($0.05) for the itemized report + evidence."
+      : `${r.findings.length} issue(s) found${by.critical ? `, ${by.critical} CRITICAL` : ""}. This preview hides WHICH tools and the evidence — get the full itemized findings + remediation via the paid scan_mcp_server tool ($0.05 USDC) or GET /scan/mcp ($0.10).`;
+  return {
+    target: r.target,
+    tools_scanned: r.tools_scanned,
+    issue_count: r.findings.length,
+    severity_breakdown: by,
+    risk_score: r.risk_score,
+    risk_summary: r.risk_summary,
+    upsell,
+    scanned_at: r.scanned_at,
+  };
+}
+
+app.get("/scan/mcp/preview", async (c) => {
+  const target = c.req.query("url");
+  if (!target || !/^https?:\/\//i.test(target)) {
+    return c.json({ error: "url query param (target MCP server endpoint) required" }, { status: 400 });
+  }
+  try {
+    const result = await scanMcpServer(target);
+    console.log(JSON.stringify({ event: "free_preview", endpoint: "/scan/mcp/preview", target, issues: result.findings.length, ts: result.scanned_at }));
+    return c.json(previewOf(result));
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // MCP endpoint — expose enrich_tech_risk as an MCP tool  ($0.05 paid via x402)
 // ---------------------------------------------------------------------------
@@ -1054,6 +1100,28 @@ const mcpHandler = createMcpHandler(() => {
           {
             type: "text" as const,
             text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerTool(
+    "scan_mcp_preview",
+    {
+      description:
+        "FREE preview scan of a target MCP server for tool-poisoning / prompt-injection. Returns issue count, severity breakdown, and risk score — but NOT which tools or the evidence. Use this to check any MCP server (including your own) at no cost; if issues are found, call the paid scan_mcp_server for the itemized findings + remediation. No payment required.",
+      inputSchema: {
+        url: z.string().describe("Target MCP server endpoint URL to preview-scan (free)"),
+      },
+    },
+    async ({ url }) => {
+      const result = await scanMcpServer(url);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(previewOf(result), null, 2),
           },
         ],
       };
