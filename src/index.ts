@@ -917,7 +917,7 @@ function analyzeMcpTool(name: string, description: string, schemaText: string): 
     "Description references other tools' behavior — shadowing / rug-pull risk.", (low.match(shadow) || [""])[0]);
 
   // 5. Invisible / non-ASCII payloads (unicode tag chars, zero-width, long base64)
-  if (/[​-‏‪-‮⁠0-f]/.test(text))
+  if (/[\u200B-\u200D\uFEFF\u202A-\u202E\u2066-\u2069]/.test(text) || /[\u{E0000}-\u{E007F}]/u.test(text))
     add("high", "invisible-unicode", "Hidden/zero-width or unicode-tag characters in description — covert instruction channel.", "non-printable chars");
   if (/[A-Za-z0-9+/]{120,}={0,2}/.test(text))
     add("medium", "opaque-blob", "Long base64-like blob embedded in tool text — possible hidden payload.", "…base64…");
