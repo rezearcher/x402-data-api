@@ -452,10 +452,27 @@ function makeRoutes(payTo: string) {
       description:
         "Query live Polymarket prediction markets — question, outcomes, live prices, volume, liquidity, end date. Filter by keyword.",
       mimeType: "application/json",
-      // NOTE: declareDiscoveryExtension temporarily omitted — its JSON-schema is
-      // validated by ajv (new Function) at settle time, which the CF Workers V8
-      // sandbox blocks ("Code generation from strings disallowed"), failing the
-      // settlement. Testing whether CDP still catalogues on a bare settle.
+      // Discovery declaration (valid config: query method, object example) so the
+      // live 402 advertises this route to Bazaar crawlers. Safe on the xpay settle
+      // path (the ajv-on-Workers wall only bites the CDP resource-server settle,
+      // which we do NOT use for live payments — see FACILITATOR_MODE note).
+      // Query-method config (method:"GET") routes declareDiscoveryExtension to its
+      // query variant at runtime; the package's exported input type is the narrower
+      // path variant, so cast to satisfy tsc without changing runtime behavior.
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { limit: "20", query: "bitcoin" },
+        inputSchema: {
+          type: "object",
+          properties: {
+            limit: { type: "string", description: "Max markets to return (default 20, max 100)" },
+            query: { type: "string", description: "Optional keyword filter matched against the market question" },
+          },
+        },
+        output: {
+          example: { question: "Will X happen by 2026?", slug: "will-x-happen-by-2026", outcomes: ["Yes", "No"], outcomePrices: [0.65, 0.35], volume: 1234567.89, liquidity: 45678.12, endDate: "2026-12-31T12:00:00Z", active: true },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
   };
 }
