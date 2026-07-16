@@ -128,6 +128,56 @@ app.get("/.well-known/402index-verify.txt", (c) =>
   c.text("619f23496d826b50e86afc72eaae3aa523868d4dba61161bfdb8640e88d4f4a5"),
 );
 
+// Self-describing x402 discovery manifest — the standard `.well-known/x402` catalog
+// that x402 crawlers/directories read to discover a provider's paid endpoints
+// (independent of any facilitator's Bazaar). Lists every paid resource we serve.
+app.get("/.well-known/x402", (c) => {
+  const BASE = "https://x402-data-api.sigrunner.workers.dev";
+  const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+  const payTo = c.env.PAY_TO;
+  const mk = (p: string, method: string, price: string, units: string, desc: string, tags: string[]) => ({
+    x402Version: 2,
+    type: "http",
+    resource: `${BASE}${p}`,
+    methods: [method],
+    method,
+    description: desc,
+    mimeType: "application/json",
+    network: NETWORK,
+    scheme: "exact",
+    payTo,
+    price_usdc: price,
+    tags,
+    accepts: [{
+      scheme: "exact", network: NETWORK, amount: units, maxAmountRequired: units,
+      asset: USDC, payTo, maxTimeoutSeconds: 300, resource: `${BASE}${p}`,
+      description: desc, mimeType: "application/json", extra: { name: "USD Coin", version: "2" },
+    }],
+  });
+  return c.json({
+    service_overview: {
+      name: "Grey Ridge Signals — x402 Data & Security",
+      tagline: "Agent-native prediction-market & crypto data, plus MCP security audits, pay-per-call over x402.",
+      description:
+        "Pay-per-call x402 services on Base: live Polymarket prediction-market data, and MCP security scans (tool-poisoning / prompt-injection / exfiltration, OWASP LLM01/LLM08). No account, no key — agents pay inline in USDC.",
+      website: BASE,
+      categories: ["prediction-markets", "crypto", "data", "security", "mcp"],
+    },
+    name: "Grey Ridge Signals",
+    provider: "Grey Ridge Signals Group LLC",
+    x402Version: 2,
+    network: NETWORK,
+    networks: [NETWORK],
+    mcp_endpoint: `${BASE}/mcp`,
+    resources: [
+      mk("/pm/markets", "GET", "0.005", "5000", "Live Polymarket prediction markets — question, outcomes, live prices, volume, liquidity, end date. Filter by keyword.", ["prediction-markets", "polymarket", "markets", "crypto", "data"]),
+      mk("/scan/mcp", "GET", "0.10", "100000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score.", ["security", "mcp", "audit", "prompt-injection"]),
+      mk("/enrich/tech-risk", "GET", "0.05", "50000", "Tech-stack fingerprint -> CVE (NVD) + EPSS + CISA-KEV attack-surface risk for a domain.", ["security", "cve", "risk"]),
+      mk("/enrich/domain", "GET", "0.01", "10000", "Firmographic + tech-stack enrichment for a domain (crt.sh, RDAP, DoH, HTTP fingerprint).", ["data", "domain", "enrichment"]),
+    ],
+  });
+});
+
 // ---------------------------------------------------------------------------
 // x402 resource server — built once per isolate at module load time.
 // The facilitator client and EVM scheme are network-level; PAY_TO comes from env.
