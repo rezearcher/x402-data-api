@@ -1,0 +1,10 @@
+name = "x402-data-api"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Override PAY_TO in .dev.vars (local) or via `wrangler secret put PAY_TO` (deployed)
+PAY_TO = "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10"
+FACILITATOR_URL = "https://facilitator.xpay.sh"
+NETWORK = "eip155:8453"
