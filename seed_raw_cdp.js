@@ -74,6 +74,9 @@ async function main() {
   bazaar.routeTemplate = bazaar.routeTemplate || '/pm/markets';
   console.log('generated bazaar ext:', JSON.stringify(bazaar));
   paymentPayload.extensions = { ...(paymentPayload.extensions || {}), bazaar };
+  // CDP docs: paymentPayload.resource MUST be included or the listing settles but
+  // never publishes to /discovery. Set it to the clean resource URL.
+  paymentPayload.resource = RESOURCE;
 
   // 4. Build the single paymentRequirements CDP expects (flat, v2) + echo bazaar.
   const a = paymentRequired.accepts[0];
@@ -88,6 +91,8 @@ async function main() {
     maxTimeoutSeconds: a.maxTimeoutSeconds || 300,
     asset: a.asset,
     extra: a.extra,
+    serviceName: 'Polymarket Prediction Market Data',
+    tags: ['prediction-markets', 'polymarket', 'markets', 'crypto', 'data'],
     extensions: { bazaar },
   };
 
