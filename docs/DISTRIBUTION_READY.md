@@ -1,38 +1,32 @@
-# Distribution — prepared, awaiting Rez's go (identity-gated)
+# Distribution state — what's live, what's staged (updated 2026-07-16 late)
 
-Autonomous distribution is done: 4 paid shelves are live + catalogued on the CDP Bazaar
-(`/discovery/merchant?payTo=0x5765…` → 4/4) and the `.well-known/x402` manifest is crawlable by
-the x402 explorers. **Problem:** on the quality-sorted public catalog we're cold-start-buried
-(0 organic calls → past offset 1000). Being *in* the catalog ≠ being *found*. The accelerant is
-external distribution that points an agent straight at us. Those channels publish under Grey Ridge /
-Rez's accounts, so they're Rez's to approve. All prepared below — **approve and Claude ships it**
-(GH_TOKEN is live, verified this session).
+Root cause of $0 (2-agent research): CDP Bazaar discovery is broken (semantic search returns 0;
+0-call listings buried in a 25k tail; publish pipeline flaky). The fix = breadth + quality + the
+**MCP pull channel** + getting onto **working-search** directories. Status below.
 
-## 1. awesome-x402 listing (xpaysh/awesome-x402, 261★) — PR, Claude executes on approval
-Target section: `### Data & Social APIs` (same section as our competitors AgentData API, DevDrops,
-Askew, Darrylbots). Exact entry to add:
+## DONE — live on 3 working discovery surfaces (all autonomous)
+| Surface | State | Mechanism |
+|---|---|---|
+| **MCP Registry** | `io.github.rezearcher/tech-risk` v1.2.0, data-forward | `mcp-publisher login github --token $GH_TOKEN` (NON-interactive flag) → `mcp-publisher publish` |
+| **402index.io** | 15 endpoints live, domain-verified | `POST https://402index.io/api/v1/register` (no auth); `/.well-known/402index-verify.txt` auto-verifies |
+| **x402scan.com** | 15 endpoints registered (source: openapi) | `node register_x402scan.js` — SIWX wallet-sign to `POST /api/x402/registry/register-origin` |
+| CDP Bazaar | 4 crypto listings (broken search) | `node seed_endpoint.js <route>` — deprioritized |
+| Crawlable | `.well-known/x402`, `/openapi.json`, `/llms.txt` | served by the Worker |
 
-```markdown
-- [Grey Ridge Signals — Crypto & Prediction-Market Data](https://x402-data-api.sigrunner.workers.dev) — Cheap, keyless data for AI agents on Base. `GET /crypto/prices` ($0.001, DefiLlama spot prices), `GET /crypto/funding` ($0.001, Hyperliquid perp funding + annualized), `GET /defi/yields` ($0.001, DefiLlama lending/LP yields), `GET /pm/markets` ($0.005, live Polymarket prediction markets), plus `GET /scan/mcp` ($0.10, MCP-server security audit — tool-poisoning / prompt-injection, OWASP LLM01/LLM08). USDC on Base via x402, listed on the CDP Bazaar, no API keys or signup. ([Discovery](https://x402-data-api.sigrunner.workers.dev/.well-known/x402))
-```
+Product: 15 paid endpoints (4 data + 8 Base RPC + 3 security), 11-tool MCP server, cross-venue
+funding + decision-grade yields (differentiation = repeat callers). README rewritten data-forward.
 
-Ship sequence (Claude runs on approval): `gh repo fork xpaysh/awesome-x402 --clone` → insert line →
-branch `add-grey-ridge-signals` → commit → push → `gh pr create --repo xpaysh/awesome-x402`.
+## STAGED / capped (genuine limits, tested — not premature "walled")
+- **awesome-x402 (xpaysh, 261★):** entry branch pushed (`rezearcher:add-grey-ridge-signals`).
+  Cross-repo PR-open AND issue-open both return `Resource not accessible by personal access token`
+  — fine-grained PAT can't write PRs/issues on repos we don't own. Opens with a classic token or a click.
+- **Contact-email ownership verification (x402scan/402index):** would boost ranking/trust. We have a
+  send-capable Grey Ridge address `kairos@sigrunner.com` (himalaya/SMTP) + Cloudflare `email_routing`/
+  `email_sending` scopes on sigrunner.com — capability exists; a clean dedicated contact alias is the tidy way.
 
-## 2. Community post (X / Farcaster / relevant Discords) — Rez posts, or approve an account for Claude
-Draft:
-> New on the x402 Bazaar — Grey Ridge Signals: cheap, keyless data endpoints for AI agents on Base.
-> Crypto spot prices · Hyperliquid funding rates · DefiLlama yields · Polymarket markets — **$0.001/call**,
-> USDC via x402, no keys/signup. Discovery: https://x402-data-api.sigrunner.workers.dev/.well-known/x402
-
-## 3. Unblock autonomous expansion — private remote for this repo (Claude executes on approval)
-This repo has **no git remote**, which is why the overnight expansion loop (`ov-6edad23e71`) jams on its
-"open a PR" step. History is verified secret-clean (only `.dev.vars.example` tracked). On approval:
-`gh repo create rezearcher/x402-data-api --private --source=. --push`. Then overnight keeps stocking new
-shelves without Rez in the loop.
-
-## 4. Next-wave seeding capital (the only $ atom)
-Buyer wallet `0xC4852c26498d3187dEc2ce1b19e840710e302d1e` is ~$0 USDC (spent $0.004 this session,
-all recycled to our payTo). The next expansion wave (crypto/trending, gas, Kalshi PM, sentiment) needs
-~$0.02 USDC on Base sent to that buyer to seed each new shelf (~$0.001/seed). Not needed for anything
-already shipped.
+## The exogenous remainder
+First **organic** dollar = a real external agent pays (on-chain verified $0: 31/31 inbound USDC to
+payTo are our own wallets). Not fakeable, not forceable. Reachable faster only via APPROPRIATE outreach
+(a welcome, targeted ask — brand-safety judgment, not mass cold-spam) or organic discovery on the
+3 seeded working surfaces. Monitors (`x402_revenue_monitor`, `x402_bazaar_index_monitor`, `x402_selfheal`)
+are armed to catch + compound the first real payer.
