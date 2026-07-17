@@ -219,20 +219,20 @@ app.get("/.well-known/x402", (c) => {
     mcp_endpoint: `${BASE}/mcp`,
     resources: [
       mk("/pm/markets", "GET", "0.005", "5000", "Live Polymarket prediction markets — question, outcomes, live prices, volume, liquidity, end date. Filter by keyword.", ["prediction-markets", "polymarket", "markets", "crypto", "data"]),
-      mk("/crypto/funding", "GET", "0.001", "1000", "Cross-venue Hyperliquid+OKX+Bybit+Binance perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, mark/oracle prices, open interest.", ["crypto", "funding", "perps", "hyperliquid", "okx", "arbitrage", "defi", "data"]),
+      mk("/crypto/funding", "GET", "0.001", "1000", "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, mark/oracle prices, open interest.", ["crypto", "funding", "perps", "hyperliquid", "okx", "dydx", "arbitrage", "defi", "data"]),
       mk("/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, APY breakdown + 7d/30d APY trend, IL risk, exposure, DefiLlama stability forecast, TVL. Filter by project, chain, or stablecoin-only.", ["defi", "yield", "lending", "apy", "tvl", "data"]),
       mk("/crypto/prices", "GET", "0.001", "1000", "Spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "defi", "data"]),
       mk("/scan/mcp", "GET", "0.10", "100000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score.", ["security", "mcp", "audit", "prompt-injection"]),
       mk("/enrich/tech-risk", "GET", "0.05", "50000", "Tech-stack fingerprint -> CVE (NVD) + EPSS + CISA-KEV attack-surface risk for a domain.", ["security", "cve", "risk"]),
-      mk("/enrich/domain", "GET", "0.01", "10000", "Firmographic + tech-stack enrichment for a domain (crt.sh, RDAP, DoH, HTTP fingerprint).", ["data", "domain", "enrichment"]),
+      mk("/enrich/domain", "GET", "0.01", "10000", "Firmographic + tech-stack enrichment for a domain, incl. full subdomain enumeration via certificate-transparency logs (crt.sh, RDAP, DoH, HTTP fingerprint).", ["data", "domain", "enrichment"]),
       mk("/chain/block-number", "GET", "0.001", "1000", "Current Base mainnet block number.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/gas-price", "GET", "0.001", "1000", "Current Base mainnet gas price (wei + gwei).", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/balance", "GET", "0.001", "1000", "ETH balance of a Base mainnet address.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/token-balance", "GET", "0.001", "1000", "ERC-20 token balance of a Base mainnet address.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/tx", "GET", "0.001", "1000", "Transaction details by hash on Base mainnet.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/receipt", "GET", "0.001", "1000", "Transaction receipt (status, gas used, logs count) by hash on Base mainnet.", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/code", "GET", "0.001", "1000", "Contract-code check for a Base mainnet address (is_contract + code size).", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/wallet", "GET", "0.003", "3000", "Wallet bundle: ETH balance + tx count + contract-code check for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]),
+      mk("/chain/code", "GET", "0.001", "1000", "Contract-code check for a Base mainnet address (is_contract + code size + EIP-7702 delegated-EOA detection).", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/wallet", "GET", "0.003", "3000", "Wallet bundle: ETH balance + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]),
     ],
   });
 });
@@ -252,20 +252,20 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 
 ## Endpoints
 - GET ${BASE}/crypto/prices?coins=bitcoin,ethereum,solana — $0.001 — spot token prices (DefiLlama), keyless.
-- GET ${BASE}/crypto/funding?limit=20 — $0.001 — cross-venue Hyperliquid+OKX+ funding rates + arb spread (bps) + best long/short venue.
+- GET ${BASE}/crypto/funding?limit=20 — $0.001 — cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread (bps) + best long/short venue.
 - GET ${BASE}/defi/yields?limit=20&project=&chain=&stable= — $0.001 — top DeFi lending/LP yields, APY trend + IL risk + stability forecast + TVL (DefiLlama).
 - GET ${BASE}/pm/markets?query=&limit=20 — $0.005 — live Polymarket prediction markets (prices, volume, liquidity).
 - GET ${BASE}/scan/mcp?url=<mcp-server> — $0.10 — security audit of an MCP server (tool-poisoning / prompt-injection, OWASP LLM01/LLM08).
 - GET ${BASE}/enrich/tech-risk?domain=<domain> — $0.05 — tech-stack -> CVE (NVD) + EPSS + CISA-KEV risk.
-- GET ${BASE}/enrich/domain?domain=<domain> — $0.01 — firmographic + tech-stack enrichment.
+- GET ${BASE}/enrich/domain?domain=<domain> — $0.01 — firmographic + tech-stack enrichment, incl. subdomain enumeration (crt.sh).
 - GET ${BASE}/chain/block-number — $0.001 — current Base mainnet block number.
 - GET ${BASE}/chain/gas-price — $0.001 — current Base mainnet gas price (wei + gwei).
 - GET ${BASE}/chain/balance?address=<0x…> — $0.001 — ETH balance of a Base address.
 - GET ${BASE}/chain/token-balance?address=<0x…>&token=<0x…> — $0.001 — ERC-20 token balance of a Base address.
 - GET ${BASE}/chain/tx?hash=<0x…> — $0.001 — transaction details by hash on Base.
 - GET ${BASE}/chain/receipt?hash=<0x…> — $0.001 — transaction receipt (status, gas used, logs) by hash on Base.
-- GET ${BASE}/chain/code?address=<0x…> — $0.001 — contract-code check for a Base address.
-- GET ${BASE}/chain/wallet?address=<0x…> — $0.003 — wallet bundle: balance + tx count + contract check, one call.
+- GET ${BASE}/chain/code?address=<0x…> — $0.001 — contract-code check for a Base address (EIP-7702 delegated-EOA aware).
+- GET ${BASE}/chain/wallet?address=<0x…> — $0.003 — wallet bundle: balance + tx count + contract check (EIP-7702 delegated-EOA aware), one call.
 
 ## Free (previews — taste the data before you pay)
 - GET ${BASE}/crypto/prices/preview — free 1-token sample of /crypto/prices.
@@ -309,20 +309,20 @@ app.get("/openapi.json", (c) => {
     servers: [{ url: BASE }],
     paths: {
       "/crypto/prices": paid("Spot token prices (DefiLlama).", "0.001", [{ name: "coins", desc: "comma-separated coingecko ids (max 25)" }]),
-      "/crypto/funding": paid("Cross-venue Hyperliquid+OKX+Bybit+Binance funding rates + arb spread.", "0.001", [{ name: "limit", desc: "max coins (default 20, max 100)" }]),
+      "/crypto/funding": paid("Cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread.", "0.001", [{ name: "limit", desc: "max coins (default 20, max 100)" }]),
       "/defi/yields": paid("Top DeFi lending/LP yields — APY trend + IL risk + stability forecast (DefiLlama).", "0.001", [{ name: "limit", desc: "max pools" }, { name: "project", desc: "protocol filter" }, { name: "chain", desc: "chain filter" }, { name: "stable", desc: "'true' = stablecoin only" }]),
       "/pm/markets": paid("Live Polymarket prediction markets.", "0.005", [{ name: "query", desc: "keyword filter" }, { name: "limit", desc: "max markets" }]),
       "/scan/mcp": paid("Security audit of an MCP server (tool-poisoning / prompt-injection).", "0.10", [{ name: "url", desc: "target MCP server URL", required: true }]),
       "/enrich/tech-risk": paid("Tech-stack -> CVE + EPSS + CISA-KEV risk.", "0.05", [{ name: "domain", desc: "target domain", required: true }]),
-      "/enrich/domain": paid("Firmographic + tech-stack enrichment.", "0.01", [{ name: "domain", desc: "target domain", required: true }]),
+      "/enrich/domain": paid("Firmographic + tech-stack enrichment, incl. subdomain enumeration.", "0.01", [{ name: "domain", desc: "target domain", required: true }]),
       "/chain/block-number": paid("Current Base mainnet block number.", "0.001", []),
       "/chain/gas-price": paid("Current Base mainnet gas price (wei + gwei).", "0.001", []),
       "/chain/balance": paid("ETH balance of a Base mainnet address.", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true }]),
       "/chain/token-balance": paid("ERC-20 token balance of a Base mainnet address.", "0.001", [{ name: "address", desc: "0x-prefixed holder address", required: true }, { name: "token", desc: "0x-prefixed ERC-20 contract address", required: true }]),
       "/chain/tx": paid("Transaction details by hash on Base mainnet.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true }]),
       "/chain/receipt": paid("Transaction receipt (status, gas used, logs count) by hash on Base mainnet.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true }]),
-      "/chain/code": paid("Contract-code check for a Base mainnet address.", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true }]),
-      "/chain/wallet": paid("Wallet bundle: ETH balance + tx count + contract-code check, in one call.", "0.003", [{ name: "address", desc: "0x-prefixed Base address", required: true }]),
+      "/chain/code": paid("Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware).", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true }]),
+      "/chain/wallet": paid("Wallet bundle: ETH balance + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call.", "0.003", [{ name: "address", desc: "0x-prefixed Base address", required: true }]),
     },
   });
 });
@@ -347,7 +347,7 @@ app.get("/crypto/funding/preview", async (c) => {
     return c.json({
       preview: all.slice(0, 1),
       total_available: all.length,
-      note: "Free top-1 sample. Full: GET /crypto/funding?limit=20 ($0.001) — ranked cross-venue Hyperliquid+OKX+ funding + arb spread, keyless x402 on Base.",
+      note: "Free top-1 sample. Full: GET /crypto/funding?limit=20 ($0.001) — ranked cross-venue Hyperliquid+OKX+dYdX funding + arb spread, keyless x402 on Base.",
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -597,7 +597,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Domain enrichment: firmographic data + SSL certs + tech-stack fingerprint",
+        "Domain enrichment: firmographic data + SSL certs + subdomain enumeration + tech-stack fingerprint",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         pathParams: {},
@@ -625,6 +625,7 @@ function makeRoutes(payTo: string) {
                 valid_to: "2025-04-01T00:00:00Z",
               },
             ],
+            subdomains: ["example.com", "www.example.com", "mail.example.com"],
             tech_stack: ["nginx"],
           },
         },
@@ -670,7 +671,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Cross-venue Hyperliquid+OKX+Bybit+Binance perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, mark/oracle prices, open interest.",
+        "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, mark/oracle prices, open interest.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -684,7 +685,7 @@ function makeRoutes(payTo: string) {
         output: {
           example: {
             coin: "BTC",
-            funding: { hyperliquid: 0.0000125, okx: 0.0000492, bybit: null, binance: null },
+            funding: { hyperliquid: 0.0000125, okx: 0.0000492, dydx: -0.00000875 },
             funding_spread_bps: 0.37,
             best_long_venue: "hyperliquid",
             best_short_venue: "okx",
@@ -898,7 +899,7 @@ function makeRoutes(payTo: string) {
         network: NETWORK,
         payTo,
       },
-      description: "Contract-code check for a Base mainnet address (is_contract + code size).",
+      description: "Contract-code check for a Base mainnet address (is_contract + code size + EIP-7702 delegated-EOA detection).",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -910,7 +911,7 @@ function makeRoutes(payTo: string) {
           },
         },
         output: {
-          example: { address: "0x4200000000000000000000000000000000000006", is_contract: true, code_size_bytes: 6234, chain: "base" },
+          example: { address: "0x4200000000000000000000000000000000000006", is_contract: true, is_eip7702_delegate: false, delegate_address: null, code_size_bytes: 6234, chain: "base" },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
@@ -921,7 +922,7 @@ function makeRoutes(payTo: string) {
         network: NETWORK,
         payTo,
       },
-      description: "Wallet bundle: ETH balance + tx count + contract-code check for a Base mainnet address, in one call.",
+      description: "Wallet bundle: ETH balance + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -933,7 +934,7 @@ function makeRoutes(payTo: string) {
           },
         },
         output: {
-          example: { address: "0x4200000000000000000000000000000000000006", balance_wei: "17265432100000000000", balance_eth: 17.2654321, tx_count: 4, is_contract: true, chain: "base" },
+          example: { address: "0x4200000000000000000000000000000000000006", balance_wei: "17265432100000000000", balance_eth: 17.2654321, tx_count: 4, is_contract: true, is_eip7702_delegate: false, delegate_address: null, chain: "base" },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
@@ -1099,7 +1100,6 @@ interface CveEntry {
   id: string;
   description: string;
   cvssScore: number | null;
-  exploitAvailable: boolean;
 }
 
 // Reject anything that isn't a bare public hostname — blocks SSRF/proxy abuse
@@ -1202,7 +1202,6 @@ async function searchNvd(keyword: string): Promise<CveEntry[]> {
         id: cve.id,
         description: desc.slice(0, 300),
         cvssScore: cvssData?.baseScore ?? null,
-        exploitAvailable: false, // NVD free API doesn't directly expose this
       };
     });
   } catch {
@@ -1343,14 +1342,21 @@ async function enrichTechRisk(
   return {
     tech_stack: techStack,
     domain: domain ?? null,
-    vulnerabilities: allCves.map((cve) => ({
-      id: cve.id,
-      description: cve.description,
-      cvss_score: cve.cvssScore,
-      epss_score: epssScores[cve.id] ?? null,
-      in_kev: kevFlags[cve.id] ?? false,
-      exploit_available: cve.exploitAvailable,
-    })),
+    vulnerabilities: allCves.map((cve) => {
+      const inKev = kevFlags[cve.id] ?? false;
+      const epssScore = epssScores[cve.id] ?? null;
+      return {
+        id: cve.id,
+        description: cve.description,
+        cvss_score: cve.cvssScore,
+        epss_score: epssScore,
+        in_kev: inKev,
+        // NVD's free API doesn't expose exploit-availability directly — derive
+        // it from data we already have: actively exploited (CISA KEV) or a
+        // high probability of exploitation in the wild (EPSS >= 0.5).
+        exploit_available: inKev || (epssScore ?? 0) >= 0.5,
+      };
+    }),
     summary: riskSummary,
     generated_at: startTs,
   };
@@ -1401,14 +1407,23 @@ interface CertEntry {
   valid_to: string;
 }
 
-// Certificate transparency logs (crt.sh)
-async function searchCertificates(domain: string): Promise<CertEntry[]> {
+interface CertSearchResult {
+  certificates: CertEntry[];
+  subdomains: string[];
+}
+
+// Certificate transparency logs (crt.sh) — the whole point of crt.sh is
+// subdomain enumeration, which needs deduping by the actual hostname
+// (name_value), not by issuer (which collapses hundreds of distinct hosts
+// down to a handful of CAs). A single row's name_value can list multiple
+// SANs newline-separated, so flatten + dedup those into `subdomains` too.
+async function searchCertificates(domain: string): Promise<CertSearchResult> {
   try {
     const res = await fetch(
-      `https://crt.sh/?q=%.${encodeURIComponent(domain)}&output=json&limit=20`,
+      `https://crt.sh/?q=%.${encodeURIComponent(domain)}&output=json&limit=200`,
       { headers: { accept: "application/json" } },
     );
-    if (!res.ok) return [];
+    if (!res.ok) return { certificates: [], subdomains: [] };
     const raw = (await res.json()) as {
       issuer_name: string;
       name_value: string;
@@ -1418,8 +1433,13 @@ async function searchCertificates(domain: string): Promise<CertEntry[]> {
 
     const seen = new Set<string>();
     const certs: CertEntry[] = [];
-    for (const entry of raw.slice(0, 10)) {
-      const key = entry.issuer_name;
+    const subdomainSet = new Set<string>();
+    for (const entry of raw) {
+      for (const host of entry.name_value.split("\n")) {
+        const cleaned = host.trim().toLowerCase().replace(/^\*\./, "");
+        if (cleaned) subdomainSet.add(cleaned);
+      }
+      const key = entry.name_value;
       if (!seen.has(key)) {
         seen.add(key);
         certs.push({
@@ -1430,9 +1450,9 @@ async function searchCertificates(domain: string): Promise<CertEntry[]> {
         });
       }
     }
-    return certs;
+    return { certificates: certs, subdomains: [...subdomainSet].sort() };
   } catch {
-    return [];
+    return { certificates: [], subdomains: [] };
   }
 }
 
@@ -1443,6 +1463,7 @@ interface EnrichDomainResult {
   registrar: string | null;
   created: string | null;
   certificates: CertEntry[];
+  subdomains: string[];
   tech_stack: string[];
   generated_at: string;
 }
@@ -1453,7 +1474,7 @@ async function enrichDomain(domain: string): Promise<EnrichDomainResult> {
   const startTs = new Date().toISOString();
 
   // Parallel: RDAP, DoH DNS, certificates, HTTP fingerprint
-  const [rdapRes, dnsFp, certs] = await Promise.all([
+  const [rdapRes, dnsFp, certResult] = await Promise.all([
     fetch(`${RDAP_URL}/${encodeURIComponent(domain)}`, {
       headers: { accept: "application/rdap+json" },
     }),
@@ -1521,7 +1542,8 @@ async function enrichDomain(domain: string): Promise<EnrichDomainResult> {
     organization,
     registrar,
     created,
-    certificates: certs,
+    certificates: certResult.certificates,
+    subdomains: certResult.subdomains,
     tech_stack: techStack,
     generated_at: startTs,
   };
@@ -1671,15 +1693,14 @@ interface HlAssetCtx {
 interface VenueFunding {
   hyperliquid: number | null;
   okx: number | null;
-  bybit: number | null;
-  binance: number | null;
+  dydx: number | null;
 }
 
 interface FundingRate {
   coin: string;
   // Each venue's current-period rate at its own native funding interval
-  // (Hyperliquid = hourly, OKX/Bybit/Binance are typically 8h) — intervals
-  // are NOT normalized, this is each venue's rate as-quoted right now.
+  // (Hyperliquid + dYdX = hourly, OKX is typically 8h) — intervals are NOT
+  // normalized, this is each venue's rate as-quoted right now.
   funding: VenueFunding;
   funding_spread_bps: number | null;
   best_long_venue: string | null;
@@ -1703,24 +1724,16 @@ async function fetchOkxFunding(coin: string): Promise<number | null> {
   }
 }
 
-async function fetchBybitFunding(coin: string): Promise<number | null> {
+// Bybit + Binance are geo-blocked from Cloudflare Workers edges (403 / 451 —
+// confirmed live) and always resolved null, so we don't advertise dead
+// venues. dYdX v4 (indexer, keyless, no CF block) fills the third slot —
+// its coin tickers (`{coin}-USD`) map 1:1 onto Hyperliquid's `coin` names.
+async function fetchDydxFunding(coin: string): Promise<number | null> {
   try {
-    const res = await fetch(`https://api.bybit.com/v5/market/tickers?category=linear&symbol=${coin}USDT`);
+    const res = await fetch(`https://indexer.dydx.trade/v4/historicalFunding/${coin}-USD?limit=1`);
     if (!res.ok) return null;
-    const j = (await res.json()) as { result?: { list?: { fundingRate: string }[] } };
-    const rate = parseFloat(j.result?.list?.[0]?.fundingRate ?? "");
-    return Number.isFinite(rate) ? rate : null;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchBinanceFunding(coin: string): Promise<number | null> {
-  try {
-    const res = await fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${coin}USDT`);
-    if (!res.ok) return null;
-    const j = (await res.json()) as { lastFundingRate?: string };
-    const rate = parseFloat(j.lastFundingRate ?? "");
+    const j = (await res.json()) as { historicalFunding?: { rate: string }[] };
+    const rate = parseFloat(j.historicalFunding?.[0]?.rate ?? "");
     return Number.isFinite(rate) ? rate : null;
   } catch {
     return null;
@@ -1764,20 +1777,18 @@ async function fetchFundingRates(limit: number): Promise<FundingRate[]> {
   const top = hlRates.slice(0, limit);
 
   // Cross-venue enrichment: Hyperliquid is always present (it's the coin
-  // universe). OKX/Bybit/Binance are best-effort — each call is wrapped so a
-  // geo-block or upstream error on any one venue never fails the request.
+  // universe). OKX/dYdX are best-effort — each call is wrapped so an
+  // upstream error or an unlisted coin on either venue never fails the request.
   const rates: FundingRate[] = await Promise.all(
     top.map(async (r) => {
-      const [okxRes, bybitRes, binanceRes] = await Promise.allSettled([
+      const [okxRes, dydxRes] = await Promise.allSettled([
         fetchOkxFunding(r.coin),
-        fetchBybitFunding(r.coin),
-        fetchBinanceFunding(r.coin),
+        fetchDydxFunding(r.coin),
       ]);
       const funding: VenueFunding = {
         hyperliquid: r.hlFunding,
         okx: okxRes.status === "fulfilled" ? okxRes.value : null,
-        bybit: bybitRes.status === "fulfilled" ? bybitRes.value : null,
-        binance: binanceRes.status === "fulfilled" ? binanceRes.value : null,
+        dydx: dydxRes.status === "fulfilled" ? dydxRes.value : null,
       };
 
       const available = (Object.entries(funding) as [string, number | null][]).filter(
@@ -2203,6 +2214,26 @@ app.get("/chain/receipt", async (c) => {
   }
 });
 
+// EIP-7702 delegation designator (0xef0100 + 20-byte target address). A
+// delegated EOA carries this special bytecode — it is NOT a real contract,
+// and mislabeling it breaks security/wallet classification for any consumer.
+// https://eips.ethereum.org/EIPS/eip-7702
+function classifyCode(code: string): {
+  is_contract: boolean;
+  is_eip7702_delegate: boolean;
+  delegate_address: string | null;
+} {
+  const hasCode = code !== "0x" && code.length > 2;
+  if (hasCode && code.toLowerCase().startsWith("0xef0100")) {
+    return {
+      is_contract: false,
+      is_eip7702_delegate: true,
+      delegate_address: "0x" + code.slice(8, 48),
+    };
+  }
+  return { is_contract: hasCode, is_eip7702_delegate: false, delegate_address: null };
+}
+
 app.get("/chain/code", async (c) => {
   const address = c.req.query("address");
   if (!address || !ADDR_RE.test(address)) {
@@ -2213,7 +2244,7 @@ app.get("/chain/code", async (c) => {
     const code = (await baseRpc("eth_getCode", [address, "latest"])) as string;
     const result = {
       address,
-      is_contract: code !== "0x" && code.length > 2,
+      ...classifyCode(code),
       code_size_bytes: Math.max(0, (code.length - 2) / 2),
       chain: "base",
     };
@@ -2246,7 +2277,7 @@ app.get("/chain/wallet", async (c) => {
       balance_wei: wei.toString(),
       balance_eth: Number(wei) / 1e18,
       tx_count: parseInt(nonceHex, 16),
-      is_contract: code !== "0x" && code.length > 2,
+      ...classifyCode(code),
       chain: "base",
     };
 
@@ -2324,6 +2355,39 @@ interface McpScanResult {
   scanned_at: string;
 }
 
+interface McpRpcResponse {
+  result?: unknown;
+  error?: { code?: number; message?: string };
+}
+
+// One streamable-HTTP JSON-RPC round trip: POSTs the body, captures any
+// Mcp-Session-Id response header, and parses either plain-JSON or SSE
+// ("event: message\ndata: {...}") framing per the 2025-06-18 transport spec.
+async function mcpRpcCall(
+  target: string,
+  body: Record<string, unknown>,
+  sessionId?: string,
+): Promise<{ json: McpRpcResponse | null; sessionId: string | null; status: number }> {
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    accept: "application/json, text/event-stream",
+  };
+  if (sessionId) headers["mcp-session-id"] = sessionId;
+  const res = await fetch(target, { method: "POST", headers, body: JSON.stringify(body) });
+  const newSessionId = res.headers.get("mcp-session-id");
+  const raw = (await res.text()).trim();
+  let json: McpRpcResponse | null = null;
+  if (raw) {
+    const jsonStr = raw.includes("data:") ? raw.split("data:").pop()!.trim() : raw;
+    try {
+      json = JSON.parse(jsonStr) as McpRpcResponse;
+    } catch {
+      json = null;
+    }
+  }
+  return { json, sessionId: newSessionId, status: res.status };
+}
+
 async function scanMcpServer(target: string): Promise<McpScanResult> {
   const scanned_at = new Date().toISOString();
   // SSRF guard: only audit a public https(s) hostname — no internal/localhost/IP
@@ -2337,19 +2401,65 @@ async function scanMcpServer(target: string): Promise<McpScanResult> {
   if (!isValidHostname(host)) {
     throw new Error("target must be a public MCP server hostname (no IPs/localhost/internal hosts)");
   }
-  // Fetch the target's tool list via MCP JSON-RPC (streamable-http)
+  // Fetch the target's tool list via MCP JSON-RPC (streamable-http). Spec-
+  // compliant servers require the initialize handshake before tools/list —
+  // skipping it (the old behavior) makes them error, which used to be
+  // silently swallowed into a false "0 tools, clean" verdict. Do the real
+  // handshake: initialize -> capture Mcp-Session-Id -> notifications/initialized
+  // -> tools/list (with the session header). Fall back to a bare stateless
+  // tools/list only if the server doesn't speak the initialize handshake.
   let tools: { name?: string; description?: string; inputSchema?: unknown }[] = [];
   try {
-    const res = await fetch(target, {
-      method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    const init = await mcpRpcCall(target, {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "x402-data-api-mcp-scanner", version: "1.0.0" },
+      },
     });
-    const raw = await res.text();
-    // handle both plain JSON and SSE ("data: {...}") framing
-    const jsonStr = raw.includes("data:") ? raw.split("data:").pop()!.trim() : raw;
-    const parsed = JSON.parse(jsonStr) as { result?: { tools?: typeof tools } };
-    tools = parsed.result?.tools ?? [];
+
+    if (init.json?.result) {
+      const sessionId = init.sessionId ?? undefined;
+      // Notification (no id, no response expected) — best-effort; some
+      // servers don't require it before accepting further requests.
+      try {
+        await mcpRpcCall(target, { jsonrpc: "2.0", method: "notifications/initialized" }, sessionId);
+      } catch {
+        /* non-fatal */
+      }
+      const list = await mcpRpcCall(target, { jsonrpc: "2.0", id: 2, method: "tools/list" }, sessionId);
+      if (!list.json) {
+        throw new Error(`tools/list returned a non-JSON response (status ${list.status})`);
+      }
+      if (list.json.error) {
+        throw new Error(list.json.error.message ?? "tools/list error");
+      }
+      tools = (list.json.result as { tools?: typeof tools } | undefined)?.tools ?? [];
+    } else {
+      // Server doesn't support/require the initialize handshake — fall back
+      // to a bare stateless tools/list (pre-fix behavior, still needed for
+      // lenient servers that never required a session). Apply the SAME error
+      // guards as the happy path: a target that answers BOTH initialize and
+      // tools/list with a JSON-RPC error (or a non-JSON body) must surface as
+      // an error — never a silent 0-tools "Clean" verdict (the core bug this
+      // whole fix exists to kill; a hostile server could otherwise force a
+      // false pass by erroring on every call).
+      const fallback = await mcpRpcCall(target, { jsonrpc: "2.0", id: 1, method: "tools/list" });
+      if (!fallback.json) {
+        throw new Error(
+          `tools/list returned a non-JSON response (status ${fallback.status}); initialize gave ${
+            init.json?.error?.message ?? "no result"
+          }`,
+        );
+      }
+      if (fallback.json.error) {
+        throw new Error(fallback.json.error.message ?? "tools/list error");
+      }
+      tools = (fallback.json.result as { tools?: typeof tools } | undefined)?.tools ?? [];
+    }
   } catch (e) {
     throw new Error(`could not fetch MCP tools/list from target: ${(e as Error).message}`);
   }
@@ -2456,7 +2566,7 @@ const mcpHandler = createMcpHandler(() => {
     "enrich_domain",
     {
       description:
-        "Firmographic + tech-stack enrichment: RDAP registrant/registrar, DNS records, certificate-transparency history, tech-stack fingerprint for a domain. Cost: $0.05 USDC per call via the shared MCP payment gate (the direct HTTP endpoint GET /enrich/domain is $0.01 — MCP tools/call is gated at a flat $0.05 per request today).",
+        "Firmographic + tech-stack enrichment: RDAP registrant/registrar, DNS records, full subdomain enumeration + certificate-transparency history, tech-stack fingerprint for a domain. Cost: $0.05 USDC per call via the shared MCP payment gate (the direct HTTP endpoint GET /enrich/domain is $0.01 — MCP tools/call is gated at a flat $0.05 per request today).",
       inputSchema: {
         domain: z.string(),
       },
@@ -2547,7 +2657,7 @@ const mcpHandler = createMcpHandler(() => {
     "crypto_funding",
     {
       description:
-        "Live cross-venue perpetual-futures funding rates from Hyperliquid+OKX+Bybit+Binance (per-venue rate, arb spread in bps, cheapest-long/richest-short venue, mark/oracle price, open interest, day volume), ranked by volume. Venues that are unreachable (e.g. geo-blocked) are omitted per-coin — Hyperliquid is always present. Cost: $0.005 USDC per call via x402.",
+        "Live cross-venue perpetual-futures funding rates from Hyperliquid+OKX+dYdX (per-venue rate, arb spread in bps, cheapest-long/richest-short venue, mark/oracle price, open interest, day volume), ranked by volume. Venues that are unreachable or don't list a given coin are omitted per-coin — Hyperliquid is always present. Cost: $0.005 USDC per call via x402.",
       inputSchema: {
         limit: z.number().optional().describe("Number of results, default 20, max 100"),
       },
