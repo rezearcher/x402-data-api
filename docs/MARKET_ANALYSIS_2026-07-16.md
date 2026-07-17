@@ -155,3 +155,24 @@ risking the working publish. The first organic call breaks the cold-start and ra
 **End-to-end PROVEN:** a real payment settled via xpay returned live Polymarket data (200) — the
 earning loop works. We are now listed where paying agents shop; `x402_revenue_monitor` catches the
 first organic dollar.
+
+---
+
+## UPDATE 3 (2026-07-16 late) — ROOT CAUSE of $0 + strategy pivot (2 research agents)
+
+**Why we get zero organic paid calls (evidence, not guess):**
+
+1. **CDP Bazaar discovery is structurally broken for a new listing.**
+   - Semantic `/discovery/search` returns **0 results for exact terms** ("polymarket", "crypto prices") — confirmed by direct test, and documented broken ecosystem-wide (incumbents absent too). The Bazaar MCP `search_resources` uses the same backend, so MCP-based Bazaar discovery inherits the outage.
+   - The paginated `/discovery/resources` catalog is 25,530 listings, quality-weighted with periodic recompute; 0-call listings sit in the deep tail. No agent pages 25k deep.
+   - CDP async publish is flaky: 8 `/chain/*` seeds settled (`success:true`) but stayed `processing`/never published, while 4 crypto seeds published in ~60s earlier. **Seeding more Bazaar shelves ≠ getting found.**
+
+2. **We were too thin AND off the one channel that works.** The earners (OneSource 340–416 payers/endpoint, Otto 40–121, BlockRun) share: **breadth** (25–124 endpoints), a **pricing ladder**, a self-describing manifest, multi-chain settlement, **habitual repeat callers** (integrated bots, not one-shot testers), and **distribution via an installable MCP** (BlockRun ships `npx @blockrun/mcp`). The MCP pull channel is the **only cold-start model with visible revenue evidence**. Our `/mcp` previously exposed only the dead-category security tools; our proven-demand data was invisible to it.
+
+**The pivot (this session):**
+- **Breadth:** 4 → 15 paid HTTP endpoints. Added the Base RPC `/chain/*` suite — the single broadest-demand crypto niche on the Bazaar, **uncontested for Base** (we're Base-native), with multi-provider RPC failover.
+- **Pull channel:** `/mcp` now serves **11 tools** (4 paid data + 3 free previews + 4 security); flat MCP price $0.05→$0.005.
+- **Quality:** `/crypto/funding` → cross-venue (Hyperliquid + OKX) with arb spread; `/defi/yields` → trend + IL-risk + stability-forecast fields. (Quality = repeat-paying callers.)
+- **De-prioritized:** Bazaar-seeding (discovery-broken). **Prioritized:** MCP-install distribution + working-search directories.
+
+**Remaining distribution levers (ranked, per Agent 2):** (a) data-forward MCP Registry entry (`server.json` v1.2.0 ready; republish blocked on expired interactive-GitHub `mcp-publisher` token — domain-auth via `sigrunner.com` is a non-interactive alternative); (b) working-search dirs (x402scan `/resources/register` is a browser SPA; 402index svc `49f463a3` needs domain-verify — our verify file is live); (c) verify `payTo` is bound to a registered CDP account (issue #2112 — may explain stuck `/chain` seeds).
