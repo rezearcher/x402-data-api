@@ -17,7 +17,13 @@ richer fields ship without price changes and widen the value gap.
 
 ---
 
-## PHASE 0 — P0 CORRECTNESS BUGS (fix first; these make paid products wrong/misleading)
+## PHASE 0 — P0 CORRECTNESS BUGS ✅ DONE 2026-07-16 (commit `db173e7`, deployed `359b027a`)
+
+> All 5 fixes implemented + **verified live** (scan/mcp: context7 `2 tools/risk 100` & hf.co `4/20`
+> vs old `0/Clean`, and a non-MCP target now errors instead of false-"Clean"; funding 3 non-null via
+> dYdX; EIP-7702 byte-exact on vitalik.eth Base addr; 117 subdomains vs 3; exploit_available derived).
+> Independent verifier caught + we fixed a fallback-path false-"Clean" hole before commit. tsc clean.
+
 
 1. **`/scan/mcp` false "clean" verdict** — `scanMcpServer` (~2293–2335) POSTs a bare `tools/list`
    with **no MCP `initialize` handshake and no `Mcp-Session-Id`**. Spec-compliant servers (confirmed
