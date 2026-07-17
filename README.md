@@ -45,7 +45,7 @@ Base-native, multi-provider RPC with automatic failover (never fails a paid call
 | `GET /enrich/tech-risk?domain=` | $0.05 | Tech-stack fingerprint → CVE (NVD) + EPSS + CISA-KEV attack-surface risk |
 | `GET /enrich/domain?domain=` | $0.01 | Firmographic + tech-stack enrichment (crt.sh, RDAP, DoH, HTTP fingerprint) |
 
-Free previews: `GET /crypto/prices/preview`, `/crypto/funding/preview`, `/defi/yields/preview`, `/scan/mcp/preview?url=`.
+Free previews: `GET /crypto/prices/preview`, `/crypto/funding/preview`, `/defi/yields/preview`, `/chain/block-number/preview`, `/chain/gas-price/preview` (full live data, not truncated), `/scan/mcp/preview?url=`.
 
 ---
 

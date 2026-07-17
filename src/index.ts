@@ -271,6 +271,8 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/crypto/prices/preview — free 1-token sample of /crypto/prices.
 - GET ${BASE}/crypto/funding/preview — free top-1 sample of /crypto/funding.
 - GET ${BASE}/defi/yields/preview — free top-1 sample of /defi/yields.
+- GET ${BASE}/chain/block-number/preview — free, full live data (identical to the paid route).
+- GET ${BASE}/chain/gas-price/preview — free, full live data (identical to the paid route).
 - GET ${BASE}/scan/mcp/preview?url=<mcp-server> — free preview (counts + risk score; withholds detail).
 - GET ${BASE}/.well-known/x402 — machine-readable discovery manifest.
 `);
@@ -2038,6 +2040,22 @@ app.get("/chain/block-number", async (c) => {
   }
 });
 
+// Free preview — same live Base RPC read as the paid route, no payment required.
+// Base-RPC calls are already $0.001, but a zero-friction taste matters for cold
+// outreach: an agent (or a human evaluating one) can curl this with no wallet setup.
+app.get("/chain/block-number/preview", async (c) => {
+  try {
+    const hex = (await baseRpc("eth_blockNumber", [])) as string;
+    return c.json({
+      block_number: parseInt(hex, 16),
+      chain: "base",
+      note: "Free live sample — identical to the paid route. Full: GET /chain/block-number ($0.001), keyless x402 on Base.",
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
 app.get("/chain/gas-price", async (c) => {
   try {
     const hex = (await baseRpc("eth_gasPrice", [])) as string;
@@ -2049,6 +2067,22 @@ app.get("/chain/gas-price", async (c) => {
     );
 
     return c.json(result);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+// Free preview — same live Base RPC read as the paid route, no payment required.
+app.get("/chain/gas-price/preview", async (c) => {
+  try {
+    const hex = (await baseRpc("eth_gasPrice", [])) as string;
+    const wei = BigInt(hex);
+    return c.json({
+      gas_price_wei: wei.toString(),
+      gas_price_gwei: Number(wei) / 1e9,
+      chain: "base",
+      note: "Free live sample — identical to the paid route. Full: GET /chain/gas-price ($0.001), keyless x402 on Base.",
+    });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
