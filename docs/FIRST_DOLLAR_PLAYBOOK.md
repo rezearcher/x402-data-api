@@ -52,7 +52,7 @@ endpoints in front of builders who pull.
 
 | # | Channel | Type | Status | Owner |
 |---|---------|------|--------|-------|
-| 1 | **Targeted 1:1 outreach** to named x402 agent-builders (free trial of Base-RPC/crypto) | Human pull | ✅ **Bankr (top target) reached via its INVITED skills catalog — [BankrBot/skills PR #573](https://github.com/BankrBot/skills/pull/573)** (our `grey-ridge-x402` skill next to Zerion/Alchemy). Warmer cold 1:1s on strangers' *product* repos + X/Farcaster DMs remain Rez's call (reputation). | Mixed |
+| 1 | **Targeted 1:1 outreach** to named x402 agent-builders (free trial of Base-RPC/crypto) | Human pull | ✅ **Bankr** via its skills catalog ([BankrBot/skills #573](https://github.com/BankrBot/skills/pull/573)); ✅ **Aeon** via its Show-and-tell ([aeon discussion #745](https://github.com/aeonfun/aeon/discussions/745)). Remaining warm targets (BlockRunAI/Capacitr) are issues-only (no invited venue) or social DMs → Rez's call (reputation / accounts). | Mixed |
 | 2 | **awesome-x402** curated list (PR #868, OPEN, mergeable) | Curated pull | ✅ Reframed → Base-RPC-first + working `/llms.txt` link (`3a9cfee`); awaiting maintainer merge | Auto |
 | 3 | **awesome-mcp-servers** (90.8k★, agent-PR fast-track w/ `🤖🤖🤖`) | Curated pull | ✅ **PR #10277 OPEN** (via classic token); awaiting merge | Auto |
 | 4 | **MCP catalogs** — Registry ✓; **mcp.so submitted ([issue #3190](https://github.com/chatmcp/mcpso/issues/3190))**; Glama (remote, needs repo); PulseMCP (web-form) | Crawler pull | Registry live + mcp.so submitted | Auto (mostly) |
