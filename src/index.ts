@@ -33,6 +33,48 @@ const CDP_HOST = "api.cdp.coinbase.com";
 const DOH_URL = "https://cloudflare-dns.com/dns-query";
 const RDAP_URL = "https://rdap.org/domain";
 const POLYMARKET_URL = "https://gamma-api.polymarket.com/markets";
+// Multiple keyless Base RPCs — rotate on 429/5xx so a single provider's rate
+// limit never fails a paid call (reliability = repeat callers).
+const BASE_RPCS = [
+  "https://mainnet.base.org",
+  "https://base.llamarpc.com",
+  "https://base-rpc.publicnode.com",
+  "https://base.drpc.org",
+];
+
+// ---------------------------------------------------------------------------
+// Base mainnet JSON-RPC helper — fixed host only (no user-supplied URL),
+// SSRF-safe by construction. Shared by all /chain/* endpoints.
+// ---------------------------------------------------------------------------
+
+const ADDR_RE = /^0x[a-fA-F0-9]{40}$/;
+const HASH_RE = /^0x[a-fA-F0-9]{64}$/;
+
+async function baseRpc(method: string, params: unknown[]): Promise<any> {
+  let lastErr = "no rpc tried";
+  for (const url of BASE_RPCS) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+      });
+      if (!res.ok) {
+        lastErr = `${url} -> HTTP ${res.status}`;
+        continue; // 429 / 5xx → try the next provider
+      }
+      const j = (await res.json()) as { result?: unknown; error?: { message?: string } };
+      if (j.error) {
+        lastErr = `${url} -> ${j.error.message ?? "rpc error"}`;
+        continue;
+      }
+      return j.result; // may be null (e.g. unknown tx hash) — a valid answer
+    } catch (e) {
+      lastErr = `${url} -> ${(e as Error).message}`;
+    }
+  }
+  throw new Error(`Base RPC unavailable (all providers): ${lastErr}`);
+}
 
 // ---------------------------------------------------------------------------
 // App factory — called fresh per Worker request (Hono is stateless)
@@ -161,7 +203,7 @@ app.get("/.well-known/x402", (c) => {
       description:
         "Pay-per-call x402 services on Base: live Polymarket prediction-market data, and MCP security scans (tool-poisoning / prompt-injection / exfiltration, OWASP LLM01/LLM08). No account, no key — agents pay inline in USDC.",
       website: BASE,
-      categories: ["prediction-markets", "crypto", "data", "security", "mcp", "funding", "yield", "token-price"],
+      categories: ["prediction-markets", "crypto", "data", "security", "mcp", "funding", "yield", "token-price", "rpc", "base", "onchain", "blockchain"],
     },
     name: "Grey Ridge Signals",
     provider: "Grey Ridge Signals Group LLC",
@@ -177,6 +219,14 @@ app.get("/.well-known/x402", (c) => {
       mk("/scan/mcp", "GET", "0.10", "100000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score.", ["security", "mcp", "audit", "prompt-injection"]),
       mk("/enrich/tech-risk", "GET", "0.05", "50000", "Tech-stack fingerprint -> CVE (NVD) + EPSS + CISA-KEV attack-surface risk for a domain.", ["security", "cve", "risk"]),
       mk("/enrich/domain", "GET", "0.01", "10000", "Firmographic + tech-stack enrichment for a domain (crt.sh, RDAP, DoH, HTTP fingerprint).", ["data", "domain", "enrichment"]),
+      mk("/chain/block-number", "GET", "0.001", "1000", "Current Base mainnet block number.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/gas-price", "GET", "0.001", "1000", "Current Base mainnet gas price (wei + gwei).", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/balance", "GET", "0.001", "1000", "ETH balance of a Base mainnet address.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/token-balance", "GET", "0.001", "1000", "ERC-20 token balance of a Base mainnet address.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/tx", "GET", "0.001", "1000", "Transaction details by hash on Base mainnet.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/receipt", "GET", "0.001", "1000", "Transaction receipt (status, gas used, logs count) by hash on Base mainnet.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/code", "GET", "0.001", "1000", "Contract-code check for a Base mainnet address (is_contract + code size).", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/wallet", "GET", "0.003", "3000", "Wallet bundle: ETH balance + tx count + contract-code check for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]),
     ],
   });
 });
@@ -202,6 +252,14 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/scan/mcp?url=<mcp-server> — $0.10 — security audit of an MCP server (tool-poisoning / prompt-injection, OWASP LLM01/LLM08).
 - GET ${BASE}/enrich/tech-risk?domain=<domain> — $0.05 — tech-stack -> CVE (NVD) + EPSS + CISA-KEV risk.
 - GET ${BASE}/enrich/domain?domain=<domain> — $0.01 — firmographic + tech-stack enrichment.
+- GET ${BASE}/chain/block-number — $0.001 — current Base mainnet block number.
+- GET ${BASE}/chain/gas-price — $0.001 — current Base mainnet gas price (wei + gwei).
+- GET ${BASE}/chain/balance?address=<0x…> — $0.001 — ETH balance of a Base address.
+- GET ${BASE}/chain/token-balance?address=<0x…>&token=<0x…> — $0.001 — ERC-20 token balance of a Base address.
+- GET ${BASE}/chain/tx?hash=<0x…> — $0.001 — transaction details by hash on Base.
+- GET ${BASE}/chain/receipt?hash=<0x…> — $0.001 — transaction receipt (status, gas used, logs) by hash on Base.
+- GET ${BASE}/chain/code?address=<0x…> — $0.001 — contract-code check for a Base address.
+- GET ${BASE}/chain/wallet?address=<0x…> — $0.003 — wallet bundle: balance + tx count + contract check, one call.
 
 ## Free (previews — taste the data before you pay)
 - GET ${BASE}/crypto/prices/preview — free 1-token sample of /crypto/prices.
@@ -249,6 +307,14 @@ app.get("/openapi.json", (c) => {
       "/scan/mcp": paid("Security audit of an MCP server (tool-poisoning / prompt-injection).", "0.10", [{ name: "url", desc: "target MCP server URL", required: true }]),
       "/enrich/tech-risk": paid("Tech-stack -> CVE + EPSS + CISA-KEV risk.", "0.05", [{ name: "domain", desc: "target domain", required: true }]),
       "/enrich/domain": paid("Firmographic + tech-stack enrichment.", "0.01", [{ name: "domain", desc: "target domain", required: true }]),
+      "/chain/block-number": paid("Current Base mainnet block number.", "0.001", []),
+      "/chain/gas-price": paid("Current Base mainnet gas price (wei + gwei).", "0.001", []),
+      "/chain/balance": paid("ETH balance of a Base mainnet address.", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true }]),
+      "/chain/token-balance": paid("ERC-20 token balance of a Base mainnet address.", "0.001", [{ name: "address", desc: "0x-prefixed holder address", required: true }, { name: "token", desc: "0x-prefixed ERC-20 contract address", required: true }]),
+      "/chain/tx": paid("Transaction details by hash on Base mainnet.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true }]),
+      "/chain/receipt": paid("Transaction receipt (status, gas used, logs count) by hash on Base mainnet.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true }]),
+      "/chain/code": paid("Contract-code check for a Base mainnet address.", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true }]),
+      "/chain/wallet": paid("Wallet bundle: ETH balance + tx count + contract-code check, in one call.", "0.003", [{ name: "address", desc: "0x-prefixed Base address", required: true }]),
     },
   });
 });
@@ -660,6 +726,181 @@ function makeRoutes(payTo: string) {
         },
         output: {
           example: { id: "bitcoin", symbol: "BTC", price: 63731.496785708485, confidence: 0.99, timestamp: 1784244902 },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /chain/block-number": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.001",
+        network: NETWORK,
+        payTo,
+      },
+      description: "Current Base mainnet block number.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: {},
+        inputSchema: { type: "object", properties: {} },
+        output: {
+          example: { block_number: 27738421, chain: "base" },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /chain/gas-price": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.001",
+        network: NETWORK,
+        payTo,
+      },
+      description: "Current Base mainnet gas price (wei + gwei).",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: {},
+        inputSchema: { type: "object", properties: {} },
+        output: {
+          example: { gas_price_wei: "21284349", gas_price_gwei: 0.021284349, chain: "base" },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /chain/balance": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.001",
+        network: NETWORK,
+        payTo,
+      },
+      description: "ETH balance of a Base mainnet address.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { address: "0x4200000000000000000000000000000000000006" },
+        inputSchema: {
+          type: "object",
+          properties: {
+            address: { type: "string", description: "0x-prefixed 20-byte Base address" },
+          },
+        },
+        output: {
+          example: { address: "0x4200000000000000000000000000000000000006", balance_wei: "17265432100000000000", balance_eth: 17.2654321, chain: "base" },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /chain/token-balance": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.001",
+        network: NETWORK,
+        payTo,
+      },
+      description: "ERC-20 token balance of a Base mainnet address.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { address: "0x4200000000000000000000000000000000000006", token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
+        inputSchema: {
+          type: "object",
+          properties: {
+            address: { type: "string", description: "0x-prefixed 20-byte holder address" },
+            token: { type: "string", description: "0x-prefixed 20-byte ERC-20 contract address" },
+          },
+        },
+        output: {
+          example: { address: "0x4200000000000000000000000000000000000006", token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", balance_raw: "1050000", chain: "base" },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /chain/tx": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.001",
+        network: NETWORK,
+        payTo,
+      },
+      description: "Transaction details by hash on Base mainnet.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { hash: "0x571284385ad512a3ffc984a6c2f335113ada217215b6296847944f9d0bc613ef" },
+        inputSchema: {
+          type: "object",
+          properties: {
+            hash: { type: "string", description: "0x-prefixed 32-byte transaction hash" },
+          },
+        },
+        output: {
+          example: { hash: "0x571284385ad512a3ffc984a6c2f335113ada217215b6296847944f9d0bc613ef", blockNumber: "48747709", from: "0xd80217bd14c4d4a4fe37bb1354be1830ed815a60", to: "0x6211a3742cf9d3b6677ecc7fd9dd102ab101d8e2", value: "0", gas: "5000000", gasPrice: "322017256", nonce: "6937" },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /chain/receipt": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.001",
+        network: NETWORK,
+        payTo,
+      },
+      description: "Transaction receipt (status, gas used, logs count) by hash on Base mainnet.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { hash: "0x571284385ad512a3ffc984a6c2f335113ada217215b6296847944f9d0bc613ef" },
+        inputSchema: {
+          type: "object",
+          properties: {
+            hash: { type: "string", description: "0x-prefixed 32-byte transaction hash" },
+          },
+        },
+        output: {
+          example: { status: 1, block_number: 48747709, gas_used: 70216, from: "0xd80217bd14c4d4a4fe37bb1354be1830ed815a60", to: "0x6211a3742cf9d3b6677ecc7fd9dd102ab101d8e2", tx_hash: "0x571284385ad512a3ffc984a6c2f335113ada217215b6296847944f9d0bc613ef", logs_count: 0 },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /chain/code": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.001",
+        network: NETWORK,
+        payTo,
+      },
+      description: "Contract-code check for a Base mainnet address (is_contract + code size).",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { address: "0x4200000000000000000000000000000000000006" },
+        inputSchema: {
+          type: "object",
+          properties: {
+            address: { type: "string", description: "0x-prefixed 20-byte Base address" },
+          },
+        },
+        output: {
+          example: { address: "0x4200000000000000000000000000000000000006", is_contract: true, code_size_bytes: 6234, chain: "base" },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /chain/wallet": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.003",
+        network: NETWORK,
+        payTo,
+      },
+      description: "Wallet bundle: ETH balance + tx count + contract-code check for a Base mainnet address, in one call.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { address: "0x4200000000000000000000000000000000000006" },
+        inputSchema: {
+          type: "object",
+          properties: {
+            address: { type: "string", description: "0x-prefixed 20-byte Base address" },
+          },
+        },
+        output: {
+          example: { address: "0x4200000000000000000000000000000000000006", balance_wei: "17265432100000000000", balance_eth: 17.2654321, tx_count: 4, is_contract: true, chain: "base" },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
@@ -1617,6 +1858,214 @@ app.get("/crypto/prices", async (c) => {
     );
 
     return c.json(prices);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// BASE MAINNET JSON-RPC READS — 8 endpoints, all via baseRpc() (fixed host,
+// SSRF-safe by construction). Addresses/hashes validated before any RPC call.
+// ---------------------------------------------------------------------------
+
+app.get("/chain/block-number", async (c) => {
+  try {
+    const hex = (await baseRpc("eth_blockNumber", [])) as string;
+    const result = { block_number: parseInt(hex, 16), chain: "base" };
+
+    console.log(
+      JSON.stringify({ event: "paid_request", endpoint: "/chain/block-number", ts: new Date().toISOString() }),
+    );
+
+    return c.json(result);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/gas-price", async (c) => {
+  try {
+    const hex = (await baseRpc("eth_gasPrice", [])) as string;
+    const wei = BigInt(hex);
+    const result = { gas_price_wei: wei.toString(), gas_price_gwei: Number(wei) / 1e9, chain: "base" };
+
+    console.log(
+      JSON.stringify({ event: "paid_request", endpoint: "/chain/gas-price", ts: new Date().toISOString() }),
+    );
+
+    return c.json(result);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/balance", async (c) => {
+  const address = c.req.query("address");
+  if (!address || !ADDR_RE.test(address)) {
+    return c.json({ error: "address query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
+  }
+
+  try {
+    const hex = (await baseRpc("eth_getBalance", [address, "latest"])) as string;
+    const wei = BigInt(hex);
+    const result = { address, balance_wei: wei.toString(), balance_eth: Number(wei) / 1e18, chain: "base" };
+
+    console.log(
+      JSON.stringify({ event: "paid_request", endpoint: "/chain/balance", address, ts: new Date().toISOString() }),
+    );
+
+    return c.json(result);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/token-balance", async (c) => {
+  const address = c.req.query("address");
+  const token = c.req.query("token");
+  if (!address || !ADDR_RE.test(address)) {
+    return c.json({ error: "address query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
+  }
+  if (!token || !ADDR_RE.test(token)) {
+    return c.json({ error: "token query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
+  }
+
+  try {
+    const data = `0x70a08231${address.slice(2).toLowerCase().padStart(64, "0")}`;
+    const hex = (await baseRpc("eth_call", [{ to: token, data }, "latest"])) as string;
+    const result = { address, token, balance_raw: BigInt(hex).toString(), chain: "base" };
+
+    console.log(
+      JSON.stringify({ event: "paid_request", endpoint: "/chain/token-balance", address, token, ts: new Date().toISOString() }),
+    );
+
+    return c.json(result);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/tx", async (c) => {
+  const hash = c.req.query("hash");
+  if (!hash || !HASH_RE.test(hash)) {
+    return c.json({ error: "hash query param must be a 0x-prefixed 32-byte transaction hash" }, { status: 400 });
+  }
+
+  try {
+    const tx = (await baseRpc("eth_getTransactionByHash", [hash])) as Record<string, unknown> | null;
+    if (!tx) {
+      return c.json({ error: "tx not found" }, { status: 404 });
+    }
+    const hexToDec = (v: unknown) => (typeof v === "string" && v.startsWith("0x") ? BigInt(v).toString() : v);
+    const result = {
+      ...tx,
+      blockNumber: hexToDec(tx.blockNumber),
+      value: hexToDec(tx.value),
+      gas: hexToDec(tx.gas),
+      gasPrice: hexToDec(tx.gasPrice),
+      nonce: hexToDec(tx.nonce),
+    };
+
+    console.log(
+      JSON.stringify({ event: "paid_request", endpoint: "/chain/tx", hash, ts: new Date().toISOString() }),
+    );
+
+    return c.json(result);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/receipt", async (c) => {
+  const hash = c.req.query("hash");
+  if (!hash || !HASH_RE.test(hash)) {
+    return c.json({ error: "hash query param must be a 0x-prefixed 32-byte transaction hash" }, { status: 400 });
+  }
+
+  try {
+    const receipt = (await baseRpc("eth_getTransactionReceipt", [hash])) as {
+      status: string;
+      blockNumber: string;
+      gasUsed: string;
+      from: string;
+      to: string | null;
+      logs: unknown[];
+    } | null;
+    if (!receipt) {
+      return c.json({ error: "receipt not found" }, { status: 404 });
+    }
+    const result = {
+      status: parseInt(receipt.status, 16),
+      block_number: parseInt(receipt.blockNumber, 16),
+      gas_used: parseInt(receipt.gasUsed, 16),
+      from: receipt.from,
+      to: receipt.to,
+      tx_hash: hash,
+      logs_count: receipt.logs.length,
+    };
+
+    console.log(
+      JSON.stringify({ event: "paid_request", endpoint: "/chain/receipt", hash, ts: new Date().toISOString() }),
+    );
+
+    return c.json(result);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/code", async (c) => {
+  const address = c.req.query("address");
+  if (!address || !ADDR_RE.test(address)) {
+    return c.json({ error: "address query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
+  }
+
+  try {
+    const code = (await baseRpc("eth_getCode", [address, "latest"])) as string;
+    const result = {
+      address,
+      is_contract: code !== "0x" && code.length > 2,
+      code_size_bytes: Math.max(0, (code.length - 2) / 2),
+      chain: "base",
+    };
+
+    console.log(
+      JSON.stringify({ event: "paid_request", endpoint: "/chain/code", address, ts: new Date().toISOString() }),
+    );
+
+    return c.json(result);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/wallet", async (c) => {
+  const address = c.req.query("address");
+  if (!address || !ADDR_RE.test(address)) {
+    return c.json({ error: "address query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
+  }
+
+  try {
+    const [balanceHex, nonceHex, code] = await Promise.all([
+      baseRpc("eth_getBalance", [address, "latest"]) as Promise<string>,
+      baseRpc("eth_getTransactionCount", [address, "latest"]) as Promise<string>,
+      baseRpc("eth_getCode", [address, "latest"]) as Promise<string>,
+    ]);
+    const wei = BigInt(balanceHex);
+    const result = {
+      address,
+      balance_wei: wei.toString(),
+      balance_eth: Number(wei) / 1e18,
+      tx_count: parseInt(nonceHex, 16),
+      is_contract: code !== "0x" && code.length > 2,
+      chain: "base",
+    };
+
+    console.log(
+      JSON.stringify({ event: "paid_request", endpoint: "/chain/wallet", address, ts: new Date().toISOString() }),
+    );
+
+    return c.json(result);
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
