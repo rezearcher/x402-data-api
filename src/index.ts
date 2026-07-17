@@ -203,7 +203,10 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/enrich/tech-risk?domain=<domain> — $0.05 — tech-stack -> CVE (NVD) + EPSS + CISA-KEV risk.
 - GET ${BASE}/enrich/domain?domain=<domain> — $0.01 — firmographic + tech-stack enrichment.
 
-## Free
+## Free (previews — taste the data before you pay)
+- GET ${BASE}/crypto/prices/preview — free 1-token sample of /crypto/prices.
+- GET ${BASE}/crypto/funding/preview — free top-1 sample of /crypto/funding.
+- GET ${BASE}/defi/yields/preview — free top-1 sample of /defi/yields.
 - GET ${BASE}/scan/mcp/preview?url=<mcp-server> — free preview (counts + risk score; withholds detail).
 - GET ${BASE}/.well-known/x402 — machine-readable discovery manifest.
 `);
@@ -248,6 +251,45 @@ app.get("/openapi.json", (c) => {
       "/enrich/domain": paid("Firmographic + tech-stack enrichment.", "0.01", [{ name: "domain", desc: "target domain", required: true }]),
     },
   });
+});
+
+// Free preview conversion hooks — a small live sample so a discovering agent sees
+// real value, then pays for the full set. Mirrors /scan/mcp/preview + the freemium
+// pattern proven across the Bazaar's top data sellers. Free, ungated.
+app.get("/crypto/prices/preview", async (c) => {
+  try {
+    const all = await fetchTokenPrices(["bitcoin", "ethereum", "solana"]);
+    return c.json({
+      preview: all.slice(0, 1),
+      note: "Free 1-of-N sample. Full: GET /crypto/prices?coins=<ids> ($0.001) — up to 25 tokens, keyless x402 on Base.",
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+app.get("/crypto/funding/preview", async (c) => {
+  try {
+    const all = await fetchFundingRates(20);
+    return c.json({
+      preview: all.slice(0, 1),
+      total_available: all.length,
+      note: "Free top-1 sample. Full: GET /crypto/funding?limit=20 ($0.001) — ranked cross-venue funding + annualized %, keyless x402 on Base.",
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+app.get("/defi/yields/preview", async (c) => {
+  try {
+    const all = await fetchDefiYields(20, undefined, undefined, false);
+    return c.json({
+      preview: all.slice(0, 1),
+      total_available: all.length,
+      note: "Free top-1 sample. Full: GET /defi/yields?limit=20 ($0.001) — ranked APY+TVL, filter by project/chain/stablecoin, keyless x402 on Base.",
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
 });
 
 // ---------------------------------------------------------------------------
