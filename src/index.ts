@@ -33,6 +33,7 @@ const CDP_HOST = "api.cdp.coinbase.com";
 const DOH_URL = "https://cloudflare-dns.com/dns-query";
 const RDAP_URL = "https://rdap.org/domain";
 const POLYMARKET_URL = "https://gamma-api.polymarket.com/markets";
+const POLYMARKET_EVENTS_URL = "https://gamma-api.polymarket.com/events";
 // Multiple keyless Base RPCs — rotate on 429/5xx so a single provider's rate
 // limit never fails a paid call (reliability = repeat callers).
 const BASE_RPCS = [
@@ -313,17 +314,17 @@ app.get("/.well-known/x402", (c) => {
     networks: [NETWORK],
     mcp_endpoint: `${BASE}/mcp`,
     resources: [
-      mk("/pm/markets", "GET", "0.005", "5000", "Live Polymarket prediction markets — question, outcomes, live prices, volume, liquidity, end date. Filter by keyword.", ["prediction-markets", "polymarket", "markets", "crypto", "data"]),
-      mk("/crypto/funding", "GET", "0.001", "1000", "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, mark/oracle prices, open interest.", ["crypto", "funding", "perps", "hyperliquid", "okx", "dydx", "arbitrage", "defi", "data"]),
-      mk("/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, APY breakdown + 7d/30d APY trend, IL risk, exposure, DefiLlama stability forecast, TVL. Filter by project, chain, or stablecoin-only.", ["defi", "yield", "lending", "apy", "tvl", "data"]),
-      mk("/crypto/prices", "GET", "0.001", "1000", "Spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "defi", "data"]),
+      mk("/pm/markets", "GET", "0.005", "5000", "Live Polymarket prediction markets — question, outcomes, bestBid/bestAsk/spread, volume24hr/volume1wk, oneDayPriceChange, clobTokenIds, conditionId, category tags, liquidity, end date. Ranked by volume24hr; filter by keyword.", ["prediction-markets", "polymarket", "markets", "crypto", "data"]),
+      mk("/crypto/funding", "GET", "0.001", "1000", "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, premium/basis, annualized_hl/annualized_okx, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices, open interest.", ["crypto", "funding", "perps", "hyperliquid", "okx", "dydx", "arbitrage", "defi", "data"]),
+      mk("/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, pool id, APY breakdown + 1d/7d/30d APY trend, IL risk (incl. il7d), exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL. Filter by project, chain, or stablecoin-only; sort by TVL or risk-adjusted APY.", ["defi", "yield", "lending", "apy", "tvl", "data"]),
+      mk("/crypto/prices", "GET", "0.001", "1000", "Spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/change_24h/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "defi", "data"]),
       mk("/scan/mcp", "GET", "0.10", "100000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score.", ["security", "mcp", "audit", "prompt-injection"]),
       mk("/enrich/tech-risk", "GET", "0.05", "50000", "Tech-stack fingerprint -> CVE (NVD) + EPSS + CISA-KEV attack-surface risk for a domain.", ["security", "cve", "risk"]),
       mk("/enrich/domain", "GET", "0.01", "10000", "Firmographic + tech-stack enrichment for a domain, incl. full subdomain enumeration via certificate-transparency logs (crt.sh, RDAP, DoH, HTTP fingerprint).", ["data", "domain", "enrichment"]),
       mk("/chain/block-number", "GET", "0.001", "1000", "Current Base mainnet block number.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/gas-price", "GET", "0.001", "1000", "Current Base mainnet gas price (wei + gwei).", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/balance", "GET", "0.001", "1000", "ETH balance of a Base mainnet address.", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/token-balance", "GET", "0.001", "1000", "ERC-20 token balance of a Base mainnet address.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/token-balance", "GET", "0.001", "1000", "ERC-20 token balance of a Base mainnet address, incl. symbol, decimals, balance_formatted.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/tx", "GET", "0.001", "1000", "Transaction details by hash on Base mainnet.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/receipt", "GET", "0.001", "1000", "Transaction receipt (status, gas used, logs count) by hash on Base mainnet.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/code", "GET", "0.001", "1000", "Contract-code check for a Base mainnet address (is_contract + code size + EIP-7702 delegated-EOA detection).", ["rpc", "base", "onchain", "blockchain", "data"]),
@@ -346,17 +347,17 @@ Each paid GET returns HTTP 402 with an x402 v2 payment-required challenge (netwo
 Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 
 ## Endpoints
-- GET ${BASE}/crypto/prices?coins=bitcoin,ethereum,solana — $0.001 — spot token prices (DefiLlama), keyless.
-- GET ${BASE}/crypto/funding?limit=20 — $0.001 — cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread (bps) + best long/short venue.
-- GET ${BASE}/defi/yields?limit=20&project=&chain=&stable= — $0.001 — top DeFi lending/LP yields, APY trend + IL risk + stability forecast + TVL (DefiLlama).
-- GET ${BASE}/pm/markets?query=&limit=20 — $0.005 — live Polymarket prediction markets (prices, volume, liquidity).
+- GET ${BASE}/crypto/prices?coins=bitcoin,ethereum,solana — $0.001 — spot token prices + change_24h (DefiLlama), keyless.
+- GET ${BASE}/crypto/funding?limit=20 — $0.001 — cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread (bps) + best long/short venue + premium/annualized/signal/next_funding_ts.
+- GET ${BASE}/defi/yields?limit=20&project=&chain=&stable=&sort=tvl|risk_adjusted — $0.001 — top DeFi lending/LP yields, APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast + TVL (DefiLlama).
+- GET ${BASE}/pm/markets?query=&limit=20 — $0.005 — live Polymarket prediction markets, ranked by volume24hr (bestBid/bestAsk/spread, clobTokenIds, category tags, liquidity).
 - GET ${BASE}/scan/mcp?url=<mcp-server> — $0.10 — security audit of an MCP server (tool-poisoning / prompt-injection, OWASP LLM01/LLM08).
 - GET ${BASE}/enrich/tech-risk?domain=<domain> — $0.05 — tech-stack -> CVE (NVD) + EPSS + CISA-KEV risk.
 - GET ${BASE}/enrich/domain?domain=<domain> — $0.01 — firmographic + tech-stack enrichment, incl. subdomain enumeration (crt.sh).
 - GET ${BASE}/chain/block-number — $0.001 — current Base mainnet block number.
 - GET ${BASE}/chain/gas-price — $0.001 — current Base mainnet gas price (wei + gwei).
 - GET ${BASE}/chain/balance?address=<0x…> — $0.001 — ETH balance of a Base address.
-- GET ${BASE}/chain/token-balance?address=<0x…>&token=<0x…> — $0.001 — ERC-20 token balance of a Base address.
+- GET ${BASE}/chain/token-balance?address=<0x…>&token=<0x…> — $0.001 — ERC-20 token balance of a Base address, incl. symbol/decimals/balance_formatted.
 - GET ${BASE}/chain/tx?hash=<0x…> — $0.001 — transaction details by hash on Base.
 - GET ${BASE}/chain/receipt?hash=<0x…> — $0.001 — transaction receipt (status, gas used, logs) by hash on Base.
 - GET ${BASE}/chain/code?address=<0x…> — $0.001 — contract-code check for a Base address (EIP-7702 delegated-EOA aware).
@@ -366,6 +367,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/crypto/prices/preview — free 1-token sample of /crypto/prices.
 - GET ${BASE}/crypto/funding/preview — free top-1 sample of /crypto/funding.
 - GET ${BASE}/defi/yields/preview — free top-1 sample of /defi/yields.
+- GET ${BASE}/pm/markets/preview — free top-1 sample of /pm/markets.
 - GET ${BASE}/chain/block-number/preview — free, full live data (identical to the paid route).
 - GET ${BASE}/chain/gas-price/preview — free, full live data (identical to the paid route).
 - GET ${BASE}/scan/mcp/preview?url=<mcp-server> — free preview (counts + risk score; withholds detail).
@@ -410,17 +412,17 @@ app.get("/openapi.json", (c) => {
           responses: { "200": { description: "HTML landing page" } },
         },
       },
-      "/crypto/prices": paid("Spot token prices (DefiLlama).", "0.001", [{ name: "coins", desc: "comma-separated coingecko ids (max 25)" }]),
-      "/crypto/funding": paid("Cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread.", "0.001", [{ name: "limit", desc: "max coins (default 20, max 100)" }]),
-      "/defi/yields": paid("Top DeFi lending/LP yields — APY trend + IL risk + stability forecast (DefiLlama).", "0.001", [{ name: "limit", desc: "max pools" }, { name: "project", desc: "protocol filter" }, { name: "chain", desc: "chain filter" }, { name: "stable", desc: "'true' = stablecoin only" }]),
-      "/pm/markets": paid("Live Polymarket prediction markets.", "0.005", [{ name: "query", desc: "keyword filter" }, { name: "limit", desc: "max markets" }]),
+      "/crypto/prices": paid("Spot token prices + change_24h (DefiLlama).", "0.001", [{ name: "coins", desc: "comma-separated coingecko ids (max 25)" }]),
+      "/crypto/funding": paid("Cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread + premium/annualized/signal/next_funding_ts.", "0.001", [{ name: "limit", desc: "max coins (default 20, max 100)" }]),
+      "/defi/yields": paid("Top DeFi lending/LP yields — APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast (DefiLlama).", "0.001", [{ name: "limit", desc: "max pools" }, { name: "project", desc: "protocol filter" }, { name: "chain", desc: "chain filter" }, { name: "stable", desc: "'true' = stablecoin only" }, { name: "sort", desc: "'tvl' (default) or 'risk_adjusted' (apy/sigma)" }]),
+      "/pm/markets": paid("Live Polymarket prediction markets, ranked by volume24hr, with bestBid/bestAsk/spread and category tags.", "0.005", [{ name: "query", desc: "keyword filter" }, { name: "limit", desc: "max markets" }]),
       "/scan/mcp": paid("Security audit of an MCP server (tool-poisoning / prompt-injection).", "0.10", [{ name: "url", desc: "target MCP server URL", required: true }]),
       "/enrich/tech-risk": paid("Tech-stack -> CVE + EPSS + CISA-KEV risk.", "0.05", [{ name: "domain", desc: "target domain", required: true }]),
       "/enrich/domain": paid("Firmographic + tech-stack enrichment, incl. subdomain enumeration.", "0.01", [{ name: "domain", desc: "target domain", required: true }]),
       "/chain/block-number": paid("Current Base mainnet block number.", "0.001", []),
       "/chain/gas-price": paid("Current Base mainnet gas price (wei + gwei).", "0.001", []),
       "/chain/balance": paid("ETH balance of a Base mainnet address.", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true }]),
-      "/chain/token-balance": paid("ERC-20 token balance of a Base mainnet address.", "0.001", [{ name: "address", desc: "0x-prefixed holder address", required: true }, { name: "token", desc: "0x-prefixed ERC-20 contract address", required: true }]),
+      "/chain/token-balance": paid("ERC-20 token balance of a Base mainnet address, incl. symbol/decimals/balance_formatted.", "0.001", [{ name: "address", desc: "0x-prefixed holder address", required: true }, { name: "token", desc: "0x-prefixed ERC-20 contract address", required: true }]),
       "/chain/tx": paid("Transaction details by hash on Base mainnet.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true }]),
       "/chain/receipt": paid("Transaction receipt (status, gas used, logs count) by hash on Base mainnet.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true }]),
       "/chain/code": paid("Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware).", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true }]),
@@ -462,6 +464,18 @@ app.get("/defi/yields/preview", async (c) => {
       preview: all.slice(0, 1),
       total_available: all.length,
       note: "Free top-1 sample. Full: GET /defi/yields?limit=20 ($0.001) — ranked APY trend+IL risk+stability forecast+TVL, filter by project/chain/stablecoin, keyless x402 on Base.",
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+app.get("/pm/markets/preview", async (c) => {
+  try {
+    const all = await fetchPolymarketMarkets(undefined, 20);
+    return c.json({
+      preview: all.slice(0, 1),
+      total_available: all.length,
+      note: "Free top-1 sample. Full: GET /pm/markets?query=&limit=20 ($0.005) — up to 100 markets ranked by volume24hr, with bestBid/bestAsk/spread, clobTokenIds, and category tags, keyless x402 on Base.",
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -741,7 +755,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Query live Polymarket prediction markets — question, outcomes, live prices, volume, liquidity, end date. Filter by keyword.",
+        "Query live Polymarket prediction markets — question, outcomes, live prices, bestBid/bestAsk/spread, volume24hr/volume1wk, oneDayPriceChange, clobTokenIds, conditionId, category tags, liquidity, end date. Ranked by volume24hr; filter by keyword.",
       mimeType: "application/json",
       // Discovery declaration (valid config: query method, object example) so the
       // live 402 advertises this route to Bazaar crawlers. Safe on the xpay settle
@@ -761,7 +775,25 @@ function makeRoutes(payTo: string) {
           },
         },
         output: {
-          example: { question: "Will X happen by 2026?", slug: "will-x-happen-by-2026", outcomes: ["Yes", "No"], outcomePrices: [0.65, 0.35], volume: 1234567.89, liquidity: 45678.12, endDate: "2026-12-31T12:00:00Z", active: true },
+          example: {
+            question: "Will X happen by 2026?",
+            slug: "will-x-happen-by-2026",
+            outcomes: ["Yes", "No"],
+            outcomePrices: [0.65, 0.35],
+            volume: 1234567.89,
+            volume24hr: 84213.45,
+            volume1wk: 412987.6,
+            liquidity: 45678.12,
+            endDate: "2026-12-31T12:00:00Z",
+            active: true,
+            bestBid: 0.64,
+            bestAsk: 0.66,
+            spread: 0.02,
+            oneDayPriceChange: 0.01,
+            clobTokenIds: ["264852...", "884780..."],
+            conditionId: "0xb6d6f15a1b5d08753653f1867ccd6126badfbe182a75159a330dc7b15336b30",
+            tags: ["Crypto", "Bitcoin"],
+          },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
@@ -773,7 +805,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, mark/oracle prices, open interest.",
+        "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, premium/basis, annualized_hl, annualized_okx, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices, open interest.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -791,6 +823,11 @@ function makeRoutes(payTo: string) {
             funding_spread_bps: 0.37,
             best_long_venue: "hyperliquid",
             best_short_venue: "okx",
+            premium: 0.00012,
+            annualized_hl: 0.1095,
+            annualized_okx: 0.05387,
+            signal: "LONGS_PAY",
+            next_funding_ts: 1784304000000,
             markPx: 63730,
             oraclePx: 63750,
             openInterest: 37519.8698399999,
@@ -807,11 +844,11 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Top DeFi lending/LP yields — project, chain, symbol, APY breakdown + 7d/30d APY trend, IL risk, exposure, DefiLlama stability forecast, TVL. Filter by project, chain, or stablecoin-only.",
+        "Top DeFi lending/LP yields — project, chain, symbol, pool id, APY breakdown + 1d/7d/30d APY trend, IL risk (incl. il7d), exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL. Filter by project, chain, or stablecoin-only; sort by TVL (default) or risk-adjusted APY (apy/sigma).",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
-        input: { limit: "20", project: "aave-v3", chain: "Ethereum", stable: "true" },
+        input: { limit: "20", project: "aave-v3", chain: "Ethereum", stable: "true", sort: "tvl" },
         inputSchema: {
           type: "object",
           properties: {
@@ -819,6 +856,7 @@ function makeRoutes(payTo: string) {
             project: { type: "string", description: "Optional: filter to an exact project name (case-insensitive)" },
             chain: { type: "string", description: "Optional: filter to an exact chain name (case-insensitive)" },
             stable: { type: "string", description: "Optional: \"true\" to return only stablecoin pools" },
+            sort: { type: "string", description: "Optional: \"tvl\" (default) or \"risk_adjusted\" (apy/sigma)" },
           },
         },
         output: {
@@ -826,15 +864,26 @@ function makeRoutes(payTo: string) {
             project: "aave-v3",
             chain: "Ethereum",
             symbol: "USDC",
+            pool: "747c1d2a-c668-4682-b9f9-296708a3dd90",
             apy: 4.21,
             apyBase: 3.1,
             apyReward: 1.11,
+            apyPct1D: 0.001,
             apyPct7D: -0.06,
             apyPct30D: 0.15,
+            apyBase7d: 3.05,
+            apyMean30d: 4.1,
             tvlUsd: 512345678,
             stablecoin: true,
             ilRisk: "no",
+            il7d: null,
             exposure: "single",
+            outlier: false,
+            rewardTokens: null,
+            underlyingTokens: ["0x0000000000000000000000000000000000000000"],
+            mu: 3.47618,
+            sigma: 0.05347,
+            risk_adjusted_apy: 78.75,
             predicted_probability: 64,
             volumeUsd1d: null,
           },
@@ -849,7 +898,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/symbol/confidence/timestamp.",
+        "Spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/change_24h/symbol/confidence/timestamp.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -861,7 +910,7 @@ function makeRoutes(payTo: string) {
           },
         },
         output: {
-          example: { id: "bitcoin", symbol: "BTC", price: 63731.496785708485, confidence: 0.99, timestamp: 1784244902 },
+          example: { id: "bitcoin", symbol: "BTC", price: 63731.496785708485, change_24h: -1.78, confidence: 0.99, timestamp: 1784244902 },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
@@ -931,7 +980,7 @@ function makeRoutes(payTo: string) {
         network: NETWORK,
         payTo,
       },
-      description: "ERC-20 token balance of a Base mainnet address.",
+      description: "ERC-20 token balance of a Base mainnet address, incl. symbol, decimals, balance_formatted.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -944,7 +993,7 @@ function makeRoutes(payTo: string) {
           },
         },
         output: {
-          example: { address: "0x4200000000000000000000000000000000000006", token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", balance_raw: "1050000", chain: "base" },
+          example: { address: "0x4200000000000000000000000000000000000006", token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", symbol: "USDC", decimals: 6, balance_raw: "1050000", balance_formatted: 1.05, chain: "base" },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
@@ -1068,6 +1117,7 @@ app.use(async (c, next) => {
       "crypto_prices_preview",
       "crypto_funding_preview",
       "defi_yields_preview",
+      "pm_markets_preview",
       "chain_block_number_preview",
       "chain_gas_price_preview",
     ]);
@@ -1684,9 +1734,22 @@ interface GammaMarket {
   outcomes?: string;
   outcomePrices?: string;
   volumeNum?: number;
+  volume24hr?: number;
+  volume1wk?: number;
   liquidityNum?: number;
   endDate?: string;
   active?: boolean;
+  bestBid?: number;
+  bestAsk?: number;
+  spread?: number;
+  oneDayPriceChange?: number;
+  clobTokenIds?: string;
+  conditionId?: string;
+}
+
+interface GammaEvent {
+  tags?: { label?: string }[];
+  markets?: { conditionId?: string }[];
 }
 
 interface PolymarketMarket {
@@ -1695,9 +1758,18 @@ interface PolymarketMarket {
   outcomes: string[];
   outcomePrices: number[];
   volume: number;
+  volume24hr: number;
+  volume1wk: number;
   liquidity: number;
   endDate: string | null;
   active: boolean;
+  bestBid: number | null;
+  bestAsk: number | null;
+  spread: number | null;
+  oneDayPriceChange: number | null;
+  clobTokenIds: string[];
+  conditionId: string | null;
+  tags: string[];
 }
 
 // Gamma's outcomes/outcomePrices fields are JSON-encoded strings (double-encoded).
@@ -1711,16 +1783,46 @@ function parseJsonArray<T>(raw: string | undefined): T[] {
   }
 }
 
+// Category/tag enrichment: the Gamma /markets object carries no tags itself,
+// but the /events object it belongs to does (tags[].label + nested markets[]
+// keyed by conditionId). Best-effort — tags are an enrichment, so an upstream
+// failure here never fails the underlying market fetch.
+async function fetchMarketTags(fetchLimit: number): Promise<Map<string, string[]>> {
+  const tagMap = new Map<string, string[]>();
+  try {
+    // Events are ranked by their own aggregate volume24hr (not per-market), so
+    // over-fetch events vs. the market limit to improve conditionId coverage —
+    // the Gamma /events endpoint caps out around 100 regardless of a higher limit.
+    const eventsLimit = Math.min(fetchLimit * 3, 100);
+    const url = `${POLYMARKET_EVENTS_URL}?closed=false&order=volume24hr&ascending=false&limit=${eventsLimit}`;
+    const res = await fetch(url, { headers: { accept: "application/json" } });
+    if (!res.ok) return tagMap;
+    const events = (await res.json()) as GammaEvent[];
+    for (const ev of events) {
+      const labels = (ev.tags ?? []).map((t) => t.label).filter((l): l is string => !!l);
+      for (const m of ev.markets ?? []) {
+        if (m.conditionId) tagMap.set(m.conditionId, labels);
+      }
+    }
+  } catch {
+    // Keep tagMap empty on any upstream failure — non-fatal enrichment.
+  }
+  return tagMap;
+}
+
 // The Gamma /markets endpoint has no server-side keyword search, so when a
-// query is given we pull the top markets by volume and filter client-side.
+// query is given we pull the top markets by volume24hr and filter client-side.
 async function fetchPolymarketMarkets(
   query: string | undefined,
   limit: number,
 ): Promise<PolymarketMarket[]> {
   const fetchLimit = query ? 100 : limit;
-  const url = `${POLYMARKET_URL}?closed=false&limit=${fetchLimit}&order=volume&ascending=false`;
+  const url = `${POLYMARKET_URL}?closed=false&limit=${fetchLimit}&order=volume24hr&ascending=false`;
 
-  const res = await fetch(url, { headers: { accept: "application/json" } });
+  const [res, tagMap] = await Promise.all([
+    fetch(url, { headers: { accept: "application/json" } }),
+    fetchMarketTags(fetchLimit),
+  ]);
   if (!res.ok) {
     throw new Error(`Polymarket upstream error: ${res.status}`);
   }
@@ -1732,9 +1834,18 @@ async function fetchPolymarketMarkets(
     outcomes: parseJsonArray<string>(m.outcomes),
     outcomePrices: parseJsonArray<string>(m.outcomePrices).map((p) => parseFloat(p)),
     volume: m.volumeNum ?? 0,
+    volume24hr: m.volume24hr ?? 0,
+    volume1wk: m.volume1wk ?? 0,
     liquidity: m.liquidityNum ?? 0,
     endDate: m.endDate ?? null,
     active: m.active ?? false,
+    bestBid: m.bestBid ?? null,
+    bestAsk: m.bestAsk ?? null,
+    spread: m.spread ?? null,
+    oneDayPriceChange: m.oneDayPriceChange ?? null,
+    clobTokenIds: parseJsonArray<string>(m.clobTokenIds),
+    conditionId: m.conditionId ?? null,
+    tags: (m.conditionId && tagMap.get(m.conditionId)) || [],
   }));
 
   const filtered = query
@@ -1809,23 +1920,46 @@ interface FundingRate {
   funding_spread_bps: number | null;
   best_long_venue: string | null;
   best_short_venue: string | null;
+  premium: number | null;
+  annualized_hl: number | null;
+  annualized_okx: number | null;
+  signal: "LONGS_PAY" | "SHORTS_PAY" | "NEUTRAL";
+  next_funding_ts: number | null;
   markPx: number;
   oraclePx: number;
   openInterest: number;
   dayNtlVlm: number;
 }
 
-async function fetchOkxFunding(coin: string): Promise<number | null> {
+interface OkxFundingResult {
+  rate: number | null;
+  nextFundingTs: number | null;
+}
+
+async function fetchOkxFunding(coin: string): Promise<OkxFundingResult> {
   try {
     const res = await fetch(`https://www.okx.com/api/v5/public/funding-rate?instId=${coin}-USDT-SWAP`);
-    if (!res.ok) return null;
-    const j = (await res.json()) as { code: string; data?: { fundingRate: string }[] };
-    if (j.code !== "0" || !j.data?.[0]) return null;
+    if (!res.ok) return { rate: null, nextFundingTs: null };
+    const j = (await res.json()) as {
+      code: string;
+      data?: { fundingRate: string; nextFundingTime?: string }[];
+    };
+    if (j.code !== "0" || !j.data?.[0]) return { rate: null, nextFundingTs: null };
     const rate = parseFloat(j.data[0].fundingRate);
-    return Number.isFinite(rate) ? rate : null;
+    const nextFundingTs = j.data[0].nextFundingTime ? parseInt(j.data[0].nextFundingTime, 10) : null;
+    return {
+      rate: Number.isFinite(rate) ? rate : null,
+      nextFundingTs: Number.isFinite(nextFundingTs as number) ? nextFundingTs : null,
+    };
   } catch {
-    return null;
+    return { rate: null, nextFundingTs: null };
   }
+}
+
+// Signal is derived off Hyperliquid's rate — the one venue always present.
+function fundingSignal(hlFunding: number): "LONGS_PAY" | "SHORTS_PAY" | "NEUTRAL" {
+  if (!Number.isFinite(hlFunding) || Math.abs(hlFunding) < 1e-8) return "NEUTRAL";
+  return hlFunding > 0 ? "LONGS_PAY" : "SHORTS_PAY";
 }
 
 // Bybit + Binance are geo-blocked from Cloudflare Workers edges (403 / 451 —
@@ -1858,6 +1992,7 @@ async function fetchFundingRates(limit: number): Promise<FundingRate[]> {
   const hlRates: {
     coin: string;
     hlFunding: number;
+    premium: number | null;
     markPx: number;
     oraclePx: number;
     openInterest: number;
@@ -1867,9 +2002,11 @@ async function fetchFundingRates(limit: number): Promise<FundingRate[]> {
     if (u.isDelisted) return;
     const ctx = ctxs[i];
     if (!ctx) return;
+    const premium = parseFloat(ctx.premium);
     hlRates.push({
       coin: u.name,
       hlFunding: parseFloat(ctx.funding),
+      premium: Number.isFinite(premium) ? premium : null,
       markPx: parseFloat(ctx.markPx),
       oraclePx: parseFloat(ctx.oraclePx),
       openInterest: parseFloat(ctx.openInterest),
@@ -1889,9 +2026,10 @@ async function fetchFundingRates(limit: number): Promise<FundingRate[]> {
         fetchOkxFunding(r.coin),
         fetchDydxFunding(r.coin),
       ]);
+      const okx: OkxFundingResult = okxRes.status === "fulfilled" ? okxRes.value : { rate: null, nextFundingTs: null };
       const funding: VenueFunding = {
         hyperliquid: r.hlFunding,
-        okx: okxRes.status === "fulfilled" ? okxRes.value : null,
+        okx: okx.rate,
         dydx: dydxRes.status === "fulfilled" ? dydxRes.value : null,
       };
 
@@ -1915,6 +2053,11 @@ async function fetchFundingRates(limit: number): Promise<FundingRate[]> {
         funding_spread_bps,
         best_long_venue,
         best_short_venue,
+        premium: r.premium,
+        annualized_hl: funding.hyperliquid !== null ? funding.hyperliquid * 24 * 365 : null,
+        annualized_okx: funding.okx !== null ? funding.okx * 3 * 365 : null,
+        signal: fundingSignal(r.hlFunding),
+        next_funding_ts: okx.nextFundingTs,
         markPx: r.markPx,
         oraclePx: r.oraclePx,
         openInterest: r.openInterest,
@@ -1959,13 +2102,22 @@ interface DefiLlamaPool {
   apyBase: number | null;
   apyReward: number | null;
   apy: number | null;
+  apyPct1D: number | null;
   apyPct7D: number | null;
   apyPct30D: number | null;
+  apyBase7d: number | null;
+  apyMean30d: number | null;
   pool: string;
   stablecoin: boolean;
   ilRisk: string;
+  il7d: number | null;
   exposure: string;
   volumeUsd1d: number | null;
+  outlier: boolean;
+  rewardTokens: string[] | null;
+  underlyingTokens: string[] | null;
+  mu: number | null;
+  sigma: number | null;
   predictions?: { predictedProbability: number | null };
 }
 
@@ -1973,15 +2125,26 @@ interface YieldPool {
   project: string;
   chain: string;
   symbol: string;
+  pool: string;
   apy: number | null;
   apyBase: number | null;
   apyReward: number | null;
+  apyPct1D: number | null;
   apyPct7D: number | null;
   apyPct30D: number | null;
+  apyBase7d: number | null;
+  apyMean30d: number | null;
   tvlUsd: number;
   stablecoin: boolean;
   ilRisk: string;
+  il7d: number | null;
   exposure: string;
+  outlier: boolean;
+  rewardTokens: string[] | null;
+  underlyingTokens: string[] | null;
+  mu: number | null;
+  sigma: number | null;
+  risk_adjusted_apy: number | null;
   predicted_probability: number | null;
   volumeUsd1d: number | null;
 }
@@ -1991,6 +2154,7 @@ async function fetchDefiYields(
   project: string | undefined,
   chain: string | undefined,
   stableOnly: boolean,
+  sort: "tvl" | "risk_adjusted" = "tvl",
 ): Promise<YieldPool[]> {
   const res = await fetch("https://yields.llama.fi/pools", { headers: { accept: "application/json" } });
   if (!res.ok) {
@@ -1998,25 +2162,33 @@ async function fetchDefiYields(
   }
   const raw = (await res.json()) as { status: string; data: DefiLlamaPool[] };
 
-  const normalized: YieldPool[] = raw.data
-    .slice()
-    .sort((a, b) => (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0))
-    .map((p) => ({
-      project: p.project,
-      chain: p.chain,
-      symbol: p.symbol,
-      apy: p.apy,
-      apyBase: p.apyBase,
-      apyReward: p.apyReward,
-      apyPct7D: p.apyPct7D ?? null,
-      apyPct30D: p.apyPct30D ?? null,
-      tvlUsd: p.tvlUsd ?? 0,
-      stablecoin: p.stablecoin ?? false,
-      ilRisk: p.ilRisk ?? "unknown",
-      exposure: p.exposure ?? "unknown",
-      predicted_probability: p.predictions?.predictedProbability ?? null,
-      volumeUsd1d: p.volumeUsd1d ?? null,
-    }));
+  const normalized: YieldPool[] = raw.data.map((p) => ({
+    project: p.project,
+    chain: p.chain,
+    symbol: p.symbol,
+    pool: p.pool,
+    apy: p.apy,
+    apyBase: p.apyBase,
+    apyReward: p.apyReward,
+    apyPct1D: p.apyPct1D ?? null,
+    apyPct7D: p.apyPct7D ?? null,
+    apyPct30D: p.apyPct30D ?? null,
+    apyBase7d: p.apyBase7d ?? null,
+    apyMean30d: p.apyMean30d ?? null,
+    tvlUsd: p.tvlUsd ?? 0,
+    stablecoin: p.stablecoin ?? false,
+    ilRisk: p.ilRisk ?? "unknown",
+    il7d: p.il7d ?? null,
+    exposure: p.exposure ?? "unknown",
+    outlier: p.outlier ?? false,
+    rewardTokens: p.rewardTokens ?? null,
+    underlyingTokens: p.underlyingTokens ?? null,
+    mu: p.mu ?? null,
+    sigma: p.sigma ?? null,
+    risk_adjusted_apy: p.apy != null && p.sigma ? p.apy / p.sigma : null,
+    predicted_probability: p.predictions?.predictedProbability ?? null,
+    volumeUsd1d: p.volumeUsd1d ?? null,
+  }));
 
   const filtered = normalized.filter((p) => {
     if (project && p.project.toLowerCase() !== project.toLowerCase()) return false;
@@ -2025,7 +2197,13 @@ async function fetchDefiYields(
     return true;
   });
 
-  return filtered.slice(0, limit);
+  const sorted = filtered.sort((a, b) =>
+    sort === "risk_adjusted"
+      ? (b.risk_adjusted_apy ?? -Infinity) - (a.risk_adjusted_apy ?? -Infinity)
+      : (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0),
+  );
+
+  return sorted.slice(0, limit);
 }
 
 app.get("/defi/yields", async (c) => {
@@ -2036,9 +2214,10 @@ app.get("/defi/yields", async (c) => {
   const project = c.req.query("project") || undefined;
   const chain = c.req.query("chain") || undefined;
   const stable = c.req.query("stable") === "true";
+  const sort = c.req.query("sort") === "risk_adjusted" ? "risk_adjusted" : "tvl";
 
   try {
-    const pools = await fetchDefiYields(limit, project, chain, stable);
+    const pools = await fetchDefiYields(limit, project, chain, stable, sort);
 
     console.log(
       JSON.stringify({
@@ -2048,6 +2227,7 @@ app.get("/defi/yields", async (c) => {
         project: project ?? null,
         chain: chain ?? null,
         stable,
+        sort,
         count: pools.length,
         ts: new Date().toISOString(),
       }),
@@ -2070,17 +2250,40 @@ interface TokenPrice {
   id: string;
   symbol: string;
   price: number;
+  change_24h: number | null;
   confidence: number;
   timestamp: number;
 }
 
 const COINGECKO_ID_RE = /^[a-z0-9-]{1,40}$/;
 
+// Best-effort 24h % change — same host as the price call (coins.llama.fi), a
+// separate endpoint, so an upstream failure here never fails the price fetch.
+async function fetchTokenPriceChanges(ids: string[]): Promise<Record<string, number | null>> {
+  const result: Record<string, number | null> = {};
+  try {
+    const path = ids.map((id) => `coingecko:${id}`).join(",");
+    const res = await fetch(`https://coins.llama.fi/percentage/${path}?period=24h`, {
+      headers: { accept: "application/json" },
+    });
+    if (!res.ok) return result;
+    const raw = (await res.json()) as { coins: Record<string, number> };
+    for (const id of ids) {
+      const v = raw.coins[`coingecko:${id}`];
+      result[id] = typeof v === "number" && Number.isFinite(v) ? v : null;
+    }
+  } catch {
+    // Keep whatever was resolved (possibly empty) — non-fatal enrichment.
+  }
+  return result;
+}
+
 async function fetchTokenPrices(ids: string[]): Promise<TokenPrice[]> {
   const path = ids.map((id) => `coingecko:${id}`).join(",");
-  const res = await fetch(`https://coins.llama.fi/prices/current/${path}`, {
-    headers: { accept: "application/json" },
-  });
+  const [res, changes] = await Promise.all([
+    fetch(`https://coins.llama.fi/prices/current/${path}`, { headers: { accept: "application/json" } }),
+    fetchTokenPriceChanges(ids),
+  ]);
   if (!res.ok) {
     throw new Error(`DefiLlama prices upstream error: ${res.status}`);
   }
@@ -2094,6 +2297,7 @@ async function fetchTokenPrices(ids: string[]): Promise<TokenPrice[]> {
         id,
         symbol: coin.symbol,
         price: coin.price,
+        change_24h: changes[id] ?? null,
         confidence: coin.confidence,
         timestamp: coin.timestamp,
       };
@@ -2224,6 +2428,50 @@ app.get("/chain/balance", async (c) => {
   }
 });
 
+// Decode an ABI-encoded dynamic `string` return value (offset + length + data).
+function decodeAbiString(hex: string): string {
+  try {
+    const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
+    if (clean.length < 128) return "";
+    const len = parseInt(clean.slice(64, 128), 16);
+    const dataHex = clean.slice(128, 128 + len * 2);
+    const bytes = new Uint8Array(dataHex.length / 2);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(dataHex.substr(i * 2, 2), 16);
+    return new TextDecoder().decode(bytes).replace(/\0/g, "").trim();
+  } catch {
+    return "";
+  }
+}
+
+interface TokenMeta {
+  symbol: string;
+  decimals: number;
+}
+
+// symbol()/decimals() rarely change for a deployed contract, so cache per
+// token address for this Worker isolate's lifetime — most-called RPC
+// primitive, this avoids 2 extra eth_calls on every repeat lookup.
+const tokenMetaCache = new Map<string, TokenMeta>();
+
+async function getTokenMeta(token: string): Promise<TokenMeta | null> {
+  const key = token.toLowerCase();
+  const cached = tokenMetaCache.get(key);
+  if (cached) return cached;
+  try {
+    const [symbolHex, decimalsHex] = await Promise.all([
+      baseRpc("eth_call", [{ to: token, data: "0x95d89b41" }, "latest"]) as Promise<string>,
+      baseRpc("eth_call", [{ to: token, data: "0x313ce567" }, "latest"]) as Promise<string>,
+    ]);
+    const symbol = decodeAbiString(symbolHex) || "UNKNOWN";
+    const decimals = decimalsHex && decimalsHex !== "0x" ? parseInt(decimalsHex, 16) : 18;
+    const meta: TokenMeta = { symbol, decimals: Number.isFinite(decimals) ? decimals : 18 };
+    tokenMetaCache.set(key, meta);
+    return meta;
+  } catch {
+    return null;
+  }
+}
+
 app.get("/chain/token-balance", async (c) => {
   const address = c.req.query("address");
   const token = c.req.query("token");
@@ -2236,8 +2484,21 @@ app.get("/chain/token-balance", async (c) => {
 
   try {
     const data = `0x70a08231${address.slice(2).toLowerCase().padStart(64, "0")}`;
-    const hex = (await baseRpc("eth_call", [{ to: token, data }, "latest"])) as string;
-    const result = { address, token, balance_raw: BigInt(hex).toString(), chain: "base" };
+    const [hex, meta] = await Promise.all([
+      baseRpc("eth_call", [{ to: token, data }, "latest"]) as Promise<string>,
+      getTokenMeta(token),
+    ]);
+    const balanceRaw = BigInt(hex);
+    const decimals = meta?.decimals ?? 18;
+    const result = {
+      address,
+      token,
+      symbol: meta?.symbol ?? null,
+      decimals,
+      balance_raw: balanceRaw.toString(),
+      balance_formatted: Number(balanceRaw) / 10 ** decimals,
+      chain: "base",
+    };
 
     console.log(
       JSON.stringify({ event: "paid_request", endpoint: "/chain/token-balance", address, token, ts: new Date().toISOString() }),
@@ -2736,7 +2997,7 @@ const mcpHandler = createMcpHandler(() => {
     "crypto_prices",
     {
       description:
-        "Live spot token prices (price, symbol, confidence, timestamp) for CoinGecko ids, sourced from DefiLlama. Cost: $0.005 USDC per call via x402.",
+        "Live spot token prices (price, change_24h, symbol, confidence, timestamp) for CoinGecko ids, sourced from DefiLlama. Cost: $0.005 USDC per call via x402.",
       inputSchema: {
         coins: z.string().optional().describe('Comma-separated CoinGecko ids, e.g. "bitcoin,ethereum,solana" (default; max 25)'),
       },
@@ -2761,7 +3022,7 @@ const mcpHandler = createMcpHandler(() => {
     "crypto_funding",
     {
       description:
-        "Live cross-venue perpetual-futures funding rates from Hyperliquid+OKX+dYdX (per-venue rate, arb spread in bps, cheapest-long/richest-short venue, mark/oracle price, open interest, day volume), ranked by volume. Venues that are unreachable or don't list a given coin are omitted per-coin — Hyperliquid is always present. Cost: $0.005 USDC per call via x402.",
+        "Live cross-venue perpetual-futures funding rates from Hyperliquid+OKX+dYdX (per-venue rate, arb spread in bps, cheapest-long/richest-short venue, premium/basis, annualized_hl, annualized_okx, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle price, open interest, day volume), ranked by volume. Venues that are unreachable or don't list a given coin are omitted per-coin — Hyperliquid is always present. Cost: $0.005 USDC per call via x402.",
       inputSchema: {
         limit: z.number().optional().describe("Number of results, default 20, max 100"),
       },
@@ -2783,20 +3044,21 @@ const mcpHandler = createMcpHandler(() => {
     "defi_yields",
     {
       description:
-        "Live DeFi lending/LP yield pools (project, chain, symbol, APY breakdown, 7d/30d APY trend, IL risk, exposure, DefiLlama stability forecast, TVL, stablecoin flag) from DefiLlama, ranked by TVL. Cost: $0.005 USDC per call via x402.",
+        "Live DeFi lending/LP yield pools (project, chain, symbol, pool id, APY breakdown incl. 1d/7d/30d trend + apyBase7d/apyMean30d, IL risk incl. il7d, exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL, stablecoin flag) from DefiLlama, ranked by TVL (or risk-adjusted APY = apy/sigma). Cost: $0.005 USDC per call via x402.",
       inputSchema: {
         limit: z.number().optional().describe("Number of results, default 20, max 100"),
         project: z.string().optional().describe("Filter by DefiLlama project slug"),
         chain: z.string().optional().describe("Filter by chain name"),
         stable: z.boolean().optional().describe("Only stablecoin pools"),
+        sort: z.enum(["tvl", "risk_adjusted"]).optional().describe("Sort order: 'tvl' (default) or 'risk_adjusted' (apy/sigma)"),
       },
     },
-    async ({ limit, project, chain, stable }) => {
+    async ({ limit, project, chain, stable, sort }) => {
       try {
         let n = limit ?? 20;
         if (!Number.isFinite(n) || n <= 0) n = 20;
         n = Math.min(n, 100);
-        const result = await fetchDefiYields(n, project, chain, stable ?? false);
+        const result = await fetchDefiYields(n, project, chain, stable ?? false, sort ?? "tvl");
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
@@ -2808,7 +3070,7 @@ const mcpHandler = createMcpHandler(() => {
     "pm_markets",
     {
       description:
-        "Live Polymarket prediction-market data (question, outcomes, outcome prices, volume, liquidity, end date), ranked by volume. Cost: $0.005 USDC per call via x402.",
+        "Live Polymarket prediction-market data — question, outcomes, outcome prices, bestBid/bestAsk/spread, volume24hr/volume1wk, oneDayPriceChange, clobTokenIds, conditionId, category tags, liquidity, end date — ranked by volume24hr. Cost: $0.005 USDC per call via x402.",
       inputSchema: {
         query: z.string().optional().describe("Case-insensitive keyword filter on the market question"),
         limit: z.number().optional().describe("Number of results, default 20, max 100"),
@@ -2891,6 +3153,28 @@ const mcpHandler = createMcpHandler(() => {
   );
 
   server.registerTool(
+    "pm_markets_preview",
+    {
+      description:
+        "FREE top-1 sample of live Polymarket prediction markets, ranked by volume24hr. No payment required.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const all = await fetchPolymarketMarkets(undefined, 20);
+        const result = {
+          preview: all.slice(0, 1),
+          total_available: all.length,
+          note: "Free sample. Full data via the paid pm_markets tool or GET /pm/markets ($0.005).",
+        };
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
     "chain_block_number",
     {
       description:
@@ -2955,7 +3239,7 @@ const mcpHandler = createMcpHandler(() => {
     "chain_token_balance",
     {
       description:
-        "ERC-20 token balance of a Base mainnet address via multi-provider JSON-RPC. Cost: $0.005 USDC per call via x402.",
+        "ERC-20 token balance of a Base mainnet address via multi-provider JSON-RPC, incl. symbol/decimals/balance_formatted (per-token-contract cached in-isolate). Cost: $0.005 USDC per call via x402.",
       inputSchema: {
         address: z.string().describe("0x-prefixed 20-byte holder address"),
         token: z.string().describe("0x-prefixed 20-byte ERC-20 contract address"),
@@ -2970,8 +3254,21 @@ const mcpHandler = createMcpHandler(() => {
       }
       try {
         const data = `0x70a08231${address.slice(2).toLowerCase().padStart(64, "0")}`;
-        const hex = (await baseRpc("eth_call", [{ to: token, data }, "latest"])) as string;
-        const result = { address, token, balance_raw: BigInt(hex).toString(), chain: "base" };
+        const [hex, meta] = await Promise.all([
+          baseRpc("eth_call", [{ to: token, data }, "latest"]) as Promise<string>,
+          getTokenMeta(token),
+        ]);
+        const balanceRaw = BigInt(hex);
+        const decimals = meta?.decimals ?? 18;
+        const result = {
+          address,
+          token,
+          symbol: meta?.symbol ?? null,
+          decimals,
+          balance_raw: balanceRaw.toString(),
+          balance_formatted: Number(balanceRaw) / 10 ** decimals,
+          chain: "base",
+        };
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
