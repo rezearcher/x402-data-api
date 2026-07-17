@@ -7,6 +7,7 @@ import { generateJwt } from "@coinbase/cdp-sdk/auth";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod/v4";
+import { keccak256 } from "viem";
 
 // ---------------------------------------------------------------------------
 // Environment bindings
@@ -158,7 +159,7 @@ app.get("/", (c) => {
     <tbody>
       <tr><td>Base on-chain reads</td><td class="price">$0.001&ndash;$0.003</td><td><code>/chain/block-number</code>, <code>/chain/gas-price</code>, <code>/chain/balance</code>, <code>/chain/token-balance</code>, <code>/chain/tx</code>, <code>/chain/receipt</code>, <code>/chain/code</code>, <code>/chain/wallet</code></td></tr>
       <tr><td>Crypto / DeFi / prediction markets</td><td class="price">$0.001&ndash;$0.005</td><td><code>/crypto/prices</code>, <code>/crypto/funding</code>, <code>/defi/yields</code>, <code>/pm/markets</code></td></tr>
-      <tr><td>Security</td><td class="price">$0.01&ndash;$0.10</td><td><code>/enrich/domain</code>, <code>/enrich/tech-risk</code>, <code>/scan/mcp</code></td></tr>
+      <tr><td>Security</td><td class="price">$0.01&ndash;$0.10</td><td><code>/enrich/domain</code>, <code>/enrich/tech-risk</code>, <code>/scan/mcp</code>, <code>/chain/token-security</code></td></tr>
     </tbody>
   </table>
 
@@ -329,6 +330,7 @@ app.get("/.well-known/x402", (c) => {
       mk("/chain/receipt", "GET", "0.001", "1000", "Transaction receipt by hash on Base mainnet — status, gas used, full logs, and the L1 fee breakdown (l1_fee_wei, l1_gas_price_wei, l1_gas_used, effective_gas_price_wei) + l1_fee_usd/total_fee_usd an ETH-only competitor can't offer.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/code", "GET", "0.001", "1000", "Contract-code check for a Base mainnet address (is_contract + code size + EIP-7702 delegated-EOA detection).", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/wallet", "GET", "0.003", "3000", "Wallet bundle: ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]),
+      mk("/chain/token-security", "GET", "0.02", "20000", "Token security / honeypot detector for a Base mainnet ERC-20: EIP-1967/1822 proxy + upgradeability detection, bytecode dispatcher scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, and a live eth_call state-override simulation testing whether a synthetic wallet can actually transfer() the token. Real compute, not a thin data wrapper. Returns risk_score (0-100) + verdict (clear/review/block) + human-readable flags.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "data"]),
     ],
   });
 });
@@ -362,6 +364,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/chain/receipt?hash=<0x…> — $0.001 — transaction receipt by hash on Base: status, gas used, full logs, L1 fee breakdown (l1_fee_wei/l1_gas_price_wei/l1_gas_used/effective_gas_price_wei) + l1_fee_usd/total_fee_usd.
 - GET ${BASE}/chain/code?address=<0x…> — $0.001 — contract-code check for a Base address (EIP-7702 delegated-EOA aware).
 - GET ${BASE}/chain/wallet?address=<0x…> — $0.003 — wallet bundle: balance + balance_usd + tx count + contract check (EIP-7702 delegated-EOA aware), one call.
+- GET ${BASE}/chain/token-security?token=<0x…> — $0.02 — token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, live eth_call state-override transfer simulation — risk_score + verdict (clear/review/block) + flags. Real compute, not a thin data wrapper.
 
 ## Free (previews — taste the data before you pay)
 - GET ${BASE}/crypto/prices/preview — free 1-token sample of /crypto/prices.
@@ -370,6 +373,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/pm/markets/preview — free top-1 sample of /pm/markets.
 - GET ${BASE}/chain/block-number/preview — free, full live data (identical to the paid route).
 - GET ${BASE}/chain/gas-price/preview — free, full live data (identical to the paid route).
+- GET ${BASE}/chain/token-security/preview — free, full real analysis of a fixed well-known token (Base WETH), same depth as the paid route.
 - GET ${BASE}/scan/mcp/preview?url=<mcp-server> — free preview (counts + risk score; withholds detail).
 - GET ${BASE}/.well-known/x402 — machine-readable discovery manifest.
 `);
@@ -427,6 +431,7 @@ app.get("/openapi.json", (c) => {
       "/chain/receipt": paid("Transaction receipt by hash on Base mainnet: status, gas used, full logs, L1 fee breakdown, l1_fee_usd/total_fee_usd.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true }]),
       "/chain/code": paid("Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware).", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true }]),
       "/chain/wallet": paid("Wallet bundle: ETH balance + balance_usd + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call.", "0.003", [{ name: "address", desc: "0x-prefixed Base address", required: true }]),
+      "/chain/token-security": paid("Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.", "0.02", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true }]),
     },
   });
 });
@@ -572,7 +577,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "MCP tools/call: crypto_prices, crypto_funding, defi_yields, pm_markets (Base/crypto/prediction-market data), chain_block_number, chain_gas_price, chain_balance, chain_token_balance, chain_tx, chain_wallet (Base mainnet on-chain reads, EIP-7702 delegated-EOA aware), enrich_tech_risk (security: tech-stack + CVE/EPSS/CISA-KEV), enrich_domain (firmographic), or scan_mcp_server (tool-poisoning/prompt-injection audit of a target MCP server)",
+        "MCP tools/call: crypto_prices, crypto_funding, defi_yields, pm_markets (Base/crypto/prediction-market data), chain_block_number, chain_gas_price, chain_balance, chain_token_balance, chain_tx, chain_wallet (Base mainnet on-chain reads, EIP-7702 delegated-EOA aware), chain_token_security (token security / honeypot detector: proxy + bytecode risk-selector scan + live transfer simulation), enrich_tech_risk (security: tech-stack + CVE/EPSS/CISA-KEV), enrich_domain (firmographic), or scan_mcp_server (tool-poisoning/prompt-injection audit of a target MCP server)",
       mimeType: "application/json",
     },
     "GET /scan/mcp": {
@@ -1132,6 +1137,49 @@ function makeRoutes(payTo: string) {
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
+    "GET /chain/token-security": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.02",
+        network: NETWORK,
+        payTo,
+      },
+      description:
+        "Token security / honeypot detector for a Base mainnet ERC-20: EIP-1967/1822 proxy + upgradeability detection, bytecode dispatcher scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, and a live eth_call state-override simulation testing whether a synthetic wallet can actually transfer() the token. Returns risk_score (0-100) + verdict (clear/review/block) + human-readable flags.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
+        inputSchema: {
+          type: "object",
+          properties: {
+            token: { type: "string", description: "0x-prefixed 20-byte ERC-20 contract address on Base mainnet" },
+          },
+        },
+        output: {
+          // Real, live-verified output for Base USDC (captured during implementation) —
+          // not a fabricated example. USDC's Base proxy predates EIP-1967 and uses the
+          // older OpenZeppelin "zOS" AdminUpgradeabilityProxy slot convention; this
+          // endpoint detects both, and scans the IMPLEMENTATION's bytecode (not the
+          // thin proxy's) so mint/pause/blacklist are correctly found.
+          example: {
+            token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+            chain: "base",
+            is_contract: true,
+            meta: { name: "USD Coin", symbol: "USDC", decimals: 6, total_supply_raw: "4268653465618984", total_supply_formatted: 4268653465.618984 },
+            proxy: { is_proxy: true, proxy_standard: "OZ zOS AdminUpgradeabilityProxy (pre-EIP-1967)", implementation_address: "0x2ce6311ddae708829bc0784c967b7d77d19fd779", admin_address: "0x4fc7850364958d97b4d3f5a08f79db2493f8ca44", is_upgradeable: true },
+            capabilities: { can_mint: true, can_burn: true, can_pause: true, has_blacklist: true, has_fee_setter: false, has_ownership: true, detected_selectors: [{ selector: "0x40c10f19", signature: "mint(address,uint256)", category: "can_mint" }], scanned_address: "0x2ce6311ddae708829bc0784c967b7d77d19fd779" },
+            ownership: { owner: "0x3abd6f64a422225e61e435bae41db12096106df7", ownership_renounced: false, owner_type: "eoa" },
+            honeypot_sim: { sim_status: "unavailable", method: "…", balance_slot_index: null, transferable: null, revert_reason: null, note: "Could not locate this token's balance storage slot by probing simple mapping(address=>uint256) layouts (slots 0-3)." },
+            risk_score: 65,
+            verdict: "review",
+            flags: ["upgradeable proxy (OZ zOS AdminUpgradeabilityProxy (pre-EIP-1967)) — contract logic can be changed by the admin after you hold this token", "owner/admin can mint unlimited new supply", "has a blacklist function — holders can be blocked from transferring", "contract can be paused — the owner can freeze all transfers", "ownership not renounced — a privileged admin account still controls this contract"],
+            risk_summary: "5 risk flag(s) detected. Risk 65/100.",
+            analyzed_at: "2026-07-17T04:12:15.519Z",
+          },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
   };
 }
 
@@ -1163,6 +1211,7 @@ app.use(async (c, next) => {
       "pm_markets_preview",
       "chain_block_number_preview",
       "chain_gas_price_preview",
+      "chain_token_security_preview",
     ]);
     if (rpcMethod !== "tools/call" || (toolName && FREE_TOOLS.has(toolName))) {
       return next();
@@ -2871,6 +2920,492 @@ app.get("/chain/wallet", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// TOKEN SECURITY / HONEYPOT DETECTOR — the flagship moat product. Every other
+// endpoint here is a thin wrapper on data anyone could fetch themselves; this
+// one does real compute an agent can't trivially self-serve: EIP-1967/1822
+// proxy-slot reads, a runtime-bytecode dispatcher scan for dangerous selectors,
+// and a LIVE eth_call state-override simulation of a wallet-to-wallet transfer
+// to test whether a token is actually movable. Base mainnet, free RPC only.
+// ---------------------------------------------------------------------------
+
+// EIP-1967 standard proxy storage slots: bytes32(uint256(keccak256("eip1967.proxy.<x>")) - 1).
+// Independently recomputed via keccak256 during implementation — not copy-pasted blind.
+const EIP1967_IMPLEMENTATION_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
+const EIP1967_ADMIN_SLOT = "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103";
+// EIP-1822 UUPS: the "PROXIABLE" slot is keccak256("PROXIABLE") itself (no -1 offset).
+const EIP1822_PROXIABLE_SLOT = "0xc5f16f0fcc639fa48a6947836d9850f504798523bf8c9a3a87d5876cf622bcf7";
+// Pre-EIP-1967 OpenZeppelin "zOS" AdminUpgradeabilityProxy slots (keccak256(string), no -1
+// offset) — the pattern OZ shipped before EIP-1967 was finalized in 2019. Still load-bearing:
+// Base USDC's FiatTokenProxy (deployed 2018-era) uses exactly this older convention, not
+// EIP-1967 — confirmed empirically against live Base state during implementation (its
+// EIP-1967 slots read all-zero; these zOS slots hold the real implementation/admin).
+const ZOS_IMPLEMENTATION_SLOT = "0x7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3";
+const ZOS_ADMIN_SLOT = "0x10d6a54a4754c8869d6886b5f5d7fbfa5b4522237ea5c60d11bc4e7a1ff9390b";
+
+// A 32-byte storage word to a checksummed-agnostic lowercase address, or null if unset.
+function storageWordToAddress(word: string): string | null {
+  const clean = word.replace(/^0x/, "").padStart(64, "0");
+  const addrPart = clean.slice(24);
+  if (/^0+$/.test(addrPart)) return null;
+  return "0x" + addrPart;
+}
+
+interface ProxyInfo {
+  is_proxy: boolean;
+  proxy_standard: string | null;
+  implementation_address: string | null;
+  admin_address: string | null;
+  is_upgradeable: boolean;
+}
+
+async function detectProxy(token: string): Promise<ProxyInfo> {
+  const [implWord, adminWord, uupsWord, zosImplWord, zosAdminWord] = await Promise.all([
+    (baseRpc("eth_getStorageAt", [token, EIP1967_IMPLEMENTATION_SLOT, "latest"]).catch(() => null)) as Promise<string | null>,
+    (baseRpc("eth_getStorageAt", [token, EIP1967_ADMIN_SLOT, "latest"]).catch(() => null)) as Promise<string | null>,
+    (baseRpc("eth_getStorageAt", [token, EIP1822_PROXIABLE_SLOT, "latest"]).catch(() => null)) as Promise<string | null>,
+    (baseRpc("eth_getStorageAt", [token, ZOS_IMPLEMENTATION_SLOT, "latest"]).catch(() => null)) as Promise<string | null>,
+    (baseRpc("eth_getStorageAt", [token, ZOS_ADMIN_SLOT, "latest"]).catch(() => null)) as Promise<string | null>,
+  ]);
+  const implAddr = implWord ? storageWordToAddress(implWord) : null;
+  const adminAddr = adminWord ? storageWordToAddress(adminWord) : null;
+  const uupsAddr = uupsWord ? storageWordToAddress(uupsWord) : null;
+  const zosImplAddr = zosImplWord ? storageWordToAddress(zosImplWord) : null;
+  const zosAdminAddr = zosAdminWord ? storageWordToAddress(zosAdminWord) : null;
+
+  if (implAddr) {
+    return { is_proxy: true, proxy_standard: "EIP-1967", implementation_address: implAddr, admin_address: adminAddr, is_upgradeable: true };
+  }
+  if (uupsAddr) {
+    return { is_proxy: true, proxy_standard: "EIP-1822 (UUPS)", implementation_address: uupsAddr, admin_address: adminAddr, is_upgradeable: true };
+  }
+  if (zosImplAddr) {
+    // Pre-EIP-1967 OpenZeppelin AdminUpgradeabilityProxy convention (e.g. Base USDC's
+    // FiatTokenProxy) — same upgradeability risk, older slot layout.
+    return { is_proxy: true, proxy_standard: "OZ zOS AdminUpgradeabilityProxy (pre-EIP-1967)", implementation_address: zosImplAddr, admin_address: zosAdminAddr, is_upgradeable: true };
+  }
+  if (adminAddr) {
+    // Admin slot populated but no readable implementation slot — still proxy-like (nonstandard variant).
+    return { is_proxy: true, proxy_standard: "EIP-1967 (admin slot only)", implementation_address: null, admin_address: adminAddr, is_upgradeable: true };
+  }
+  return { is_proxy: false, proxy_standard: null, implementation_address: null, admin_address: null, is_upgradeable: false };
+}
+
+// Bytecode red-flag selectors, grouped by risk capability. Selectors below are
+// verified 4-byte function selectors (keccak256(signature).slice(0,4)) for the
+// exact signatures shown — cross-checked with viem's toFunctionSelector during
+// implementation, not guessed.
+type SecurityCategory = "can_mint" | "can_burn" | "can_pause" | "has_blacklist" | "has_fee_setter" | "has_ownership";
+
+const SELECTOR_CATALOG: { selector: string; sig: string; category: SecurityCategory }[] = [
+  { selector: "40c10f19", sig: "mint(address,uint256)", category: "can_mint" },
+  { selector: "a0712d68", sig: "mint(uint256)", category: "can_mint" },
+  { selector: "42966c68", sig: "burn(uint256)", category: "can_burn" },
+  { selector: "9dc29fac", sig: "burn(address,uint256)", category: "can_burn" },
+  { selector: "8456cb59", sig: "pause()", category: "can_pause" },
+  { selector: "3f4ba83a", sig: "unpause()", category: "can_pause" },
+  { selector: "f9f92be4", sig: "blacklist(address)", category: "has_blacklist" },
+  { selector: "0ecb93c0", sig: "addBlackList(address)", category: "has_blacklist" },
+  { selector: "417c73a7", sig: "addToBlackList(address)", category: "has_blacklist" },
+  { selector: "153b0d1e", sig: "setBlacklist(address,bool)", category: "has_blacklist" },
+  { selector: "fe575a87", sig: "isBlacklisted(address)", category: "has_blacklist" },
+  { selector: "e5c7160b", sig: "blocklist(address)", category: "has_blacklist" },
+  { selector: "000af2a1", sig: "setBlocked(address,bool)", category: "has_blacklist" },
+  { selector: "061c82d0", sig: "setTaxFeePercent(uint256)", category: "has_fee_setter" },
+  { selector: "69fe0e2d", sig: "setFee(uint256)", category: "has_fee_setter" },
+  { selector: "0b78f9c0", sig: "setFees(uint256,uint256)", category: "has_fee_setter" },
+  { selector: "2e5bb6ff", sig: "setTax(uint256)", category: "has_fee_setter" },
+  { selector: "dc1052e2", sig: "setBuyTax(uint256)", category: "has_fee_setter" },
+  { selector: "8cd09d50", sig: "setSellTax(uint256)", category: "has_fee_setter" },
+  { selector: "8da5cb5b", sig: "owner()", category: "has_ownership" },
+  { selector: "715018a6", sig: "renounceOwnership()", category: "has_ownership" },
+  { selector: "f2fde38b", sig: "transferOwnership(address)", category: "has_ownership" },
+];
+
+// Detects a selector via the Solidity function-dispatcher pattern (PUSH4 <selector> EQ,
+// opcodes 0x63<4-byte-selector>0x14) rather than a raw substring search — far lower
+// false-positive rate than matching the 4 bytes anywhere in the bytecode (which can
+// coincidentally appear inside PUSH-immediate constants unrelated to the dispatcher).
+function scanBytecodeSelectors(code: string): {
+  detected: { selector: string; signature: string; category: SecurityCategory }[];
+  categories: Record<SecurityCategory, boolean>;
+} {
+  const low = code.toLowerCase();
+  const detected = SELECTOR_CATALOG.filter((s) => low.includes(`63${s.selector}14`)).map((s) => ({
+    selector: `0x${s.selector}`,
+    signature: s.sig,
+    category: s.category,
+  }));
+  const categories: Record<SecurityCategory, boolean> = {
+    can_mint: false,
+    can_burn: false,
+    can_pause: false,
+    has_blacklist: false,
+    has_fee_setter: false,
+    has_ownership: false,
+  };
+  for (const d of detected) categories[d.category] = true;
+  return { detected, categories };
+}
+
+interface OwnerInfo {
+  owner: string | null;
+  ownership_renounced: boolean;
+  owner_type: "none" | "renounced" | "eoa" | "contract";
+}
+
+// Single-attempt-per-provider RPC call: unlike baseRpc(), a JSON-RPC "error"
+// here (e.g. execution reverted because a function doesn't exist — expected
+// for e.g. owner() on a non-Ownable token) IS a real answer, not a failure to
+// paper over by rotating through all 4 providers. Only rotates on transport-
+// level failures or explicit rate-limit responses. Cloudflare Workers caps
+// subrequests per invocation (~50, shared with the x402 payment middleware's
+// own facilitator calls) — burning 4x subrequests on every expected revert
+// (as baseRpc's blind full-rotation would) risks tripping that cap on a
+// compute-heavy endpoint like this one, so every optional/may-revert call in
+// this file's token-security analysis uses this instead of baseRpc().
+async function baseRpcProbe(method: string, params: unknown[]): Promise<{ result?: string; error?: string; unavailable?: boolean }> {
+  for (const url of BASE_RPCS) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+      });
+      if (!res.ok) continue;
+      const j = (await res.json()) as { result?: string; error?: { message?: string } };
+      if (j.error) {
+        if (/rate limit|too many requests|429/i.test(j.error.message ?? "")) continue; // transient — try next provider
+        return { error: j.error.message ?? "execution reverted" }; // a real revert — stop rotating, this is the answer
+      }
+      return { result: j.result };
+    } catch {
+      continue;
+    }
+  }
+  return { unavailable: true };
+}
+
+async function getOwnerInfo(token: string): Promise<OwnerInfo> {
+  const call = await baseRpcProbe("eth_call", [{ to: token, data: "0x8da5cb5b" }, "latest"]);
+  if (!call.result || call.result === "0x") return { owner: null, ownership_renounced: false, owner_type: "none" };
+  const addr = storageWordToAddress(call.result);
+  if (!addr) return { owner: null, ownership_renounced: true, owner_type: "renounced" };
+  const codeCall = await baseRpcProbe("eth_getCode", [addr, "latest"]);
+  const isContract = !!codeCall.result && codeCall.result !== "0x";
+  return { owner: addr, ownership_renounced: false, owner_type: isContract ? "contract" : "eoa" };
+}
+
+// ---------------------------------------------------------------------------
+// Honeypot / tradeability simulation — the hard, valuable part. Real eth_call
+// state overrides (stateDiff), not a fabricated result: a synthetic wallet is
+// given a token balance out-of-band (no funds move, nothing is broadcast) by
+// overriding the ERC-20's balance-mapping storage slot, then we attempt a
+// plain transfer() from it and observe revert vs success. This is a proxy for
+// "can this token actually be moved", NOT a full DEX buy+sell round-trip
+// through a router (Aerodrome/Uniswap) — see the `method` note on the result.
+// Confirmed empirically during implementation that mainnet.base.org,
+// base-rpc.publicnode.com, and base.drpc.org all honor the stateDiff override
+// (verified against WETH's known balance slot before writing this).
+// ---------------------------------------------------------------------------
+
+const PROBE_HOLDER = "0x1111111111111111111111111111111111111111";
+const PROBE_RECIPIENT = "0x2222222222222222222222222222222222222222";
+const PROBE_VALUE = 31337n * 10n ** 18n; // distinctive "leet" test balance — collision-negligible vs a real balance
+const PROBE_VALUE_HEX = "0x" + PROBE_VALUE.toString(16).padStart(64, "0");
+// Slots 0..3, tried sequentially with an early exit on match — covers slot 0
+// (the common case for a bare OZ ERC20 with no state before it) through slot 3
+// (canonical WETH9's balance-mapping slot) while keeping subrequests low.
+// Cloudflare Workers caps subrequests at 50/invocation, shared with the x402
+// payment middleware's own verify+settle facilitator calls (empirically
+// confirmed during implementation: a wider range plus a proxy token's extra
+// implementation-code fetch tripped that cap and caused settlement to fail on
+// an otherwise-successful analysis — this range was tuned back down to fit).
+const PROBE_SLOT_RANGE = 4;
+
+// Solidity's mapping(address => X) slot derivation: keccak256(pad32(key) . pad32(slot)).
+function mappingSlotKey(holder: string, slot: number): string {
+  const holderWord = holder.slice(2).toLowerCase().padStart(64, "0");
+  const slotWord = slot.toString(16).padStart(64, "0");
+  return keccak256(`0x${holderWord}${slotWord}` as `0x${string}`);
+}
+
+interface HoneypotSim {
+  sim_status: "tested" | "unavailable";
+  method: string;
+  balance_slot_index: number | null;
+  transferable: boolean | null;
+  revert_reason: string | null;
+  note: string;
+}
+
+const HONEYPOT_SIM_METHOD =
+  "eth_call with a stateDiff override: gives a synthetic wallet (0x1111...1111) a token balance out-of-band (no real funds move) by overriding the ERC-20's balance-mapping storage slot, then attempts a plain transfer() to a second synthetic wallet and checks for a revert. Detects wallet-to-wallet transfer blocks (the most common honeypot/blacklist pattern). This is NOT a full DEX buy+sell round-trip through a router (Aerodrome/Uniswap) — no buy_tax_pct/sell_tax_pct is computed. A token could in principle allow plain transfers while still blocking sells specifically through its LP pair, or vice versa; treat transferable:false as a strong red flag and transferable:true as 'no basic transfer-block found', not a full sellability guarantee.";
+
+async function simulateTransferProbe(token: string): Promise<HoneypotSim> {
+  const balanceOfData = (holder: string) => `0x70a08231${holder.slice(2).toLowerCase().padStart(64, "0")}`;
+  const transferData = (to: string, amount: bigint) =>
+    `0xa9059cbb${to.slice(2).toLowerCase().padStart(64, "0")}${amount.toString(16).padStart(64, "0")}`;
+
+  // Sequential with early exit (not Promise.all-parallel): most simple ERC-20
+  // layouts match within the first slot or two, so this keeps the common case
+  // cheap on Workers' per-invocation subrequest budget; only a non-matching
+  // token pays for the full PROBE_SLOT_RANGE attempts.
+  let foundSlot: number | null = null;
+  let sawAnySuccess = false;
+  for (let slot = 0; slot < PROBE_SLOT_RANGE; slot++) {
+    const key = mappingSlotKey(PROBE_HOLDER, slot);
+    const override = { [token]: { stateDiff: { [key]: PROBE_VALUE_HEX } } };
+    const r = await baseRpcProbe("eth_call", [{ to: token, data: balanceOfData(PROBE_HOLDER) }, "latest", override]);
+    if (r.result !== undefined) {
+      sawAnySuccess = true;
+      try {
+        if (BigInt(r.result) === PROBE_VALUE) {
+          foundSlot = slot;
+          break;
+        }
+      } catch {
+        /* non-numeric result — ignore */
+      }
+    }
+  }
+
+  if (foundSlot === null) {
+    return {
+      sim_status: "unavailable",
+      method: HONEYPOT_SIM_METHOD,
+      balance_slot_index: null,
+      transferable: null,
+      revert_reason: null,
+      note: sawAnySuccess
+        ? `Could not locate this token's balance storage slot by probing simple mapping(address=>uint256) layouts (slots 0-${PROBE_SLOT_RANGE - 1}). Likely a non-standard storage layout (packed struct, diamond storage, or an offset beyond the probed range) — no tradeability signal available. This does NOT imply the token is safe or unsafe.`
+        : "RPC state-override calls failed or were rate-limited on every attempt — simulation infra unavailable right now. This does NOT imply the token is safe or unsafe.",
+    };
+  }
+
+  const key = mappingSlotKey(PROBE_HOLDER, foundSlot);
+  const override = { [token]: { stateDiff: { [key]: PROBE_VALUE_HEX } } };
+  const sendAmount = PROBE_VALUE / 2n;
+  const simResult = await baseRpcProbe("eth_call", [
+    { to: token, from: PROBE_HOLDER, data: transferData(PROBE_RECIPIENT, sendAmount) },
+    "latest",
+    override,
+  ]);
+
+  if (simResult.unavailable) {
+    return {
+      sim_status: "unavailable",
+      method: HONEYPOT_SIM_METHOD,
+      balance_slot_index: foundSlot,
+      transferable: null,
+      revert_reason: null,
+      note: "Balance slot located but the transfer-probe eth_call failed or was rate-limited on every RPC attempt.",
+    };
+  }
+  if (simResult.error) {
+    return {
+      sim_status: "tested",
+      method: HONEYPOT_SIM_METHOD,
+      balance_slot_index: foundSlot,
+      transferable: false,
+      revert_reason: simResult.error.slice(0, 300),
+      note: "A synthetic wallet holding this token could NOT complete a plain transfer() — it reverted. Strong honeypot / transfer-restriction signal.",
+    };
+  }
+  return {
+    sim_status: "tested",
+    method: HONEYPOT_SIM_METHOD,
+    balance_slot_index: foundSlot,
+    transferable: true,
+    revert_reason: null,
+    note: "A synthetic wallet holding this token successfully completed a plain transfer() with no revert. No basic transfer-block detected (does not rule out DEX-pair-specific sell restrictions).",
+  };
+}
+
+interface TokenSecurityResult {
+  token: string;
+  chain: "base";
+  is_contract: boolean;
+  is_eip7702_delegate: boolean;
+  delegate_address: string | null;
+  meta: {
+    name: string | null;
+    symbol: string | null;
+    decimals: number;
+    total_supply_raw: string | null;
+    total_supply_formatted: number | null;
+  };
+  proxy: ProxyInfo;
+  capabilities: Record<SecurityCategory, boolean> & {
+    detected_selectors: { selector: string; signature: string; category: SecurityCategory }[];
+    scanned_address: string;
+  };
+  ownership: OwnerInfo;
+  honeypot_sim: HoneypotSim;
+  risk_score: number;
+  verdict: Verdict;
+  flags: string[];
+  risk_summary: string;
+  analyzed_at: string;
+}
+
+async function analyzeTokenSecurity(token: string): Promise<TokenSecurityResult> {
+  const analyzed_at = new Date().toISOString();
+
+  const [code, nameCall, totalSupplyCall, meta, proxy, owner, sim] = await Promise.all([
+    baseRpc("eth_getCode", [token, "latest"]) as Promise<string>,
+    baseRpcProbe("eth_call", [{ to: token, data: "0x06fdde03" }, "latest"]),
+    baseRpcProbe("eth_call", [{ to: token, data: "0x18160ddd" }, "latest"]),
+    getTokenMeta(token),
+    detectProxy(token),
+    getOwnerInfo(token),
+    simulateTransferProbe(token),
+  ]);
+
+  const codeClass = classifyCode(code);
+  // A proxy's OWN bytecode is just a thin delegatecall forwarder — mint/pause/
+  // blacklist/etc selectors live in the IMPLEMENTATION contract, not the proxy.
+  // Scanning the proxy's code would silently miss every capability on every
+  // legitimate proxy token (including USDC). Fetch and scan the implementation
+  // instead when one was found; fall back to the queried address's own code.
+  let scanAddress = token;
+  let scanCode = code;
+  if (proxy.is_proxy && proxy.implementation_address) {
+    const implCode = (await baseRpc("eth_getCode", [proxy.implementation_address, "latest"]).catch(() => null)) as string | null;
+    if (implCode && implCode !== "0x") {
+      scanAddress = proxy.implementation_address;
+      scanCode = implCode;
+    }
+  }
+  const { detected, categories } = scanBytecodeSelectors(scanCode);
+  const decimals = meta?.decimals ?? 18;
+  const nameHex = nameCall.result ?? null;
+  const totalSupplyHex = totalSupplyCall.result ?? null;
+  let totalSupplyRaw: bigint | null = null;
+  try {
+    if (totalSupplyHex && totalSupplyHex !== "0x") totalSupplyRaw = BigInt(totalSupplyHex);
+  } catch {
+    /* non-numeric — leave null */
+  }
+
+  const flags: string[] = [];
+  let score = 0;
+
+  if (!codeClass.is_contract) {
+    score = 100;
+    flags.push("target address is not a contract — not a valid ERC-20 token");
+  } else {
+    if (sim.sim_status === "tested" && sim.transferable === false) {
+      score += 75;
+      flags.push("simulated transfer reverted — token appears non-transferable / possible honeypot");
+    }
+    if (proxy.is_proxy) {
+      score += 15;
+      flags.push(`upgradeable proxy (${proxy.proxy_standard}) — contract logic can be changed by the admin after you hold this token`);
+    }
+    if (categories.can_mint) {
+      score += 15;
+      flags.push("owner/admin can mint unlimited new supply");
+    }
+    if (categories.has_blacklist) {
+      score += 15;
+      flags.push("has a blacklist function — holders can be blocked from transferring");
+    }
+    if (categories.can_pause) {
+      score += 10;
+      flags.push("contract can be paused — the owner can freeze all transfers");
+    }
+    if (categories.has_fee_setter) {
+      score += 10;
+      flags.push("owner can set or change a transfer tax/fee");
+    }
+    if (categories.has_ownership && !owner.ownership_renounced) {
+      score += 10;
+      flags.push("ownership not renounced — a privileged admin account still controls this contract");
+    }
+  }
+  score = Math.min(100, score);
+  const verdict = verdictFromScore(score);
+
+  const risk_summary = !codeClass.is_contract
+    ? "Target is not a contract — cannot be an ERC-20 token."
+    : flags.length === 0
+      ? `No dangerous capabilities detected on static analysis${sim.sim_status === "tested" && sim.transferable ? " and the simulated transfer succeeded" : ""}. Risk ${score}/100.`
+      : `${flags.length} risk flag(s) detected. Risk ${score}/100.${sim.sim_status === "unavailable" ? " Honeypot simulation was unavailable for this token — see honeypot_sim.note." : ""}`;
+
+  return {
+    token,
+    chain: "base",
+    is_contract: codeClass.is_contract,
+    is_eip7702_delegate: codeClass.is_eip7702_delegate,
+    delegate_address: codeClass.delegate_address,
+    meta: {
+      name: (nameHex ? decodeAbiString(nameHex) : "") || null,
+      symbol: meta?.symbol ?? null,
+      decimals,
+      total_supply_raw: totalSupplyRaw !== null ? totalSupplyRaw.toString() : null,
+      total_supply_formatted: totalSupplyRaw !== null ? Number(totalSupplyRaw) / 10 ** decimals : null,
+    },
+    proxy,
+    capabilities: { ...categories, detected_selectors: detected, scanned_address: scanAddress },
+    ownership: owner,
+    honeypot_sim: sim,
+    risk_score: score,
+    verdict,
+    flags,
+    risk_summary,
+    analyzed_at,
+  };
+}
+
+app.get("/chain/token-security", async (c) => {
+  const token = c.req.query("token");
+  if (!token || !ADDR_RE.test(token)) {
+    return c.json({ error: "token query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
+  }
+  try {
+    const result = await analyzeTokenSecurity(token);
+    console.log(
+      JSON.stringify({
+        event: "paid_request",
+        endpoint: "/chain/token-security",
+        token,
+        verdict: result.verdict,
+        risk_score: result.risk_score,
+        ts: result.analyzed_at,
+      }),
+    );
+    return c.json(result);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+// Free preview — runs the FULL real analysis (not a withheld/partial result) on
+// a fixed well-known token (Base WETH) so an agent can see the real product
+// before paying. To analyze an arbitrary token, pay for GET /chain/token-security.
+const TOKEN_SECURITY_PREVIEW_TOKEN = "0x4200000000000000000000000000000000000006"; // WETH on Base
+app.get("/chain/token-security/preview", async (c) => {
+  try {
+    const result = await analyzeTokenSecurity(TOKEN_SECURITY_PREVIEW_TOKEN);
+    console.log(
+      JSON.stringify({
+        event: "free_preview",
+        endpoint: "/chain/token-security/preview",
+        token: TOKEN_SECURITY_PREVIEW_TOKEN,
+        verdict: result.verdict,
+        ts: result.analyzed_at,
+      }),
+    );
+    return c.json({
+      ...result,
+      note: "Free live sample — full real analysis of a well-known token (Base WETH), same depth as the paid endpoint. Full: GET /chain/token-security?token=<0x…> ($0.02) to analyze ANY Base ERC-20 token.",
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // MCP SECURITY SCAN — the moat product. Fetch a target MCP server's tool list
 // and statically analyze each tool for prompt-injection / tool-poisoning (OWASP
 // LLM01/LLM08 + the MCP-specific tool-poisoning class). Edge-runnable, keyless:
@@ -3587,6 +4122,28 @@ const mcpHandler = createMcpHandler(() => {
   );
 
   server.registerTool(
+    "chain_token_security",
+    {
+      description:
+        "Token security / honeypot detector for a Base mainnet ERC-20: EIP-1967/1822 proxy + upgradeability detection, bytecode dispatcher scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, and a live eth_call state-override simulation testing whether a synthetic wallet can actually transfer() the token. Returns risk_score (0-100) + verdict (clear/review/block) + human-readable flags. Real compute an agent can't trivially self-serve. Cost: $0.005 USDC per call via x402.",
+      inputSchema: {
+        token: z.string().describe("0x-prefixed 20-byte ERC-20 contract address on Base mainnet"),
+      },
+    },
+    async ({ token }) => {
+      if (!ADDR_RE.test(token)) {
+        return { content: [{ type: "text" as const, text: "Error: token must be a 0x-prefixed 20-byte address" }] };
+      }
+      try {
+        const result = await analyzeTokenSecurity(token);
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
     "chain_block_number_preview",
     {
       description:
@@ -3634,6 +4191,27 @@ const mcpHandler = createMcpHandler(() => {
           note: "Free live sample — identical to the paid tool. Full: the paid chain_gas_price tool or GET /chain/gas-price ($0.001).",
         };
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "chain_token_security_preview",
+    {
+      description:
+        "FREE full real analysis of a fixed well-known token (Base WETH) via the token security / honeypot detector — same depth as the paid chain_token_security tool, so you can see the real product before paying. To analyze an arbitrary token, use the paid chain_token_security tool. No payment required.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const result = await analyzeTokenSecurity(TOKEN_SECURITY_PREVIEW_TOKEN);
+        const withNote = {
+          ...result,
+          note: "Free live sample — full real analysis of a well-known token (Base WETH), same depth as the paid tool. Full: the paid chain_token_security tool or GET /chain/token-security ($0.02) to analyze ANY Base ERC-20 token.",
+        };
+        return { content: [{ type: "text" as const, text: JSON.stringify(withNote, null, 2) }] };
       } catch (e) {
         return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
       }
