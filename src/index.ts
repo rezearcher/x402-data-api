@@ -181,6 +181,75 @@ app.get("/.well-known/x402", (c) => {
   });
 });
 
+// llms.txt — the plain-text catalog AI-agent crawlers read to discover paid
+// services (an emerging convention many x402 sellers expose). Free, ungated.
+app.get("/llms.txt", (c) => {
+  const BASE = "https://x402-data-api.sigrunner.workers.dev";
+  return c.text(`# Grey Ridge Signals — x402 Data & Security APIs
+
+> Agent-native, pay-per-call data on Base (USDC via x402). No account, no API key — agents pay inline.
+> Discovery: ${BASE}/.well-known/x402  |  OpenAPI: ${BASE}/openapi.json  |  Listed on the Coinbase CDP x402 Bazaar.
+
+## How to pay
+Each paid GET returns HTTP 402 with an x402 v2 payment-required challenge (network eip155:8453 / Base, asset USDC).
+Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
+
+## Endpoints
+- GET ${BASE}/crypto/prices?coins=bitcoin,ethereum,solana — $0.001 — spot token prices (DefiLlama), keyless.
+- GET ${BASE}/crypto/funding?limit=20 — $0.001 — cross-venue perp funding rates + annualized % (Hyperliquid).
+- GET ${BASE}/defi/yields?limit=20&project=&chain=&stable= — $0.001 — top DeFi lending/LP yields, APY + TVL (DefiLlama).
+- GET ${BASE}/pm/markets?query=&limit=20 — $0.005 — live Polymarket prediction markets (prices, volume, liquidity).
+- GET ${BASE}/scan/mcp?url=<mcp-server> — $0.10 — security audit of an MCP server (tool-poisoning / prompt-injection, OWASP LLM01/LLM08).
+- GET ${BASE}/enrich/tech-risk?domain=<domain> — $0.05 — tech-stack -> CVE (NVD) + EPSS + CISA-KEV risk.
+- GET ${BASE}/enrich/domain?domain=<domain> — $0.01 — firmographic + tech-stack enrichment.
+
+## Free
+- GET ${BASE}/scan/mcp/preview?url=<mcp-server> — free preview (counts + risk score; withholds detail).
+- GET ${BASE}/.well-known/x402 — machine-readable discovery manifest.
+`);
+});
+
+// openapi.json — OpenAPI 3.1 spec so agents can auto-integrate every paid route.
+app.get("/openapi.json", (c) => {
+  const BASE = "https://x402-data-api.sigrunner.workers.dev";
+  const paid = (
+    summary: string,
+    price: string,
+    params: { name: string; desc: string; required?: boolean }[],
+  ) => ({
+    get: {
+      summary,
+      description: `${summary} Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $${price}.`,
+      parameters: params.map((p) => ({
+        name: p.name, in: "query", required: !!p.required,
+        schema: { type: "string" }, description: p.desc,
+      })),
+      responses: {
+        "200": { description: "Success — JSON data" },
+        "402": { description: `Payment required ($${price} USDC via x402)` },
+      },
+    },
+  });
+  return c.json({
+    openapi: "3.1.0",
+    info: {
+      title: "Grey Ridge Signals — x402 Data & Security APIs",
+      version: "1.0.0",
+      description: "Agent-native pay-per-call data on Base (USDC via x402). No API keys, no signup. Discovery: /.well-known/x402",
+    },
+    servers: [{ url: BASE }],
+    paths: {
+      "/crypto/prices": paid("Spot token prices (DefiLlama).", "0.001", [{ name: "coins", desc: "comma-separated coingecko ids (max 25)" }]),
+      "/crypto/funding": paid("Cross-venue perp funding rates + annualized (Hyperliquid).", "0.001", [{ name: "limit", desc: "max coins (default 20, max 100)" }]),
+      "/defi/yields": paid("Top DeFi lending/LP yields (DefiLlama).", "0.001", [{ name: "limit", desc: "max pools" }, { name: "project", desc: "protocol filter" }, { name: "chain", desc: "chain filter" }, { name: "stable", desc: "'true' = stablecoin only" }]),
+      "/pm/markets": paid("Live Polymarket prediction markets.", "0.005", [{ name: "query", desc: "keyword filter" }, { name: "limit", desc: "max markets" }]),
+      "/scan/mcp": paid("Security audit of an MCP server (tool-poisoning / prompt-injection).", "0.10", [{ name: "url", desc: "target MCP server URL", required: true }]),
+      "/enrich/tech-risk": paid("Tech-stack -> CVE + EPSS + CISA-KEV risk.", "0.05", [{ name: "domain", desc: "target domain", required: true }]),
+      "/enrich/domain": paid("Firmographic + tech-stack enrichment.", "0.01", [{ name: "domain", desc: "target domain", required: true }]),
+    },
+  });
+});
+
 // ---------------------------------------------------------------------------
 // x402 resource server — built once per isolate at module load time.
 // The facilitator client and EVM scheme are network-level; PAY_TO comes from env.
