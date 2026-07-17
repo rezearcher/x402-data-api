@@ -58,7 +58,13 @@ richer fields ship without price changes and widen the value gap.
 
 ---
 
-## PHASE 1 — ZERO-DEPENDENCY FIELD ENRICHMENTS (data already in payloads we fetch + discard)
+## PHASE 1 — ZERO-DEPENDENCY FIELD ENRICHMENTS ✅ CORE DONE 2026-07-16 (commit `547dc1c`, deployed `17ca8722`)
+
+> Items **6, 7, 8, 9, 12 DONE** + verified live (change_24h; funding premium/annualized/signal/next_funding_ts;
+> defi mu/sigma/pool/risk_adjusted; pm/markets bestBid/ask/spread/volume24hr-sort/tags + new /pm/markets/preview
+> [20 MCP tools]; token-balance symbol/decimals/balance_formatted). **Remaining: 10 (receipt fields), 11 (tx
+> normalize), 13 (tech-risk fields), 14 (verdict enum — folded into Builder D).**
+
 
 6. **`/crypto/prices`** (VERDICT: behind — every competitor adds ≥1 derived field, we add zero;
    handler ~1945–1985): add **`change_24h`** via parallel `GET coins.llama.fi/percentage/coingecko:{ids}?period=24h`

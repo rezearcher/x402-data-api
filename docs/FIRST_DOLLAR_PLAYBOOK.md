@@ -54,7 +54,7 @@ endpoints in front of builders who pull.
 |---|---------|------|--------|-------|
 | 1 | **Targeted 1:1 outreach** to named x402 agent-builders (free trial of Base-RPC/crypto) | Human pull | Targets being researched; message drafted → **Rez sends/approves** | Rez-atom |
 | 2 | **awesome-x402** curated list (PR #868, OPEN, mergeable) | Curated pull | ✅ Reframed → Base-RPC-first + working `/llms.txt` link (`3a9cfee`); awaiting maintainer merge | Auto |
-| 3 | **awesome-mcp-servers** (90.8k★, agent-PR fast-track w/ `🤖🤖🤖`) | Curated pull | Fork ready; landing page live → **submitting** | Auto |
+| 3 | **awesome-mcp-servers** (90.8k★, agent-PR fast-track w/ `🤖🤖🤖`) | Curated pull | ✅ **PR #10277 OPEN** (via classic token); awaiting merge | Auto |
 | 4 | **MCP catalogs** — Registry ✓; **Glama ✗** (remote, needs claim); mcp.so / PulseMCP (web-form submit) | Crawler pull | Registry covered; claim/submit others | Auto (mostly) |
 | 5 | **Dual-rail RapidAPI / Stripe** for human/API-key buyers (Rez's stated preference) | Human market | Needs Rez's account/tokens | Rez-atom |
 
