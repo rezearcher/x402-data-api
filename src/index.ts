@@ -213,8 +213,8 @@ app.get("/.well-known/x402", (c) => {
     mcp_endpoint: `${BASE}/mcp`,
     resources: [
       mk("/pm/markets", "GET", "0.005", "5000", "Live Polymarket prediction markets — question, outcomes, live prices, volume, liquidity, end date. Filter by keyword.", ["prediction-markets", "polymarket", "markets", "crypto", "data"]),
-      mk("/crypto/funding", "GET", "0.001", "1000", "Cross-venue perp funding rates from Hyperliquid — top coins by 24h notional volume, hourly + annualized funding, mark/oracle prices, open interest.", ["crypto", "funding", "perps", "hyperliquid", "defi", "data"]),
-      mk("/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, APY breakdown, TVL. Filter by project, chain, or stablecoin-only.", ["defi", "yield", "lending", "apy", "tvl", "data"]),
+      mk("/crypto/funding", "GET", "0.001", "1000", "Cross-venue Hyperliquid+OKX+Bybit+Binance perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, mark/oracle prices, open interest.", ["crypto", "funding", "perps", "hyperliquid", "okx", "arbitrage", "defi", "data"]),
+      mk("/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, APY breakdown + 7d/30d APY trend, IL risk, exposure, DefiLlama stability forecast, TVL. Filter by project, chain, or stablecoin-only.", ["defi", "yield", "lending", "apy", "tvl", "data"]),
       mk("/crypto/prices", "GET", "0.001", "1000", "Spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "defi", "data"]),
       mk("/scan/mcp", "GET", "0.10", "100000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score.", ["security", "mcp", "audit", "prompt-injection"]),
       mk("/enrich/tech-risk", "GET", "0.05", "50000", "Tech-stack fingerprint -> CVE (NVD) + EPSS + CISA-KEV attack-surface risk for a domain.", ["security", "cve", "risk"]),
@@ -246,8 +246,8 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 
 ## Endpoints
 - GET ${BASE}/crypto/prices?coins=bitcoin,ethereum,solana — $0.001 — spot token prices (DefiLlama), keyless.
-- GET ${BASE}/crypto/funding?limit=20 — $0.001 — cross-venue perp funding rates + annualized % (Hyperliquid).
-- GET ${BASE}/defi/yields?limit=20&project=&chain=&stable= — $0.001 — top DeFi lending/LP yields, APY + TVL (DefiLlama).
+- GET ${BASE}/crypto/funding?limit=20 — $0.001 — cross-venue Hyperliquid+OKX+ funding rates + arb spread (bps) + best long/short venue.
+- GET ${BASE}/defi/yields?limit=20&project=&chain=&stable= — $0.001 — top DeFi lending/LP yields, APY trend + IL risk + stability forecast + TVL (DefiLlama).
 - GET ${BASE}/pm/markets?query=&limit=20 — $0.005 — live Polymarket prediction markets (prices, volume, liquidity).
 - GET ${BASE}/scan/mcp?url=<mcp-server> — $0.10 — security audit of an MCP server (tool-poisoning / prompt-injection, OWASP LLM01/LLM08).
 - GET ${BASE}/enrich/tech-risk?domain=<domain> — $0.05 — tech-stack -> CVE (NVD) + EPSS + CISA-KEV risk.
@@ -301,8 +301,8 @@ app.get("/openapi.json", (c) => {
     servers: [{ url: BASE }],
     paths: {
       "/crypto/prices": paid("Spot token prices (DefiLlama).", "0.001", [{ name: "coins", desc: "comma-separated coingecko ids (max 25)" }]),
-      "/crypto/funding": paid("Cross-venue perp funding rates + annualized (Hyperliquid).", "0.001", [{ name: "limit", desc: "max coins (default 20, max 100)" }]),
-      "/defi/yields": paid("Top DeFi lending/LP yields (DefiLlama).", "0.001", [{ name: "limit", desc: "max pools" }, { name: "project", desc: "protocol filter" }, { name: "chain", desc: "chain filter" }, { name: "stable", desc: "'true' = stablecoin only" }]),
+      "/crypto/funding": paid("Cross-venue Hyperliquid+OKX+Bybit+Binance funding rates + arb spread.", "0.001", [{ name: "limit", desc: "max coins (default 20, max 100)" }]),
+      "/defi/yields": paid("Top DeFi lending/LP yields — APY trend + IL risk + stability forecast (DefiLlama).", "0.001", [{ name: "limit", desc: "max pools" }, { name: "project", desc: "protocol filter" }, { name: "chain", desc: "chain filter" }, { name: "stable", desc: "'true' = stablecoin only" }]),
       "/pm/markets": paid("Live Polymarket prediction markets.", "0.005", [{ name: "query", desc: "keyword filter" }, { name: "limit", desc: "max markets" }]),
       "/scan/mcp": paid("Security audit of an MCP server (tool-poisoning / prompt-injection).", "0.10", [{ name: "url", desc: "target MCP server URL", required: true }]),
       "/enrich/tech-risk": paid("Tech-stack -> CVE + EPSS + CISA-KEV risk.", "0.05", [{ name: "domain", desc: "target domain", required: true }]),
@@ -339,7 +339,7 @@ app.get("/crypto/funding/preview", async (c) => {
     return c.json({
       preview: all.slice(0, 1),
       total_available: all.length,
-      note: "Free top-1 sample. Full: GET /crypto/funding?limit=20 ($0.001) — ranked cross-venue funding + annualized %, keyless x402 on Base.",
+      note: "Free top-1 sample. Full: GET /crypto/funding?limit=20 ($0.001) — ranked cross-venue Hyperliquid+OKX+ funding + arb spread, keyless x402 on Base.",
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -351,7 +351,7 @@ app.get("/defi/yields/preview", async (c) => {
     return c.json({
       preview: all.slice(0, 1),
       total_available: all.length,
-      note: "Free top-1 sample. Full: GET /defi/yields?limit=20 ($0.001) — ranked APY+TVL, filter by project/chain/stablecoin, keyless x402 on Base.",
+      note: "Free top-1 sample. Full: GET /defi/yields?limit=20 ($0.001) — ranked APY trend+IL risk+stability forecast+TVL, filter by project/chain/stablecoin, keyless x402 on Base.",
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -662,7 +662,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Cross-venue perp funding rates from Hyperliquid — top coins by 24h notional volume, hourly + annualized funding, mark/oracle prices, open interest.",
+        "Cross-venue Hyperliquid+OKX+Bybit+Binance perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, mark/oracle prices, open interest.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -674,7 +674,17 @@ function makeRoutes(payTo: string) {
           },
         },
         output: {
-          example: { coin: "BTC", funding: 0.0000125, fundingAnnualizedPct: 10.95, markPx: 63730, oraclePx: 63750, openInterest: 37519.8698399999, dayNtlVlm: 1670654479.0625291 },
+          example: {
+            coin: "BTC",
+            funding: { hyperliquid: 0.0000125, okx: 0.0000492, bybit: null, binance: null },
+            funding_spread_bps: 0.37,
+            best_long_venue: "hyperliquid",
+            best_short_venue: "okx",
+            markPx: 63730,
+            oraclePx: 63750,
+            openInterest: 37519.8698399999,
+            dayNtlVlm: 1670654479.0625291,
+          },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
@@ -686,7 +696,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Top DeFi lending/LP yields — project, chain, symbol, APY breakdown, TVL. Filter by project, chain, or stablecoin-only.",
+        "Top DeFi lending/LP yields — project, chain, symbol, APY breakdown + 7d/30d APY trend, IL risk, exposure, DefiLlama stability forecast, TVL. Filter by project, chain, or stablecoin-only.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -701,7 +711,22 @@ function makeRoutes(payTo: string) {
           },
         },
         output: {
-          example: { project: "aave-v3", chain: "Ethereum", symbol: "USDC", apy: 4.21, apyBase: 3.1, apyReward: 1.11, tvlUsd: 512345678, stablecoin: true },
+          example: {
+            project: "aave-v3",
+            chain: "Ethereum",
+            symbol: "USDC",
+            apy: 4.21,
+            apyBase: 3.1,
+            apyReward: 1.11,
+            apyPct7D: -0.06,
+            apyPct30D: 0.15,
+            tvlUsd: 512345678,
+            stablecoin: true,
+            ilRisk: "no",
+            exposure: "single",
+            predicted_probability: 64,
+            volumeUsd1d: null,
+          },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
@@ -1635,14 +1660,63 @@ interface HlAssetCtx {
   midPx: string;
 }
 
+interface VenueFunding {
+  hyperliquid: number | null;
+  okx: number | null;
+  bybit: number | null;
+  binance: number | null;
+}
+
 interface FundingRate {
   coin: string;
-  funding: number;
-  fundingAnnualizedPct: number;
+  // Each venue's current-period rate at its own native funding interval
+  // (Hyperliquid = hourly, OKX/Bybit/Binance are typically 8h) — intervals
+  // are NOT normalized, this is each venue's rate as-quoted right now.
+  funding: VenueFunding;
+  funding_spread_bps: number | null;
+  best_long_venue: string | null;
+  best_short_venue: string | null;
   markPx: number;
   oraclePx: number;
   openInterest: number;
   dayNtlVlm: number;
+}
+
+async function fetchOkxFunding(coin: string): Promise<number | null> {
+  try {
+    const res = await fetch(`https://www.okx.com/api/v5/public/funding-rate?instId=${coin}-USDT-SWAP`);
+    if (!res.ok) return null;
+    const j = (await res.json()) as { code: string; data?: { fundingRate: string }[] };
+    if (j.code !== "0" || !j.data?.[0]) return null;
+    const rate = parseFloat(j.data[0].fundingRate);
+    return Number.isFinite(rate) ? rate : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchBybitFunding(coin: string): Promise<number | null> {
+  try {
+    const res = await fetch(`https://api.bybit.com/v5/market/tickers?category=linear&symbol=${coin}USDT`);
+    if (!res.ok) return null;
+    const j = (await res.json()) as { result?: { list?: { fundingRate: string }[] } };
+    const rate = parseFloat(j.result?.list?.[0]?.fundingRate ?? "");
+    return Number.isFinite(rate) ? rate : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchBinanceFunding(coin: string): Promise<number | null> {
+  try {
+    const res = await fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${coin}USDT`);
+    if (!res.ok) return null;
+    const j = (await res.json()) as { lastFundingRate?: string };
+    const rate = parseFloat(j.lastFundingRate ?? "");
+    return Number.isFinite(rate) ? rate : null;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchFundingRates(limit: number): Promise<FundingRate[]> {
@@ -1656,16 +1730,21 @@ async function fetchFundingRates(limit: number): Promise<FundingRate[]> {
   }
   const [meta, ctxs] = (await res.json()) as [{ universe: HlUniverseEntry[] }, HlAssetCtx[]];
 
-  const rates: FundingRate[] = [];
+  const hlRates: {
+    coin: string;
+    hlFunding: number;
+    markPx: number;
+    oraclePx: number;
+    openInterest: number;
+    dayNtlVlm: number;
+  }[] = [];
   meta.universe.forEach((u, i) => {
     if (u.isDelisted) return;
     const ctx = ctxs[i];
     if (!ctx) return;
-    const funding = parseFloat(ctx.funding);
-    rates.push({
+    hlRates.push({
       coin: u.name,
-      funding,
-      fundingAnnualizedPct: Math.round(funding * 24 * 365 * 100 * 10000) / 10000,
+      hlFunding: parseFloat(ctx.funding),
       markPx: parseFloat(ctx.markPx),
       oraclePx: parseFloat(ctx.oraclePx),
       openInterest: parseFloat(ctx.openInterest),
@@ -1673,8 +1752,55 @@ async function fetchFundingRates(limit: number): Promise<FundingRate[]> {
     });
   });
 
-  rates.sort((a, b) => b.dayNtlVlm - a.dayNtlVlm);
-  return rates.slice(0, limit);
+  hlRates.sort((a, b) => b.dayNtlVlm - a.dayNtlVlm);
+  const top = hlRates.slice(0, limit);
+
+  // Cross-venue enrichment: Hyperliquid is always present (it's the coin
+  // universe). OKX/Bybit/Binance are best-effort — each call is wrapped so a
+  // geo-block or upstream error on any one venue never fails the request.
+  const rates: FundingRate[] = await Promise.all(
+    top.map(async (r) => {
+      const [okxRes, bybitRes, binanceRes] = await Promise.allSettled([
+        fetchOkxFunding(r.coin),
+        fetchBybitFunding(r.coin),
+        fetchBinanceFunding(r.coin),
+      ]);
+      const funding: VenueFunding = {
+        hyperliquid: r.hlFunding,
+        okx: okxRes.status === "fulfilled" ? okxRes.value : null,
+        bybit: bybitRes.status === "fulfilled" ? bybitRes.value : null,
+        binance: binanceRes.status === "fulfilled" ? binanceRes.value : null,
+      };
+
+      const available = (Object.entries(funding) as [string, number | null][]).filter(
+        (entry): entry is [string, number] => entry[1] !== null,
+      );
+      let funding_spread_bps: number | null = null;
+      let best_long_venue: string | null = null;
+      let best_short_venue: string | null = null;
+      if (available.length >= 2) {
+        const min = available.reduce((a, b) => (b[1] < a[1] ? b : a));
+        const max = available.reduce((a, b) => (b[1] > a[1] ? b : a));
+        funding_spread_bps = Math.round((max[1] - min[1]) * 10000 * 100) / 100;
+        best_long_venue = min[0];
+        best_short_venue = max[0];
+      }
+
+      return {
+        coin: r.coin,
+        funding,
+        funding_spread_bps,
+        best_long_venue,
+        best_short_venue,
+        markPx: r.markPx,
+        oraclePx: r.oraclePx,
+        openInterest: r.openInterest,
+        dayNtlVlm: r.dayNtlVlm,
+      };
+    }),
+  );
+
+  return rates;
 }
 
 app.get("/crypto/funding", async (c) => {
@@ -1710,8 +1836,14 @@ interface DefiLlamaPool {
   apyBase: number | null;
   apyReward: number | null;
   apy: number | null;
+  apyPct7D: number | null;
+  apyPct30D: number | null;
   pool: string;
   stablecoin: boolean;
+  ilRisk: string;
+  exposure: string;
+  volumeUsd1d: number | null;
+  predictions?: { predictedProbability: number | null };
 }
 
 interface YieldPool {
@@ -1721,8 +1853,14 @@ interface YieldPool {
   apy: number | null;
   apyBase: number | null;
   apyReward: number | null;
+  apyPct7D: number | null;
+  apyPct30D: number | null;
   tvlUsd: number;
   stablecoin: boolean;
+  ilRisk: string;
+  exposure: string;
+  predicted_probability: number | null;
+  volumeUsd1d: number | null;
 }
 
 async function fetchDefiYields(
@@ -1747,8 +1885,14 @@ async function fetchDefiYields(
       apy: p.apy,
       apyBase: p.apyBase,
       apyReward: p.apyReward,
+      apyPct7D: p.apyPct7D ?? null,
+      apyPct30D: p.apyPct30D ?? null,
       tvlUsd: p.tvlUsd ?? 0,
       stablecoin: p.stablecoin ?? false,
+      ilRisk: p.ilRisk ?? "unknown",
+      exposure: p.exposure ?? "unknown",
+      predicted_probability: p.predictions?.predictedProbability ?? null,
+      volumeUsd1d: p.volumeUsd1d ?? null,
     }));
 
   const filtered = normalized.filter((p) => {
@@ -2363,7 +2507,7 @@ const mcpHandler = createMcpHandler(() => {
     "crypto_funding",
     {
       description:
-        "Live cross-venue perpetual-futures funding rates (annualized %, mark/oracle price, open interest, day volume) from Hyperliquid, ranked by volume. Cost: $0.005 USDC per call via x402.",
+        "Live cross-venue perpetual-futures funding rates from Hyperliquid+OKX+Bybit+Binance (per-venue rate, arb spread in bps, cheapest-long/richest-short venue, mark/oracle price, open interest, day volume), ranked by volume. Venues that are unreachable (e.g. geo-blocked) are omitted per-coin — Hyperliquid is always present. Cost: $0.005 USDC per call via x402.",
       inputSchema: {
         limit: z.number().optional().describe("Number of results, default 20, max 100"),
       },
@@ -2385,7 +2529,7 @@ const mcpHandler = createMcpHandler(() => {
     "defi_yields",
     {
       description:
-        "Live DeFi lending/LP yield pools (project, chain, symbol, APY breakdown, TVL, stablecoin flag) from DefiLlama, ranked by TVL. Cost: $0.005 USDC per call via x402.",
+        "Live DeFi lending/LP yield pools (project, chain, symbol, APY breakdown, 7d/30d APY trend, IL risk, exposure, DefiLlama stability forecast, TVL, stablecoin flag) from DefiLlama, ranked by TVL. Cost: $0.005 USDC per call via x402.",
       inputSchema: {
         limit: z.number().optional().describe("Number of results, default 20, max 100"),
         project: z.string().optional().describe("Filter by DefiLlama project slug"),
