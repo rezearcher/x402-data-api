@@ -443,12 +443,12 @@ function makeRoutes(payTo: string) {
     "POST /mcp": {
       accepts: {
         scheme: "exact" as const,
-        price: "$0.05",
+        price: "$0.005",
         network: NETWORK,
         payTo,
       },
       description:
-        "MCP tools/call: enrich_tech_risk (security: tech-stack + CVE/EPSS/CISA-KEV), enrich_domain (firmographic), or scan_mcp_server (tool-poisoning/prompt-injection audit of a target MCP server)",
+        "MCP tools/call: crypto_prices, crypto_funding, defi_yields, pm_markets (Base/crypto/prediction-market data), enrich_tech_risk (security: tech-stack + CVE/EPSS/CISA-KEV), enrich_domain (firmographic), or scan_mcp_server (tool-poisoning/prompt-injection audit of a target MCP server)",
       mimeType: "application/json",
     },
     "GET /scan/mcp": {
@@ -927,7 +927,12 @@ app.use(async (c, next) => {
     // Freemium: discovery + the free preview tool are FREE (so agents self-scan
     // and SEE they're vulnerable); the full-detail tools are x402-gated (so they
     // must pay to learn WHICH tools and HOW to fix). Free tools bypass the gate.
-    const FREE_TOOLS = new Set(["scan_mcp_preview"]);
+    const FREE_TOOLS = new Set([
+      "scan_mcp_preview",
+      "crypto_prices_preview",
+      "crypto_funding_preview",
+      "defi_yields_preview",
+    ]);
     if (rpcMethod !== "tools/call" || (toolName && FREE_TOOLS.has(toolName))) {
       return next();
     }
@@ -2326,6 +2331,164 @@ const mcpHandler = createMcpHandler(() => {
           },
         ],
       };
+    },
+  );
+
+  server.registerTool(
+    "crypto_prices",
+    {
+      description:
+        "Live spot token prices (price, symbol, confidence, timestamp) for CoinGecko ids, sourced from DefiLlama. Cost: $0.005 USDC per call via x402.",
+      inputSchema: {
+        coins: z.string().optional().describe('Comma-separated CoinGecko ids, e.g. "bitcoin,ethereum,solana" (default; max 25)'),
+      },
+    },
+    async ({ coins }) => {
+      try {
+        const coinsParam = coins || "bitcoin,ethereum,solana";
+        const ids = coinsParam.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 25);
+        const invalid = ids.filter((id) => !COINGECKO_ID_RE.test(id));
+        if (invalid.length > 0) {
+          return { content: [{ type: "text" as const, text: `Error: invalid coingecko id(s): ${invalid.join(", ")}` }] };
+        }
+        const result = await fetchTokenPrices(ids);
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "crypto_funding",
+    {
+      description:
+        "Live cross-venue perpetual-futures funding rates (annualized %, mark/oracle price, open interest, day volume) from Hyperliquid, ranked by volume. Cost: $0.005 USDC per call via x402.",
+      inputSchema: {
+        limit: z.number().optional().describe("Number of results, default 20, max 100"),
+      },
+    },
+    async ({ limit }) => {
+      try {
+        let n = limit ?? 20;
+        if (!Number.isFinite(n) || n <= 0) n = 20;
+        n = Math.min(n, 100);
+        const result = await fetchFundingRates(n);
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "defi_yields",
+    {
+      description:
+        "Live DeFi lending/LP yield pools (project, chain, symbol, APY breakdown, TVL, stablecoin flag) from DefiLlama, ranked by TVL. Cost: $0.005 USDC per call via x402.",
+      inputSchema: {
+        limit: z.number().optional().describe("Number of results, default 20, max 100"),
+        project: z.string().optional().describe("Filter by DefiLlama project slug"),
+        chain: z.string().optional().describe("Filter by chain name"),
+        stable: z.boolean().optional().describe("Only stablecoin pools"),
+      },
+    },
+    async ({ limit, project, chain, stable }) => {
+      try {
+        let n = limit ?? 20;
+        if (!Number.isFinite(n) || n <= 0) n = 20;
+        n = Math.min(n, 100);
+        const result = await fetchDefiYields(n, project, chain, stable ?? false);
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "pm_markets",
+    {
+      description:
+        "Live Polymarket prediction-market data (question, outcomes, outcome prices, volume, liquidity, end date), ranked by volume. Cost: $0.005 USDC per call via x402.",
+      inputSchema: {
+        query: z.string().optional().describe("Case-insensitive keyword filter on the market question"),
+        limit: z.number().optional().describe("Number of results, default 20, max 100"),
+      },
+    },
+    async ({ query, limit }) => {
+      try {
+        let n = limit ?? 20;
+        if (!Number.isFinite(n) || n <= 0) n = 20;
+        n = Math.min(n, 100);
+        const result = await fetchPolymarketMarkets(query, n);
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "crypto_prices_preview",
+    {
+      description:
+        "FREE 1-item sample of live token prices. No payment required.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const all = await fetchTokenPrices(["bitcoin", "ethereum", "solana"]);
+        const result = {
+          preview: all.slice(0, 1),
+          note: "Free sample. Full data via the paid crypto_prices tool or GET /crypto/prices ($0.001).",
+        };
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "crypto_funding_preview",
+    {
+      description:
+        "FREE 1-item sample of live cross-venue funding rates. No payment required.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const all = await fetchFundingRates(20);
+        const result = {
+          preview: all.slice(0, 1),
+          note: "Free sample. Full data via the paid crypto_funding tool or GET /crypto/funding ($0.001).",
+        };
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "defi_yields_preview",
+    {
+      description:
+        "FREE 1-item sample of live DeFi yield pools. No payment required.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const all = await fetchDefiYields(20, undefined, undefined, false);
+        const result = {
+          preview: all.slice(0, 1),
+          note: "Free sample. Full data via the paid defi_yields tool or GET /defi/yields ($0.001).",
+        };
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
     },
   );
 
