@@ -170,6 +170,12 @@ app.get("/.well-known/402index-verify.txt", (c) =>
   c.text("619f23496d826b50e86afc72eaae3aa523868d4dba61161bfdb8640e88d4f4a5"),
 );
 
+// MCP Registry HTTP domain-auth proof — lets us publish/update our MCP Registry
+// listing under the domain namespace (no interactive GitHub login needed).
+app.get("/.well-known/mcp-registry-auth", (c) =>
+  c.text("v=MCPv1; k=ed25519; p=/fl+vN2K62tQL/mmihmc7e7ASuNrfc3SrSjOsji3fko="),
+);
+
 // Self-describing x402 discovery manifest — the standard `.well-known/x402` catalog
 // that x402 crawlers/directories read to discover a provider's paid endpoints
 // (independent of any facilitator's Bazaar). Lists every paid resource we serve.
