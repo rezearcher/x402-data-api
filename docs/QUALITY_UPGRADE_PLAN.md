@@ -118,7 +118,12 @@ richer fields ship without price changes and widen the value gap.
 
 ---
 
-## PHASE 2 — USD ENRICHMENT (internal cross-call to our own `/crypto/prices` — the moat OneSource can't match)
+## PHASE 2 — USD ENRICHMENT ✅ DONE 2026-07-16 (commit `cca8c5e`, deployed `a2d4f181`)
+
+> Items 15-17 DONE + verified live (gas_price_usd hand-checked exact to 8+ sig figs vs live oracle;
+> EIP-1559 base/priority fees; balance_usd; receipt L1 breakdown + l1_fee_usd/total_fee_usd). Item 14
+> (verdict enum clear|review|block) also shipped on all 3 security endpoints. **The Base+USD moat is live.**
+
 
 15. **`/chain/gas-price`**: add EIP-1559 **`base_fee_gwei`/`priority_fee_gwei`** via `eth_feeHistory`,
     plus **`gas_price_usd`** (ETH price × gas). OneSource has no price oracle → can't match.
