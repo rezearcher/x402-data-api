@@ -318,17 +318,17 @@ app.get("/.well-known/x402", (c) => {
       mk("/crypto/funding", "GET", "0.001", "1000", "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, premium/basis, annualized_hl/annualized_okx, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices, open interest.", ["crypto", "funding", "perps", "hyperliquid", "okx", "dydx", "arbitrage", "defi", "data"]),
       mk("/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, pool id, APY breakdown + 1d/7d/30d APY trend, IL risk (incl. il7d), exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL. Filter by project, chain, or stablecoin-only; sort by TVL or risk-adjusted APY.", ["defi", "yield", "lending", "apy", "tvl", "data"]),
       mk("/crypto/prices", "GET", "0.001", "1000", "Spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/change_24h/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "defi", "data"]),
-      mk("/scan/mcp", "GET", "0.10", "100000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score.", ["security", "mcp", "audit", "prompt-injection"]),
-      mk("/enrich/tech-risk", "GET", "0.05", "50000", "Tech-stack fingerprint -> CVE (NVD) + EPSS + CISA-KEV attack-surface risk for a domain.", ["security", "cve", "risk"]),
-      mk("/enrich/domain", "GET", "0.01", "10000", "Firmographic + tech-stack enrichment for a domain, incl. full subdomain enumeration via certificate-transparency logs (crt.sh, RDAP, DoH, HTTP fingerprint).", ["data", "domain", "enrichment"]),
+      mk("/scan/mcp", "GET", "0.10", "100000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score + verdict (clear/review/block).", ["security", "mcp", "audit", "prompt-injection"]),
+      mk("/enrich/tech-risk", "GET", "0.05", "50000", "Tech-stack fingerprint -> CVE (NVD) + EPSS + CISA-KEV attack-surface risk + verdict (clear/review/block) for a domain.", ["security", "cve", "risk"]),
+      mk("/enrich/domain", "GET", "0.01", "10000", "Firmographic + tech-stack enrichment for a domain, incl. full subdomain enumeration via certificate-transparency logs (crt.sh, RDAP, DoH, HTTP fingerprint) + verdict (clear/review/block, based on domain age).", ["data", "domain", "enrichment"]),
       mk("/chain/block-number", "GET", "0.001", "1000", "Current Base mainnet block number.", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/gas-price", "GET", "0.001", "1000", "Current Base mainnet gas price (wei + gwei).", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/balance", "GET", "0.001", "1000", "ETH balance of a Base mainnet address.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/gas-price", "GET", "0.001", "1000", "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, and gas_price_usd — no price oracle on ETH-only competitors.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/balance", "GET", "0.001", "1000", "ETH balance of a Base mainnet address, incl. balance_usd (internal ETH price cross-call).", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/token-balance", "GET", "0.001", "1000", "ERC-20 token balance of a Base mainnet address, incl. symbol, decimals, balance_formatted.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/tx", "GET", "0.001", "1000", "Transaction details by hash on Base mainnet.", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/receipt", "GET", "0.001", "1000", "Transaction receipt (status, gas used, logs count) by hash on Base mainnet.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/receipt", "GET", "0.001", "1000", "Transaction receipt by hash on Base mainnet — status, gas used, full logs, and the L1 fee breakdown (l1_fee_wei, l1_gas_price_wei, l1_gas_used, effective_gas_price_wei) + l1_fee_usd/total_fee_usd an ETH-only competitor can't offer.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/code", "GET", "0.001", "1000", "Contract-code check for a Base mainnet address (is_contract + code size + EIP-7702 delegated-EOA detection).", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/wallet", "GET", "0.003", "3000", "Wallet bundle: ETH balance + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]),
+      mk("/chain/wallet", "GET", "0.003", "3000", "Wallet bundle: ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]),
     ],
   });
 });
@@ -351,17 +351,17 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/crypto/funding?limit=20 — $0.001 — cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread (bps) + best long/short venue + premium/annualized/signal/next_funding_ts.
 - GET ${BASE}/defi/yields?limit=20&project=&chain=&stable=&sort=tvl|risk_adjusted — $0.001 — top DeFi lending/LP yields, APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast + TVL (DefiLlama).
 - GET ${BASE}/pm/markets?query=&limit=20 — $0.005 — live Polymarket prediction markets, ranked by volume24hr (bestBid/bestAsk/spread, clobTokenIds, category tags, liquidity).
-- GET ${BASE}/scan/mcp?url=<mcp-server> — $0.10 — security audit of an MCP server (tool-poisoning / prompt-injection, OWASP LLM01/LLM08).
-- GET ${BASE}/enrich/tech-risk?domain=<domain> — $0.05 — tech-stack -> CVE (NVD) + EPSS + CISA-KEV risk.
-- GET ${BASE}/enrich/domain?domain=<domain> — $0.01 — firmographic + tech-stack enrichment, incl. subdomain enumeration (crt.sh).
+- GET ${BASE}/scan/mcp?url=<mcp-server> — $0.10 — security audit of an MCP server (tool-poisoning / prompt-injection, OWASP LLM01/LLM08); findings + risk score + verdict (clear/review/block).
+- GET ${BASE}/enrich/tech-risk?domain=<domain> — $0.05 — tech-stack -> CVE (NVD) + EPSS + CISA-KEV risk + verdict (clear/review/block).
+- GET ${BASE}/enrich/domain?domain=<domain> — $0.01 — firmographic + tech-stack enrichment, incl. subdomain enumeration (crt.sh) + verdict (clear/review/block, domain age).
 - GET ${BASE}/chain/block-number — $0.001 — current Base mainnet block number.
-- GET ${BASE}/chain/gas-price — $0.001 — current Base mainnet gas price (wei + gwei).
-- GET ${BASE}/chain/balance?address=<0x…> — $0.001 — ETH balance of a Base address.
+- GET ${BASE}/chain/gas-price — $0.001 — current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd — no price oracle on ETH-only competitors.
+- GET ${BASE}/chain/balance?address=<0x…> — $0.001 — ETH balance of a Base address, incl. balance_usd.
 - GET ${BASE}/chain/token-balance?address=<0x…>&token=<0x…> — $0.001 — ERC-20 token balance of a Base address, incl. symbol/decimals/balance_formatted.
 - GET ${BASE}/chain/tx?hash=<0x…> — $0.001 — transaction details by hash on Base.
-- GET ${BASE}/chain/receipt?hash=<0x…> — $0.001 — transaction receipt (status, gas used, logs) by hash on Base.
+- GET ${BASE}/chain/receipt?hash=<0x…> — $0.001 — transaction receipt by hash on Base: status, gas used, full logs, L1 fee breakdown (l1_fee_wei/l1_gas_price_wei/l1_gas_used/effective_gas_price_wei) + l1_fee_usd/total_fee_usd.
 - GET ${BASE}/chain/code?address=<0x…> — $0.001 — contract-code check for a Base address (EIP-7702 delegated-EOA aware).
-- GET ${BASE}/chain/wallet?address=<0x…> — $0.003 — wallet bundle: balance + tx count + contract check (EIP-7702 delegated-EOA aware), one call.
+- GET ${BASE}/chain/wallet?address=<0x…> — $0.003 — wallet bundle: balance + balance_usd + tx count + contract check (EIP-7702 delegated-EOA aware), one call.
 
 ## Free (previews — taste the data before you pay)
 - GET ${BASE}/crypto/prices/preview — free 1-token sample of /crypto/prices.
@@ -416,17 +416,17 @@ app.get("/openapi.json", (c) => {
       "/crypto/funding": paid("Cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread + premium/annualized/signal/next_funding_ts.", "0.001", [{ name: "limit", desc: "max coins (default 20, max 100)" }]),
       "/defi/yields": paid("Top DeFi lending/LP yields — APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast (DefiLlama).", "0.001", [{ name: "limit", desc: "max pools" }, { name: "project", desc: "protocol filter" }, { name: "chain", desc: "chain filter" }, { name: "stable", desc: "'true' = stablecoin only" }, { name: "sort", desc: "'tvl' (default) or 'risk_adjusted' (apy/sigma)" }]),
       "/pm/markets": paid("Live Polymarket prediction markets, ranked by volume24hr, with bestBid/bestAsk/spread and category tags.", "0.005", [{ name: "query", desc: "keyword filter" }, { name: "limit", desc: "max markets" }]),
-      "/scan/mcp": paid("Security audit of an MCP server (tool-poisoning / prompt-injection).", "0.10", [{ name: "url", desc: "target MCP server URL", required: true }]),
-      "/enrich/tech-risk": paid("Tech-stack -> CVE + EPSS + CISA-KEV risk.", "0.05", [{ name: "domain", desc: "target domain", required: true }]),
-      "/enrich/domain": paid("Firmographic + tech-stack enrichment, incl. subdomain enumeration.", "0.01", [{ name: "domain", desc: "target domain", required: true }]),
+      "/scan/mcp": paid("Security audit of an MCP server (tool-poisoning / prompt-injection). Findings + risk score + verdict (clear/review/block).", "0.10", [{ name: "url", desc: "target MCP server URL", required: true }]),
+      "/enrich/tech-risk": paid("Tech-stack -> CVE + EPSS + CISA-KEV risk + verdict (clear/review/block).", "0.05", [{ name: "domain", desc: "target domain", required: true }]),
+      "/enrich/domain": paid("Firmographic + tech-stack enrichment, incl. subdomain enumeration + verdict (clear/review/block, domain age).", "0.01", [{ name: "domain", desc: "target domain", required: true }]),
       "/chain/block-number": paid("Current Base mainnet block number.", "0.001", []),
-      "/chain/gas-price": paid("Current Base mainnet gas price (wei + gwei).", "0.001", []),
-      "/chain/balance": paid("ETH balance of a Base mainnet address.", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true }]),
+      "/chain/gas-price": paid("Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd.", "0.001", []),
+      "/chain/balance": paid("ETH balance of a Base mainnet address, incl. balance_usd.", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true }]),
       "/chain/token-balance": paid("ERC-20 token balance of a Base mainnet address, incl. symbol/decimals/balance_formatted.", "0.001", [{ name: "address", desc: "0x-prefixed holder address", required: true }, { name: "token", desc: "0x-prefixed ERC-20 contract address", required: true }]),
       "/chain/tx": paid("Transaction details by hash on Base mainnet.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true }]),
-      "/chain/receipt": paid("Transaction receipt (status, gas used, logs count) by hash on Base mainnet.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true }]),
+      "/chain/receipt": paid("Transaction receipt by hash on Base mainnet: status, gas used, full logs, L1 fee breakdown, l1_fee_usd/total_fee_usd.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true }]),
       "/chain/code": paid("Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware).", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true }]),
-      "/chain/wallet": paid("Wallet bundle: ETH balance + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call.", "0.003", [{ name: "address", desc: "0x-prefixed Base address", required: true }]),
+      "/chain/wallet": paid("Wallet bundle: ETH balance + balance_usd + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call.", "0.003", [{ name: "address", desc: "0x-prefixed Base address", required: true }]),
     },
   });
 });
@@ -583,7 +583,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score.",
+        "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score + verdict (clear/review/block).",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         pathParams: {},
@@ -600,6 +600,7 @@ function makeRoutes(payTo: string) {
               { tool: "read_file", severity: "critical", rule: "tool-poisoning:hidden-instructions", detail: "…", evidence: "…" },
             ],
             risk_score: 40,
+            verdict: "review",
             risk_summary: "1 issue across 3 tools, 1 CRITICAL (tool-poisoning). Risk 40/100.",
           },
         },
@@ -670,7 +671,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Security enrichment: tech-stack fingerprint + CVE mapping + EPSS + CISA KEV for a domain",
+        "Security enrichment: tech-stack fingerprint + CVE mapping + EPSS + CISA KEV + verdict for a domain",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         pathParams: {},
@@ -700,6 +701,7 @@ function makeRoutes(payTo: string) {
                 exploit_available: false,
               },
             ],
+            verdict: "review",
             risk_summary: "nginx, PHP — 2 high-severity CVEs. Prioritize patching.",
           },
         },
@@ -713,7 +715,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Domain enrichment: firmographic data + SSL certs + subdomain enumeration + tech-stack fingerprint",
+        "Domain enrichment: firmographic data + SSL certs + subdomain enumeration + tech-stack fingerprint + verdict (domain age)",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         pathParams: {},
@@ -743,6 +745,7 @@ function makeRoutes(payTo: string) {
             ],
             subdomains: ["example.com", "www.example.com", "mail.example.com"],
             tech_stack: ["nginx"],
+            verdict: "clear",
           },
         },
       }),
@@ -939,14 +942,21 @@ function makeRoutes(payTo: string) {
         network: NETWORK,
         payTo,
       },
-      description: "Current Base mainnet gas price (wei + gwei).",
+      description: "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, and gas_price_usd.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
         input: {},
         inputSchema: { type: "object", properties: {} },
         output: {
-          example: { gas_price_wei: "21284349", gas_price_gwei: 0.021284349, chain: "base" },
+          example: {
+            gas_price_wei: "21284349",
+            gas_price_gwei: 0.021284349,
+            base_fee_gwei: 0.018,
+            priority_fee_gwei: 0.0032,
+            gas_price_usd: 3.93e-8,
+            chain: "base",
+          },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
@@ -957,7 +967,7 @@ function makeRoutes(payTo: string) {
         network: NETWORK,
         payTo,
       },
-      description: "ETH balance of a Base mainnet address.",
+      description: "ETH balance of a Base mainnet address, incl. balance_usd.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -969,7 +979,13 @@ function makeRoutes(payTo: string) {
           },
         },
         output: {
-          example: { address: "0x4200000000000000000000000000000000000006", balance_wei: "17265432100000000000", balance_eth: 17.2654321, chain: "base" },
+          example: {
+            address: "0x4200000000000000000000000000000000000006",
+            balance_wei: "17265432100000000000",
+            balance_eth: 17.2654321,
+            balance_usd: 31886.15,
+            chain: "base",
+          },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
@@ -1027,7 +1043,7 @@ function makeRoutes(payTo: string) {
         network: NETWORK,
         payTo,
       },
-      description: "Transaction receipt (status, gas used, logs count) by hash on Base mainnet.",
+      description: "Transaction receipt by hash on Base mainnet: status, gas used, full logs, L1 fee breakdown, l1_fee_usd/total_fee_usd.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -1039,7 +1055,24 @@ function makeRoutes(payTo: string) {
           },
         },
         output: {
-          example: { status: 1, block_number: 48747709, gas_used: 70216, from: "0xd80217bd14c4d4a4fe37bb1354be1830ed815a60", to: "0x6211a3742cf9d3b6677ecc7fd9dd102ab101d8e2", tx_hash: "0x571284385ad512a3ffc984a6c2f335113ada217215b6296847944f9d0bc613ef", logs_count: 0 },
+          example: {
+            status: 1,
+            block_number: 48734000,
+            gas_used: 28859,
+            cumulative_gas_used: 75077,
+            effective_gas_price_wei: "49851573",
+            from: "0xd80217bd14c4d4a4fe37bb1354be1830ed815a60",
+            to: "0x6211a3742cf9d3b6677ecc7fd9dd102ab101d8e2",
+            contract_address: null,
+            tx_hash: "0x571284385ad512a3ffc984a6c2f335113ada217215b6296847944f9d0bc613ef",
+            logs_count: 0,
+            logs: [],
+            l1_fee_wei: "1158985140",
+            l1_gas_price_wei: "116776985",
+            l1_gas_used: 1600,
+            l1_fee_usd: 0.00000214,
+            total_fee_usd: 0.0026591,
+          },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
@@ -1073,7 +1106,7 @@ function makeRoutes(payTo: string) {
         network: NETWORK,
         payTo,
       },
-      description: "Wallet bundle: ETH balance + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.",
+      description: "Wallet bundle: ETH balance + balance_usd + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -1085,7 +1118,17 @@ function makeRoutes(payTo: string) {
           },
         },
         output: {
-          example: { address: "0x4200000000000000000000000000000000000006", balance_wei: "17265432100000000000", balance_eth: 17.2654321, tx_count: 4, is_contract: true, is_eip7702_delegate: false, delegate_address: null, chain: "base" },
+          example: {
+            address: "0x4200000000000000000000000000000000000006",
+            balance_wei: "17265432100000000000",
+            balance_eth: 17.2654321,
+            balance_usd: 31886.15,
+            tx_count: 4,
+            is_contract: true,
+            is_eip7702_delegate: false,
+            delegate_address: null,
+            chain: "base",
+          },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
@@ -1254,6 +1297,18 @@ interface CveEntry {
   id: string;
   description: string;
   cvssScore: number | null;
+}
+
+// Shared verdict enum for all 3 security endpoints (/scan/mcp, /enrich/tech-risk,
+// /enrich/domain) — every competitor (LoneStarOracle, GlobalAPI, GPT55) ships a
+// PASS/WARN/BLOCK-style triage field on top of a numeric score; we only shipped
+// the score. Common thresholds for anything already expressed 0-100.
+type Verdict = "clear" | "review" | "block";
+
+function verdictFromScore(score: number): Verdict {
+  if (score >= 70) return "block";
+  if (score >= 30) return "review";
+  return "clear";
 }
 
 // Reject anything that isn't a bare public hostname — blocks SSRF/proxy abuse
@@ -1455,8 +1510,18 @@ interface EnrichTechRiskResult {
     in_kev: boolean;
     exploit_available: boolean;
   }[];
+  verdict: Verdict;
   summary: string;
   generated_at: string;
+}
+
+// block: at least one actively-exploited (CISA KEV) or high-probability-exploit
+// (EPSS >= 0.5) CVE. review: at least one high-severity (CVSS >= 7) CVE that
+// isn't (yet) known-exploited. clear: no CVEs, or only low/medium severity.
+function techRiskVerdict(vulns: EnrichTechRiskResult["vulnerabilities"]): Verdict {
+  if (vulns.some((v) => v.in_kev || v.exploit_available)) return "block";
+  if (vulns.some((v) => (v.cvss_score ?? 0) >= 7)) return "review";
+  return "clear";
 }
 
 async function enrichTechRisk(
@@ -1493,24 +1558,27 @@ async function enrichTechRisk(
   // Step 5: build summary
   const riskSummary = buildRiskSummary(techStack, allCves, epssScores, kevFlags);
 
+  const vulnerabilities = allCves.map((cve) => {
+    const inKev = kevFlags[cve.id] ?? false;
+    const epssScore = epssScores[cve.id] ?? null;
+    return {
+      id: cve.id,
+      description: cve.description,
+      cvss_score: cve.cvssScore,
+      epss_score: epssScore,
+      in_kev: inKev,
+      // NVD's free API doesn't expose exploit-availability directly — derive
+      // it from data we already have: actively exploited (CISA KEV) or a
+      // high probability of exploitation in the wild (EPSS >= 0.5).
+      exploit_available: inKev || (epssScore ?? 0) >= 0.5,
+    };
+  });
+
   return {
     tech_stack: techStack,
     domain: domain ?? null,
-    vulnerabilities: allCves.map((cve) => {
-      const inKev = kevFlags[cve.id] ?? false;
-      const epssScore = epssScores[cve.id] ?? null;
-      return {
-        id: cve.id,
-        description: cve.description,
-        cvss_score: cve.cvssScore,
-        epss_score: epssScore,
-        in_kev: inKev,
-        // NVD's free API doesn't expose exploit-availability directly — derive
-        // it from data we already have: actively exploited (CISA KEV) or a
-        // high probability of exploitation in the wild (EPSS >= 0.5).
-        exploit_available: inKev || (epssScore ?? 0) >= 0.5,
-      };
-    }),
+    vulnerabilities,
+    verdict: techRiskVerdict(vulnerabilities),
     summary: riskSummary,
     generated_at: startTs,
   };
@@ -1619,7 +1687,22 @@ interface EnrichDomainResult {
   certificates: CertEntry[];
   subdomains: string[];
   tech_stack: string[];
+  verdict: Verdict;
   generated_at: string;
+}
+
+// Domain age is the standard low-cost domain-risk signal (newly-registered
+// domains correlate strongly with phishing/abuse infra): block if registered
+// <7 days ago, review if <30 days or the registration date is unverifiable
+// (no RDAP `created` — can't rule out a fresh/hidden registration), else clear.
+function domainVerdict(created: string | null): Verdict {
+  if (!created) return "review";
+  const ageMs = Date.now() - new Date(created).getTime();
+  if (!Number.isFinite(ageMs) || ageMs < 0) return "review";
+  const ageDays = ageMs / 86_400_000;
+  if (ageDays < 7) return "block";
+  if (ageDays < 30) return "review";
+  return "clear";
 }
 
 // Combine RDAP + DoH + crt.sh + HTTP fingerprint for domain enrichment.
@@ -1699,6 +1782,7 @@ async function enrichDomain(domain: string): Promise<EnrichDomainResult> {
     certificates: certResult.certificates,
     subdomains: certResult.subdomains,
     tech_stack: techStack,
+    verdict: domainVerdict(created),
     generated_at: startTs,
   };
 }
@@ -2340,6 +2424,57 @@ app.get("/crypto/prices", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// Internal USD price helpers — the moat OneSource (ETH-only, no price oracle)
+// can't match. Cross-call our own DefiLlama fetch logic in-process (never a
+// paid x402 sub-call, never a second upstream host), cached per isolate with
+// a short TTL: long enough to spare repeat /chain/* calls a redundant fetch,
+// short enough that a busy isolate never serves a stale USD figure.
+// ---------------------------------------------------------------------------
+
+const USD_PRICE_TTL_MS = 30_000;
+
+let ethUsdCache: { price: number; ts: number } | null = null;
+
+async function getEthUsd(): Promise<number | null> {
+  const now = Date.now();
+  if (ethUsdCache && now - ethUsdCache.ts < USD_PRICE_TTL_MS) return ethUsdCache.price;
+  try {
+    const [eth] = await fetchTokenPrices(["ethereum"]);
+    if (!eth || !Number.isFinite(eth.price)) return ethUsdCache?.price ?? null;
+    ethUsdCache = { price: eth.price, ts: now };
+    return eth.price;
+  } catch {
+    return ethUsdCache?.price ?? null; // stale-but-present beats a hard failure
+  }
+}
+
+const tokenUsdCache = new Map<string, { price: number; ts: number }>();
+
+// Base-chain ERC-20 price by contract address, via the same coins.llama.fi
+// host as fetchTokenPrices (the `base:{address}` id form instead of
+// `coingecko:{id}`). Not called by any route in this build; kept ready for
+// token-level USD enrichment (e.g. /chain/token-balance).
+async function getTokenUsd(contract: string): Promise<number | null> {
+  const key = contract.toLowerCase();
+  const now = Date.now();
+  const cached = tokenUsdCache.get(key);
+  if (cached && now - cached.ts < USD_PRICE_TTL_MS) return cached.price;
+  try {
+    const res = await fetch(`https://coins.llama.fi/prices/current/base:${key}`, {
+      headers: { accept: "application/json" },
+    });
+    if (!res.ok) return cached?.price ?? null;
+    const raw = (await res.json()) as { coins: Record<string, { price: number }> };
+    const price = raw.coins[`base:${key}`]?.price;
+    if (typeof price !== "number" || !Number.isFinite(price)) return cached?.price ?? null;
+    tokenUsdCache.set(key, { price, ts: now });
+    return price;
+  } catch {
+    return cached?.price ?? null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // BASE MAINNET JSON-RPC READS — 8 endpoints, all via baseRpc() (fixed host,
 // SSRF-safe by construction). Addresses/hashes validated before any RPC call.
 // ---------------------------------------------------------------------------
@@ -2375,11 +2510,43 @@ app.get("/chain/block-number/preview", async (c) => {
   }
 });
 
+// EIP-1559 base/priority fee via eth_feeHistory (1 block, median-percentile
+// reward). Best-effort: an upstream hiccup here degrades to nulls rather than
+// failing the whole gas-price read (eth_gasPrice already has its own answer).
+async function fetchFeeHistory(): Promise<{ base_fee_gwei: number | null; priority_fee_gwei: number | null }> {
+  try {
+    const hist = (await baseRpc("eth_feeHistory", ["0x1", "latest", [50]])) as {
+      baseFeePerGas?: string[];
+      reward?: string[][];
+    };
+    const baseFee = hist.baseFeePerGas?.[0];
+    const priorityFee = hist.reward?.[0]?.[0];
+    return {
+      base_fee_gwei: baseFee ? Number(BigInt(baseFee)) / 1e9 : null,
+      priority_fee_gwei: priorityFee ? Number(BigInt(priorityFee)) / 1e9 : null,
+    };
+  } catch {
+    return { base_fee_gwei: null, priority_fee_gwei: null };
+  }
+}
+
 app.get("/chain/gas-price", async (c) => {
   try {
-    const hex = (await baseRpc("eth_gasPrice", [])) as string;
+    const [hex, feeHistory, ethUsd] = await Promise.all([
+      baseRpc("eth_gasPrice", []) as Promise<string>,
+      fetchFeeHistory(),
+      getEthUsd(),
+    ]);
     const wei = BigInt(hex);
-    const result = { gas_price_wei: wei.toString(), gas_price_gwei: Number(wei) / 1e9, chain: "base" };
+    const gasPriceEth = Number(wei) / 1e18;
+    const result = {
+      gas_price_wei: wei.toString(),
+      gas_price_gwei: Number(wei) / 1e9,
+      base_fee_gwei: feeHistory.base_fee_gwei,
+      priority_fee_gwei: feeHistory.priority_fee_gwei,
+      gas_price_usd: ethUsd !== null ? gasPriceEth * ethUsd : null,
+      chain: "base",
+    };
 
     console.log(
       JSON.stringify({ event: "paid_request", endpoint: "/chain/gas-price", ts: new Date().toISOString() }),
@@ -2394,11 +2561,19 @@ app.get("/chain/gas-price", async (c) => {
 // Free preview — same live Base RPC read as the paid route, no payment required.
 app.get("/chain/gas-price/preview", async (c) => {
   try {
-    const hex = (await baseRpc("eth_gasPrice", [])) as string;
+    const [hex, feeHistory, ethUsd] = await Promise.all([
+      baseRpc("eth_gasPrice", []) as Promise<string>,
+      fetchFeeHistory(),
+      getEthUsd(),
+    ]);
     const wei = BigInt(hex);
+    const gasPriceEth = Number(wei) / 1e18;
     return c.json({
       gas_price_wei: wei.toString(),
       gas_price_gwei: Number(wei) / 1e9,
+      base_fee_gwei: feeHistory.base_fee_gwei,
+      priority_fee_gwei: feeHistory.priority_fee_gwei,
+      gas_price_usd: ethUsd !== null ? gasPriceEth * ethUsd : null,
       chain: "base",
       note: "Free live sample — identical to the paid route. Full: GET /chain/gas-price ($0.001), keyless x402 on Base.",
     });
@@ -2414,9 +2589,19 @@ app.get("/chain/balance", async (c) => {
   }
 
   try {
-    const hex = (await baseRpc("eth_getBalance", [address, "latest"])) as string;
+    const [hex, ethUsd] = await Promise.all([
+      baseRpc("eth_getBalance", [address, "latest"]) as Promise<string>,
+      getEthUsd(),
+    ]);
     const wei = BigInt(hex);
-    const result = { address, balance_wei: wei.toString(), balance_eth: Number(wei) / 1e18, chain: "base" };
+    const balanceEth = Number(wei) / 1e18;
+    const result = {
+      address,
+      balance_wei: wei.toString(),
+      balance_eth: balanceEth,
+      balance_usd: ethUsd !== null ? balanceEth * ethUsd : null,
+      chain: "base",
+    };
 
     console.log(
       JSON.stringify({ event: "paid_request", endpoint: "/chain/balance", address, ts: new Date().toISOString() }),
@@ -2548,25 +2733,51 @@ app.get("/chain/receipt", async (c) => {
   }
 
   try {
-    const receipt = (await baseRpc("eth_getTransactionReceipt", [hash])) as {
-      status: string;
-      blockNumber: string;
-      gasUsed: string;
-      from: string;
-      to: string | null;
-      logs: unknown[];
-    } | null;
+    const [receipt, ethUsd] = await Promise.all([
+      baseRpc("eth_getTransactionReceipt", [hash]) as Promise<{
+        status: string;
+        blockNumber: string;
+        gasUsed: string;
+        cumulativeGasUsed: string;
+        effectiveGasPrice?: string;
+        from: string;
+        to: string | null;
+        contractAddress: string | null;
+        logs: unknown[];
+        l1Fee?: string;
+        l1GasPrice?: string;
+        l1GasUsed?: string;
+      } | null>,
+      getEthUsd(),
+    ]);
     if (!receipt) {
       return c.json({ error: "receipt not found" }, { status: 404 });
     }
+    const hexToDec = (v: string | undefined) => (v ? BigInt(v).toString() : null);
+    // Base (OP-stack) total fee = L2 execution fee (effectiveGasPrice * gasUsed)
+    // + the L1 data-availability fee (l1Fee) — the breakdown an ETH-only
+    // competitor has no L1 component for in the first place.
+    const l1FeeWei = receipt.l1Fee ? BigInt(receipt.l1Fee) : null;
+    const l2FeeWei = receipt.effectiveGasPrice ? BigInt(receipt.effectiveGasPrice) * BigInt(receipt.gasUsed) : null;
+    const totalFeeWei = l2FeeWei !== null ? l2FeeWei + (l1FeeWei ?? 0n) : l1FeeWei;
+    const weiToUsd = (w: bigint | null) => (w !== null && ethUsd !== null ? (Number(w) / 1e18) * ethUsd : null);
     const result = {
       status: parseInt(receipt.status, 16),
       block_number: parseInt(receipt.blockNumber, 16),
       gas_used: parseInt(receipt.gasUsed, 16),
+      cumulative_gas_used: parseInt(receipt.cumulativeGasUsed, 16),
+      effective_gas_price_wei: hexToDec(receipt.effectiveGasPrice),
       from: receipt.from,
       to: receipt.to,
+      contract_address: receipt.contractAddress,
       tx_hash: hash,
       logs_count: receipt.logs.length,
+      logs: receipt.logs,
+      l1_fee_wei: hexToDec(receipt.l1Fee),
+      l1_gas_price_wei: hexToDec(receipt.l1GasPrice),
+      l1_gas_used: receipt.l1GasUsed ? parseInt(receipt.l1GasUsed, 16) : null,
+      l1_fee_usd: weiToUsd(l1FeeWei),
+      total_fee_usd: weiToUsd(totalFeeWei),
     };
 
     console.log(
@@ -2631,16 +2842,19 @@ app.get("/chain/wallet", async (c) => {
   }
 
   try {
-    const [balanceHex, nonceHex, code] = await Promise.all([
+    const [balanceHex, nonceHex, code, ethUsd] = await Promise.all([
       baseRpc("eth_getBalance", [address, "latest"]) as Promise<string>,
       baseRpc("eth_getTransactionCount", [address, "latest"]) as Promise<string>,
       baseRpc("eth_getCode", [address, "latest"]) as Promise<string>,
+      getEthUsd(),
     ]);
     const wei = BigInt(balanceHex);
+    const balanceEth = Number(wei) / 1e18;
     const result = {
       address,
       balance_wei: wei.toString(),
-      balance_eth: Number(wei) / 1e18,
+      balance_eth: balanceEth,
+      balance_usd: ethUsd !== null ? balanceEth * ethUsd : null,
       tx_count: parseInt(nonceHex, 16),
       ...classifyCode(code),
       chain: "base",
@@ -2716,6 +2930,7 @@ interface McpScanResult {
   tools_scanned: number;
   findings: ScanFinding[];
   risk_score: number; // 0-100
+  verdict: Verdict;
   risk_summary: string;
   scanned_at: string;
 }
@@ -2840,7 +3055,7 @@ async function scanMcpServer(target: string): Promise<McpScanResult> {
     ? `No tool-poisoning/injection patterns detected across ${tools.length} tool(s). Clean on static checks.`
     : `${findings.length} issue(s) across ${tools.length} tool(s)${crit ? `, ${crit} CRITICAL (tool-poisoning)` : ""}. Risk ${risk_score}/100. Review flagged tools before trusting this server.`;
 
-  return { target, tools_scanned: tools.length, findings, risk_score, risk_summary, scanned_at };
+  return { target, tools_scanned: tools.length, findings, risk_score, verdict: verdictFromScore(risk_score), risk_summary, scanned_at };
 }
 
 app.get("/scan/mcp", async (c) => {
@@ -2874,6 +3089,7 @@ function previewOf(r: McpScanResult) {
     issue_count: r.findings.length,
     severity_breakdown: by,
     risk_score: r.risk_score,
+    verdict: r.verdict,
     risk_summary: r.risk_summary,
     upsell,
     scanned_at: r.scanned_at,
@@ -2908,7 +3124,7 @@ const mcpHandler = createMcpHandler(() => {
     "enrich_tech_risk",
     {
       description:
-        "Security enrichment: tech-stack fingerprint + CVE mapping + EPSS + CISA KEV for a domain. Cost: $0.05 USDC per call (x402 micropayment).",
+        "Security enrichment: tech-stack fingerprint + CVE mapping + EPSS + CISA KEV + verdict (clear/review/block) for a domain. Cost: $0.05 USDC per call (x402 micropayment).",
       inputSchema: {
         domain: z.string().optional(),
         techstack: z.array(z.string()).optional(),
@@ -2931,7 +3147,7 @@ const mcpHandler = createMcpHandler(() => {
     "enrich_domain",
     {
       description:
-        "Firmographic + tech-stack enrichment: RDAP registrant/registrar, DNS records, full subdomain enumeration + certificate-transparency history, tech-stack fingerprint for a domain. Cost: $0.05 USDC per call via the shared MCP payment gate (the direct HTTP endpoint GET /enrich/domain is $0.01 — MCP tools/call is gated at a flat $0.05 per request today).",
+        "Firmographic + tech-stack enrichment: RDAP registrant/registrar, DNS records, full subdomain enumeration + certificate-transparency history, tech-stack fingerprint, verdict (clear/review/block, based on domain age) for a domain. Cost: $0.05 USDC per call via the shared MCP payment gate (the direct HTTP endpoint GET /enrich/domain is $0.01 — MCP tools/call is gated at a flat $0.05 per request today).",
       inputSchema: {
         domain: z.string(),
       },
@@ -2953,7 +3169,7 @@ const mcpHandler = createMcpHandler(() => {
     "scan_mcp_server",
     {
       description:
-        "Security-audit a target MCP server for prompt-injection / tool-poisoning. Fetches the server's advertised tools and statically analyzes each for hidden instructions, data-exfiltration hints, dangerous capabilities, cross-tool shadowing, and invisible-unicode payloads (OWASP LLM01/LLM08). Returns findings + a 0-100 risk score. Cost: $0.05 USDC per scan via x402.",
+        "Security-audit a target MCP server for prompt-injection / tool-poisoning. Fetches the server's advertised tools and statically analyzes each for hidden instructions, data-exfiltration hints, dangerous capabilities, cross-tool shadowing, and invisible-unicode payloads (OWASP LLM01/LLM08). Returns findings + a 0-100 risk score + verdict (clear/review/block). Cost: $0.05 USDC per scan via x402.",
       inputSchema: {
         url: z.string().describe("Target MCP server endpoint URL to audit"),
       },
@@ -2975,7 +3191,7 @@ const mcpHandler = createMcpHandler(() => {
     "scan_mcp_preview",
     {
       description:
-        "FREE preview scan of a target MCP server for tool-poisoning / prompt-injection. Returns issue count, severity breakdown, and risk score — but NOT which tools or the evidence. Use this to check any MCP server (including your own) at no cost; if issues are found, call the paid scan_mcp_server for the itemized findings + remediation. No payment required.",
+        "FREE preview scan of a target MCP server for tool-poisoning / prompt-injection. Returns issue count, severity breakdown, risk score, and verdict (clear/review/block) — but NOT which tools or the evidence. Use this to check any MCP server (including your own) at no cost; if issues are found, call the paid scan_mcp_server for the itemized findings + remediation. No payment required.",
       inputSchema: {
         url: z.string().describe("Target MCP server endpoint URL to preview-scan (free)"),
       },
@@ -3196,14 +3412,26 @@ const mcpHandler = createMcpHandler(() => {
     "chain_gas_price",
     {
       description:
-        "Current Base mainnet gas price (wei + gwei) via multi-provider JSON-RPC. Cost: $0.005 USDC per call via x402.",
+        "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, and gas_price_usd (ETH price cross-call — no price oracle on ETH-only competitors) via multi-provider JSON-RPC. Cost: $0.005 USDC per call via x402.",
       inputSchema: {},
     },
     async () => {
       try {
-        const hex = (await baseRpc("eth_gasPrice", [])) as string;
+        const [hex, feeHistory, ethUsd] = await Promise.all([
+          baseRpc("eth_gasPrice", []) as Promise<string>,
+          fetchFeeHistory(),
+          getEthUsd(),
+        ]);
         const wei = BigInt(hex);
-        const result = { gas_price_wei: wei.toString(), gas_price_gwei: Number(wei) / 1e9, chain: "base" };
+        const gasPriceEth = Number(wei) / 1e18;
+        const result = {
+          gas_price_wei: wei.toString(),
+          gas_price_gwei: Number(wei) / 1e9,
+          base_fee_gwei: feeHistory.base_fee_gwei,
+          priority_fee_gwei: feeHistory.priority_fee_gwei,
+          gas_price_usd: ethUsd !== null ? gasPriceEth * ethUsd : null,
+          chain: "base",
+        };
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
@@ -3215,7 +3443,7 @@ const mcpHandler = createMcpHandler(() => {
     "chain_balance",
     {
       description:
-        "Native ETH balance of a Base mainnet address via multi-provider JSON-RPC. Cost: $0.005 USDC per call via x402.",
+        "Native ETH balance of a Base mainnet address, incl. balance_usd (ETH price cross-call — no price oracle on ETH-only competitors), via multi-provider JSON-RPC. Cost: $0.005 USDC per call via x402.",
       inputSchema: {
         address: z.string().describe("0x-prefixed 20-byte Base address"),
       },
@@ -3225,9 +3453,19 @@ const mcpHandler = createMcpHandler(() => {
         return { content: [{ type: "text" as const, text: "Error: address must be a 0x-prefixed 20-byte address" }] };
       }
       try {
-        const hex = (await baseRpc("eth_getBalance", [address, "latest"])) as string;
+        const [hex, ethUsd] = await Promise.all([
+          baseRpc("eth_getBalance", [address, "latest"]) as Promise<string>,
+          getEthUsd(),
+        ]);
         const wei = BigInt(hex);
-        const result = { address, balance_wei: wei.toString(), balance_eth: Number(wei) / 1e18, chain: "base" };
+        const balanceEth = Number(wei) / 1e18;
+        const result = {
+          address,
+          balance_wei: wei.toString(),
+          balance_eth: balanceEth,
+          balance_usd: ethUsd !== null ? balanceEth * ethUsd : null,
+          chain: "base",
+        };
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
@@ -3314,7 +3552,7 @@ const mcpHandler = createMcpHandler(() => {
     "chain_wallet",
     {
       description:
-        "Wallet bundle: ETH balance + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call. Cost: $0.005 USDC per call via x402.",
+        "Wallet bundle: ETH balance + balance_usd (ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call. Cost: $0.005 USDC per call via x402.",
       inputSchema: {
         address: z.string().describe("0x-prefixed 20-byte Base address"),
       },
@@ -3324,16 +3562,19 @@ const mcpHandler = createMcpHandler(() => {
         return { content: [{ type: "text" as const, text: "Error: address must be a 0x-prefixed 20-byte address" }] };
       }
       try {
-        const [balanceHex, nonceHex, code] = await Promise.all([
+        const [balanceHex, nonceHex, code, ethUsd] = await Promise.all([
           baseRpc("eth_getBalance", [address, "latest"]) as Promise<string>,
           baseRpc("eth_getTransactionCount", [address, "latest"]) as Promise<string>,
           baseRpc("eth_getCode", [address, "latest"]) as Promise<string>,
+          getEthUsd(),
         ]);
         const wei = BigInt(balanceHex);
+        const balanceEth = Number(wei) / 1e18;
         const result = {
           address,
           balance_wei: wei.toString(),
-          balance_eth: Number(wei) / 1e18,
+          balance_eth: balanceEth,
+          balance_usd: ethUsd !== null ? balanceEth * ethUsd : null,
           tx_count: parseInt(nonceHex, 16),
           ...classifyCode(code),
           chain: "base",
@@ -3376,11 +3617,19 @@ const mcpHandler = createMcpHandler(() => {
     },
     async () => {
       try {
-        const hex = (await baseRpc("eth_gasPrice", [])) as string;
+        const [hex, feeHistory, ethUsd] = await Promise.all([
+          baseRpc("eth_gasPrice", []) as Promise<string>,
+          fetchFeeHistory(),
+          getEthUsd(),
+        ]);
         const wei = BigInt(hex);
+        const gasPriceEth = Number(wei) / 1e18;
         const result = {
           gas_price_wei: wei.toString(),
           gas_price_gwei: Number(wei) / 1e9,
+          base_fee_gwei: feeHistory.base_fee_gwei,
+          priority_fee_gwei: feeHistory.priority_fee_gwei,
+          gas_price_usd: ethUsd !== null ? gasPriceEth * ethUsd : null,
           chain: "base",
           note: "Free live sample — identical to the paid tool. Full: the paid chain_gas_price tool or GET /chain/gas-price ($0.001).",
         };
