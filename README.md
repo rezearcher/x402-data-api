@@ -35,15 +35,15 @@ Base-native, multi-provider RPC with automatic failover (never fails a paid call
 | `GET /chain/token-balance?address=&token=` | $0.001 | ERC-20 token balance |
 | `GET /chain/tx?hash=` | $0.001 | Transaction details |
 | `GET /chain/receipt?hash=` | $0.001 | Transaction receipt (status, gas used, logs) |
-| `GET /chain/code?address=` | $0.001 | Contract-code check (is it a contract?) |
-| `GET /chain/wallet?address=` | $0.003 | **Bundle:** ETH balance + tx count + contract flag in one call |
+| `GET /chain/code?address=` | $0.001 | Contract-code check — is it a contract, and **EIP-7702 delegated-EOA detection** (`is_eip7702_delegate` / `delegate_address`) |
+| `GET /chain/wallet?address=` | $0.003 | **Bundle:** ETH balance + tx count + contract flag in one call, EIP-7702 delegated-EOA aware (`is_eip7702_delegate` / `delegate_address`) |
 
 ### Security
 | Endpoint | Price | Returns |
 |---|---|---|
 | `GET /scan/mcp?url=` | $0.10 | Security audit of a target MCP server: tool-poisoning / prompt-injection / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08) + risk score |
 | `GET /enrich/tech-risk?domain=` | $0.05 | Tech-stack fingerprint → CVE (NVD) + EPSS + CISA-KEV attack-surface risk |
-| `GET /enrich/domain?domain=` | $0.01 | Firmographic + tech-stack enrichment (crt.sh, RDAP, DoH, HTTP fingerprint) |
+| `GET /enrich/domain?domain=` | $0.01 | Firmographic + tech-stack enrichment, incl. **full subdomain enumeration** (`subdomains[]`) via crt.sh certificate-transparency logs, RDAP, DoH, HTTP fingerprint |
 
 Free previews: `GET /crypto/prices/preview`, `/crypto/funding/preview`, `/defi/yields/preview`, `/chain/block-number/preview`, `/chain/gas-price/preview` (full live data, not truncated), `/scan/mcp/preview?url=`.
 
@@ -54,9 +54,12 @@ Free previews: `GET /crypto/prices/preview`, `/crypto/funding/preview`, `/defi/y
 Add one remote MCP server and your agent gets the whole toolset. `initialize` and `tools/list`
 are **free** so agents can discover the tools; paid `tools/call` returns an x402 challenge.
 
-`tools/list` advertises 11 tools: `crypto_prices`, `crypto_funding`, `defi_yields`, `pm_markets`
-(paid data), `crypto_prices_preview`, `crypto_funding_preview`, `defi_yields_preview` (free),
-and `scan_mcp_server`, `scan_mcp_preview`, `enrich_tech_risk`, `enrich_domain` (security).
+`tools/list` advertises 19 tools: `crypto_prices`, `crypto_funding`, `defi_yields`, `pm_markets`,
+`chain_block_number`, `chain_gas_price`, `chain_balance`, `chain_token_balance`, `chain_tx`,
+`chain_wallet` (paid Base RPC + data, EIP-7702 delegated-EOA aware), `crypto_prices_preview`,
+`crypto_funding_preview`, `defi_yields_preview`, `chain_block_number_preview`,
+`chain_gas_price_preview` (free), and `scan_mcp_server`, `scan_mcp_preview`, `enrich_tech_risk`,
+`enrich_domain` (security).
 
 ```jsonc
 // add to your MCP client config

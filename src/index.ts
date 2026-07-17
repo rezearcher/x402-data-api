@@ -88,6 +88,101 @@ const app = new Hono<{ Bindings: Env }>();
 
 app.get("/health", (c) => c.json({ ok: true }));
 
+// ---------------------------------------------------------------------------
+// Landing page — every external listing (Bazaar, MCP registry, awesome-x402,
+// llms.txt crawlers) links back here, so a 404 undercuts credibility. Plain
+// self-contained HTML: inline CSS only, no external resources, readable by
+// both humans and agents. Hono auto-serves HEAD from this GET handler.
+// ---------------------------------------------------------------------------
+
+app.get("/", (c) => {
+  const BASE = "https://x402-data-api.sigrunner.workers.dev";
+  const mcpConfig = JSON.stringify(
+    { mcpServers: { "grey-ridge-x402": { type: "streamable-http", url: `${BASE}/mcp` } } },
+    null,
+    2,
+  );
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grey Ridge Signals — Base-native x402 Data API</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2.5rem 1.25rem 4rem;
+    background: #0b0f14; color: #dbe4ee;
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  main { max-width: 780px; margin: 0 auto; }
+  h1 { font-size: 1.7rem; margin: 0 0 0.4rem; color: #f4f7fa; }
+  .tagline { color: #7fd1a8; font-size: 0.95rem; margin: 0 0 1.5rem; }
+  p { color: #b9c4d0; }
+  h2 { font-size: 1.05rem; color: #f4f7fa; margin: 2rem 0 0.75rem; border-top: 1px solid #1f2933; padding-top: 1.5rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #1f2933; }
+  th { color: #8b9bab; font-weight: 600; }
+  td.price { color: #7fd1a8; white-space: nowrap; }
+  code, pre {
+    font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #10161d; color: #d7e2ec; border: 1px solid #1f2933; border-radius: 6px;
+  }
+  code { padding: 0.1rem 0.35rem; }
+  pre { padding: 0.9rem 1rem; overflow-x: auto; margin: 0.5rem 0 1.25rem; }
+  a { color: #6fb7ff; }
+  ul.links { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; }
+  ul.links li a { text-decoration: none; }
+  ul.links li a:hover { text-decoration: underline; }
+  footer { margin-top: 2.5rem; color: #5c6b7a; font-size: 0.8rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Grey Ridge Signals — Base-native x402 Data API</h1>
+  <p class="tagline">Agent-native, pay-per-call data on Base — no account, no API key.</p>
+  <p>
+    Every endpoint here is paid inline in USDC over the <a href="https://x402.org">x402</a> protocol on
+    Base mainnet — an agent gets a 402 challenge, signs, retries, and gets data back in the same request.
+    No signup, no key management, no subscription. Our white space is <strong>Base-native RPC</strong>
+    (block/gas/balance/tx/wallet reads with EIP-7702 delegated-EOA detection) — most data sellers in this
+    space are Ethereum-only. We pair that with crypto/DeFi/prediction-market data and MCP security audits
+    (tool-poisoning / prompt-injection scanning), all reachable over plain HTTP or as MCP tools.
+  </p>
+
+  <h2>Endpoint groups</h2>
+  <table>
+    <thead><tr><th>Group</th><th>Price</th><th>Endpoints</th></tr></thead>
+    <tbody>
+      <tr><td>Base on-chain reads</td><td class="price">$0.001&ndash;$0.003</td><td><code>/chain/block-number</code>, <code>/chain/gas-price</code>, <code>/chain/balance</code>, <code>/chain/token-balance</code>, <code>/chain/tx</code>, <code>/chain/receipt</code>, <code>/chain/code</code>, <code>/chain/wallet</code></td></tr>
+      <tr><td>Crypto / DeFi / prediction markets</td><td class="price">$0.001&ndash;$0.005</td><td><code>/crypto/prices</code>, <code>/crypto/funding</code>, <code>/defi/yields</code>, <code>/pm/markets</code></td></tr>
+      <tr><td>Security</td><td class="price">$0.01&ndash;$0.10</td><td><code>/enrich/domain</code>, <code>/enrich/tech-risk</code>, <code>/scan/mcp</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2>Try it free</h2>
+  <pre>curl -s ${BASE}/chain/gas-price/preview</pre>
+
+  <h2>Add the MCP server</h2>
+  <pre>${mcpConfig}</pre>
+
+  <h2>Discovery</h2>
+  <ul class="links">
+    <li><a href="/llms.txt">/llms.txt</a></li>
+    <li><a href="/openapi.json">/openapi.json</a></li>
+    <li><a href="/.well-known/x402">/.well-known/x402</a></li>
+    <li><a href="/mcp">/mcp</a></li>
+  </ul>
+
+  <footer>Grey Ridge Signals Group LLC &middot; Base mainnet (eip155:8453), USDC via x402</footer>
+</main>
+</body>
+</html>
+`;
+  return c.html(html);
+});
+
 // Staged CDP-auth probe (temporary): confirms we can mint a CDP JWT from Worker
 // secrets and that the CDP facilitator accepts it, before swapping the live gate.
 app.get("/internal/cdp-probe", async (c) => {
@@ -244,7 +339,7 @@ app.get("/llms.txt", (c) => {
   return c.text(`# Grey Ridge Signals — x402 Data & Security APIs
 
 > Agent-native, pay-per-call data on Base (USDC via x402). No account, no API key — agents pay inline.
-> Discovery: ${BASE}/.well-known/x402  |  OpenAPI: ${BASE}/openapi.json  |  Listed on the Coinbase CDP x402 Bazaar.
+> Landing page: ${BASE}/  |  Discovery: ${BASE}/.well-known/x402  |  OpenAPI: ${BASE}/openapi.json  |  Listed on the Coinbase CDP x402 Bazaar.
 
 ## How to pay
 Each paid GET returns HTTP 402 with an x402 v2 payment-required challenge (network eip155:8453 / Base, asset USDC).
@@ -308,6 +403,13 @@ app.get("/openapi.json", (c) => {
     },
     servers: [{ url: BASE }],
     paths: {
+      "/": {
+        get: {
+          summary: "Landing page (HTML, free).",
+          description: "Self-contained HTML landing page — pitch, endpoint-group pricing table, free curl sample, MCP install snippet, discovery links. No payment required.",
+          responses: { "200": { description: "HTML landing page" } },
+        },
+      },
       "/crypto/prices": paid("Spot token prices (DefiLlama).", "0.001", [{ name: "coins", desc: "comma-separated coingecko ids (max 25)" }]),
       "/crypto/funding": paid("Cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread.", "0.001", [{ name: "limit", desc: "max coins (default 20, max 100)" }]),
       "/defi/yields": paid("Top DeFi lending/LP yields — APY trend + IL risk + stability forecast (DefiLlama).", "0.001", [{ name: "limit", desc: "max pools" }, { name: "project", desc: "protocol filter" }, { name: "chain", desc: "chain filter" }, { name: "stable", desc: "'true' = stablecoin only" }]),
@@ -456,7 +558,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "MCP tools/call: crypto_prices, crypto_funding, defi_yields, pm_markets (Base/crypto/prediction-market data), enrich_tech_risk (security: tech-stack + CVE/EPSS/CISA-KEV), enrich_domain (firmographic), or scan_mcp_server (tool-poisoning/prompt-injection audit of a target MCP server)",
+        "MCP tools/call: crypto_prices, crypto_funding, defi_yields, pm_markets (Base/crypto/prediction-market data), chain_block_number, chain_gas_price, chain_balance, chain_token_balance, chain_tx, chain_wallet (Base mainnet on-chain reads, EIP-7702 delegated-EOA aware), enrich_tech_risk (security: tech-stack + CVE/EPSS/CISA-KEV), enrich_domain (firmographic), or scan_mcp_server (tool-poisoning/prompt-injection audit of a target MCP server)",
       mimeType: "application/json",
     },
     "GET /scan/mcp": {
@@ -966,6 +1068,8 @@ app.use(async (c, next) => {
       "crypto_prices_preview",
       "crypto_funding_preview",
       "defi_yields_preview",
+      "chain_block_number_preview",
+      "chain_gas_price_preview",
     ]);
     if (rpcMethod !== "tools/call" || (toolName && FREE_TOOLS.has(toolName))) {
       return next();
@@ -2778,6 +2882,210 @@ const mcpHandler = createMcpHandler(() => {
         const result = {
           preview: all.slice(0, 1),
           note: "Free sample. Full data via the paid defi_yields tool or GET /defi/yields ($0.001).",
+        };
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "chain_block_number",
+    {
+      description:
+        "Current Base mainnet block number via multi-provider JSON-RPC (automatic failover across 4 providers, never fails on one provider's rate limit). Cost: $0.005 USDC per call via x402.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const hex = (await baseRpc("eth_blockNumber", [])) as string;
+        const result = { block_number: parseInt(hex, 16), chain: "base" };
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "chain_gas_price",
+    {
+      description:
+        "Current Base mainnet gas price (wei + gwei) via multi-provider JSON-RPC. Cost: $0.005 USDC per call via x402.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const hex = (await baseRpc("eth_gasPrice", [])) as string;
+        const wei = BigInt(hex);
+        const result = { gas_price_wei: wei.toString(), gas_price_gwei: Number(wei) / 1e9, chain: "base" };
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "chain_balance",
+    {
+      description:
+        "Native ETH balance of a Base mainnet address via multi-provider JSON-RPC. Cost: $0.005 USDC per call via x402.",
+      inputSchema: {
+        address: z.string().describe("0x-prefixed 20-byte Base address"),
+      },
+    },
+    async ({ address }) => {
+      if (!ADDR_RE.test(address)) {
+        return { content: [{ type: "text" as const, text: "Error: address must be a 0x-prefixed 20-byte address" }] };
+      }
+      try {
+        const hex = (await baseRpc("eth_getBalance", [address, "latest"])) as string;
+        const wei = BigInt(hex);
+        const result = { address, balance_wei: wei.toString(), balance_eth: Number(wei) / 1e18, chain: "base" };
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "chain_token_balance",
+    {
+      description:
+        "ERC-20 token balance of a Base mainnet address via multi-provider JSON-RPC. Cost: $0.005 USDC per call via x402.",
+      inputSchema: {
+        address: z.string().describe("0x-prefixed 20-byte holder address"),
+        token: z.string().describe("0x-prefixed 20-byte ERC-20 contract address"),
+      },
+    },
+    async ({ address, token }) => {
+      if (!ADDR_RE.test(address)) {
+        return { content: [{ type: "text" as const, text: "Error: address must be a 0x-prefixed 20-byte address" }] };
+      }
+      if (!ADDR_RE.test(token)) {
+        return { content: [{ type: "text" as const, text: "Error: token must be a 0x-prefixed 20-byte address" }] };
+      }
+      try {
+        const data = `0x70a08231${address.slice(2).toLowerCase().padStart(64, "0")}`;
+        const hex = (await baseRpc("eth_call", [{ to: token, data }, "latest"])) as string;
+        const result = { address, token, balance_raw: BigInt(hex).toString(), chain: "base" };
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "chain_tx",
+    {
+      description:
+        "Transaction details by hash on Base mainnet via multi-provider JSON-RPC. Cost: $0.005 USDC per call via x402.",
+      inputSchema: {
+        hash: z.string().describe("0x-prefixed 32-byte transaction hash"),
+      },
+    },
+    async ({ hash }) => {
+      if (!HASH_RE.test(hash)) {
+        return { content: [{ type: "text" as const, text: "Error: hash must be a 0x-prefixed 32-byte transaction hash" }] };
+      }
+      try {
+        const tx = (await baseRpc("eth_getTransactionByHash", [hash])) as Record<string, unknown> | null;
+        if (!tx) {
+          return { content: [{ type: "text" as const, text: "Error: tx not found" }] };
+        }
+        const hexToDec = (v: unknown) => (typeof v === "string" && v.startsWith("0x") ? BigInt(v).toString() : v);
+        const result = {
+          ...tx,
+          blockNumber: hexToDec(tx.blockNumber),
+          value: hexToDec(tx.value),
+          gas: hexToDec(tx.gas),
+          gasPrice: hexToDec(tx.gasPrice),
+          nonce: hexToDec(tx.nonce),
+        };
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "chain_wallet",
+    {
+      description:
+        "Wallet bundle: ETH balance + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call. Cost: $0.005 USDC per call via x402.",
+      inputSchema: {
+        address: z.string().describe("0x-prefixed 20-byte Base address"),
+      },
+    },
+    async ({ address }) => {
+      if (!ADDR_RE.test(address)) {
+        return { content: [{ type: "text" as const, text: "Error: address must be a 0x-prefixed 20-byte address" }] };
+      }
+      try {
+        const [balanceHex, nonceHex, code] = await Promise.all([
+          baseRpc("eth_getBalance", [address, "latest"]) as Promise<string>,
+          baseRpc("eth_getTransactionCount", [address, "latest"]) as Promise<string>,
+          baseRpc("eth_getCode", [address, "latest"]) as Promise<string>,
+        ]);
+        const wei = BigInt(balanceHex);
+        const result = {
+          address,
+          balance_wei: wei.toString(),
+          balance_eth: Number(wei) / 1e18,
+          tx_count: parseInt(nonceHex, 16),
+          ...classifyCode(code),
+          chain: "base",
+        };
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "chain_block_number_preview",
+    {
+      description:
+        "FREE live sample of the current Base mainnet block number — identical data to the paid chain_block_number tool. No payment required.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const hex = (await baseRpc("eth_blockNumber", [])) as string;
+        const result = {
+          block_number: parseInt(hex, 16),
+          chain: "base",
+          note: "Free live sample — identical to the paid tool. Full: the paid chain_block_number tool or GET /chain/block-number ($0.001).",
+        };
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "chain_gas_price_preview",
+    {
+      description:
+        "FREE live sample of the current Base mainnet gas price — identical data to the paid chain_gas_price tool. No payment required.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const hex = (await baseRpc("eth_gasPrice", [])) as string;
+        const wei = BigInt(hex);
+        const result = {
+          gas_price_wei: wei.toString(),
+          gas_price_gwei: Number(wei) / 1e9,
+          chain: "base",
+          note: "Free live sample — identical to the paid tool. Full: the paid chain_gas_price tool or GET /chain/gas-price ($0.001).",
         };
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
