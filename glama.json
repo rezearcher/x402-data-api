@@ -1,0 +1,55 @@
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "name": "x402-data-api",
+  "type": "streamable-http",
+  "description": "Pay-per-call crypto, DeFi, prediction-market, and on-chain data for AI agents — HTTP 402 payment-enabled MCP server on Base mainnet.",
+  "url": "https://x402-data-api.sigrunner.workers.dev/mcp",
+  "repository": "https://github.com/rezearcher/x402-data-api",
+  "authors": [
+    {
+      "name": "Rez",
+      "email": "matthewjaybowman@gmail.com"
+    }
+  ],
+  "maintainers": [
+    {
+      "name": "rezearcher",
+      "github": "rezearcher"
+    }
+  ],
+  "logoUrl": "https://img.shields.io/badge/x402-data--api-blue",
+  "homepage": "https://github.com/rezearcher/x402-data-api",
+  "documentation": "https://x402-data-api.sigrunner.workers.dev/llms.txt",
+  "privacy": "https://github.com/rezearcher/x402-data-api#privacy",
+  "license": "MIT",
+  "capabilities": [
+    "read",
+    "data-access",
+    "payment-aware"
+  ],
+  "tools": 19,
+  "pricing": "HTTP 402 pay-per-call (USDC, $0.001–$0.005 per call)",
+  "network": "Base mainnet (eip155:8453)",
+  "features": [
+    "Crypto prices & funding rates",
+    "DeFi yields & APY trends",
+    "Polymarket prediction markets",
+    "Base JSON-RPC (block, gas, balance, token, tx, contract code, wallet bundle)",
+    "MCP security scanning & tech-risk enrichment",
+    "Free preview endpoints on all data tools",
+    "HTTP 402 inline payment (USDC on Base)",
+    "No API key required",
+    "Multi-provider RPC failover"
+  ],
+  "tags": [
+    "crypto",
+    "defi",
+    "prediction-markets",
+    "blockchain",
+    "base",
+    "payment",
+    "x402",
+    "data",
+    "rpc"
+  ]
+}
