@@ -47,6 +47,14 @@ EXCLUDED (off-mission): per-target vulnerability/conviction feeds.
   - `=0` → kill. Sunk cost ≈ $0.
 
 ## Status (updated 2026-07-11)
+
+> **Shipped reality (2026-07-18):** this checklist is stale — it lists only the `/enrich/*`
+> endpoints. The deployed Worker now serves **18 paid GET endpoints** + a **22-tool MCP server**
+> (data, Base RPC, `/chain/token-security` honeypot detector, MCP security scan, domain enrichment).
+> See **`ARCHITECTURE.md`** (root) for the code-verified inventory and the current gap list.
+> Still true: **first organic dollar = $0** (on-chain verified). The revenue atom is now the
+> RapidAPI seller account + Stripe payout (only Rez can create it), not just the MCP Registry publish below.
+
 - [x] Scaffold Hono worker + x402 middleware
 - [x] Wire enrichment endpoints to data sources (`/enrich/tech-risk`, `/enrich/domain` — NVD/EPSS/KEV/crt.sh/RDAP/DoH, all free feeds)
 - [x] tech-risk endpoint (supersedes the planned `cve-context`)
