@@ -1,0 +1,22 @@
+{
+  "actorSpecification": 1,
+  "name": "grey-ridge-base-onchain",
+  "title": "Grey Ridge — Base On-Chain Data Proxy",
+  "description": "Query Base mainnet on-chain data — gas price, block number, wallet ETH balance, and ERC-20 token balances. Powered by Grey Ridge Signals' x402 data API. No API key needed. $0.001/run via Apify's x402 integration.",
+  "version": "0.1.0",
+  "dockerfile": "./Dockerfile",
+  "input": "./input_schema.json",
+  "storages": {
+    "dataset": {
+      "actorSpecification": 1,
+      "title": "On-chain query results"
+    }
+  },
+  "tags": ["base", "crypto", "rpc", "blockchain", "x402", "ethereum", "web3", "defi", "onchain"],
+  "secretsSchema": {
+    "type": "object",
+    "properties": {},
+    "description": "No API keys or secrets required — all queries use free preview endpoints and public RPCs."
+  },
+  "maximumMemoryMbytes": 256
+}

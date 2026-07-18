@@ -1,0 +1,47 @@
+{
+  "title": "Grey Ridge — Base On-Chain Data Proxy",
+  "description": "Query Base mainnet on-chain data. Supports ETH balance, ERC-20 token balance, gas price, and block number lookups. All results are stored in the Actor's dataset for easy export.",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "wallets": {
+      "title": "Wallet Addresses",
+      "type": "array",
+      "description": "Base mainnet wallet addresses (0x-prefixed) to query balances for. Each address gets ETH balance and optional ERC-20 token balances.",
+      "editor": "json",
+      "prefill": [
+        "0x4200000000000000000000000000000000000006"
+      ],
+      "default": []
+    },
+    "tokens": {
+      "title": "Token Addresses (ERC-20)",
+      "type": "array",
+      "description": "Base mainnet ERC-20 token contract addresses to check balances for each wallet. Leave empty to only get native ETH balances. Standard tokens: USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913, WETH = 0x4200000000000000000000000000000000000006",
+      "editor": "json",
+      "prefill": [
+        "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+      ],
+      "default": []
+    },
+    "includeGasPrice": {
+      "title": "Include gas price",
+      "type": "boolean",
+      "description": "If enabled, fetches current Base mainnet gas price (wei, gwei, and USD equivalent) alongside other queries.",
+      "default": true
+    },
+    "includeBlockNumber": {
+      "title": "Include block number",
+      "type": "boolean",
+      "description": "If enabled, fetches latest Base mainnet block number alongside other queries.",
+      "default": true
+    },
+    "performTokenSecurityCheck": {
+      "title": "Perform token security check",
+      "type": "boolean",
+      "description": "If enabled, runs a honeypot/safety scan on each token contract via the x402 /chain/token-security endpoint (paid: $0.02/token). Adds 50+ ms latency per token. Requires a keyed proxy, not the free RPC path.",
+      "default": false
+    }
+  },
+  "required": []
+}
