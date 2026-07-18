@@ -57,6 +57,7 @@ endpoints in front of builders who pull.
 | 3 | **awesome-mcp-servers** (90.8k★, agent-PR fast-track w/ `🤖🤖🤖`) | Curated pull | ✅ **PR #10277 OPEN** (via classic token); awaiting merge | Auto |
 | 4 | **MCP catalogs** — Registry ✓; **mcp.so submitted ([issue #3190](https://github.com/chatmcp/mcpso/issues/3190))**; Glama (remote, needs repo); PulseMCP (web-form) | Crawler pull | Registry live + mcp.so submitted | Auto (mostly) |
 | 5 | **Dual-rail RapidAPI / Stripe** for human/API-key buyers (Rez's stated preference) | Human market | Needs Rez's account/tokens | Rez-atom |
+| 6 | **MCPize listing** — discovery-only marketplace for x402-gated MCP servers | MCP marketplace | ✅ Prep doc complete (`docs/MCPIZE_LISTING_PREP.md`); 0% platform take (x402 bypass); ready to publish after Rez email verification | Auto-prep, Rez-atom (email gate) |
 
 **Ruled out (do not revisit):** cold-spam email from sigrunner.com (shared reputation — Rez's call);
 wash-trading / self-payment as "first dollar"; more MCP-scanner-only build (dead category d/s=14);
@@ -65,9 +66,10 @@ X/PII scraping (legal). Note: *personalized 1:1 dev outreach is NOT cold-spam.*
 ## The autonomous / Rez-atom split
 
 - **Autonomous (I do, no Rez):** Phase 0 fixes → landing page → reframe/submit the curated-list PRs
-  (#2, #3) → claim/submit MCP catalogs (#4) → keep the product undeniable.
+  (#2, #3) → claim/submit MCP catalogs (#4) → create MCPize listing prep doc → keep the product undeniable.
 - **Rez-atom (only he can):** approve/send the 1:1 outreach (his identity/reputation), and/or greenlight
-  the RapidAPI dual-rail with his account. That's the legal-gate-equivalent here.
+  the RapidAPI dual-rail with his account, and/or verify the MCPize account email (to publish the listing).
+  That's the legal-gate-equivalent here.
 
 ---
 

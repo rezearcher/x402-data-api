@@ -134,6 +134,7 @@ The discussion is well-crafted with technical depth, but it's easy to blend into
 | 3 | BankrBot/skills | Skill catalog PR | OPEN | 🤷 Unknown | Wait for manual review |
 | 4 | mcp.so | Catalog issue | OPEN | N/A (issue) | Optional value-add comment |
 | 5 | Aeon/discussions | Community post | OPEN | N/A (discussion) | Follow-up with integration detail |
+| 6 | **MCPize** | MCP marketplace | PREP DONE | ✅ Prep doc in docs/MCPIZE_LISTING_PREP.md | Publish (needs Rez email verify) |
 
 **Immediate work items:** (#1) fix Glama + repo URL — (#2) rebase and fix merge conflict
 **Waiting game:** (#3) Bankr review — (#4) mcp.so review — (#5) Aeon reply
