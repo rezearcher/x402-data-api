@@ -1,7 +1,8 @@
 # ARCHITECTURE — x402-data-api
 
 **Source of truth for what is actually shipped.** Verified against `src/index.ts` on
-2026-07-18. Where a claim in another doc conflicts with the code, the code wins and the
+2026-07-18; dependency/Dependabot cards re-checked against the manifests on 2026-07-19 (see §6a).
+Where a claim in another doc conflicts with the code, the code wins and the
 conflict is recorded in [Doc-drift corrections](#doc-drift-corrections). Prices, counts,
 and route lists below were read out of the code, not copied from prose.
 
@@ -125,6 +126,23 @@ for these as **unverified** until an artifact exists.
 | `t_a1408407` Apify Base RPC Actor — publish to 20k+ pipelines | **No Apify actor exists** — no `actor.json`, no actor source, no `apify` code anywhere. Only planning mentions in `FIRST_DOLLAR_PLAYBOOK` (Tier B). | **GAP — not built.** "Published to 20k+ agent pipelines" is unproven; nothing in this repo implements it. |
 | `t_39a77a4a` MCP Directory Flood — submit to 8 directories | Repo shows MCP Registry (`server.json`) + mcp.so `#3190` (an earlier commit) + Glama/PulseMCP noted "needs repo"/"web-form" pending in `FIRST_DOLLAR_PLAYBOOK`. | **Partial / unverified** — no evidence of 8 fresh submissions in one pass; the artifacts present pre-date the task window. |
 | `t_e6242d7e` x402scan Composer + Bazaar Indexing | `register_x402scan.js` (SIWX registration) and `seed_*.js` (Bazaar seeders) exist, **but all are dated 2026-07-16** — before the task window. No "Composer" artifact. | **Mechanism pre-exists; this task's specific output unverified.** |
+
+## 6a. Dependabot cards (2026-07-18/19) — misdirected, no-op for this repo
+
+Two kanban cards closed in the last 24h claiming Rust-crate bumps:
+
+| Task | Claim | Repo evidence | Verdict |
+|---|---|---|---|
+| `t_ed83c170` | Update to **rustls 0.23.25** | `rustls` is a **Rust** TLS crate. This repo has **no `Cargo.toml`, no `Cargo.lock`, no `.rs` file**, and **zero** occurrences of `rustls` anywhere (grep-verified 2026-07-19). | **Misdirected / no-op.** Nothing to update; nothing changed here. |
+| `t_c70a762b` | Update to **tokio 1.45.0** | `tokio` is the **Rust** async runtime. Same as above — no Rust toolchain, no `tokio` anywhere in the repo. | **Misdirected / no-op.** Nothing to update; nothing changed here. |
+
+**Why the mismatch:** x402-data-api is a **TypeScript / Cloudflare Worker** (`package.json`,
+`wrangler.toml`, `src/index.ts`). Its real dependency surface is **npm**, not Cargo. These
+Dependabot cards target a Rust project and were routed to the wrong board — closing them left
+**no artifact and no code change** here. **Do not** record "rustls/tokio updated" as shipped fact
+for this service; it would be a doc lie. The actual dependencies are the npm packages pinned in
+`package.json` (Hono 4, `@x402/*` 2.15, viem 2.55, `@modelcontextprotocol/*`, `@coinbase/cdp-sdk`,
+zod 4) with `wrangler` as the toolchain — none Rust.
 
 ## 7. Doc-drift corrections (statements the code disproves)
 
