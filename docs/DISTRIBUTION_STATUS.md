@@ -1,6 +1,6 @@
-# Distribution Status — 2026-07-18
+# Distribution Status — updated 2026-07-19
 
-Current state of all 5 open distribution channels for Grey Ridge Signals / x402-data-api.
+Current state of all open distribution channels for Grey Ridge Signals / x402-data-api.
 
 ---
 
@@ -19,16 +19,15 @@ Current state of all 5 open distribution channels for Grey Ridge Signals / x402-
 - Our server is a Cloudflare Worker (`streamable-http`, not a Docker container). Need to investigate whether Glama supports remote MCP servers or requires Docker-only.
 - Workaround: package the MCP endpoint inside a minimal Dockerfile that wraps a proxy/health-check, or find if Glama accepts `streamable-http` remotes natively.
 
-**Blocker B — `non-github-url`**
-- PR body points to `https://x402-data-api.sigrunner.workers.dev/mcp` — bot requires GitHub repo URLs.
-- Fix: update the PR body so the primary link references a GitHub repo (e.g. `https://github.com/rezearcher/mcp-security-scanner`). The Worker URL can remain as the MCP endpoint but the "source" link must be GitHub.
+**Blocker B — `non-github-url`** — RESOLVED 2026-07-19 (card t_4fea70bb)
+- Was: PR body pointed to `https://x402-data-api.sigrunner.workers.dev/mcp` — bot requires GitHub repo URLs.
+- Fix: published `https://github.com/rezearcher/x402-data-api` (public, 54 commits, MIT — verified live via GitHub API, `.private == false`) and updated PR #10277 body to lead with it. `mergeable_state` verified `clean` post-fix.
 
 **Non-blocker labels** (benign): `has-emoji` (the required 🤖🤖🤖 marker), `valid-name` (entry name passes format check).
 
 ### Next actions
-1. Investigate Glama remote-server support → resolve or add Dockerfile workaround
-2. Re-open PR with body updated to use GitHub repo URL as primary link
-3. Add Glama badge once listed
+1. Blocker A (Glama listing) still open — Glama has no public submit API; needs either their crawler to pick up the now-live repo, or a manual browser submission at `glama.ai/mcp/servers/submit`.
+2. Blocker B closed — no further action.
 
 ---
 
@@ -125,16 +124,33 @@ The discussion is well-crafted with technical depth, but it's easy to blend into
 
 ---
 
+## 7. LobeHub MCP Marketplace — BLOCKED, needs Rez (browser login)
+
+**Card:** t_736d0a19. `market-cli` (`lhm`) requires interactive browser OIDC login (`lhm login`) + GitHub OAuth (`lhm github connect`) — no automated/headless path exists. 3 dispatched agent runs confirmed this (2 crashed mid-session, 1 clean self-block with the finding above).
+
+**Rez atom:** run `lhm login` + `lhm github connect` in a browser-accessible terminal, then re-run `lhm` publish — a few minutes, one-time.
+
+## 8. mcpservers.org — BLOCKED, needs Rez (browser submit)
+
+**Card:** t_1f6f4a5a. Submit form is a TanStack Start server function (`/submit` → `/_serverFn/<hash>`) protected by a real browser session/CSRF token — no public API. 3 dispatched agent runs (curl form-POST, serverFn FormData, serverFn JSON, all with spoofed browser headers) all failed to authenticate; each burned the full 1200s budget before the dispatcher gave up.
+
+**Rez atom:** submit manually at `mcpservers.org/submit` in a browser — name=`x402-data-api`, url=`github.com/rezearcher/x402-data-api`, category=`finance`. ~2 minutes, one-time.
+
+---
+
 ## Summary
 
 | # | Channel | Type | Status | Mergeable | Action needed |
 |---|---------|------|--------|-----------|---------------|
-| 1 | awesome-mcp-servers | Curated list PR | OPEN | ✅ Yes | Fix Glama listing + repo URL in body |
+| 1 | awesome-mcp-servers | Curated list PR | OPEN | ✅ Yes (clean) | Blocker A only — Glama listing (passive/manual) |
 | 2 | awesome-x402 | Curated list PR | OPEN, CONFLICT | ❌ Dirty | Rebase + resolve README conflict |
 | 3 | BankrBot/skills | Skill catalog PR | OPEN | 🤷 Unknown | Wait for manual review |
 | 4 | mcp.so | Catalog issue | OPEN | N/A (issue) | Optional value-add comment |
 | 5 | Aeon/discussions | Community post | OPEN | N/A (discussion) | Follow-up with integration detail |
 | 6 | **MCPize** | MCP marketplace | PREP DONE | ✅ Prep doc in docs/MCPIZE_LISTING_PREP.md | Publish (needs Rez email verify) |
+| 7 | LobeHub | MCP marketplace | BLOCKED | N/A | Needs Rez: browser OIDC login (`lhm login`) |
+| 8 | mcpservers.org | Curated directory | BLOCKED | N/A | Needs Rez: browser submit form |
 
-**Immediate work items:** (#1) fix Glama + repo URL — (#2) rebase and fix merge conflict
+**Immediate work items:** (#2) rebase and fix merge conflict — (#1) Glama listing is passive/manual now that the repo blocker is fixed
 **Waiting game:** (#3) Bankr review — (#4) mcp.so review — (#5) Aeon reply
+**Needs Rez (structurally un-automatable — browser session required):** (#7) LobeHub — (#8) mcpservers.org
