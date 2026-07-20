@@ -1,7 +1,8 @@
 # ARCHITECTURE — x402-data-api
 
 **Source of truth for what is actually shipped.** Verified against `src/index.ts` on
-2026-07-18; dependency/Dependabot cards re-checked against the manifests on 2026-07-19 (see §6a).
+2026-07-18; dependency/Dependabot cards re-checked against the manifests on 2026-07-19 (see §6a);
+the public source-repo publication (card `t_4fea70bb`) was independently re-verified 2026-07-19 (see §5a).
 Where a claim in another doc conflicts with the code, the code wins and the
 conflict is recorded in [Doc-drift corrections](#doc-drift-corrections). Prices, counts,
 and route lists below were read out of the code, not copied from prose.
@@ -17,6 +18,7 @@ No account / API key / subscription: an agent pays inline in USDC and gets the d
 the same request. Every data endpoint exposes a **free preview**.
 
 - **Deployed:** `https://x402-data-api.sigrunner.workers.dev`
+- **Source:** `https://github.com/rezearcher/x402-data-api` — **public** since 2026-07-19 (§5a)
 - **MCP endpoint (streamable-http):** `/mcp`
 - **Runtime:** Cloudflare Workers, `nodejs_compat`, `compatibility_date = 2025-06-01` (`wrangler.toml`)
 - **Framework:** Hono 4 + `@x402/hono` `paymentMiddleware` / `x402ResourceServer`
@@ -112,6 +114,30 @@ The MCP surface is a **subset** of the HTTP surface: `/chain/code`, `/chain/rece
 - **CDP Bazaar:** `seed_endpoint.js` / `seed_*.js` — catalog seed (search reported broken).
 - **402index.io:** domain-verified via `/.well-known/402index-verify.txt`.
 
+## 5a. Public source repo — SHIPPED 2026-07-19 (card `t_4fea70bb`, independently re-verified)
+
+Unlike the §6 tasks below, this one **left a verifiable artifact.** The source is now a **public**
+GitHub repo — `https://github.com/rezearcher/x402-data-api`. The local `.git/config` `origin`
+remote points at it.
+
+**Independently re-verified 2026-07-19** by the SRE pass (not taken from the card's own summary):
+- `curl https://github.com/rezearcher/x402-data-api` → **HTTP 200** (was **404** as of 2026-07-18).
+- GitHub API `.private == false`; `created_at 2026-07-19T18:07:21Z`.
+- **Secrets gate:** the 7 gitleaks/trufflehog hits in the pushed tree are **all false positives** —
+  every one is `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`, the canonical Circle-issued USDC
+  contract on Base (public, appears in `src/index.ts` payment logic). **No private key, API key,
+  or wallet seed** in the pushed tree. (The publish correctly blocked at this gate on the first
+  run and completed only after the false-positive was confirmed.)
+
+**What it unblocked:** the `non-github-url` label on **awesome-mcp-servers PR #10277** — the bot
+requires a GitHub URL. PR body was updated to lead with the repo; `mergeable_state=clean`, still
+open. It also gives Glama's auto-indexer a real repo to crawl.
+
+**Caveats / not independently verified here:** the "54 commits" and "MIT" claims come from
+`docs/DISTRIBUTION_STATUS.md` / `glama.json` — `glama.json` declares `"license": "MIT"`, but there
+is **no `LICENSE` file in the working tree** and **no `license` field in `package.json`** (the
+declared license is not backed by a working-tree artifact — see §8).
+
 ## 6. The five 2026-07-17/18 "completed" tasks — reality check
 
 **These five kanban tasks closed in the last 24h, but the repo shows no file modified after
@@ -167,6 +193,15 @@ zod 4) with `wrangler` as the toolchain — none Rust.
   everything downstream (import `/openapi.json`, tiers, token-security as hero) is automatable once it exists.
 - **Apify actor:** not built (see §6).
 - **`/dns` + `/whois` discovery:** live but undiscoverable — not in `.well-known/x402` or `openapi.json`.
+- **No CI/CD or release pipeline.** The source repo is public (§5a) but has **no
+  `.github/workflows/`** — no automated build, test, lint, or release. Both publication (`git push`)
+  and deploy (`wrangler deploy`) are **manual**. A CI/release Action is planned-but-absent.
+- **Glama listing still pending.** The repo blocker that broke it is resolved (§5a), but the
+  Glama.ai listing itself is not done — it needs a passive 14-day crawl of the now-live repo or a
+  manual browser submit at `glama.ai/mcp/servers/submit` (no public API). This is still Blocker A
+  on awesome-mcp-servers PR #10277.
+- **No `LICENSE` file.** `glama.json` declares MIT, but the working tree has no `LICENSE` file and
+  `package.json` has no `license` field — the declared license lacks a repo artifact.
 - **Next moat builds (not started):** indexed event history (free RPC caps `eth_getLogs` at ~10
   blocks → needs a D1/KV indexer, must respect the ~50-subrequest/invocation cap); cross-DEX
   best-quote/price-impact on Base; Aave/Moonwell near-liquidation monitor.
