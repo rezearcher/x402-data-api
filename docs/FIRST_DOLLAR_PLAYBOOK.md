@@ -4,6 +4,16 @@
 call one of our endpoints. **Win by being undeniable** (mastery, not milestone-faking). Self-payment
 / wash-trade is explicitly NOT the first dollar.
 
+**Status update (2026-07-20 — t_91c6fca6):** the milestone sensor (`gap.json`) was blind to
+on-chain settlement for 48 straight passes, reading `revenue_usd=0` while 25 genuine paid USDC
+transfers ($0.395 total, price+log-count filtered to exclude false positives) had already landed
+on-chain over the API's first 8 days. Fixed with a 4-hourly reconciliation cron
+(`reconcile_onchain_revenue.sh` → `revenue_ledger.py record`, idempotent by tx-hash) that backfilled
+the ledger and now keeps it current. `gap.json` correctly reads `revenue_usd=0.395` (39.5% of the
+$1.00 target) as of this fix — the "$0, unmoving" premise behind earlier cards (e.g. the t_33de6690
+bounty draft) was a measurement gap, not reality. Distribution work above is still what closes the
+remaining $0.605.
+
 ---
 
 ## Corrected thesis (supersedes the "market's clock" conclusion)
