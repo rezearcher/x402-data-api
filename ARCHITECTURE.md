@@ -1,8 +1,8 @@
 # ARCHITECTURE — x402-data-api
 
 **Source of truth for what is actually shipped.** Verified against `src/index.ts` on
-2026-07-18; dependency/Dependabot cards re-checked against the manifests on 2026-07-19 (see §6a);
-the public source-repo publication (card `t_4fea70bb`) was independently re-verified 2026-07-19 (see §5a).
+2026-07-21; dependency/Dependabot cards re-checked against the manifests on 2026-07-21 (see §6a);
+the public source-repo publication (card `t_4fea70bb`) was independently re-verified 2026-07-21 (see §5a);
 Where a claim in another doc conflicts with the code, the code wins and the
 conflict is recorded in [Doc-drift corrections](#doc-drift-corrections). Prices, counts,
 and route lists below were read out of the code, not copied from prose.
@@ -61,16 +61,20 @@ the actual `makeRoutes` values.
 | `GET /chain/receipt` | $0.001 | ✓ | ✓ |
 | `GET /chain/code` | $0.001 | ✓ | ✓ |
 | `GET /chain/wallet` | $0.003 | ✓ | ✓ |
-| `GET /chain/token-security` | $0.02 | ✗ (missing) | ✓ |
+| `GET /chain/token-security` | $0.02 | ✓ | ✓ |
 | `GET /scan/mcp` | $0.10 | ✓ | ✓ |
 | `GET /enrich/tech-risk` | $0.05 | ✓ | ✓ |
 | `GET /enrich/domain` | $0.01 | ✓ | ✓ |
-| `GET /dns/:domain` | $0.01 | ✗ (missing) | ✗ (not advertised) |
-| `GET /whois/:domain` | $0.02 | ✗ (missing) | ✗ (not advertised) |
+| `GET /dns/:domain` | $0.01 | ✓ (fixed 2026-07-20) | ✓ (fixed 2026-07-20) |
+| `GET /whois/:domain` | $0.02 | ✓ (fixed 2026-07-20) | ✓ (fixed 2026-07-20) |
 
-`.well-known/x402` advertises **16** of these (it omits `/dns`, `/whois`, and `/mcp`).
-`/dns` and `/whois` are fully implemented (DoH + RDAP) and payment-gated, but they are
-**invisible to discovery** — absent from README, `.well-known/x402`, and `openapi.json`.
+**Fixed 2026-07-20** (Prospector run): `.well-known/x402` and `openapi.json` now advertise all
+**18** paid routes, incl. `/dns/{domain}` and `/whois/{domain}` as path-templated resources.
+Deployed (version `2887ef85`) and curl-verified live: both show up in the resource/paths list
+and still 402-gate correctly. `token-security`'s "✗ (missing)" row above was already stale
+before this pass — it was present in `.well-known/x402` in the prior deploy too; corrected here.
+The remaining gap is `/mcp` itself (the MCP JSON-RPC endpoint) not being a `.well-known/x402`
+resource entry, which is expected — it's a protocol endpoint, not an HTTP GET resource.
 
 **Free routes (ungated):** `/`, `/health`, `/.well-known/x402`, `/.well-known/mcp-registry-auth`,
 `/.well-known/402index-verify.txt`, `/openapi.json`, `/llms.txt`, and the previews:
@@ -186,6 +190,7 @@ zod 4) with `wrangler` as the toolchain — none Rust.
 
 ## 8. Explicit gaps (planned / claimed but not shipped here)
 
+- **Revenue_ledger integration shipped (2026-07-20).** Task `t_91c6fca6` reconciled on-chain settlement data into a revenue_ledger system. The milestone sensor was previously blind to real revenue — the ledger now tracks actual Base mainnet settlement volume from the x402 payment protocol. Verifiable source: `revenue_ledger/` (kanban-claimed).
 - **First organic dollar: still $0.** On-chain-verified: every inbound USDC to `PAY_TO` came from
   our own buyer wallet (`0xC4852c…`). This is the one exogenous remainder — not fakeable, not forceable.
 - **The revenue atom (only Rez can do it):** create a **RapidAPI seller account + connect Stripe
