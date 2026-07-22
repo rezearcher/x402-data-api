@@ -5,3 +5,8 @@ node_modules/
 buyer-wallet.json
 seed_cdp_pm.js
 .mcp-registry-key
+
+# rogue literal-tilde worker-session artifact (Hermes $HOME-resolution bug,
+# see t_e128cabf) — a worker wrote to a path like "~/.hermes/vpe-keys/..."
+# without shell expansion, creating a literal "~" dir instead of $HOME.
+/~/
