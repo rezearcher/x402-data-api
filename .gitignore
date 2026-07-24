@@ -10,3 +10,9 @@ seed_cdp_pm.js
 # see t_e128cabf) — a worker wrote to a path like "~/.hermes/vpe-keys/..."
 # without shell expansion, creating a literal "~" dir instead of $HOME.
 /~/
+
+# per-card kanban worktree checkouts (wt/<card_id> branches, managed by
+# `git worktree` — content lives in git history, not here; keeping this
+# untracked means `git status` on the live repo is always dirty and a
+# blind `git clean -fdx` elsewhere could reap in-flight worktrees)
+/.worktrees/
