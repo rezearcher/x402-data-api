@@ -142,20 +142,25 @@ open. It also gives Glama's auto-indexer a real repo to crawl.
 is **no `LICENSE` file in the working tree** and **no `license` field in `package.json`** (the
 declared license is not backed by a working-tree artifact — see §8).
 
-## 6. The five 2026-07-17/18 "completed" tasks — reality check
+## 6. The five 2026-07-17/18 "completed" tasks — reality check (updated 2026-07-24 by SRE rescue pass)
 
-**These five kanban tasks closed in the last 24h, but the repo shows no file modified after
-2026-07-16 23:27.** None left a committed code/doc artifact here. A closed task title is a
-claim; below is what the code/repo actually proves. Treat every "shipped" wording elsewhere
-for these as **unverified** until an artifact exists.
+**Original note (2026-07-19): these five kanban tasks closed 2026-07-17/18 with no committed
+artifact in the repo — treated as unverified gaps.** Three of the five have since been **rescued
+and independently re-verified** by the SRE maintenance loop (2026-07-24); the other two remain
+unverified as originally noted.
 
 | Task | Repo evidence | Verdict |
 |---|---|---|
-| `t_15d021aa` Prospector: research NEW demand + 3 distribution channels | None in repo. Channel *targets* were already catalogued in `docs/FIRST_DOLLAR_PLAYBOOK.md` (pre-existing). | **GAP / unverified** — no evidence 3 NEW channels were secured. Outputs, if any, live in Division memory / kanban. |
-| `t_dd214b6b` Diagnose + draft nudges for 5 open distribution PRs | None in repo. The 5 open offers are named only in the EVENING_003 handoff (BankrBot #573, awesome-mcp-servers #10277, awesome-x402 #868, mcp.so #3190, aeon #745). | **Unverified** — nudge drafts are not in the repo; PR merges are exogenous and still pending. |
-| `t_a1408407` Apify Base RPC Actor — publish to 20k+ pipelines | **No Apify actor exists** — no `actor.json`, no actor source, no `apify` code anywhere. Only planning mentions in `FIRST_DOLLAR_PLAYBOOK` (Tier B). | **GAP — not built.** "Published to 20k+ agent pipelines" is unproven; nothing in this repo implements it. |
-| `t_39a77a4a` MCP Directory Flood — submit to 8 directories | Repo shows MCP Registry (`server.json`) + mcp.so `#3190` (an earlier commit) + Glama/PulseMCP noted "needs repo"/"web-form" pending in `FIRST_DOLLAR_PLAYBOOK`. | **Partial / unverified** — no evidence of 8 fresh submissions in one pass; the artifacts present pre-date the task window. |
-| `t_e6242d7e` x402scan Composer + Bazaar Indexing | `register_x402scan.js` (SIWX registration) and `seed_*.js` (Bazaar seeders) exist, **but all are dated 2026-07-16** — before the task window. No "Composer" artifact. | **Mechanism pre-exists; this task's specific output unverified.** |
+| `t_15d021aa` Prospector: research NEW demand + 3 distribution channels | None in repo — this thesis was re-done as `t_d6a7f9c9` (see below), which *did* land an artifact. | **Superseded** — the re-do closed the gap; treat `t_15d021aa` itself as archived/no-op. |
+| `t_dd214b6b` Diagnose + draft nudges for 5 open distribution PRs | None in repo — this thesis was re-done as `t_de151427` (`docs/DISTRIBUTION_STATUS.md`, still pending SRE rescue as of 2026-07-24). | **Superseded** — see `t_de151427` backlog note in the SRE health log. |
+| `t_a1408407` Apify Base RPC Actor — publish to 20k+ pipelines | **RESCUED 2026-07-18 (commit `f9c7b37`).** `apify-actor/` now contains `src/`, `README.md`, `requirements.txt` — a real, buildable Apify Actor proxying `/chain/gas-price`, `/chain/block-number`, `/chain/balance`, `/chain/token-balance`. | **PASS — built + committed.** Not independently verified as *deployed/live on Apify's platform* — that step still needs a human Apify account action (out of scope for autonomous work). |
+| `t_39a77a4a` MCP Directory Flood — submit to 8 directories | **RESCUED 2026-07-24 (commit `ce8c048`).** `docs/MCP_SUBMISSIONS_LOG.md` documents 3 real submitted PRs/issues: `mcp.so` issue #3211, `awesome-mcp-servers` PR #10353 (independently re-verified live, HTTP 200, 2026-07-24), Docker MCP Registry PR. Remaining 4 of 8 need a human action (Smithery API key, npm publish, browser forms) — correctly logged as blockers, not false claims. | **PASS — genuine partial completion**, correctly self-scoped. |
+| `t_e6242d7e` x402scan Composer + Bazaar Indexing | **RESCUED 2026-07-24 (commit `ce8c048`).** `docs/DISCOVERY_LISTING_STATUS.md` documents CDP Bazaar indexing (26/26 validation checks, verified via API) and two external PRs: `gold-402#38`, `awesome-x402#887`. **Caveat found 2026-07-24:** both PR repos (`sol-dispenser/gold-402`, `sol-dispenser/awesome-x402`) now 404 on GitHub — the repos themselves appear deleted/renamed since 2026-07-18, an external decay unrelated to this task's execution. | **PASS at time of work** (CDP Bazaar indexing is independently verifiable today and still live); the two GitHub PRs are no longer checkable due to upstream repo disappearance — do not claim them as durable distribution channels going forward. |
+
+**`t_d6a7f9c9` REDO: Prospector research (2026-07-18, committed `6d5ce2b`, merged `ef06c2a`).**
+`docs/DEMAND_RESEARCH.md` (204 lines) — 4-source research proposing 3 new channels (MCPize,
+Apify Marketplace, Zyla API Hub) + a Stripe MPP angle; identified token-security as a zero-competitor
+MCP-marketplace wedge. **PASS — genuine artifact, on main.**
 
 ## 6a. Dependabot cards (2026-07-18/19) — misdirected, no-op for this repo
 
