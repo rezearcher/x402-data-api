@@ -62,3 +62,57 @@ The gap.json currently reports `revenue_usd=0.4` from the ledger sum. The genuin
 Either:
 1. Filter self-traffic from ledger recording (deduct `buyer-wallet` and PAY_TO transfers at recording time), or
 2. Maintain a separate `revenue_external_usd` metric in the gap computation that uses the verified summary.
+
+---
+
+## Addendum: Probe-Likelihood Analysis of External Payer
+
+**Analysis date:** 2026-07-24  
+**Method:** On-chain behavioral analysis via `--probe-check` flag in `scripts/verify_revenue_ledger.py`, querying Blockscout API (`base.blockscout.com`) for transaction history, method calls, and token transfers of the external payer address.
+
+### Motivation
+
+The original audit found only 1 external payer across all 221 ledger rows:
+`0x7e571e959cc7c75ccdd2eac24f8775ea2eaa2f09` (3 payments, $0.015 total).
+
+To determine whether this payer represents a real human user or an automated bot/probe, we ran on-chain behavioral triage using three independent heuristics.
+
+### Results
+
+| Heuristic | Value | Score Contribution |
+|-----------|-------|-------------------|
+| H1: Nonce (total tx count) | 3,176 | +0.40 |
+| H2: Repeated method burst | 15× `giveFeedback` → `0x061959...b6e` in 120s | +0.35 |
+| H3: Unsolicited farm tokens | 3 tokens (HOLD, UHODL, USGR) | +0.25 |
+| **Composite Probe Score** | **1.000** | **PROBE / FARMING BOT** |
+
+### Heuristic Details
+
+**H1 — Nonce (3,176):** The address has sent 3,176 transactions on Base since its first activity. This is ≈15.6 transactions/day average — far above any normal human usage pattern. Addresses with nonce ≥ 1,000 receive +0.4.
+
+**H2 — Method burst (15× `giveFeedback` in 120s):** The address repeatedly calls `giveFeedback(bytes32,string)` on contract `0x061959e70fb718d7891027283afbfe2875696b6e` — a gamified feedback/reputation dApp commonly used by bot farms. We detected 15 identical calls to the same contract + method within a 120-second window (1 call per 8 seconds). This is an unambiguous automation signature. Method burst ≥ 5 within any 120s window receives +0.35.
+
+**H3 — Farm tokens (3 unsolicited receipts):** The address has received transfers of HOLD, UHODL, and USGR tokens from external senders it has never transacted with. These are "dusting" / airdrop patterns typical of farm-token distribution to bot addresses. Each unique unsolicited sender contributes +0.1 (capped at +0.25).
+
+### Revised Impact Assessment
+
+With the probe analysis confirming the sole external payer is a farming bot, **the x402 data API had zero human users** during the audit period. Both categories of ledger revenue trace to automated infrastructure — self-traffic and bot traffic. The true organic revenue is **$0.00**.
+
+| Revenue Source | Amount | Nature |
+|----------------|--------|--------|
+| Self-traffic (own wallets) | $0.385 | Contamination |
+| Bot payer (`0x7e571e...`) | $0.015 | Automated probe |
+| **Organic human usage** | **$0.000** | **Did not exist** |
+
+**Verdict:** `probe_likely: true` — the sole external payer is a farming bot, not a genuine buyer.
+
+### Prerequisites
+
+The probe check requires:
+- Internet access to `https://base.blockscout.com` (Blockscout API)
+- No API key or authentication needed (public endpoint)
+
+To re-run:
+```bash
+python3 scripts/verify_revenue_ledger.py --probe-check
+```
