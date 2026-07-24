@@ -21,6 +21,7 @@ DATA_BASE = os.path.expanduser("~/.hermes/data")
 PLAY = "x402-data-api"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_PATH = os.path.join(SCRIPT_DIR, "revenue_usd")
+OUTPUT_PATH_CORRECTED = os.path.join(SCRIPT_DIR, "revenue_usd_corrected")
 
 
 def main():
@@ -72,11 +73,14 @@ def main():
 
     organic_total = round(organic_total, 6)
 
-    # ── Write output ───────────────────────────────────────────────
+    # ── Write outputs ──────────────────────────────────────────────
     with open(OUTPUT_PATH, "w") as f:
+        f.write(f"{organic_total}\n")
+    with open(OUTPUT_PATH_CORRECTED, "w") as f:
         f.write(f"{organic_total}\n")
 
     print(f"revenue_usd={organic_total}")
+    print(f"revenue_usd_corrected={organic_total}")
     print(f"  external rows from ledger:   {counts['external_from_ledger']}")
     print(f"  probe-flagged rows deducted: {counts['probe_flagged']}")
     print(f"  organic rows remaining:      {counts['organic_remaining']}")
