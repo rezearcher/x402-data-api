@@ -72,8 +72,15 @@ Either:
 
 ### Motivation
 
-The original audit found only 1 external payer across all 221 ledger rows:
+The original audit found only 1 external payer across all 221 ledger rows[^rowcount]:
 `0x7e571e959cc7c75ccdd2eac24f8775ea2eaa2f09` (3 payments, $0.015 total).
+
+[^rowcount]: **Inconsistency flagged 2026-07-25 (doc-sync pass), unresolved.** This paragraph says
+**221** ledger rows; the Summary table at the top of this document says **26**. The dollar figures
+($0.400 total / $0.385 self-traffic / $0.015 external) reconcile with the **26**-row table, so 221 is
+probably a stale or different-window count — but this was *not* re-derived from the ledger. Re-run
+`python3 scripts/verify_revenue_ledger.py` to settle it before quoting either number externally. The
+$0.00-organic conclusion does not depend on which is right.
 
 To determine whether this payer represents a real human user or an automated bot/probe, we ran on-chain behavioral triage using three independent heuristics.
 

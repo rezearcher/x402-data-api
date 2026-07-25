@@ -3,6 +3,8 @@
 **Source of truth for what is actually shipped.** Verified against `src/index.ts` on
 2026-07-21; dependency/Dependabot cards re-checked against the manifests on 2026-07-21 (see §6a);
 the public source-repo publication (card `t_4fea70bb`) was independently re-verified 2026-07-21 (see §5a);
+**doc-sync pass 2026-07-25** re-read `.metrics/compute_revenue_usd.py`, `scripts/verify_revenue_ledger.py`,
+`scripts/auto-merge.sh`, `docs/REVENUE_LEDGER_AUDIT.md`, `.gitignore`, `LICENSE`, `package.json` (see §9);
 Where a claim in another doc conflicts with the code, the code wins and the
 conflict is recorded in [Doc-drift corrections](#doc-drift-corrections). Prices, counts,
 and route lists below were read out of the code, not copied from prose.
@@ -108,7 +110,10 @@ The MCP surface is a **subset** of the HTTP surface: `/chain/code`, `/chain/rece
 
 ## 5. Discovery / distribution surfaces
 
-**In the code (served by the Worker):** `/.well-known/x402` (16 routes for x402 crawlers),
+**In the code (served by the Worker):** `/.well-known/x402` (**count disputed** — this line says 16
+routes, §3 says the 2026-07-20 fix brought it to all **18**; the live probe to re-settle it was
+sandbox-blocked in the 2026-07-25 pass, so neither number is currently code-proven. Trust §3's
+curl evidence over this line until re-probed),
 `/openapi.json`, `/llms.txt`, `/.well-known/mcp-registry-auth`, `/.well-known/402index-verify.txt`.
 
 **External registrations (mechanisms present in repo; state per handoffs, not re-verified live):**
@@ -196,14 +201,20 @@ zod 4) with `wrangler` as the toolchain — none Rust.
 ## 8. Explicit gaps (planned / claimed but not shipped here)
 
 - **Revenue_ledger integration shipped (2026-07-20).** Task `t_91c6fca6` reconciled on-chain settlement data into a revenue_ledger system. The milestone sensor was previously blind to real revenue — the ledger now tracks actual Base mainnet settlement volume from the x402 payment protocol. Verifiable source: `revenue_ledger/` (kanban-claimed).
-- **Revenue ledger audit — 96.25% self-traffic (2026-07-23).** Task `t_efa5b713` performed on-chain forensic verification of all 26 revenue_ledger rows via `eth_getTransactionReceipt` on Base mainnet, reading each row's USDC Transfer event `from` topic. Result: **23/26 rows ($0.385, 96.25%) are self-traffic** from buyer-wallet (`0xC4852c…`) and PAY_TO (`0x5765ae…`) addresses; 3 rows ($0.015) were provisionally external revenue from payer `0x7e571e…` — **since superseded, see next bullet.** Verifiable artifacts: `scripts/verify_revenue_ledger.py` (now 601 lines after `t_5c08554f`'s `--probe-check` extension, reusable RPC-based ledger auditor). Deliverable lives merged on `main` (commit `b2089a2` + `fcff3c8`); the ledger-audit script produces `~/.hermes/data/x402-data-api-revenue/ledger_verified_summary.json`. Note: `docs/REVENUE_LEDGER_AUDIT.md` referenced by earlier passes does not exist on `main` — creating it (with a probe-likelihood addendum) is tracked in follow-up card `t_913952c8`.
+- **Revenue ledger audit — 96.25% self-traffic (2026-07-23).** Task `t_efa5b713` performed on-chain forensic verification of all 26 revenue_ledger rows via `eth_getTransactionReceipt` on Base mainnet, reading each row's USDC Transfer event `from` topic. Result: **23/26 rows ($0.385, 96.25%) are self-traffic** from buyer-wallet (`0xC4852c…`) and PAY_TO (`0x5765ae…`) addresses; 3 rows ($0.015) were provisionally external revenue from payer `0x7e571e…` — **since superseded, see next bullet.** Verifiable artifacts: `scripts/verify_revenue_ledger.py` (now 601 lines after `t_5c08554f`'s `--probe-check` extension, reusable RPC-based ledger auditor). Deliverable lives merged on `main` (commit `b2089a2` + `fcff3c8`); the ledger-audit script produces `~/.hermes/data/x402-data-api-revenue/ledger_verified_summary.json`. ~~Note: `docs/REVENUE_LEDGER_AUDIT.md` referenced by earlier passes does not exist on `main`~~ — **stale as of 2026-07-25: it does exist** (129 lines, read-verified), see §9.2.
 - **Sole "external" payer confirmed farming bot — true organic revenue $0.00 (2026-07-24).** Task `t_5c08554f` probed the one remaining "external" address (`0x7e571e959cc7c75ccdd2eac24f8775ea2eaa2f09`) via live Base Blockscout API + `eth_getTransactionCount`: `nonce_tx_count=3176` (high-activity automation), `15×` identical `giveFeedback()` calls to one contract within a 120s window (sybil/reputation-farming signature), and `3` unsolicited farm-bait token receipts (HOLD/UHODL/USGR). Composite `probe_score=1.000`. **True organic x402 revenue is $0.00, not $0.015** — the $0.015 was itself noise, the third false-positive the same metric has produced across three passes (`t_91c6fca6` blind-$0→$0.395, `t_efa5b713` $0.395→$0.015 after excluding self-traffic, `t_5c08554f` $0.015→$0.00 after excluding bot traffic). Sidecar evidence: `~/.hermes/data/x402-data-api-revenue/probe_check_summary.json`. Deliverable merged to `main` at `fcff3c8` (was sitting unmerged on `wt/t_5c08554f` for one SRE cycle — rescued 2026-07-24).
 - **First organic dollar: still $0, confirmed by a third independent pass.** Zero real humans or task-driven agents have ever knowingly paid for this API despite 8+ live distribution channels already up for days. The milestone target ($1.00 organic) requires the full **$1.00**, not $0.985 or $0.60. This strengthens the case for escalating the $20 outbound bounty (`t_33de6690`, blocked on Rez capital-approval) over another passive-listing card.
 - **The revenue atom (only Rez can do it):** create a **RapidAPI seller account + connect Stripe
   payout** at `rapidapi.com/provider`. The dual-rail (x402 + RapidAPI/Stripe) plan hinges on it;
   everything downstream (import `/openapi.json`, tiers, token-security as hero) is automatable once it exists.
-- **Apify actor:** not built (see §6).
-- **`/dns` + `/whois` discovery:** live but undiscoverable — not in `.well-known/x402` or `openapi.json`.
+- ~~**Apify actor:** not built (see §6).~~ **RESOLVED / was a doc lie** — `apify-actor/` exists in the
+  working tree (`src/`, `README.md`, `requirements.txt`, ls-verified 2026-07-25) and §6 already records it
+  as rescued at commit `f9c7b37`. This bullet contradicted §6 of the same file. **Remaining real gap:** not
+  verified as *deployed/live on Apify's platform* — that needs Rez's Apify account.
+- ~~**`/dns` + `/whois` discovery:** live but undiscoverable~~ **RESOLVED / was a doc lie** — §3 of this
+  same file records both as added to `.well-known/x402` + `openapi.json` on 2026-07-20 (deploy `2887ef85`).
+  This bullet was never updated. **Not re-probed live in the 2026-07-25 pass** (outbound curl was
+  sandbox-blocked), so treat §3's 2026-07-20 curl evidence as the last verification.
 - **No CI/CD or release pipeline.** The source repo is public (§5a) but has **no
   `.github/workflows/`** — no automated build, test, lint, or release. Both publication (`git push`)
   and deploy (`wrangler deploy`) are **manual**. A CI/release Action is planned-but-absent.
@@ -211,11 +222,107 @@ zod 4) with `wrangler` as the toolchain — none Rust.
   Glama.ai listing itself is not done — it needs a passive 14-day crawl of the now-live repo or a
   manual browser submit at `glama.ai/mcp/servers/submit` (no public API). This is still Blocker A
   on awesome-mcp-servers PR #10277.
-- **No `LICENSE` file.** `glama.json` declares MIT, but the working tree has no `LICENSE` file and
-  `package.json` has no `license` field — the declared license lacks a repo artifact.
+- ~~**No `LICENSE` file.**~~ **RESOLVED / was a doc lie** — verified 2026-07-25: `LICENSE` exists at repo
+  root ("MIT License / Copyright (c) 2026 Grey Ridge Signals Group LLC"), `package.json:5` has
+  `"license": "MIT"`, and `glama.json:24` matches. All three agree; the declared license is now backed
+  by a real artifact. (Landed with commit `de349d5`.)
 - **Next moat builds (not started):** indexed event history (free RPC caps `eth_getLogs` at ~10
   blocks → needs a D1/KV indexer, must respect the ~50-subrequest/invocation cap); cross-DEX
   best-quote/price-impact on Base; Aave/Moonwell near-liquidation monitor.
+
+---
+
+## 9. Doc-sync 2026-07-25 — four cards closed in the last 24h
+
+Each row below was checked by **reading the artifact in the working tree**, not by trusting the card
+title. Where the artifact lives outside this repo (Hermes config, hooks registry), the sandbox blocked
+verification and it is written as a **gap**, not a fact.
+
+### 9.1 `t_5c08554f` — probe-check mode / sole external payer is a farming bot — **SHIPPED**
+
+**Code-proven.** `scripts/verify_revenue_ledger.py` is **601 lines** and really does implement a second
+mode: `--probe-check` is parsed at `scripts/verify_revenue_ledger.py:586-595`, dispatching to
+`run_probe_check(play)` at `:507`, which writes the sidecar
+`~/.hermes/data/<play>-revenue/probe_check_summary.json` (`:510`) **without mutating** the normal-mode
+files. The module docstring documents both modes (`:5`, `:11-21`). Invocation:
+`python3 scripts/verify_revenue_ledger.py --probe-check [play_name]`.
+
+Finding (already recorded in §8): payer `0x7e571e95…` scores `probe_score=1.000` on three
+heuristics — nonce 3,176 (+0.40), 15× `giveFeedback()` in 120s (+0.35), 3 unsolicited farm tokens
+(+0.25). **True organic revenue $0.00.**
+
+### 9.2 `t_913952c8` — probe-likelihood addendum to the revenue audit — **SHIPPED**
+
+**Code-proven.** `docs/REVENUE_LEDGER_AUDIT.md` exists on `main`, **129 lines**. The addendum starts at
+`docs/REVENUE_LEDGER_AUDIT.md:68` ("Addendum: Probe-Likelihood Analysis of External Payer") with the
+heuristic table (`:82-87`), per-heuristic derivations (`:91-95`), a revised impact table showing
+`Organic human usage $0.000` (`:105`), prerequisites (`:109-118`), and a provenance note (`:122-129`)
+explaining that this file was rescued from stranded branch `wt/t_efa5b713` and folded together with the
+smaller duplicate that `t_5c08554f` / `t_913952c8` had landed separately.
+
+> **Open inconsistency inside that doc (do not paper over):** the summary table says **26** total ledger
+> rows (`:11`) while the addendum's motivation paragraph says **221** ledger rows (`:75`). Both cannot be
+> right. The $ figures ($0.400 total / $0.385 self / $0.015 external) are internally consistent with the
+> 26-row table, so **26 is the more likely correct figure** and `221` is probably a stale or
+> different-window count — but this was **not** re-derived from the ledger in this pass. Re-run
+> `verify_revenue_ledger.py` to settle it before quoting either number externally.
+
+### 9.3 `t_70fcb2ca` — `revenue_usd_corrected` producer + milestone re-point — **HALF-PROVEN**
+
+**Proven (in-repo):** `.metrics/compute_revenue_usd.py` reads *both* audit sidecars
+(`ledger_verified_summary.json` + `probe_check_summary.json`), builds the set of `probe_likely`
+addresses, sums only ledger rows classified `external` whose payer is **not** probe-flagged, and writes
+the same value to **two** sibling files — `.metrics/revenue_usd` and `.metrics/revenue_usd_corrected`
+(`OUTPUT_PATH` / `OUTPUT_PATH_CORRECTED`). Both files exist on disk and both read **`0.0`**. Both
+sidecars are **hard-required** — the script `sys.exit(1)`s if either is missing.
+
+**GAP — the "milestone.sh shadows the producer" half is NOT verified here.** The card's thesis is that
+`milestone.sh` has a built-in branch for `name=revenue_usd` that shadows the producer file, and that the
+fix was to re-point `milestone.json`'s `target_metric` to `revenue_usd_corrected`. Both `milestone.sh`
+and `milestone.json` live **outside this repo** (Hermes config) and every read of them was
+sandbox-blocked in this session. So:
+- **Not proven:** that `milestone.json` currently has `target_metric: revenue_usd_corrected`.
+- **Not proven:** that the milestone sensor now reads the producer file rather than its built-in branch.
+- **Consequence if the re-point silently didn't land:** the milestone would keep reporting the *built-in*
+  revenue number (historically the contaminated $0.395/$0.015 figures) instead of the corrected `0.0` —
+  i.e. the exact false-positive this card existed to kill would still be live. Re-verify out-of-sandbox
+  before trusting the milestone reading.
+
+Note the producer writes the corrected value to **both** filenames, so `revenue_usd` and
+`revenue_usd_corrected` can never disagree — the split is purely a hook to escape `milestone.sh`'s
+name-matched built-in branch, not two different metrics.
+
+### 9.4 `t_06390ee0` — auto-merge `wt/<task_id>` branches on kanban completion — **HALF-PROVEN**
+
+**Proven (in-repo):** `scripts/auto-merge.sh` exists and is a real implementation, not a stub. It
+resolves `task_id` from `HERMES_KANBAN_TASK` or, failing that, parses the hook's stdin JSON payload at
+`extra.task_id` (`scripts/auto-merge.sh:11-28`); checks `wt/<task_id>` exists (`:37`); skips cleanly if
+already an ancestor of `main` (`:50-55`); otherwise `git merge --no-ff`, then pushes `main` and deletes
+the local + remote branch (`:58-68`). It is **fail-OPEN by construction** — every failure path is
+`exit 0` and a bad merge calls `git merge --abort`, so it can never block a legitimate task completion.
+Related: `.gitignore` now carries `/.worktrees/` with a comment explaining that per-card checkouts kept
+the live repo permanently dirty and were at risk from a blind `git clean -fdx` (commit `246eceb`).
+
+**GAP — registration is unverified and the hook has never been observed firing.**
+- The mapping `kanban_task_completed → scripts/auto-merge.sh` lives in the **Hermes hooks registry
+  outside this repo**; reading it was sandbox-blocked. A perfectly correct script that is not registered
+  does nothing.
+- **No commit in recent history carries the script's own merge-message signature** (`auto-merge: wt/…`).
+  The recent worktree merges are all human/SRE **rescue** commits (`rescue: merge t_70fcb2ca worktree …
+  was stranded pre-auto-merge-hook`, `rescue: merge t_913952c8 worktree …`) — i.e. evidence of the
+  *problem*, not of the *fix* working.
+- **Verdict: the fix is written but not yet demonstrated.** Do not record "worktree branches now
+  auto-merge" as shipped reality until a commit titled `auto-merge: wt/<task_id> (task …)` appears on
+  `main`. That commit is the acceptance test.
+- `.worktrees/` currently holds **10+ per-card checkouts** (`t_06390ee0`, `t_1c2d2ef4`, `t_1f6f4a5a`,
+  `t_33de6690`, `t_4fea70bb`, `t_5c08554f`, `t_70fcb2ca`, `t_736d0a19`, `t_7c5b0f37`, `t_913952c8`, …) —
+  the hook deletes branches, not worktree directories, so stale checkouts still accumulate. Unresolved.
+
+### 9.5 What none of these four changed
+
+The revenue picture is unchanged and remains **$0.00 organic**. These cards improved the *honesty of the
+measurement* (probe detection, corrected metric, audit doc) and the *plumbing* (auto-merge) — none of
+them is a distribution or demand action. The first-dollar gap in §8 stands exactly as written.
 
 ---
 
