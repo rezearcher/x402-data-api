@@ -54,8 +54,24 @@ if git merge-base --is-ancestor "$branch" main 2>/dev/null; then
     exit 0
 fi
 
-# --- Attempt merge (fail-OPEN: any failure = silent abort) --------------------
+# --- Attempt merge (fail-OPEN: any failure = log + silent abort) ---------------
 merge_output=$(git merge --no-ff -m "auto-merge: $branch (task $task_id, sha $current_sha)" "$branch" 2>&1) || {
+    merge_exit=$?
+    fail_dir="$HOME/.hermes/data/x402-data-api-health/auto_merge_failures"
+    mkdir -p "$fail_dir"
+    {
+        echo "task_id: $task_id"
+        echo "branch: $branch"
+        echo "sha: $current_sha"
+        echo "exit_code: $merge_exit"
+        echo "--- merge_output ---"
+        echo "$merge_output"
+        if echo "$merge_output" | grep -qi "untracked working tree files would be overwritten"; then
+            echo "--- CONFLICT TYPE: untracked files ---"
+            echo "conflicting_paths:"
+            echo "$merge_output" | grep -E "^\t" | sed 's/^\t//'
+        fi
+    } > "$fail_dir/$task_id.log"
     git merge --abort 2>/dev/null
     exit 0
 }
