@@ -66,10 +66,10 @@
 - **Action for Rez:** Visit that URL → generate API key → paste here to complete submission
 - **Alternative:** Use https://smithery.ai/docs/build/publish web form (Bring Your Own Hosting)
 
-### ⏳ Official MCP Registry — Needs Package
+### ⏳ Official MCP Registry — Package built, needs publish
 - **Method:** `mcp-publisher` CLI from `@modelcontextprotocol/mcp-publisher`
-- **Requirement:** Must publish npm or PyPI package first
-- **Action for Rez:** Publish the MCP server as npm package → then run `npx @modelcontextprotocol/mcp-publisher register`
+- **Status (2026-07-27):** The npm package requirement is now code-complete: `mcp-client/` in this repo (`x402-data-api-mcp`, merged to main at `df94d8b`) is a locally-installable stdio MCP server wrapping the live Worker, with x402 auto-payment via `@x402/fetch`/`@x402/evm`/viem (installer supplies their own wallet key — never Rez's). `npm pack --dry-run` succeeds and all 5 live-production tests pass (`mcp-client/test-mcp-client.mjs`).
+- **Action for Rez:** The only remaining atom is `npm login` (free npmjs.com account, ~2 min) + `npm publish` from `mcp-client/`, then `npx @modelcontextprotocol/mcp-publisher register`. Publishing itself is intentionally out of scope for autonomous work (needs Rez's own npm account).
 - **Docs:** https://modelcontextprotocol.io/registry/quickstart
 
 ### ⏳ awesome-mcp-servers (appcypher) — Needs Fork
@@ -117,7 +117,7 @@ Author: Grey Ridge Signals Group LLC
 1. **Get Smithery API key** at https://smithery.ai/account/api-keys (or use web form)
 2. **Fork appcypher/awesome-mcp-servers** under rezearcher account
 3. **Submit 3 manual web forms:** PulseMCP, mcpservers.org, Skiln
-4. **Publish npm/PyPI package** if interested in Official MCP Registry
+4. **Publish npm package** for Official MCP Registry — package is built and tested (`mcp-client/`, merged 2026-07-27); only needs `npm login` + `npm publish` + `mcp-publisher register`
 
 ### Verification checks (48h after submissions):
 - mcp.so: Search for "x402" or "Grey Ridge Signals"
