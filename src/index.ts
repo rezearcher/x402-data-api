@@ -174,6 +174,7 @@ app.get("/", (c) => {
     <li><a href="/llms.txt">/llms.txt</a></li>
     <li><a href="/openapi.json">/openapi.json</a></li>
     <li><a href="/.well-known/x402">/.well-known/x402</a></li>
+    <li><a href="/.well-known/agent-card.json">A2A Agent Card</a></li>
     <li><a href="/mcp">/mcp</a></li>
   </ul>
 
@@ -333,6 +334,163 @@ app.get("/.well-known/x402", (c) => {
       mk("/chain/token-security", "GET", "0.02", "20000", "Token security / honeypot detector for a Base mainnet ERC-20: EIP-1967/1822 proxy + upgradeability detection, bytecode dispatcher scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, and a live eth_call state-override simulation testing whether a synthetic wallet can actually transfer() the token. Real compute, not a thin data wrapper. Returns risk_score (0-100) + verdict (clear/review/block) + human-readable flags.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "data"]),
       mk("/dns/{domain}", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", ["dns", "domain", "data", "recon"]),
       mk("/whois/{domain}", "GET", "0.02", "20000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", ["whois", "rdap", "domain", "data", "recon"]),
+    ],
+  });
+});
+
+// A2A Agent Card — RFC-8615 well-known URI for Agent-to-Agent protocol
+// discovery (https://a2a-protocol.org/latest/topics/agent-discovery).
+// Lists every skill this service provides as an A2A-discoverable agent.
+// Skills reference real route/tool names from this API (not fabricated),
+// and describe the x402 payment flow in plain language since A2A's spec
+// has no native payment-extension field yet.
+app.get("/.well-known/agent-card.json", (c) => {
+  const BASE = "https://x402-data-api.sigrunner.workers.dev";
+  return c.json({
+    name: "Grey Ridge Signals — x402 Data & Security API",
+    description:
+      "Agent-native, pay-per-call data on Base mainnet (USDC via x402). No account, no API key — agents pay inline in USDC. " +
+      "Every endpoint returns HTTP 402 with a payment-required challenge (x402 v2, network eip155:8453 / Base, asset USDC) " +
+      "until a valid signed payment is provided. See /.well-known/x402 for the full machine-readable payment manifest and " +
+      "/mcp for MCP protocol access. Provider: Grey Ridge Signals Group LLC.",
+    url: BASE,
+    provider: {
+      name: "Grey Ridge Signals Group LLC",
+      url: BASE,
+    },
+    version: "1.0.0",
+    documentationUrl: BASE,
+    capabilities: {
+      streaming: false,
+      pushNotifications: false,
+    },
+    defaultInputModes: ["application/json"],
+    defaultOutputModes: ["application/json"],
+    skills: [
+      {
+        id: "crypto-prices",
+        name: "Spot Token Prices",
+        description:
+          "Live spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/change_24h/symbol/confidence/timestamp. " +
+          "Route: GET /crypto/prices. Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. " +
+          "Price: $0.001. Free preview at GET /crypto/prices/preview. " +
+          "Machine-readable payment manifest: /.well-known/x402. MCP tool interface: /mcp (tool: crypto_prices).",
+        tags: ["crypto", "prices", "defi", "data"],
+        examples: [
+          "GET /crypto/prices?coins=bitcoin,ethereum,solana",
+        ],
+      },
+      {
+        id: "funding-rates",
+        name: "Cross-Venue Perp Funding Rates",
+        description:
+          "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h volume, per-venue funding + arb spread (bps), " +
+          "best long/short venue, premium/annualized signal, next_funding_ts, mark/oracle prices, open interest. " +
+          "Route: GET /crypto/funding. Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. " +
+          "Price: $0.001. Free preview at GET /crypto/funding/preview. " +
+          "Machine-readable payment manifest: /.well-known/x402. MCP tool interface: /mcp (tool: crypto_funding).",
+        tags: ["crypto", "funding", "perps", "hyperliquid", "arbitrage", "data"],
+        examples: [
+          "GET /crypto/funding?limit=20",
+        ],
+      },
+      {
+        id: "defi-yields",
+        name: "DeFi Lending & LP Yields",
+        description:
+          "Top DeFi lending/LP yields — project, chain, symbol, APY breakdown + 1d/7d/30d APY trend, IL risk, " +
+          "mu/sigma, DefiLlama stability forecast, TVL. Filter by project, chain, or stablecoin-only. Sort by TVL or risk-adjusted APY. " +
+          "Route: GET /defi/yields. Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. " +
+          "Price: $0.001. Free preview at GET /defi/yields/preview. " +
+          "Machine-readable payment manifest: /.well-known/x402. MCP tool interface: /mcp (tool: defi_yields).",
+        tags: ["defi", "yield", "lending", "apy", "tvl", "data"],
+        examples: [
+          "GET /defi/yields?limit=20&project=aave-v3&chain=Ethereum",
+        ],
+      },
+      {
+        id: "polymarket-markets",
+        name: "Polymarket Prediction Markets",
+        description:
+          "Live Polymarket prediction markets — question, outcomes, bestBid/bestAsk/spread, volume24hr/volume1wk, " +
+          "oneDayPriceChange, clobTokenIds, conditionId, category tags, liquidity, end date. Ranked by volume24hr; filter by keyword. " +
+          "Route: GET /pm/markets. Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. " +
+          "Price: $0.005. Free preview at GET /pm/markets/preview. " +
+          "Machine-readable payment manifest: /.well-known/x402. MCP tool interface: /mcp (tool: pm_markets).",
+        tags: ["prediction-markets", "polymarket", "markets", "crypto", "data"],
+        examples: [
+          "GET /pm/markets?query=bitcoin&limit=20",
+        ],
+      },
+      {
+        id: "base-chain-reads",
+        name: "Base Mainnet On-Chain Reads",
+        description:
+          "Base mainnet blockchain data — block number, gas price (EIP-1559 base_fee/priority_fee + gas_price_usd), " +
+          "ETH balance (incl. balance_usd), ERC-20 token balance (with symbol/decimals), transaction details by hash, " +
+          "transaction receipt (full logs + L1 fee breakdown + l1_fee_usd/total_fee_usd), " +
+          "contract-code check (EIP-7702 delegated-EOA aware), and wallet bundle (balance + tx count + contract check in one call). " +
+          "Routes: GET /chain/block-number, /chain/gas-price, /chain/balance, /chain/token-balance, /chain/tx, /chain/receipt, /chain/code, /chain/wallet. " +
+          "Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. Price: $0.001-$0.003 per call. " +
+          "Free previews at /chain/block-number/preview and /chain/gas-price/preview (full live data, no payment required). " +
+          "Machine-readable payment manifest: /.well-known/x402. MCP tool interface: /mcp (tools: chain_block_number, chain_gas_price, chain_balance, chain_token_balance, chain_tx, chain_wallet).",
+        tags: ["rpc", "base", "onchain", "blockchain", "data"],
+        examples: [
+          "GET /chain/gas-price",
+          "GET /chain/balance?address=0x4200000000000000000000000000000000000006",
+          "GET /chain/wallet?address=0x4200000000000000000000000000000000000006",
+        ],
+      },
+      {
+        id: "token-security",
+        name: "Token Security / Honeypot Detector",
+        description:
+          "ERC-20 token security analysis for Base mainnet — EIP-1967/1822 proxy + upgradeability detection, " +
+          "bytecode dispatcher scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, " +
+          "and a live eth_call state-override simulation testing whether a synthetic wallet can actually transfer() the token. " +
+          "Real compute, not a thin data wrapper. Returns risk_score (0-100) + verdict (clear/review/block) + human-readable flags. " +
+          "Route: GET /chain/token-security. Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. " +
+          "Price: $0.02. Free preview at GET /chain/token-security/preview (full analysis of Base WETH). " +
+          "Machine-readable payment manifest: /.well-known/x402. MCP tool interface: /mcp (tool: chain_token_security).",
+        tags: ["security", "rpc", "base", "onchain", "token", "honeypot", "data"],
+        examples: [
+          "GET /chain/token-security?token=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        ],
+      },
+      {
+        id: "mcp-security-scan",
+        name: "MCP Server Security Audit",
+        description:
+          "Security scan of a target MCP server — audits every advertised tool for prompt-injection / tool-poisoning / " +
+          "exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). " +
+          "Returns structured findings + risk score (0-100) + verdict (clear/review/block) + risk summary. " +
+          "Route: GET /scan/mcp. Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. " +
+          "Price: $0.10. Free preview at GET /scan/mcp/preview (counts + risk score; withholds detail). " +
+          "Machine-readable payment manifest: /.well-known/x402. MCP tool interface: /mcp (tool: scan_mcp_server).",
+        tags: ["security", "mcp", "audit", "prompt-injection"],
+        examples: [
+          "GET /scan/mcp?url=https://example.com/mcp",
+        ],
+      },
+      {
+        id: "domain-enrichment",
+        name: "Domain Enrichment & Tech-Risk Assessment",
+        description:
+          "Domain intelligence: firmographic + tech-stack enrichment with full subdomain enumeration via certificate-transparency logs " +
+          "(crt.sh, RDAP, DoH, HTTP fingerprint) + verdict based on domain age. " +
+          "Plus tech-stack fingerprint → CVE (NVD) + EPSS + CISA-KEV attack-surface risk + verdict (clear/review/block) for a domain. " +
+          "Routes: GET /enrich/domain, GET /enrich/tech-risk, GET /dns/:domain, GET /whois/:domain. " +
+          "Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. " +
+          "Price: $0.01-$0.05 per call. " +
+          "Machine-readable payment manifest: /.well-known/x402.",
+        tags: ["domain", "enrichment", "security", "cve", "risk", "dns", "whois", "data"],
+        examples: [
+          "GET /enrich/domain?domain=example.com",
+          "GET /enrich/tech-risk?domain=example.com",
+          "GET /dns/example.com",
+          "GET /whois/example.com",
+        ],
+      },
     ],
   });
 });
