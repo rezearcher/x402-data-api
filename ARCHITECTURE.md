@@ -326,6 +326,35 @@ them is a distribution or demand action. The first-dollar gap in §8 stands exac
 
 ---
 
+## 10. SRE pass 2026-07-27 — Stripe rail rescued, worktree-bypass pattern found
+
+**`t_aef95830` (PIVOT: Stripe-billed human rail) — rescued, PASS.** The coder committed its work
+straight onto the **live main working tree** instead of its assigned worktree (`wt/t_aef95830`,
+which stayed at its pre-work SHA). SRE verified the diff matched the card's own summary exactly,
+`tsc --noEmit` clean, no secrets, then committed as `ae27bbe`: `GET /token-safety` landing page,
+`POST /stripe/webhook` (HMAC-verified, KV-backed API key issuance), an API-key bypass middleware
+ahead of the x402 gate, and `docs/TOKEN_SAFETY_STRIPE_PROBE.md`. **Still blocked on Rez:** the KV
+namespace isn't created and Stripe secrets aren't set (both commented out / unset) — no deploy yet.
+
+**`t_819dd337` (auto-merge.sh logging hardening) — rescued, PASS.** Same pattern: the fix (structured
+`auto_merge_failures/<task_id>.log` on merge failure) landed directly on main as `10fdeb3`
+("Closes t_819dd337"), while `wt/t_819dd337` stayed stale. `run_acceptance.sh`'s CHECK false-FAILed
+against the stale worktree; re-run against main HEAD, it passes for real.
+
+**`t_79490638` (A2A Agent Card) — correctly blocked, deliverable rescued to its own branch only.**
+This card is legitimately `blocked` awaiting Rez's content-accuracy sign-off, but the Agent Card was
+already deployed live to prod (version `125c4745`) while its worktree sat uncommitted — reap risk on
+code actively serving traffic. Committed to `wt/t_79490638` (`d3dee9e`) only; **main untouched**,
+still gated on review.
+
+**Systemic finding (doctrine `x402-worktree-bypass-check-main-too`, review 2026-10-27):** twice in one
+pass a coder bypassed its assigned worktree and committed straight to main. This silently defeats the
+worktree-isolation / auto-merge safety net documented in §9.4 and false-negatives any acceptance CHECK
+that only inspects the worktree. Rule going forward: an acceptance/rescue sweep must check the live
+main tree (`git status` + `git log`) for the claimed fix before trusting a worktree-only FAIL/UNRESOLVED.
+
+---
+
 *See `docs/FIRST_DOLLAR_PLAYBOOK.md` (thesis + outreach targets), `docs/DISTRIBUTION_READY.md`
 (distribution state), `docs/QUALITY_UPGRADE_PLAN.md` (endpoint quality), and
 `docs/MARKET_ANALYSIS_2026-07-16.md` (market thesis). This file supersedes their code-level claims.*
