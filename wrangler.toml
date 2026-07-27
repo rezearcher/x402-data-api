@@ -13,3 +13,9 @@ NETWORK = "eip155:8453"
 # bypasses the @x402 resource server). Setting this to "cdp" would break settle on
 # DECLARED routes (ajv new Function blocked in Workers) — keep it "xpay".
 FACILITATOR_MODE = "xpay"
+
+# KV namespace for API key storage (created via `wrangler kv namespace create API_KEYS`)
+# Replace id with the returned namespace ID before deploying.
+# [[kv_namespaces]]
+# binding = "API_KEYS"
+# id = "PLACEHOLDER_ID_FROM_WRANGLER_KV_NAMESPACE_CREATE"

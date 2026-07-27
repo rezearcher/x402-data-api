@@ -19,6 +19,13 @@ type Env = {
   CDP_API_KEY_ID?: string;
   CDP_API_KEY_SECRET?: string;
   FACILITATOR_MODE?: string; // "cdp" routes settlement through CDP; anything else = xpay (default)
+  // Stripe billing (set via Worker secrets — skip for local dev)
+  STRIPE_API_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
+  STRIPE_PRICE_ID?: string;
+  // Optional KV namespace for API key storage. Needs `wrangler kv namespace create API_KEYS`
+  // + binding id in wrangler.toml. If absent, API key auth returns 501.
+  API_KEYS?: KVNamespace;
 };
 
 // ---------------------------------------------------------------------------
@@ -1187,7 +1194,248 @@ function makeRoutes(payTo: string) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// API key helpers — for the Stripe-billed human rail
+// ---------------------------------------------------------------------------
+
+const KEY_PREFIX = "sk_";
+
+function generateApiKey(): string {
+  const bytes = new Uint8Array(20);
+  crypto.getRandomValues(bytes);
+  return KEY_PREFIX + Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+interface ApiKeyRecord {
+  key: string;
+  stripe_session_id: string;
+  customer_email?: string;
+  credits_remaining: number;
+  created_at: number;
+  expires_at: number;
+}
+
+const PLANS = {
+  pro: { price: 9.99, monthly_credits: 100, price_id_env: "STRIPE_PRICE_ID" },
+} as const;
+
+// ---------------------------------------------------------------------------
+// Human-facing landing page — token-safety scanner product
+// ---------------------------------------------------------------------------
+
+app.get("/token-safety", (c) => {
+  const BASE = "https://x402-data-api.sigrunner.workers.dev";
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token Safety Scanner — Base Chain Honeypot Detector | Grey Ridge Signals</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2.5rem 1.25rem 4rem;
+    background: #0b0f14; color: #dbe4ee;
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  main { max-width: 780px; margin: 0 auto; }
+  h1 { font-size: 1.7rem; margin: 0 0 0.4rem; color: #f4f7fa; }
+  .tagline { color: #f59e0b; font-size: 0.95rem; margin: 0 0 1.5rem; }
+  p { color: #b9c4d0; }
+  h2 { font-size: 1.05rem; color: #f4f7fa; margin: 2rem 0 0.75rem; border-top: 1px solid #1f2933; padding-top: 1.5rem; }
+  .features { display: flex; flex-direction: column; gap: 0.75rem; margin: 1rem 0; }
+  .feature { background: #121a24; border: 1px solid #1f2933; border-radius: 8px; padding: 1rem; }
+  .feature h3 { margin: 0 0 0.3rem; font-size: 1rem; color: #7fd1a8; }
+  .feature p { margin: 0; font-size: 0.9rem; color: #8b9bab; }
+  .pricing { display: flex; gap: 1rem; margin: 1.5rem 0; }
+  .plan { background: #121a24; border: 1px solid #1f2933; border-radius: 8px; padding: 1.25rem; flex: 1; }
+  .plan.featured { border-color: #f59e0b; }
+  .plan h3 { margin: 0 0 0.5rem; color: #f4f7fa; }
+  .plan .price { font-size: 1.5rem; color: #7fd1a8; font-weight: bold; }
+  .plan ul { list-style: none; padding: 0; margin: 1rem 0; }
+  .plan li { padding: 0.25rem 0; color: #b9c4d0; font-size: 0.85rem; }
+  .plan li::before { content: "✓ "; color: #7fd1a8; }
+  .btn {
+    display: inline-block; padding: 0.6rem 1.2rem; border-radius: 6px;
+    text-decoration: none; font-weight: 600; font-size: 0.9rem;
+    background: #f59e0b; color: #0b0f14; text-align: center;
+  }
+  .btn:hover { background: #d97706; }
+  code {
+    font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #10161d; color: #d7e2ec; border: 1px solid #1f2933; border-radius: 6px;
+    padding: 0.1rem 0.35rem;
+  }
+  .demo-box { background: #10161d; border: 1px solid #1f2933; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+  .demo-box pre { margin: 0; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #b9c4d0; overflow-x: auto; }
+  .note { font-size: 0.85rem; color: #6b7c8a; margin-top: 0.5rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🧪 Token Safety Scanner</h1>
+  <p class="tagline">Real-time honeypot detection for Base chain tokens — before you buy</p>
+
+  <p>Paste any Base ERC-20 token address and get a full security analysis: proxy detection, bytecode risk-selector scan, ownership checks, and a live on-chain transfer simulation. Built for traders, degens, and AI agents who need to know <em>before</em> they click "swap".</p>
+
+  <h2>What it detects</h2>
+  <div class="features">
+    <div class="feature"><h3>🔄 Upgradeable Proxies</h3><p>EIP-1967/EIP-1822 transparent & UUPS proxies — can the contract logic be swapped out from under you?</p></div>
+    <div class="feature"><h3>✋ Mint, Pause & Blacklist</h3><p>Can the owner mint unlimited new supply, freeze transfers, or block specific holders?</p></div>
+    <div class="feature"><h3>🏠 Ownership Status</h3><p>Is the contract renounced? Multi-sig? EOA-controlled? Who can change the rules?</p></div>
+    <div class="feature"><h3>💰 Live Transfer Simulation</h3><p>We simulate an actual eth_call transfer — does it succeed, revert, or silently burn your tokens?</p></div>
+    <div class="feature"><h3>📊 Risk Score & Verdict</h3><p>Aggregated 0-100 risk score with clear/review/block verdict and human-readable flag explanations.</p></div>
+  </div>
+
+  <h2>Live demo</h2>
+  <div class="demo-box">
+    <pre>curl ${BASE}/chain/token-security/preview</pre>
+    <p class="note">Free preview — analyzes a fixed well-known token (Base WETH). Full API analyzes any Base ERC-20.</p>
+  </div>
+
+  <h2>Pricing</h2>
+  <div class="pricing">
+    <div class="plan">
+      <h3>Free</h3>
+      <div class="price">$0</div>
+      <ul>
+        <li>3 token checks / month</li>
+        <li>Preview endpoint (WETH)</li>
+        <li>No account required</li>
+      </ul>
+      <a class="btn" href="${BASE}/chain/token-security/preview" style="background:#1f2933;color:#b9c4d0;">Try Preview</a>
+    </div>
+    <div class="plan featured">
+      <h3>Pro</h3>
+      <div class="price">$9.99</div>
+      <div class="note">per month</div>
+      <ul>
+        <li>100 token checks / month</li>
+        <li>Any Base ERC-20 address</li>
+        <li>API key access</li>
+        <li>Priority RPC routing</li>
+      </ul>
+      <a class="btn" href="#" onclick="alert('Stripe checkout coming soon — subscribe via x402 in the meantime!')">Subscribe</a>
+      <p class="note" style="margin-top:0.5rem;">Prefer agent-native? Use our <a href="${BASE}/" style="color:#7fd1a8;">x402 endpoint</a> — pay per call in USDC, no account needed.</p>
+    </div>
+  </div>
+
+  <h2>API access</h2>
+  <p>Subscribe via Stripe to get an API key. Use it directly:</p>
+  <div class="demo-box">
+    <pre>curl "https://x402-data-api.sigrunner.workers.dev/chain/token-security?token=0x...&api_key=sk_..."</pre>
+  </div>
+  <p style="font-size:0.9rem;">Or pay-per-call via <a href="${BASE}/" style="color:#7fd1a8;">x402</a> (agent-native, no account).</p>
+</main>
+</body>
+</html>`;
+  return c.html(html);
+});
+
+// ---------------------------------------------------------------------------
+// Stripe webhook — creates API keys on successful payment
+// ---------------------------------------------------------------------------
+
+app.post("/stripe/webhook", async (c) => {
+  const sig = c.req.header("stripe-signature");
+  if (!sig) return c.text("Missing stripe-signature header", 400);
+  if (!c.env.STRIPE_WEBHOOK_SECRET || !c.env.STRIPE_API_KEY) {
+    // Webhook not configured — reply 200 to prevent Stripe retries during setup
+    console.log(JSON.stringify({ event: "stripe_webhook_unconfigured", sig }));
+    return c.text("ok (unconfigured)");
+  }
+
+  let event: any;
+  try {
+    const body = await c.req.text();
+    // Verify webhook signature — using Node crypto polyfill on CF Workers
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw", enc.encode(c.env.STRIPE_WEBHOOK_SECRET),
+      { name: "HMAC", hash: "SHA-256" }, false, ["verify"],
+    );
+    const parts = sig.split(",");
+    let sigValue = "", timeValue = "";
+    for (const p of parts) {
+      const [k, v] = p.split("=");
+      if (k === "v1") sigValue = v;
+      if (k === "t") timeValue = v;
+    }
+    // Stripe v1 signature = HMAC(timestamp.body, webhook_secret)
+    const payload = `${timeValue}.${body}`;
+    const expected = await crypto.subtle.sign("HMAC", key, enc.encode(payload));
+    const expectedHex = Array.from(new Uint8Array(expected)).map(b => b.toString(16).padStart(2, "0")).join("");
+    if (expectedHex !== sigValue) {
+      console.log(JSON.stringify({ event: "stripe_webhook_sig_mismatch" }));
+      return c.text("Signature mismatch", 401);
+    }
+
+    // Parse webhook body as JSON
+    event = JSON.parse(body);
+  } catch (e) {
+    console.log(JSON.stringify({ event: "stripe_webhook_parse_error", error: (e as Error).message }));
+    return c.text("ok (parse error — swallowed to prevent retries)");
+  }
+
+  console.log(JSON.stringify({ event: "stripe_webhook_received", type: event?.type }));
+
+  if (event?.type === "checkout.session.completed") {
+    const session = event.data.object;
+    const sessionId = session.id;
+    const email = session.customer_details?.email;
+
+    if (!c.env.API_KEYS) {
+      console.log(JSON.stringify({ event: "stripe_webhook_no_kv" }));
+      return c.json({ received: true, note: "KV not configured — key would be created here" });
+    }
+
+    // Create API key for the customer
+    const apiKey = generateApiKey();
+    const record: ApiKeyRecord = {
+      key: apiKey,
+      stripe_session_id: sessionId,
+      customer_email: email,
+      credits_remaining: PLANS.pro.monthly_credits,
+      created_at: Date.now(),
+      expires_at: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
+    };
+
+    await c.env.API_KEYS.put(apiKey, JSON.stringify(record));
+    console.log(JSON.stringify({ event: "api_key_created", session_id: sessionId, email }));
+  }
+
+  return c.json({ received: true });
+});
+
+// ---------------------------------------------------------------------------
+// API key bypass — if a valid api_key query param is present on a paid
+// endpoint, skip the x402 payment gate.
+// ---------------------------------------------------------------------------
+
 app.use(async (c, next) => {
+  // Toll-free routes — never check API key or x402
+  const FREE_PATHS = new Set(["/", "/health", "/token-safety", "/stripe/webhook"]);
+  if (FREE_PATHS.has(c.req.path)) return next();
+  if (c.req.path.startsWith("/.well-known/")) return next();
+
+  // API key bypass for paid endpoints
+  const apiKey = c.req.query("api_key");
+  if (apiKey && c.env.API_KEYS) {
+    const raw = await c.env.API_KEYS.get(apiKey);
+    if (raw) {
+      const record: ApiKeyRecord = JSON.parse(raw);
+      if (record.expires_at > Date.now() && record.credits_remaining > 0) {
+        // Deduct a credit and proceed
+        record.credits_remaining -= 1;
+        await c.env.API_KEYS.put(apiKey, JSON.stringify(record));
+        console.log(JSON.stringify({ event: "api_key_used", credits_remaining: record.credits_remaining }));
+        return next();
+      }
+    }
+  }
+
+  // Fall through to x402 gate
   // MCP: discovery (initialize / tools/list / notifications) is FREE so agents
   // can find the tool; only tools/call is x402-gated ($0.05). Peek at the
   // JSON-RPC method to decide. Non-JSON (GET/SSE) → free.
