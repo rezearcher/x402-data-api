@@ -94,6 +94,19 @@ const ROUTES = {
     inputSchema: { type: 'object', properties: { address: { type: 'string', description: 'holder 0x address' }, token: { type: 'string', description: 'ERC-20 token 0x address' } } },
     example: { address: '0x4200000000000000000000000000000000000006', token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', balance_raw: '0', chain: 'base' },
   },
+  '/chain/token-security': {
+    description: 'Token security / honeypot detector for a Base mainnet ERC-20: EIP-1967/1822 proxy + upgradeability detection, bytecode dispatcher scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, and a live eth_call state-override simulation testing whether a synthetic wallet can actually transfer() the token. Returns risk_score + verdict (clear/review/block) + human-readable flags.',
+    serviceName: 'Token Security / Honeypot Detector (Base RPC)',
+    tags: ['rpc', 'base', 'onchain', 'token', 'security', 'honeypot', 'data'],
+    input: { token: '0x4200000000000000000000000000000000000006' },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        token: { type: 'string', description: '0x-prefixed 20-byte ERC-20 contract address on Base mainnet' },
+      },
+    },
+    example: { token: '0x4200000000000000000000000000000000000006', chain: 'base', is_contract: true, proxy: { is_proxy: false, proxy_standard: null, implementation_address: null, admin_address: null, is_upgradeable: false }, capabilities: { can_mint: false, can_burn: false, can_pause: false, has_blacklist: false, has_fee_setter: false, has_ownership: false, detected_selectors: [], scanned_address: '0x4200000000000000000000000000000000000006' }, ownership: { owner: null, ownership_renounced: false, owner_type: 'none' }, risk_score: 0, verdict: 'clear', flags: [] },
+  },
   '/chain/tx': {
     description: 'Transaction details by hash on Base mainnet. Agent-native onchain read, pay-per-call via x402.',
     serviceName: 'Base Transaction Lookup (RPC)',
@@ -125,6 +138,20 @@ const ROUTES = {
     input: { address: '0x4200000000000000000000000000000000000006' },
     inputSchema: { type: 'object', properties: { address: { type: 'string', description: '0x-prefixed 40-hex address' } } },
     example: { address: '0x4200000000000000000000000000000000000006', balance_wei: '0', balance_eth: 0, tx_count: 42, is_contract: false, chain: 'base' },
+  },
+  '/pm/markets': {
+    description: 'Query live Polymarket prediction markets — question, outcomes, live prices, bestBid/bestAsk/spread, volume24hr/volume1wk, oneDayPriceChange, clobTokenIds, conditionId, category tags, liquidity, end date. Ranked by volume24hr; filter by keyword. Agent-native, pay-per-call via x402.',
+    serviceName: 'Polymarket Prediction Markets (PolyCLOB)',
+    tags: ['prediction-markets', 'polymarket', 'polyclob', 'defi', 'data'],
+    input: { limit: '20', query: 'bitcoin' },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'string', description: 'Max markets to return (default 20, max 100)' },
+        query: { type: 'string', description: 'Optional keyword filter matched against the market question' },
+      },
+    },
+    example: { question: 'Will X happen by 2026?', slug: 'will-x-happen-by-2026', outcomes: ['Yes', 'No'], outcomePrices: [0.65, 0.35], volume: 1234567.89, volume24hr: 84213.45, volume1wk: 412987.6, liquidity: 45678.12, endDate: '2026-12-31T12:00:00Z', active: true, bestBid: 0.64, bestAsk: 0.66, spread: 0.02, oneDayPriceChange: 0.01, clobTokenIds: ['264852...', '884780...'], conditionId: '0xb6d6f15a1b5d08753653f1867ccd6126badfbe182a75159a330dc7b15336b30', tags: ['Crypto', 'Bitcoin'] },
   },
 };
 
@@ -217,6 +244,19 @@ async function main() {
   });
   const out = await res.json();
   console.log('proxy status:', res.status);
+
+  // decode extension responses for debugging
+  for (const phase of ['verify', 'settle']) {
+    if (out[phase]?.extensionResponses) {
+      try {
+        const decoded = JSON.parse(Buffer.from(out[phase].extensionResponses, 'base64').toString());
+        console.log(`  [${phase} bazaar response]:`, JSON.stringify(decoded, null, 2).slice(0, 2000));
+      } catch (e) {
+        console.log(`  [${phase} decode error]:`, e.message);
+      }
+    }
+  }
+
   console.log(JSON.stringify(out, null, 2));
 }
 
