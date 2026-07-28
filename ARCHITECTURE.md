@@ -3,6 +3,7 @@
 **Source of truth for what is actually shipped.** Verified against `src/index.ts` on
 2026-07-21; dependency/Dependabot cards re-checked against the manifests on 2026-07-21 (see §6a);
 the public source-repo publication (card `t_4fea70bb`) was independently re-verified 2026-07-21 (see §5a);
+**doc-sync pass 2026-07-28** read `mcp-client/` end-to-end (see §11);
 **doc-sync pass 2026-07-25** re-read `.metrics/compute_revenue_usd.py`, `scripts/verify_revenue_ledger.py`,
 `scripts/auto-merge.sh`, `docs/REVENUE_LEDGER_AUDIT.md`, `.gitignore`, `LICENSE`, `package.json` (see §9);
 Where a claim in another doc conflicts with the code, the code wins and the
@@ -12,6 +13,9 @@ and route lists below were read out of the code, not copied from prose.
 ---
 
 ## 1. What it is
+
+*(As of 2026-07-27 the repo holds **two** shipped components: the Worker below, and
+`mcp-client/` — a local stdio MCP client that proxies to it, §11.)*
 
 A single [Cloudflare Worker](./src/index.ts) (~4,200 lines) that serves pay-per-call
 crypto / DeFi / prediction-market / Base on-chain data **and** MCP-security scanning over
@@ -119,6 +123,7 @@ curl evidence over this line until re-probed),
 **External registrations (mechanisms present in repo; state per handoffs, not re-verified live):**
 - **MCP Registry:** `server.json` = `io.github.rezearcher/tech-risk` **v1.2.0**; published via
   `mcp-publisher`.
+- **npm / local stdio MCP client:** `mcp-client/` (`x402-data-api-mcp`) — **built, not published.** See §11.
 - **x402scan.com:** `register_x402scan.js` — SIWX wallet-sign to the registry API.
 - **CDP Bazaar:** `seed_endpoint.js` / `seed_*.js` — catalog seed (search reported broken).
 - **402index.io:** domain-verified via `/.well-known/402index-verify.txt`.
@@ -204,6 +209,9 @@ zod 4) with `wrangler` as the toolchain — none Rust.
 - **Revenue ledger audit — 96.25% self-traffic (2026-07-23).** Task `t_efa5b713` performed on-chain forensic verification of all 26 revenue_ledger rows via `eth_getTransactionReceipt` on Base mainnet, reading each row's USDC Transfer event `from` topic. Result: **23/26 rows ($0.385, 96.25%) are self-traffic** from buyer-wallet (`0xC4852c…`) and PAY_TO (`0x5765ae…`) addresses; 3 rows ($0.015) were provisionally external revenue from payer `0x7e571e…` — **since superseded, see next bullet.** Verifiable artifacts: `scripts/verify_revenue_ledger.py` (now 601 lines after `t_5c08554f`'s `--probe-check` extension, reusable RPC-based ledger auditor). Deliverable lives merged on `main` (commit `b2089a2` + `fcff3c8`); the ledger-audit script produces `~/.hermes/data/x402-data-api-revenue/ledger_verified_summary.json`. ~~Note: `docs/REVENUE_LEDGER_AUDIT.md` referenced by earlier passes does not exist on `main`~~ — **stale as of 2026-07-25: it does exist** (129 lines, read-verified), see §9.2.
 - **Sole "external" payer confirmed farming bot — true organic revenue $0.00 (2026-07-24).** Task `t_5c08554f` probed the one remaining "external" address (`0x7e571e959cc7c75ccdd2eac24f8775ea2eaa2f09`) via live Base Blockscout API + `eth_getTransactionCount`: `nonce_tx_count=3176` (high-activity automation), `15×` identical `giveFeedback()` calls to one contract within a 120s window (sybil/reputation-farming signature), and `3` unsolicited farm-bait token receipts (HOLD/UHODL/USGR). Composite `probe_score=1.000`. **True organic x402 revenue is $0.00, not $0.015** — the $0.015 was itself noise, the third false-positive the same metric has produced across three passes (`t_91c6fca6` blind-$0→$0.395, `t_efa5b713` $0.395→$0.015 after excluding self-traffic, `t_5c08554f` $0.015→$0.00 after excluding bot traffic). Sidecar evidence: `~/.hermes/data/x402-data-api-revenue/probe_check_summary.json`. Deliverable merged to `main` at `fcff3c8` (was sitting unmerged on `wt/t_5c08554f` for one SRE cycle — rescued 2026-07-24).
 - **First organic dollar: still $0, confirmed by a third independent pass.** Zero real humans or task-driven agents have ever knowingly paid for this API despite 8+ live distribution channels already up for days. The milestone target ($1.00 organic) requires the full **$1.00**, not $0.985 or $0.60. This strengthens the case for escalating the $20 outbound bounty (`t_33de6690`, blocked on Rez capital-approval) over another passive-listing card.
+- **The npm atom (only Rez can do it):** `npm login` + `npm publish` from `mcp-client/`. The package
+  is built, committed, and locally runnable (§11), but unpublished — so the `npx` install path that
+  the MCP-directory submissions and `README.md` advertise does not work for anyone outside this repo.
 - **The revenue atom (only Rez can do it):** create a **RapidAPI seller account + connect Stripe
   payout** at `rapidapi.com/provider`. The dual-rail (x402 + RapidAPI/Stripe) plan hinges on it;
   everything downstream (import `/openapi.json`, tiers, token-security as hero) is automatable once it exists.
@@ -352,6 +360,79 @@ pass a coder bypassed its assigned worktree and committed straight to main. This
 worktree-isolation / auto-merge safety net documented in §9.4 and false-negatives any acceptance CHECK
 that only inspects the worktree. Rule going forward: an acceptance/rescue sweep must check the live
 main tree (`git status` + `git log`) for the claimed fix before trusting a worktree-only FAIL/UNRESOLVED.
+
+---
+
+## 11. `mcp-client/` — local stdio MCP client (card `t_d792f3ba`, doc-sync 2026-07-28)
+
+**Code-verified by reading the working tree**, not from the card title. Second component in the
+repo alongside the Worker: `mcp-client/` is a self-contained npm package (`x402-data-api-mcp`
+v0.1.0, MIT-implied via root `LICENSE`) that runs **on the installing agent's machine** and speaks
+MCP over **stdio**, proxying to the already-deployed Worker's HTTP `/mcp`. It adds no new data
+surface — it is a transport + payment shim so stdio-only clients (Claude Desktop, Cursor) can reach
+the 22 remote tools.
+
+**What is actually in the tree:**
+
+| File | Evidence |
+|---|---|
+| `mcp-client/package.json` | `"bin": {"x402-data-api-mcp": "./dist/server.js"}`, `"type": "module"`, `"files": ["dist/"]`, `prepublishOnly: npm run build`. Deps: `@modelcontextprotocol/sdk ^1.29.0`, `@x402/fetch`/`@x402/evm`/`@x402/core` `^2.19.0`, `viem ^2.55.0`, `zod ^4.4.3`. |
+| `mcp-client/src/server.ts` | 149 lines — the whole implementation. |
+| `mcp-client/dist/` | Compiled `server.js` (+ `.d.ts`, maps) **committed** — `.gitignore` ignores `node_modules/` only, so the `bin` target ships. Shebang `#!/usr/bin/env node` present. |
+| `mcp-client/package-lock.json` | 114 resolved packages — deps really were installed/built. |
+| `mcp-client/test-mcp-client.mjs` | 143-line harness: spawns `dist/server.js`, asserts all 22 tool names in `tools/list`, then calls 4 free previews (`chain_block_number`, `crypto_prices`, `chain_gas_price`, `chain_token_security`) against **live production**. |
+| `mcp-client/README.md` | 90 lines — quick start, 22-tool table, free/paid split, dev loop. |
+
+**Payment path (code-proven, `src/server.ts:29-56`).** The wallet key comes from
+`X402_WALLET_PRIVATE_KEY` — **the installer's own key**, read from their env; no key, seed, or
+wallet file for this client exists in the repo. When set: dynamic `import()` of
+`wrapFetchWithPayment` (`@x402/fetch`), `x402Client` (`@x402/core/client`),
+`registerExactEvmScheme` (`@x402/evm/exact/client`), and `privateKeyToAccount` (`viem/accounts`);
+the wrapped fetch replaces `globalThis.fetch` for all Worker calls, so a 402 challenge is signed and
+retried transparently. Init failure is **non-fatal** — it logs to stderr and falls back to plain
+fetch (free/preview tools only), same as running with no key at all (`:50-56`). Target URL is
+`WORKER_BASE_URL` (default `https://x402-data-api.sigrunner.workers.dev`) + `/mcp` (`:32`, `:76`).
+
+**Response handling (`:87-113`):** parses JSON first, else scans for SSE `data: ` lines and takes
+the last valid JSON one; on neither, synthesizes a JSON-RPC error carrying the HTTP status.
+
+**Scope of the proxy — narrower than its own docstring claims.** Only **two** handlers are
+registered: `ListToolsRequestSchema` (`:117`) and `CallToolRequestSchema` (`:131`). Capabilities
+declare `tools` only (`:65-69`). `initialize` is answered **locally by the MCP SDK**, not proxied,
+so the header comment "Proxies all MCP JSON-RPC calls (tools/list, tools/call, initialize, etc.)"
+(`src/server.ts:6-7`) overstates it. No `resources`, no `prompts`, no notification pass-through.
+Not a defect for this use case — recorded so the doc isn't repeating the code's own overstatement.
+
+### Gaps (claimed or implied but **not** proven in the tree)
+
+- **Not published to npm.** Nothing in the repo proves `x402-data-api-mcp` exists on the registry,
+  and the registry probe was sandbox-blocked in this pass. `docs/MCP_SUBMISSIONS_LOG.md:71-72` states
+  the remaining atom is Rez's `npm login` + `npm publish` (+ `mcp-publisher register`) — an account
+  action, correctly out of scope for autonomous work. **Until that lands, every `npm install -g` /
+  `npx x402-data-api-mcp` instruction in `mcp-client/README.md` fails for an outside installer**;
+  only the in-repo `node dist/server.js` path works. The README's "Or run directly from the repo:
+  `npx x402-data-api-mcp`" is wrong on both counts (it resolves against the registry, not the repo).
+- **`README.md` step 1 points at a file that does not exist.** It says to copy `.env.example` to
+  `.env`; there is no `.env.example` in `mcp-client/` (ls-verified). The two env vars are read
+  straight from `process.env`, so the instruction is inert, not blocking.
+- **The "5/5 live tests pass" claim is documentation, not evidence.** The harness exists and is real,
+  but no run output is stored in the repo; the pass claim lives only at
+  `docs/MCP_SUBMISSIONS_LOG.md:71`. Re-run `node mcp-client/test-mcp-client.mjs` to re-establish it.
+- **Paid-path never demonstrated.** All 5 tests exercise **free previews**. No artifact shows a 402
+  challenge being signed and settled through this client — the x402 wiring is code-reviewed, not
+  round-trip-proven.
+- **Invisible on the repo's own discovery surfaces.** Root `README.md`, `server.json`, and
+  `glama.json` contain **zero** references to `mcp-client` / `x402-data-api-mcp` (grep-verified).
+  `server.json` still describes only the remote server (`io.github.rezearcher/tech-risk` v1.2.0).
+  A visitor to the public repo cannot discover the client exists.
+- **Two independent version identities.** npm package `0.1.0` vs `server.json` `1.2.0`. Nothing
+  syncs them; the 22-tool list is hardcoded in `mcp-client/README.md` + the test harness and will
+  drift silently if the Worker's tool set changes.
+- **No CI.** Per §8 there is still no `.github/workflows/`, so `npm run build` / the test harness
+  run only when someone runs them by hand.
+
+**Revenue note:** this is a distribution mechanism, not revenue. It changes nothing in §8 — organic
+revenue remains **$0.00**, and this package cannot begin to move that number until it is on npm.
 
 ---
 
