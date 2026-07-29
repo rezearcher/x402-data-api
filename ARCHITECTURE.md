@@ -125,7 +125,9 @@ curl evidence over this line until re-probed),
   `mcp-publisher`.
 - **npm / local stdio MCP client:** `mcp-client/` (`x402-data-api-mcp`) — **built, not published.** See §11.
 - **x402scan.com:** `register_x402scan.js` — SIWX wallet-sign to the registry API.
-- **CDP Bazaar:** `seed_endpoint.js` / `seed_*.js` — catalog seed (search reported broken).
+- **CDP Bazaar:** `seed_endpoint.js` (13-route table, one route per invocation, positional arg) and
+  `seed_batch_cdp.js` (4-route batch loop with 12h cooldown, added by `t_1a11024d` — see §12); also
+  `seed_raw_cdp.js` / `seed_cdp_pm.js` / `seed_normal_xpay.js` — catalog seed (search reported broken).
 - **402index.io:** domain-verified via `/.well-known/402index-verify.txt`.
 
 ## 5a. Public source repo — SHIPPED 2026-07-19 (card `t_4fea70bb`, independently re-verified)
@@ -200,6 +202,10 @@ zod 4) with `wrangler` as the toolchain — none Rust.
   3 security)". Actual = **18 paid GET endpoints** (adds `/chain/token-security`, `/dns`, `/whois`).
 - **Funding venues.** Code fetches **Hyperliquid + OKX + dYdX**; README said only Hyperliquid + OKX
   (corrected 2026-07-18).
+- **Seeder CLI flags that never existed.** `docs/AGENTIC_MARKET_ENRICHMENT.md` advertised
+  `--workers-url` / `--dry-run` / `--route` on `seed_batch_cdp.js`; the file has **no `process.argv`
+  handling at all** (corrected 2026-07-29, see §12). Correct invocations are
+  `node seed_batch_cdp.js` (no args, all 4 manifest routes) and `node seed_endpoint.js <route>`.
 - **`PLAN.md` status section is stale** — it lists only the two `/enrich/*` endpoints as the MCP
   surface; the shipped surface is 22 MCP tools / 18 paid HTTP endpoints. See this file for current state.
 
@@ -433,6 +439,58 @@ Not a defect for this use case — recorded so the doc isn't repeating the code'
 
 **Revenue note:** this is a distribution mechanism, not revenue. It changes nothing in §8 — organic
 revenue remains **$0.00**, and this package cannot begin to move that number until it is on npm.
+
+---
+
+## 12. `seed_batch_cdp.js` — batch CDP Bazaar seeder (card `t_1a11024d`, doc-sync 2026-07-29)
+
+Card title: *"Fix Agentic.Market enrichment gap: extend proven CDP-seed to token-security + Base-RPC
+(category-matched buyer demand proven live)."* **Read-verified against the tree**, not taken from the
+title. Landed via SRE rescue `ac53946` (deliverable had been stranded on `wt/t_1a11024d`); the
+underlying work is commit `7627eaa`.
+
+**What actually shipped:**
+
+| Artifact | Evidence |
+|---|---|
+| `seed_batch_cdp.js` | 237 lines at repo root. Iterates a hardcoded 4-route manifest (`/pm/markets`, `/chain/token-security`, `/chain/gas-price`, `/chain/block-number`), does challenge → sign → settle per route. |
+| Cooldown persistence | `.cdp_seed_cooldown.json`, 12h window (`:16-17`, `:112-121`, `:148-153`). Entry is written **only on the success path** (`:218`), so a present entry = a settle that returned OK. |
+| Settle path | POSTs `{paymentPayload, paymentRequirements}` to the Worker's `/internal/cdp-settle-raw` (`:206-211`) — that route **exists**, `src/index.ts:232` (`app.post`). Bypasses the ajv-on-Workers wall. |
+| Bazaar extension | `declareDiscoveryExtension()` from `@x402/extensions/bazaar` per route, plus a manual `bazaar.info.input.type/method` + `routeTemplate` patch for x402 issue #2156 (`:169-176`). |
+| Wallet | `buyer-wallet.json` at repo root, loaded at `:126`; signs via viem + `registerExactEvmScheme` on `eip155:8453`. |
+| `seed_endpoint.js` | 13-route registration table **does** include `/chain/token-security` (`:99`) and the full Base-RPC set (block-number, gas-price, balance, token-balance, tx, receipt, code, wallet) — this is the "extend to token-security + Base-RPC" part of the card, and it is real. |
+
+**How to run it (correcting the docs):** `node seed_batch_cdp.js` with **no arguments**.
+`node seed_endpoint.js <route>` takes one **positional** route name (`seed_endpoint.js:158`).
+
+### Gaps / doc lies found in this pass
+
+- **`docs/AGENTIC_MARKET_ENRICHMENT.md` claimed CLI flags that do not exist.** It advertised
+  `--workers-url`, `--dry-run`, and `--route` on `seed_batch_cdp.js`. The file contains **zero**
+  `process.argv` references (grep-verified); `BASE` is hardcoded at `:15` and the manifest at `:21`.
+  There is no dry-run and no route filter — a run always attempts real on-chain settles for every
+  non-cooled-down route. Corrected in that file 2026-07-29. **Real gap:** if a dry-run / target
+  override is wanted, it still has to be written.
+- **The "❌ Insufficient USDC" rows in that doc are contradicted by the repo's own artifact.**
+  `.cdp_seed_cooldown.json` holds success entries for **all four** routes — including `/pm/markets`
+  and `/chain/token-security`, the two the doc lists as failed — stamped within a ~2.5s window
+  (cooldown expiry `2026-07-29T03:09:31–34Z` ⇒ seeds at **`2026-07-28T15:09:31–34Z`**). Since the
+  cooldown key is only set after a non-error settle response, either all four settled or the doc's
+  failure table is from a different run. **Not resolved here** — treat both the failure rows and the
+  "4/4 seeded" reading as unproven until a fresh run is captured.
+- **Those doc timestamps were cooldown-*expiry* times, not seed times.** `seed_run_1785253314.log`
+  is an all-SKIP run (`Seeded: none`), and its `cooldown until …T03:09:3xZ` lines are what got
+  transcribed into the doc as seed times. Corrected.
+- **Agentic.Market enrichment itself is still NOT fixed** — the card's actual headline goal. There is
+  no enrichment code, no enrichment call, and nothing in the repo that sets `description`/`category`
+  on the Agentic.Market service record. The doc's own status table shows `enriched: False`,
+  `description: ""`, `category: ""`. What shipped is **CDP Bazaar seeding**, which is upstream of
+  Agentic.Market's own enrichment pipeline. **Open gap.**
+- **Live seeding state not re-probed in this pass** (docs-only, no network). The last on-chain claim
+  (tx `0xb5ab7…33a`, block 49,231,013) comes from the card's own summary and is **not** independently
+  verified here.
+- **Revenue impact: none.** Per §8, organic revenue remains **$0.00**. Catalog seeding is discovery
+  plumbing; `/chain/token-security` still shows zero paid calls ever.
 
 ---
 
