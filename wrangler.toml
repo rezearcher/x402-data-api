@@ -15,7 +15,6 @@ NETWORK = "eip155:8453"
 FACILITATOR_MODE = "xpay"
 
 # KV namespace for API key storage (created via `wrangler kv namespace create API_KEYS`)
-# Replace id with the returned namespace ID before deploying.
-# [[kv_namespaces]]
-# binding = "API_KEYS"
-# id = "PLACEHOLDER_ID_FROM_WRANGLER_KV_NAMESPACE_CREATE"
+[[kv_namespaces]]
+binding = "API_KEYS"
+id = "b4862216375341f18f2aa6d58822c874"
