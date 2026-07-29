@@ -14,7 +14,21 @@ NETWORK = "eip155:8453"
 # DECLARED routes (ajv new Function blocked in Workers) — keep it "xpay".
 FACILITATOR_MODE = "xpay"
 
+# === REQUIRED Worker secrets (set via `wrangler secret put <NAME>`) ===
+# CDP_API_KEY_ID          - CDP API Key ID for JWT auth with CDP x402 facilitator
+# CDP_API_KEY_SECRET      - CDP API Key Secret (PEM or base64 private key) for JWT signing
+# STRIPE_API_KEY          - (optional) Stripe secret key for recurring billing
+# STRIPE_WEBHOOK_SECRET   - (optional) Stripe webhook signing secret
+# STRIPE_PRICE_ID         - (optional) Stripe price ID for subscription tier
+
 # KV namespace for API key storage (created via `wrangler kv namespace create API_KEYS`)
 [[kv_namespaces]]
 binding = "API_KEYS"
 id = "b4862216375341f18f2aa6d58822c874"
+# Required for routes declared with declareDiscoveryExtension to be catalogued in the Bazaar.
+# Both must be present for CDP facilitator to activate; if absent, xpay is used (default).
+#
+# Obtain from https://portal.cdp.coinbase.com/access/api — create an API key with x402
+# scope and download the private key (PEM or base64 ed25519).
+#   CDP_API_KEY_ID: UUID format (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+#   CDP_API_KEY_SECRET: PEM-encoded private key or base64 ed25519 key material

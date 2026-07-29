@@ -8,6 +8,7 @@ import { createMcpHandler } from "@modelcontextprotocol/server";
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod/v4";
 import { keccak256 } from "viem";
+import { createCdpFacilitator } from "./facilitator";
 
 // ---------------------------------------------------------------------------
 // Environment bindings
@@ -680,33 +681,12 @@ const resourceServer = new x402ResourceServer(facilitatorClient).register(
 // secrets via jose/WebCrypto (edge-safe). Default (flag unset) stays on xpay.
 // ---------------------------------------------------------------------------
 
-function makeCdpAuthHeaders(apiKeyId: string, apiKeySecret: string) {
-  const mk = async (path: string, method: "GET" | "POST") => {
-    const jwt = await generateJwt({
-      apiKeyId,
-      apiKeySecret,
-      requestMethod: method,
-      requestHost: CDP_HOST,
-      requestPath: path,
-    });
-    return { Authorization: `Bearer ${jwt}` };
-  };
-  return async () => ({
-    verify: await mk("/platform/v2/x402/verify", "POST"),
-    settle: await mk("/platform/v2/x402/settle", "POST"),
-    supported: await mk("/platform/v2/x402/supported", "GET"),
-  });
-}
-
 let activeResourceServer: x402ResourceServer | null = null;
 
 function selectResourceServer(env: Env): x402ResourceServer {
   if (activeResourceServer) return activeResourceServer;
   if (env.FACILITATOR_MODE === "cdp" && env.CDP_API_KEY_ID && env.CDP_API_KEY_SECRET) {
-    const cdpFacilitator = new HTTPFacilitatorClient({
-      url: CDP_FACILITATOR_URL,
-      createAuthHeaders: makeCdpAuthHeaders(env.CDP_API_KEY_ID, env.CDP_API_KEY_SECRET),
-    });
+    const cdpFacilitator = createCdpFacilitator(env.CDP_API_KEY_ID, env.CDP_API_KEY_SECRET);
     activeResourceServer = new x402ResourceServer(cdpFacilitator).register(
       NETWORK,
       new ExactEvmScheme(),
