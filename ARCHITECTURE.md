@@ -1,499 +1,564 @@
 # ARCHITECTURE — x402-data-api
 
-**Source of truth for what is actually shipped.** Verified against `src/index.ts` on
-2026-07-21; dependency/Dependabot cards re-checked against the manifests on 2026-07-21 (see §6a);
-the public source-repo publication (card `t_4fea70bb`) was independently re-verified 2026-07-21 (see §5a);
-**doc-sync pass 2026-07-28** read `mcp-client/` end-to-end (see §11);
-**doc-sync pass 2026-07-25** re-read `.metrics/compute_revenue_usd.py`, `scripts/verify_revenue_ledger.py`,
-`scripts/auto-merge.sh`, `docs/REVENUE_LEDGER_AUDIT.md`, `.gitignore`, `LICENSE`, `package.json` (see §9);
-Where a claim in another doc conflicts with the code, the code wins and the
-conflict is recorded in [Doc-drift corrections](#doc-drift-corrections). Prices, counts,
-and route lists below were read out of the code, not copied from prose.
+**Source of truth for what is actually shipped.** Rewritten 2026-07-29 from a full read of every
+source file in the tree at commit `90cadd1`. Counts, prices, route lists, and tool lists below were
+read out of the code — not copied from prose — and cross-checked against the **live deployment**
+(see [§16 Verification evidence](#16-verification-evidence)). Where another doc conflicts with the
+code, the code wins and the conflict is recorded in [§13 Doc-drift corrections](#13-doc-drift-corrections).
 
 ---
 
 ## 1. What it is
 
-*(As of 2026-07-27 the repo holds **two** shipped components: the Worker below, and
-`mcp-client/` — a local stdio MCP client that proxies to it, §11.)*
-
-A single [Cloudflare Worker](./src/index.ts) (~4,200 lines) that serves pay-per-call
-crypto / DeFi / prediction-market / Base on-chain data **and** MCP-security scanning over
-the [x402 payment protocol](https://x402.org) on **Base mainnet** (`eip155:8453`, USDC).
-No account / API key / subscription: an agent pays inline in USDC and gets the data back in
-the same request. Every data endpoint exposes a **free preview**.
+A pay-per-call data + security API for AI agents, settled inline in USDC on **Base mainnet**
+(`eip155:8453`) over the [x402 protocol](https://x402.org). No account, no API key, no
+subscription on the agent rail: a caller hits an endpoint, gets **HTTP 402** with a signed
+challenge, signs an EIP-3009 authorization, retries, and receives the data in the same request.
+Every data domain also exposes a **free preview** so a discovering agent can taste the output
+before paying.
 
 - **Deployed:** `https://x402-data-api.sigrunner.workers.dev`
-- **Source:** `https://github.com/rezearcher/x402-data-api` — **public** since 2026-07-19 (§5a)
-- **MCP endpoint (streamable-http):** `/mcp`
-- **Runtime:** Cloudflare Workers, `nodejs_compat`, `compatibility_date = 2025-06-01` (`wrangler.toml`)
+- **Source:** `https://github.com/rezearcher/x402-data-api` — public since 2026-07-19, MIT
+- **Runtime:** Cloudflare Workers (`nodejs_compat`, `compatibility_date = 2025-06-01`)
 - **Framework:** Hono 4 + `@x402/hono` `paymentMiddleware` / `x402ResourceServer`
-- **Settlement:** **xpay** non-custodial facilitator (`FACILITATOR_URL=https://facilitator.xpay.sh`,
-  `FACILITATOR_MODE=xpay`). No Coinbase/CDP account is required to settle. `PAY_TO` is a Base
-  wallet Rez controls (`0x5765…`, overridable via `wrangler secret put PAY_TO`).
+- **MCP endpoint:** `POST /mcp` (streamable-http), 22 tools
+- **A2A endpoint:** `GET /.well-known/agent-card.json`
 
-## 2. Request path & payment gate
+Two payment rails are wired (§5, §6): the **agent rail** (x402/USDC, live) and the
+**human rail** (Stripe subscription → KV-stored API key, code-complete, secrets not yet set).
 
-1. Global middleware builds the paid-route map (`makeRoutes(PAY_TO)`) once and caches it
-   (`cachedMiddleware`), then delegates to `@x402/hono` `paymentMiddleware`.
-2. A gated route with no valid payment → **HTTP 402** with an x402 v2 challenge
-   (network `eip155:8453`, asset USDC). An x402-capable client signs an EIP-3009
-   authorization and retries; the middleware verifies + settles via xpay.
-3. **CDP is used only** for the one-time Bazaar catalog seed via `/internal/cdp-settle-raw`
-   (which bypasses the `@x402` resource server); switching `FACILITATOR_MODE` to `cdp` would
-   break settlement on declared routes on Workers (ajv `new Function` is blocked) — see the
-   note in `wrangler.toml`.
-4. All upstreams are **free/keyless** public APIs (DefiLlama, Hyperliquid, OKX, dYdX,
-   Polymarket Gamma, Base JSON-RPC with multi-provider failover, NVD/EPSS/CISA-KEV,
-   crt.sh/RDAP/DoH). Inputs are validated and SSRF-guarded; the only user-supplied fetch
-   targets are the explicitly-scoped `/scan/mcp`, `/dns`, `/whois`, and enrichment routes.
+## 2. Repo map
 
-## 3. Paid endpoint inventory (code-verified)
+| Path | Lines | What it is |
+|---|--:|---|
+| `src/index.ts` | 4,652 | **The entire Worker.** Single file: routes, payment gate, all data/compute logic, MCP server. |
+| `mcp-client/` | 149 (src) | Standalone npm package `x402-data-api-mcp` — local **stdio** MCP client that proxies to the deployed Worker (§10). |
+| `apify-actor/` | 410 (src) | Python Apify Actor `grey-ridge-base-onchain` — wraps the free preview endpoints + public RPC for the Apify marketplace (§11). |
+| `scripts/` | 726 | `deploy.sh` (token-resolving `wrangler deploy`), `auto-merge.sh` (kanban worktree merge hook), `verify_revenue_ledger.py` (on-chain revenue forensics). |
+| `.metrics/` | 91 | `compute_revenue_usd.py` producer + the two output files it writes. |
+| `seed_*.js`, `register_x402scan.js`, `fund_buyer.js`, `smoke.js`, `test_payment_flow.js` | ~950 | Human-run Node ops scripts — catalog seeding, registry registration, wallet funding, paid smoke tests (§12). |
+| `docs/` | 16 files + handoffs | Distribution, market, and audit narrative docs. This file supersedes their code-level claims. |
+| `wrangler.toml`, `package.json`, `tsconfig.json` | — | Worker config, npm deps, strict TS (`noEmit`). |
 
-**18 paid `GET` endpoints** are registered in `makeRoutes()` (plus `POST /mcp`). Prices are
-the actual `makeRoutes` values.
+**Not in git** (`.gitignore`): `node_modules/`, `.wrangler/`, `.dev.vars`, `buyer-wallet.json`,
+`seed_cdp_pm.js`, `.mcp-registry-key`, `/.worktrees/`. Note `seed_cdp_pm.js` exists on disk but is
+**untracked** — it is not part of the public repo despite appearing in older doc inventories.
 
-| Endpoint | Price | In README? | In `.well-known/x402`? |
-|---|---|:--:|:--:|
-| `GET /crypto/prices` | $0.001 | ✓ | ✓ |
-| `GET /crypto/funding` | $0.001 | ✓ | ✓ |
-| `GET /defi/yields` | $0.001 | ✓ | ✓ |
-| `GET /pm/markets` | $0.005 | ✓ | ✓ |
-| `GET /chain/block-number` | $0.001 | ✓ | ✓ |
-| `GET /chain/gas-price` | $0.001 | ✓ | ✓ |
-| `GET /chain/balance` | $0.001 | ✓ | ✓ |
-| `GET /chain/token-balance` | $0.001 | ✓ | ✓ |
-| `GET /chain/tx` | $0.001 | ✓ | ✓ |
-| `GET /chain/receipt` | $0.001 | ✓ | ✓ |
-| `GET /chain/code` | $0.001 | ✓ | ✓ |
-| `GET /chain/wallet` | $0.003 | ✓ | ✓ |
-| `GET /chain/token-security` | $0.02 | ✓ | ✓ |
-| `GET /scan/mcp` | $0.10 | ✓ | ✓ |
-| `GET /enrich/tech-risk` | $0.05 | ✓ | ✓ |
-| `GET /enrich/domain` | $0.01 | ✓ | ✓ |
-| `GET /dns/:domain` | $0.01 | ✓ (fixed 2026-07-20) | ✓ (fixed 2026-07-20) |
-| `GET /whois/:domain` | $0.02 | ✓ (fixed 2026-07-20) | ✓ (fixed 2026-07-20) |
+The Worker is deliberately **one file with no build step beyond `wrangler`**. There is no bundler
+config, no module split, no test framework. `npm run typecheck` (`tsc --noEmit`) is the only static
+gate and it currently passes clean.
 
-**Fixed 2026-07-20** (Prospector run): `.well-known/x402` and `openapi.json` now advertise all
-**18** paid routes, incl. `/dns/{domain}` and `/whois/{domain}` as path-templated resources.
-Deployed (version `2887ef85`) and curl-verified live: both show up in the resource/paths list
-and still 402-gate correctly. `token-security`'s "✗ (missing)" row above was already stale
-before this pass — it was present in `.well-known/x402` in the prior deploy too; corrected here.
-The remaining gap is `/mcp` itself (the MCP JSON-RPC endpoint) not being a `.well-known/x402`
-resource entry, which is expected — it's a protocol endpoint, not an HTTP GET resource.
+## 3. Runtime & configuration
 
-**Free routes (ungated):** `/`, `/health`, `/.well-known/x402`, `/.well-known/mcp-registry-auth`,
-`/.well-known/402index-verify.txt`, `/openapi.json`, `/llms.txt`, and the previews:
-`/crypto/prices/preview`, `/crypto/funding/preview`, `/defi/yields/preview`,
-`/pm/markets/preview`, `/chain/block-number/preview`, `/chain/gas-price/preview`,
-`/chain/token-security/preview`, `/scan/mcp/preview`. Internal: `/internal/cdp-probe`,
-`/internal/cdp-settle-raw` (Bazaar seed only).
+`wrangler.toml`:
 
-**Differentiators actually in the code** (not just claims): cross-venue funding with
-**Hyperliquid + OKX + dYdX** and arb spread; DeFi yields with 1d/7d/30d APY trend + IL risk +
-DefiLlama stability forecast; EIP-7702 delegated-EOA detection on `/chain/code` and
-`/chain/wallet`; USD cross-pricing on chain reads; and `/chain/token-security` — a real
-`eth_call` state-override honeypot simulation + proxy/bytecode selector scan (own compute,
-not a GoPlus wrapper).
-
-## 4. MCP server — **22 tools** (code-verified)
-
-`initialize`, `notifications`, and `tools/list` are **free** (discovery); paid `tools/call`
-returns an x402 challenge. Preview tools are in the `FREE_TOOLS` set and stay free.
-
-- **14 paid tools:** `crypto_prices`, `crypto_funding`, `defi_yields`, `pm_markets`,
-  `chain_block_number`, `chain_gas_price`, `chain_balance`, `chain_token_balance`,
-  `chain_tx`, `chain_wallet`, `chain_token_security`, `enrich_tech_risk`, `enrich_domain`,
-  `scan_mcp_server`.
-- **8 free tools:** `crypto_prices_preview`, `crypto_funding_preview`, `defi_yields_preview`,
-  `pm_markets_preview`, `chain_block_number_preview`, `chain_gas_price_preview`,
-  `chain_token_security_preview`, `scan_mcp_preview`.
-
-The MCP surface is a **subset** of the HTTP surface: `/chain/code`, `/chain/receipt`,
-`/dns`, and `/whois` have HTTP routes but **no MCP tool**.
-
-## 5. Discovery / distribution surfaces
-
-**In the code (served by the Worker):** `/.well-known/x402` (**count disputed** — this line says 16
-routes, §3 says the 2026-07-20 fix brought it to all **18**; the live probe to re-settle it was
-sandbox-blocked in the 2026-07-25 pass, so neither number is currently code-proven. Trust §3's
-curl evidence over this line until re-probed),
-`/openapi.json`, `/llms.txt`, `/.well-known/mcp-registry-auth`, `/.well-known/402index-verify.txt`.
-
-**External registrations (mechanisms present in repo; state per handoffs, not re-verified live):**
-- **MCP Registry:** `server.json` = `io.github.rezearcher/tech-risk` **v1.2.0**; published via
-  `mcp-publisher`.
-- **npm / local stdio MCP client:** `mcp-client/` (`x402-data-api-mcp`) — **built, not published.** See §11.
-- **x402scan.com:** `register_x402scan.js` — SIWX wallet-sign to the registry API.
-- **CDP Bazaar:** `seed_endpoint.js` (13-route table, one route per invocation, positional arg) and
-  `seed_batch_cdp.js` (4-route batch loop with 12h cooldown, added by `t_1a11024d` — see §12); also
-  `seed_raw_cdp.js` / `seed_cdp_pm.js` / `seed_normal_xpay.js` — catalog seed (search reported broken).
-- **402index.io:** domain-verified via `/.well-known/402index-verify.txt`.
-
-## 5a. Public source repo — SHIPPED 2026-07-19 (card `t_4fea70bb`, independently re-verified)
-
-Unlike the §6 tasks below, this one **left a verifiable artifact.** The source is now a **public**
-GitHub repo — `https://github.com/rezearcher/x402-data-api`. The local `.git/config` `origin`
-remote points at it.
-
-**Independently re-verified 2026-07-19** by the SRE pass (not taken from the card's own summary):
-- `curl https://github.com/rezearcher/x402-data-api` → **HTTP 200** (was **404** as of 2026-07-18).
-- GitHub API `.private == false`; `created_at 2026-07-19T18:07:21Z`.
-- **Secrets gate:** the 7 gitleaks/trufflehog hits in the pushed tree are **all false positives** —
-  every one is `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`, the canonical Circle-issued USDC
-  contract on Base (public, appears in `src/index.ts` payment logic). **No private key, API key,
-  or wallet seed** in the pushed tree. (The publish correctly blocked at this gate on the first
-  run and completed only after the false-positive was confirmed.)
-
-**What it unblocked:** the `non-github-url` label on **awesome-mcp-servers PR #10277** — the bot
-requires a GitHub URL. PR body was updated to lead with the repo; `mergeable_state=clean`, still
-open. It also gives Glama's auto-indexer a real repo to crawl.
-
-**Caveats / not independently verified here:** the "54 commits" and "MIT" claims come from
-`docs/DISTRIBUTION_STATUS.md` / `glama.json` — `glama.json` declares `"license": "MIT"`, but there
-is **no `LICENSE` file in the working tree** and **no `license` field in `package.json`** (the
-declared license is not backed by a working-tree artifact — see §8).
-
-## 6. The five 2026-07-17/18 "completed" tasks — reality check (updated 2026-07-24 by SRE rescue pass)
-
-**Original note (2026-07-19): these five kanban tasks closed 2026-07-17/18 with no committed
-artifact in the repo — treated as unverified gaps.** Three of the five have since been **rescued
-and independently re-verified** by the SRE maintenance loop (2026-07-24); the other two remain
-unverified as originally noted.
-
-| Task | Repo evidence | Verdict |
+| Setting | Value | Notes |
 |---|---|---|
-| `t_15d021aa` Prospector: research NEW demand + 3 distribution channels | None in repo — this thesis was re-done as `t_d6a7f9c9` (see below), which *did* land an artifact. | **Superseded** — the re-do closed the gap; treat `t_15d021aa` itself as archived/no-op. |
-| `t_dd214b6b` Diagnose + draft nudges for 5 open distribution PRs | None in repo — this thesis was re-done as `t_de151427` (`docs/DISTRIBUTION_STATUS.md`, still pending SRE rescue as of 2026-07-24). | **Superseded** — see `t_de151427` backlog note in the SRE health log. |
-| `t_a1408407` Apify Base RPC Actor — publish to 20k+ pipelines | **RESCUED 2026-07-18 (commit `f9c7b37`).** `apify-actor/` now contains `src/`, `README.md`, `requirements.txt` — a real, buildable Apify Actor proxying `/chain/gas-price`, `/chain/block-number`, `/chain/balance`, `/chain/token-balance`. | **PASS — built + committed.** Not independently verified as *deployed/live on Apify's platform* — that step still needs a human Apify account action (out of scope for autonomous work). |
-| `t_39a77a4a` MCP Directory Flood — submit to 8 directories | **RESCUED 2026-07-24 (commit `ce8c048`).** `docs/MCP_SUBMISSIONS_LOG.md` documents 3 real submitted PRs/issues: `mcp.so` issue #3211, `awesome-mcp-servers` PR #10353 (independently re-verified live, HTTP 200, 2026-07-24), Docker MCP Registry PR. Remaining 4 of 8 need a human action (Smithery API key, npm publish, browser forms) — correctly logged as blockers, not false claims. | **PASS — genuine partial completion**, correctly self-scoped. |
-| `t_e6242d7e` x402scan Composer + Bazaar Indexing | **RESCUED 2026-07-24 (commit `ce8c048`).** `docs/DISCOVERY_LISTING_STATUS.md` documents CDP Bazaar indexing (26/26 validation checks, verified via API) and two external PRs: `gold-402#38`, `awesome-x402#887`. **Caveat found 2026-07-24:** both PR repos (`sol-dispenser/gold-402`, `sol-dispenser/awesome-x402`) now 404 on GitHub — the repos themselves appear deleted/renamed since 2026-07-18, an external decay unrelated to this task's execution. | **PASS at time of work** (CDP Bazaar indexing is independently verifiable today and still live); the two GitHub PRs are no longer checkable due to upstream repo disappearance — do not claim them as durable distribution channels going forward. |
+| `name` / `main` | `x402-data-api` / `src/index.ts` | |
+| `compatibility_flags` | `["nodejs_compat"]` | Required by `@coinbase/cdp-sdk/auth` (JWT minting). |
+| `vars.PAY_TO` | `0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10` | Base wallet Rez controls; overridable via `wrangler secret put PAY_TO`. |
+| `vars.FACILITATOR_URL` | `https://facilitator.xpay.sh` | |
+| `vars.NETWORK` | `eip155:8453` | Base mainnet. |
+| `vars.FACILITATOR_MODE` | `xpay` | **Do not set to `cdp`** — see §5. |
+| `kv_namespaces[0]` | binding `API_KEYS`, id `b48622…c874` | Wired 2026-07-29 (commit `90cadd1`); backs the Stripe rail (§6). |
 
-**`t_d6a7f9c9` REDO: Prospector research (2026-07-18, committed `6d5ce2b`, merged `ef06c2a`).**
-`docs/DEMAND_RESEARCH.md` (204 lines) — 4-source research proposing 3 new channels (MCPize,
-Apify Marketplace, Zyla API Hub) + a Stripe MPP angle; identified token-security as a zero-competitor
-MCP-marketplace wedge. **PASS — genuine artifact, on main.**
+`Env` type (`src/index.ts:16-29`) — everything beyond `PAY_TO` is optional, and every consumer
+degrades gracefully when absent:
 
-## 6a. Dependabot cards (2026-07-18/19) — misdirected, no-op for this repo
+- `CDP_API_KEY_ID` / `CDP_API_KEY_SECRET` — Worker secrets. Only used by `/internal/cdp-probe` and
+  `/internal/cdp-settle-raw`; absent → those two routes return 500 and nothing else is affected.
+- `STRIPE_API_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_ID` — absent → the webhook replies
+  `200 ok (unconfigured)` so Stripe does not retry during setup.
+- `API_KEYS` (KVNamespace) — absent → API-key issuance/lookup is skipped and every caller falls
+  through to the x402 gate.
 
-Two kanban cards closed in the last 24h claiming Rust-crate bumps:
+Local dev: copy `.dev.vars.example` → `.dev.vars`, `npm run dev`. Deploy: `npm run deploy`, or
+`bash scripts/deploy.sh` which resolves `CF_WORKERS_TOKEN` (the token with Workers:Write scope)
+from the environment or `~/.hermes/.env` before invoking `npx wrangler deploy`.
 
-| Task | Claim | Repo evidence | Verdict |
-|---|---|---|---|
-| `t_ed83c170` | Update to **rustls 0.23.25** | `rustls` is a **Rust** TLS crate. This repo has **no `Cargo.toml`, no `Cargo.lock`, no `.rs` file**, and **zero** occurrences of `rustls` anywhere (grep-verified 2026-07-19). | **Misdirected / no-op.** Nothing to update; nothing changed here. |
-| `t_c70a762b` | Update to **tokio 1.45.0** | `tokio` is the **Rust** async runtime. Same as above — no Rust toolchain, no `tokio` anywhere in the repo. | **Misdirected / no-op.** Nothing to update; nothing changed here. |
+## 4. Request pipeline
 
-**Why the mismatch:** x402-data-api is a **TypeScript / Cloudflare Worker** (`package.json`,
-`wrangler.toml`, `src/index.ts`). Its real dependency surface is **npm**, not Cargo. These
-Dependabot cards target a Rust project and were routed to the wrong board — closing them left
-**no artifact and no code change** here. **Do not** record "rustls/tokio updated" as shipped fact
-for this service; it would be a doc lie. The actual dependencies are the npm packages pinned in
-`package.json` (Hono 4, `@x402/*` 2.15, viem 2.55, `@modelcontextprotocol/*`, `@coinbase/cdp-sdk`,
-zod 4) with `wrangler` as the toolchain — none Rust.
+Hono composes matched handlers **in registration order**, which this file uses as the primary
+access-control mechanism. Everything free is registered *above* the gate; everything paid is
+registered *below* it.
 
-## 7. Doc-drift corrections (statements the code disproves)
+```
+                    src/index.ts registration order
+ ─────────────────────────────────────────────────────────────────────────────
+  :98   GET  /health                                    ┐
+  :107  GET  /                       (HTML landing)     │
+  :198  GET  /internal/cdp-probe                        │  registered ABOVE the
+  :232  POST /internal/cdp-settle-raw                   │  gate → these handlers
+  :274  GET  /.well-known/402index-verify.txt           │  return before the
+  :280  GET  /.well-known/mcp-registry-auth             │  payment middleware is
+  :287  GET  /.well-known/x402                          │  ever composed in.
+  :354  GET  /.well-known/agent-card.json               │  Free by position.
+  :507  GET  /llms.txt                                  │
+  :550  GET  /openapi.json                              │
+  :611  GET  /crypto/prices/preview                     │
+  :622  GET  /crypto/funding/preview                    │
+  :634  GET  /defi/yields/preview                       │
+  :646  GET  /pm/markets/preview                        │
+  :1384 GET  /token-safety          (HTML landing)      │
+  :1498 POST /stripe/webhook                            ┘
+ ─────────────────────────────────────────────────────────────────────────────
+  :1574 app.use(...)  ◄── THE GATE
+          1. FREE_PATHS short-circuit + /.well-known/* prefix skip
+          2. API-key bypass:  ?api_key=sk_… → KV lookup → credit decrement
+          3. /mcp JSON-RPC peek: free unless method === "tools/call"
+                                 with a non-FREE_TOOLS tool name
+          4. ensureInitialized(env) → selectResourceServer(env)
+          5. cachedMiddleware = paymentMiddleware(makeRoutes(PAY_TO), …)
+ ─────────────────────────────────────────────────────────────────────────────
+  :1654 … :4634   all paid routes + the remaining previews + POST /mcp
+                  (previews registered here are free because makeRoutes()
+                   simply doesn't declare them — the middleware passes
+                   undeclared paths straight through)
+```
 
-- **MCP tool count.** Code has **22** tools. `README.md` said **19**; `docs/DISTRIBUTION_READY.md`
-  said **11**. Both were wrong (README + DISTRIBUTION_READY corrected 2026-07-18).
-- **Missing endpoints in README.** `/chain/token-security`, `/dns/:domain`, `/whois/:domain`
-  are live + paid but were absent from the README endpoint tables (token-security added
-  2026-07-18; `/dns` + `/whois` noted).
-- **Paid-endpoint count.** `DISTRIBUTION_READY` said "15 paid endpoints (4 data + 8 Base RPC +
-  3 security)". Actual = **18 paid GET endpoints** (adds `/chain/token-security`, `/dns`, `/whois`).
-- **Funding venues.** Code fetches **Hyperliquid + OKX + dYdX**; README said only Hyperliquid + OKX
-  (corrected 2026-07-18).
+Details worth knowing:
+
+- **`makeRoutes(payTo)` (`:739-1354`)** is the single declaration of the paid surface — price,
+  network, `payTo`, human description, and a Bazaar `declareDiscoveryExtension()` block per route.
+  It is called once and the resulting `paymentMiddleware` is memoized in `cachedMiddleware`
+  (`:737`), so the route map is built once per isolate, not per request.
+- **`ensureInitialized` (`:728`)** memoizes resource-server startup in `initPromise`. The x402
+  middleware is constructed with `syncFacilitatorOnStart=false` because init is already awaited
+  here; doing it twice was the original failure mode.
+- **The `FREE_PATHS` set inside the gate** (`/`, `/health`, `/token-safety`, `/stripe/webhook`) is
+  belt-and-braces — all four are registered above the gate and never reach it. Harmless redundancy,
+  documented so nobody "fixes" one layer and assumes the other still holds.
+- **`/internal/*` is unauthenticated.** Both internal routes are free by position and neither checks
+  a shared secret; they are gated only by the fact that they 500 without CDP secrets in env, and
+  `/internal/cdp-settle-raw` merely forwards a *caller-supplied, caller-signed* payment to CDP.
+  Treat that as intentional-but-noted, not as a designed authz boundary.
+
+## 5. Payment architecture (agent rail — x402)
+
+```
+agent ──GET /chain/gas-price──►  Worker
+                                  │ paymentMiddleware: route declared, no payment
+      ◄──402 + x402 v2 challenge──┤   (network eip155:8453, asset USDC, payTo, price)
+        (sign EIP-3009 auth)      │
+      ──retry w/ X-PAYMENT──────► │
+                                  ├──verify──► xpay facilitator ──► Base mainnet
+                                  ├──settle──►      (~1s)
+      ◄──200 + JSON data──────────┘
+```
+
+- **Facilitator:** xpay, non-custodial (`FACILITATOR_URL = https://facilitator.xpay.sh`,
+  `src/index.ts:37`). No Coinbase/CDP account is required to take money.
+- **Resource server** (`:664-676`): `new x402ResourceServer(new HTTPFacilitatorClient({url}))`
+  registered with `ExactEvmScheme`. `selectResourceServer(env)` (`:703`) is where a CDP-backed
+  server *would* be swapped in when `FACILITATOR_MODE === "cdp"`.
+- **The CDP wall — the single most important operational constraint.** Routing live settlement
+  through CDP breaks on Cloudflare Workers: the `@x402` resource server validates the Bazaar
+  discovery extension with **ajv**, which compiles schemas via `new Function` — blocked in the
+  Workers runtime. `FACILITATOR_MODE` must stay `xpay`. CDP is reachable **only** through
+  `POST /internal/cdp-settle-raw` (`:232`), which mints a CDP JWT and POSTs a pre-signed
+  `{paymentPayload, paymentRequirements}` pair straight at the CDP facilitator's `/verify` then
+  `/settle`, bypassing the resource server entirely. That path exists solely so routes get
+  catalogued in the CDP x402 Bazaar (§12).
+- **Discovery extensions.** Every entry in `makeRoutes` carries `declareDiscoveryExtension({...})`
+  with an input schema and a realistic output example, so the live 402 challenge itself advertises
+  the route to Bazaar crawlers. Query-method routes pass `method: "GET"` and are cast to the
+  package's narrower exported path-variant type — a `tsc`-only accommodation with no runtime effect
+  (comment at `:941-944`).
+
+## 6. Payment architecture (human rail — Stripe → API key)
+
+Shipped in commit `ae27bbe`; KV binding wired in `90cadd1`. Code-complete, **not yet activated**
+(Stripe secrets unset — §14).
+
+1. `GET /token-safety` (`:1384`) — standalone HTML landing page selling the token-security scanner
+   to humans. Free plan (preview endpoint) / Pro $9.99 per month for 100 checks. The Subscribe
+   button is still a JS `alert()` placeholder — there is **no Checkout Session creation route** in
+   the Worker; the Stripe payment link must be created out-of-band.
+2. `POST /stripe/webhook` (`:1498`) — verifies Stripe's `v1` signature by recomputing
+   `HMAC-SHA256(timestamp + "." + rawBody, STRIPE_WEBHOOK_SECRET)` via WebCrypto and comparing hex.
+   On `checkout.session.completed` it mints `sk_` + 20 random bytes (`generateApiKey`, `:1361`) and
+   writes an `ApiKeyRecord` to KV: `{key, stripe_session_id, customer_email, credits_remaining: 100,
+   created_at, expires_at: +30d}`.
+   *Signature comparison is a plain `!==` string compare, not constant-time.*
+3. **API-key bypass** inside the gate (`:1581-1595`) — `?api_key=sk_…` → KV `get` → if unexpired and
+   `credits_remaining > 0`, decrement, write back, and `return next()`, skipping x402 entirely.
+   *Read-modify-write is non-atomic; concurrent calls on one key can double-spend a credit.
+   Acceptable at this volume, noted so it isn't rediscovered as a bug.*
+4. `PLANS` (`:1376`) currently holds exactly one tier: `pro` — $9.99, 100 monthly credits,
+   price id read from `STRIPE_PRICE_ID`.
+
+## 7. HTTP surface
+
+### 7.1 Paid — 18 `GET` routes + `POST /mcp`
+
+All declared in `makeRoutes()`; prices are the literal values in that function.
+
+| Route | Price | Handler | MCP tool? |
+|---|--:|---|:--:|
+| `GET /crypto/prices` | $0.001 | `:2851` | `crypto_prices` |
+| `GET /crypto/funding` | $0.001 | `:2615` | `crypto_funding` |
+| `GET /defi/yields` | $0.001 | `:2752` | `defi_yields` |
+| `GET /pm/markets` | $0.005 | `:2401` | `pm_markets` |
+| `GET /chain/block-number` | $0.001 | `:2941` | `chain_block_number` |
+| `GET /chain/gas-price` | $0.001 | `:2992` | `chain_gas_price` |
+| `GET /chain/balance` | $0.001 | `:3044` | `chain_balance` |
+| `GET /chain/token-balance` | $0.001 | `:3119` | `chain_token_balance` |
+| `GET /chain/tx` | $0.001 | `:3157` | `chain_tx` |
+| `GET /chain/receipt` | $0.001 | `:3188` | — |
+| `GET /chain/code` | $0.001 | `:3272` | — |
+| `GET /chain/wallet` | $0.003 | `:3297` | `chain_wallet` |
+| `GET /chain/token-security` | $0.02 | `:3770` | `chain_token_security` |
+| `GET /scan/mcp` | $0.10 | `:4006` | `scan_mcp_server` |
+| `GET /enrich/tech-risk` | $0.05 | `:2046` | `enrich_tech_risk` |
+| `GET /enrich/domain` | $0.01 | `:2249` | `enrich_domain` |
+| `GET /dns/:domain` | $0.01 | `:1654` | — |
+| `GET /whois/:domain` | $0.02 | `:1691` | — |
+| `POST /mcp` (paid `tools/call`) | $0.005 | `:4634` | — |
+
+### 7.2 Free
+
+- **Previews** (8): `/crypto/prices/preview`, `/crypto/funding/preview`, `/defi/yields/preview`,
+  `/pm/markets/preview` (all top-1 samples + `total_available` + an upsell note);
+  `/chain/block-number/preview`, `/chain/gas-price/preview` (**identical to the paid route** —
+  full live data); `/chain/token-security/preview` (**full real analysis**, but pinned to Base WETH
+  `0x4200…0006`); `/scan/mcp/preview` (real scan of the caller's target, but returns only counts +
+  severity histogram + score + verdict — withholds which tools and the evidence).
+- **Discovery/meta:** `/`, `/health`, `/llms.txt`, `/openapi.json`, `/.well-known/x402`,
+  `/.well-known/agent-card.json`, `/.well-known/mcp-registry-auth`, `/.well-known/402index-verify.txt`.
+- **Human rail:** `/token-safety`, `POST /stripe/webhook`.
+- **Internal:** `/internal/cdp-probe`, `/internal/cdp-settle-raw`.
+
+The preview tier is the deliberate conversion mechanism: free previews are *real* (live upstream
+calls, not canned fixtures) — the paywall buys breadth (`/chain/*` full set, arbitrary token,
+itemized findings), not authenticity.
+
+## 8. MCP surface — 22 tools
+
+Server: `McpServer({name: "x402-data-api", version: "0.1.0"})` built by `createMcpHandler` at
+`:4062`; `app.all("/mcp")` (`:4634`) clones and pre-parses the JSON body then hands the raw request
+to `mcpHandler.fetch`.
+
+**Free by protocol method:** `initialize`, `notifications/*`, and `tools/list` never hit the gate —
+only `tools/call` does. That is what makes the server discoverable by any MCP client without a wallet.
+
+**14 paid tools:** `crypto_prices`, `crypto_funding`, `defi_yields`, `pm_markets`,
+`chain_block_number`, `chain_gas_price`, `chain_balance`, `chain_token_balance`, `chain_tx`,
+`chain_wallet`, `chain_token_security`, `enrich_tech_risk`, `enrich_domain`, `scan_mcp_server`.
+
+**8 free tools** (the `FREE_TOOLS` set at `:1616-1625`, which matches the registered preview tools
+exactly): `crypto_prices_preview`, `crypto_funding_preview`, `defi_yields_preview`,
+`pm_markets_preview`, `chain_block_number_preview`, `chain_gas_price_preview`,
+`chain_token_security_preview`, `scan_mcp_preview`.
+
+**The MCP surface is a strict subset of the HTTP surface.** `/chain/code`, `/chain/receipt`,
+`/dns/:domain`, and `/whois/:domain` have paid HTTP routes but **no MCP tool**.
+
+**Pricing asymmetry (by design, mis-described in the tool text — see §13).** MCP is gated at the
+transport: *every* paid `tools/call` costs the flat `POST /mcp` price of **$0.005**, regardless of
+which tool. So `enrich_domain` is $0.01 over HTTP but $0.005 over MCP, and `scan_mcp_server` is
+$0.10 over HTTP but $0.005 over MCP — a 20× discount for reaching the same compute through MCP.
+
+## 9. Data & compute internals
+
+### 9.1 Base on-chain reads (`/chain/*`)
+
+- **`baseRpc(method, params)` (`:62-86`)** — the only path to chain data. Iterates a fixed 4-provider
+  list (`mainnet.base.org`, `base.llamarpc.com`, `base-rpc.publicnode.com`, `base.drpc.org`) and
+  rotates on HTTP failure *or* a JSON-RPC `error` object, throwing only when all four fail. Fixed
+  hosts, never a user-supplied URL → SSRF-safe by construction. `baseRpcProbe` (`:3476`) is the
+  soft variant that returns `{result|error|unavailable}` instead of throwing, used where a revert is
+  a *result* rather than a failure.
+- **USD cross-pricing** — `getEthUsd()` (`:2897`) and `getTokenUsd(contract)` (`:2916`) with a 30s
+  in-isolate TTL cache, so `/chain/balance`, `/chain/wallet`, `/chain/gas-price`, and
+  `/chain/receipt` return `*_usd` fields. This is the stated differentiator over ETH-only RPC sellers.
+- **`classifyCode()` (`:3256`)** — `is_contract`, code size, and **EIP-7702 delegated-EOA detection**
+  (the `0xef0100` prefix + delegate address), surfaced on `/chain/code` and `/chain/wallet`.
+- **`/chain/receipt`** decodes the full log set plus the Base **L1 fee breakdown**
+  (`l1_fee_wei`, `l1_gas_price_wei`, `l1_gas_used`, `effective_gas_price_wei`) and converts to
+  `l1_fee_usd` / `total_fee_usd`.
+- **`getTokenMeta()` (`:3100`)** caches name/symbol/decimals per contract in an isolate-local `Map`.
+
+### 9.2 Token security / honeypot detector (`/chain/token-security`, `:3332-3816`)
+
+The most compute-heavy endpoint and the one with no thin-wrapper equivalent. `analyzeTokenSecurity`
+fans out seven RPC workstreams in parallel and merges them into a 0-100 `risk_score` + verdict:
+
+1. **Proxy detection (`detectProxy`, `:3371`)** — reads EIP-1967 implementation/admin slots, the
+   EIP-1822 proxiable slot, **and** the legacy OpenZeppelin "zOS" `AdminUpgradeabilityProxy` slots
+   (which is what Base USDC actually uses). Returns standard name + implementation + admin +
+   `is_upgradeable`.
+2. **Bytecode selector scan (`scanBytecodeSelectors`, `:3438`)** — greps the dispatcher for a
+   catalog of 4-byte selectors mapped to six categories: `can_mint`, `can_burn`, `can_pause`,
+   `has_blacklist`, `has_fee_setter`, `has_ownership`. **Critically, it scans the *implementation*
+   bytecode when a proxy is detected**, not the thin forwarder — scanning the proxy would silently
+   report "no capabilities" for every legitimate proxy token.
+3. **Ownership (`getOwnerInfo`, `:3498`)** — `owner()` call, renouncement check, EOA-vs-contract
+   classification of the owner.
+4. **Honeypot simulation (`simulateTransferProbe`, `:3554`)** — the hard part. Derives the
+   Solidity balance-mapping slot `keccak256(pad32(holder) . pad32(slot))` for slots 0-3, uses an
+   `eth_call` **`stateDiff` state override** to grant a synthetic wallet `31337e18` of the token
+   out-of-band, then attempts `transfer()` to a second synthetic wallet and observes revert vs
+   success. Nothing is broadcast and no funds move. The result carries an explicit honest caveat in
+   `method`: this detects wallet-to-wallet transfer blocks, **not** a DEX buy/sell round-trip, so
+   there is no `buy_tax_pct`/`sell_tax_pct` and `transferable: true` is "no basic transfer-block
+   found", not a sellability guarantee.
+5. `PROBE_SLOT_RANGE = 4` is **tuned against the Cloudflare 50-subrequest-per-invocation cap** —
+   the comment at `:3517-3525` records that a wider probe range plus a proxy's extra implementation
+   fetch tripped that cap and broke *settlement* on an otherwise-successful analysis. This is the
+   binding constraint on making this endpoint deeper.
+
+### 9.3 MCP security scan (`/scan/mcp`, `:3818-4056`)
+
+Fetches a target MCP server's tool list and statically analyzes every advertised tool's
+name + description + schema — all attacker-controllable text the victim agent implicitly trusts.
+
+- **Real handshake:** `initialize` → capture `Mcp-Session-Id` → `notifications/initialized` →
+  `tools/list` with the session header, falling back to a bare stateless `tools/list`. The comment
+  at `:3924-3931` records why: skipping the handshake made spec-compliant servers error, and the
+  error was being swallowed into a false "0 tools, clean" verdict.
+- **Five rule classes** (`analyzeMcpTool`, `:3837`), mapping to OWASP LLM01/LLM08:
+  `tool-poisoning:hidden-instructions` (critical), `exfiltration-hint` (high),
+  `dangerous-capability` (high), `cross-tool-shadowing` (medium), `invisible-unicode` (high) and
+  `opaque-blob` (medium).
+- **SSRF guard:** `isValidHostname()` (`:1775`) rejects anything with a scheme/path/port/credential/
+  whitespace, rejects `localhost`, and requires a dotted hostname with an alpha TLD — so raw IPv4/IPv6
+  targets fail by construction. This is the only route that fetches a fully caller-chosen origin.
+- Runs entirely at the edge: pure `fetch` + text analysis, no subprocess, no third-party API key.
+
+### 9.4 Domain enrichment (`/enrich/*`, `/dns`, `/whois`)
+
+- `enrichTechRisk` (`:1986`) — header/body fingerprint → NVD keyword CVE search (`searchNvd`,
+  `:1843`) → EPSS scores (`fetchEpss`, `:1881`) → CISA KEV membership (`isInKev`, `:1907`, with a
+  module-level `kevCache` + timestamp) → weighted verdict.
+- `enrichDomain` (`:2169`) — RDAP registrant/registrar, DoH records, crt.sh certificate-transparency
+  subdomain enumeration (`searchCertificates`, `:2101`), tech fingerprint, and a domain-age verdict.
+- `fingerprintDomain` (`:1786`) is the only function that fetches `https://<user-supplied-host>`, and
+  it applies `isValidHostname()` as its first statement.
+- `/dns/:domain` and `/whois/:domain` do **not** validate the hostname — they `encodeURIComponent`
+  the value into a **fixed-host** DoH query param and a fixed-host RDAP path respectively, so the
+  request destination is never caller-controlled. Bounded, but the asymmetry with `/enrich/*` is
+  worth knowing.
+
+### 9.5 Markets & DeFi
+
+- `fetchPolymarketMarkets` (`:2358`) — Gamma `/markets` + `/events` (for category tags via
+  `fetchMarketTags`, `:2333`), ranked by `volume24hr`, keyword-filterable; surfaces
+  bestBid/bestAsk/spread, `clobTokenIds`, `conditionId`, liquidity, `oneDayPriceChange`.
+- `fetchFundingRates` (`:2524`) — **three venues**: Hyperliquid (`metaAndAssetCtxs`, always present),
+  OKX (`fetchOkxFunding`, `:2482`), dYdX (`fetchDydxFunding`, `:2512`). Computes the cross-venue
+  **arb spread in bps**, cheapest-long/richest-short venue, premium/basis, annualized rates, and a
+  `LONGS_PAY`/`SHORTS_PAY`/`NEUTRAL` signal. Venues that are unreachable or don't list a coin are
+  omitted per-coin rather than failing the request.
+- `fetchDefiYields` (`:2695`) — DefiLlama pools with the 1d/7d/30d APY trend, `il7d`, exposure,
+  reward/underlying tokens, outlier flag, `mu`/`sigma`, DefiLlama's stability forecast
+  (`predicted_probability`), and a derived `risk_adjusted_apy = apy/sigma` sort mode.
+- `fetchTokenPrices` / `fetchTokenPriceChanges` (`:2824`, `:2805`) — DefiLlama coins API, CoinGecko
+  ids validated against `COINGECKO_ID_RE`, capped at 25 ids.
+
+**All upstreams are free and keyless**: DefiLlama, Hyperliquid, OKX, dYdX, Polymarket Gamma, Base
+public RPCs, NVD, EPSS, CISA KEV, crt.sh, RDAP, Cloudflare DoH. The service holds **no third-party
+API keys** — which is why it can be a single stateless Worker.
+
+## 10. Discovery surfaces (served by the Worker)
+
+| Surface | Route | Contents |
+|---|---|---|
+| x402 manifest | `/.well-known/x402` (`:287`) | Service overview + **18 resource entries**, each with x402 v2 `accepts` (scheme/network/USDC asset/`payTo`/amount/timeout), price, tags. `/dns/{domain}` + `/whois/{domain}` appear as path-templated resources. |
+| A2A Agent Card | `/.well-known/agent-card.json` (`:354`) | RFC-8615 Agent-to-Agent discovery. **8 skills** grouping the routes, each naming its real route + price + preview + MCP tool. Payment flow described in prose since A2A has no payment-extension field yet. |
+| OpenAPI 3.1 | `/openapi.json` (`:550`) | All 18 paid paths + `/`, with a documented `402` response per path. |
+| llms.txt | `/llms.txt` (`:507`) | Plain-text agent-crawler catalog: how-to-pay, every paid endpoint with price, every free preview. |
+| MCP Registry auth | `/.well-known/mcp-registry-auth` (`:280`) | `v=MCPv1; k=ed25519; p=…` — domain-namespace proof for `mcp-publisher`. |
+| 402index proof | `/.well-known/402index-verify.txt` (`:274`) | Static ownership hash. |
+| Landing page | `/` (`:107`) | Self-contained HTML, inline CSS, zero external resources — pitch, price table, curl sample, MCP client config JSON, discovery links. |
+
+**Registry manifests in-repo:** `server.json` (MCP Registry, `io.github.rezearcher/tech-risk`
+v1.2.0, streamable-http remote) and `glama.json` (Glama listing).
+
+## 11. Companion component — `mcp-client/`
+
+A separate npm package, `x402-data-api-mcp` v0.1.0, that runs **on the installing agent's machine**
+and speaks MCP over **stdio**, proxying to the deployed Worker's `/mcp`. It adds no data surface —
+it is a transport + payment shim so stdio-only clients (Claude Desktop, Cursor) can reach the 22
+remote tools.
+
+- **Payment path (`src/server.ts:29-56`):** wallet key comes from `X402_WALLET_PRIVATE_KEY` — the
+  *installer's* key, read from their env. No key or wallet file for this client exists in the repo.
+  When set, it dynamically imports `wrapFetchWithPayment` / `x402Client` / `registerExactEvmScheme` /
+  `privateKeyToAccount` and replaces the module-local fetch, so a 402 is signed and retried
+  transparently. Init failure is **non-fatal** — logs to stderr and falls back to plain fetch
+  (free tools only).
+- **Scope is narrower than its own docstring:** only `ListToolsRequestSchema` (`:117`) and
+  `CallToolRequestSchema` (`:131`) are registered, and capabilities declare `tools` only.
+  `initialize` is answered **locally by the MCP SDK**, not proxied — the header comment claiming it
+  proxies `initialize` overstates it. No resources, no prompts, no notification pass-through.
+- **Response handling (`:87-113`):** tries JSON, else scans for SSE `data: ` lines and takes the last
+  valid one, else synthesizes a JSON-RPC error carrying the HTTP status.
+- `dist/` is **committed** (`.gitignore` only ignores `node_modules/`), so the `bin` target ships
+  even without a build. `test-mcp-client.mjs` spawns `dist/server.js`, asserts all 22 tool names, and
+  calls 4 free previews against live production.
+
+## 12. Companion component — `apify-actor/`
+
+Python Apify Actor `grey-ridge-base-onchain` v0.1.0 (`.actor/actor.json`, `Dockerfile`,
+`input_schema.json`, `src/main.py`, 410 lines). Queries Base on-chain data for Apify's marketplace
+at $0.001/run via Apify's own x402 integration.
+
+Architecturally it is a **free-tier consumer of this API, not a paid one**: gas price and block
+number come from `/chain/gas-price/preview` and `/chain/block-number/preview`, ETH/USD from
+`/crypto/prices/preview`, while ETH and ERC-20 balances are read **directly** from the same four
+public Base RPCs the Worker uses (`_rpc_call`, `_eth_call`). It therefore carries no wallet, no
+secret, and generates no x402 revenue — it is a distribution surface. Note `_fetch_eth_usd`
+(`:224-242`) knowingly parses the preview's fixed BTC sample shape; the comment records the caveat.
+
+## 13. Ops tooling (human-run Node/Python scripts)
+
+| Script | Purpose |
+|---|---|
+| `seed_batch_cdp.js` (237) | Batch CDP Bazaar seeder. Iterates a **hardcoded 4-route manifest** (`/pm/markets`, `/chain/token-security`, `/chain/gas-price`, `/chain/block-number`); per route: live 402 → sign → `POST /internal/cdp-settle-raw`. Persists a **12h cooldown** to `.cdp_seed_cooldown.json`, written only on the success path. **Takes no arguments** — no `process.argv` handling exists. |
+| `seed_endpoint.js` (263) | Single-route seeder, one **positional** arg: `node seed_endpoint.js /crypto/funding`. Carries a 13-route metadata table incl. `/chain/token-security` and the full Base-RPC set. Price/asset/payTo are read from the **live** 402, so it is price-agnostic. |
+| `seed_raw_cdp.js` (118) | The original single-purpose `/pm/markets` CDP seeder that the two above generalize. |
+| `seed_normal_xpay.js` (132) / `test_payment_flow.js` (132) | **Near-duplicates** — identical except the wallet path (`buyer-wallet.json` vs `~/.hermes/secrets/base-wallet.json`) and the target URL (`/pm/markets` vs `/enrich/tech-risk`). Real paid xpay round-trips. |
+| `smoke.js` (55) | Paid smoke test against any path: `node smoke.js "/crypto/prices?coins=bitcoin"` — pays the advertised price and prints the body. The end-to-end paid→data proof. |
+| `fund_buyer.js` (49) | One-time: generate a throwaway buyer wallet and fund it with 0.03 USDC from the main wallet. Needed because CDP rejects self-sends, so seeds require `from != payTo`. |
+| `register_x402scan.js` (57) | SIWX (wallet-signature, not payment) registration with x402scan.com — `register-origin` by default, or a single resource URL as `argv[2]`. |
+| `scripts/verify_revenue_ledger.py` (601) | Two modes. Normal: reads `~/.hermes/data/<play>-revenue/ledger.jsonl`, resolves each row's USDC `Transfer` `from` via `eth_getTransactionReceipt`, classifies self-traffic vs external, writes `ledger_verified_summary.json`. `--probe-check` (`:586`→`run_probe_check`, `:507`): scores each "external" payer on three bot heuristics — total nonce, identical-method bursts within 120s, unsolicited farm-token receipts — writing `probe_check_summary.json` **without mutating** normal-mode files. |
+| `.metrics/compute_revenue_usd.py` (91) | Reads both sidecars, sums only `external` rows whose payer is **not** probe-flagged, writes the same value to `.metrics/revenue_usd` **and** `.metrics/revenue_usd_corrected`. Hard-fails if either sidecar is missing. Both files currently read **`0.0`**. |
+| `scripts/auto-merge.sh` (86) | `kanban_task_completed` hook: merges `wt/<task_id>` into `main`, pushes, deletes the branch. **Fail-OPEN by construction** — every failure path is `exit 0`, a failed merge calls `git merge --abort` and writes a diagnostic to `~/.hermes/data/x402-data-api-health/auto_merge_failures/<task_id>.log`. |
+| `scripts/deploy.sh` (39) | Resolves `CF_WORKERS_TOKEN` (Workers:Write scope — **not** `CF_API_TOKEN`) then `npx wrangler deploy`. |
+
+**Wallets:** `buyer-wallet.json` (throwaway buyer, gitignored) and `~/.hermes/secrets/base-wallet.json`
+(the `payTo`/provider identity, outside the repo). No private key is in the tracked tree.
+
+## 14. Doc-drift corrections
+
+Statements elsewhere that this pass's code read disproves. Corrected here; the referenced files are
+**not** edited by this doc.
+
+- **`glama.json` says `"tools": 19`.** The server registers and serves **22** (live-verified §16).
+  Stale by three.
+- **MCP tool descriptions overstate price 10× on three tools.** `enrich_tech_risk` (`:4072`),
+  `enrich_domain` (`:4095`), and `scan_mcp_server` (`:4117`) advertise *"Cost: $0.05 USDC per call"*.
+  The actual gate is the flat `POST /mcp` price of **$0.005** (`makeRoutes`, `:742`). The other 11
+  paid tools correctly say $0.005. `enrich_domain`'s text additionally claims MCP is gated *above*
+  its HTTP price, which is backwards — MCP is the cheaper rail for it.
+- **Two code comments repeat the same 10× error:** `:1598` ("only tools/call is x402-gated ($0.05)")
+  and `:4059` ("expose enrich_tech_risk as an MCP tool ($0.05 paid via x402)"). The `scan_mcp_preview`
+  upsell string (`:4030`) also quotes "$0.05 USDC" for the paid MCP tool.
+- **`:4059`'s section header is stale in a second way** — it says the MCP endpoint exposes
+  `enrich_tech_risk`; it exposes 22 tools.
+- **`.well-known/x402` resource count is settled: 18.** Prior revisions of this file carried a
+  "count disputed — 16 vs 18" note. Live probe returns 18 (§16). The dispute is closed.
 - **Seeder CLI flags that never existed.** `docs/AGENTIC_MARKET_ENRICHMENT.md` advertised
-  `--workers-url` / `--dry-run` / `--route` on `seed_batch_cdp.js`; the file has **no `process.argv`
-  handling at all** (corrected 2026-07-29, see §12). Correct invocations are
-  `node seed_batch_cdp.js` (no args, all 4 manifest routes) and `node seed_endpoint.js <route>`.
-- **`PLAN.md` status section is stale** — it lists only the two `/enrich/*` endpoints as the MCP
-  surface; the shipped surface is 22 MCP tools / 18 paid HTTP endpoints. See this file for current state.
+  `--workers-url` / `--dry-run` / `--route` on `seed_batch_cdp.js`; the file contains zero
+  `process.argv` references. Correct invocations: `node seed_batch_cdp.js` (no args) and
+  `node seed_endpoint.js <route>`. (Corrected in that file 2026-07-29.)
+- **`PLAN.md` status section is stale** — it describes the MCP surface as the two `/enrich/*`
+  endpoints. Actual: 22 MCP tools / 18 paid HTTP routes.
+- **`seed_cdp_pm.js` is gitignored**, so distribution inventories that list it as a repo artifact are
+  wrong about the public repo.
+- **Historically corrected and still correct:** README's "19 tools" and DISTRIBUTION_READY's
+  "11 tools" / "15 paid endpoints" were fixed 2026-07-18; funding venues are Hyperliquid **+ OKX +
+  dYdX** (README said two); `LICENSE` exists and `package.json`/`glama.json` agree on MIT (an earlier
+  "no LICENSE file" gap was itself the doc lie).
 
-## 8. Explicit gaps (planned / claimed but not shipped here)
+## 15. Gaps — claimed, planned, or implied but not shipped
 
-- **Revenue_ledger integration shipped (2026-07-20).** Task `t_91c6fca6` reconciled on-chain settlement data into a revenue_ledger system. The milestone sensor was previously blind to real revenue — the ledger now tracks actual Base mainnet settlement volume from the x402 payment protocol. Verifiable source: `revenue_ledger/` (kanban-claimed).
-- **Revenue ledger audit — 96.25% self-traffic (2026-07-23).** Task `t_efa5b713` performed on-chain forensic verification of all 26 revenue_ledger rows via `eth_getTransactionReceipt` on Base mainnet, reading each row's USDC Transfer event `from` topic. Result: **23/26 rows ($0.385, 96.25%) are self-traffic** from buyer-wallet (`0xC4852c…`) and PAY_TO (`0x5765ae…`) addresses; 3 rows ($0.015) were provisionally external revenue from payer `0x7e571e…` — **since superseded, see next bullet.** Verifiable artifacts: `scripts/verify_revenue_ledger.py` (now 601 lines after `t_5c08554f`'s `--probe-check` extension, reusable RPC-based ledger auditor). Deliverable lives merged on `main` (commit `b2089a2` + `fcff3c8`); the ledger-audit script produces `~/.hermes/data/x402-data-api-revenue/ledger_verified_summary.json`. ~~Note: `docs/REVENUE_LEDGER_AUDIT.md` referenced by earlier passes does not exist on `main`~~ — **stale as of 2026-07-25: it does exist** (129 lines, read-verified), see §9.2.
-- **Sole "external" payer confirmed farming bot — true organic revenue $0.00 (2026-07-24).** Task `t_5c08554f` probed the one remaining "external" address (`0x7e571e959cc7c75ccdd2eac24f8775ea2eaa2f09`) via live Base Blockscout API + `eth_getTransactionCount`: `nonce_tx_count=3176` (high-activity automation), `15×` identical `giveFeedback()` calls to one contract within a 120s window (sybil/reputation-farming signature), and `3` unsolicited farm-bait token receipts (HOLD/UHODL/USGR). Composite `probe_score=1.000`. **True organic x402 revenue is $0.00, not $0.015** — the $0.015 was itself noise, the third false-positive the same metric has produced across three passes (`t_91c6fca6` blind-$0→$0.395, `t_efa5b713` $0.395→$0.015 after excluding self-traffic, `t_5c08554f` $0.015→$0.00 after excluding bot traffic). Sidecar evidence: `~/.hermes/data/x402-data-api-revenue/probe_check_summary.json`. Deliverable merged to `main` at `fcff3c8` (was sitting unmerged on `wt/t_5c08554f` for one SRE cycle — rescued 2026-07-24).
-- **First organic dollar: still $0, confirmed by a third independent pass.** Zero real humans or task-driven agents have ever knowingly paid for this API despite 8+ live distribution channels already up for days. The milestone target ($1.00 organic) requires the full **$1.00**, not $0.985 or $0.60. This strengthens the case for escalating the $20 outbound bounty (`t_33de6690`, blocked on Rez capital-approval) over another passive-listing card.
-- **The npm atom (only Rez can do it):** `npm login` + `npm publish` from `mcp-client/`. The package
-  is built, committed, and locally runnable (§11), but unpublished — so the `npx` install path that
-  the MCP-directory submissions and `README.md` advertise does not work for anyone outside this repo.
-- **The revenue atom (only Rez can do it):** create a **RapidAPI seller account + connect Stripe
-  payout** at `rapidapi.com/provider`. The dual-rail (x402 + RapidAPI/Stripe) plan hinges on it;
-  everything downstream (import `/openapi.json`, tiers, token-security as hero) is automatable once it exists.
-- ~~**Apify actor:** not built (see §6).~~ **RESOLVED / was a doc lie** — `apify-actor/` exists in the
-  working tree (`src/`, `README.md`, `requirements.txt`, ls-verified 2026-07-25) and §6 already records it
-  as rescued at commit `f9c7b37`. This bullet contradicted §6 of the same file. **Remaining real gap:** not
-  verified as *deployed/live on Apify's platform* — that needs Rez's Apify account.
-- ~~**`/dns` + `/whois` discovery:** live but undiscoverable~~ **RESOLVED / was a doc lie** — §3 of this
-  same file records both as added to `.well-known/x402` + `openapi.json` on 2026-07-20 (deploy `2887ef85`).
-  This bullet was never updated. **Not re-probed live in the 2026-07-25 pass** (outbound curl was
-  sandbox-blocked), so treat §3's 2026-07-20 curl evidence as the last verification.
-- **No CI/CD or release pipeline.** The source repo is public (§5a) but has **no
-  `.github/workflows/`** — no automated build, test, lint, or release. Both publication (`git push`)
-  and deploy (`wrangler deploy`) are **manual**. A CI/release Action is planned-but-absent.
-- **Glama listing still pending.** The repo blocker that broke it is resolved (§5a), but the
-  Glama.ai listing itself is not done — it needs a passive 14-day crawl of the now-live repo or a
-  manual browser submit at `glama.ai/mcp/servers/submit` (no public API). This is still Blocker A
-  on awesome-mcp-servers PR #10277.
-- ~~**No `LICENSE` file.**~~ **RESOLVED / was a doc lie** — verified 2026-07-25: `LICENSE` exists at repo
-  root ("MIT License / Copyright (c) 2026 Grey Ridge Signals Group LLC"), `package.json:5` has
-  `"license": "MIT"`, and `glama.json:24` matches. All three agree; the declared license is now backed
-  by a real artifact. (Landed with commit `de349d5`.)
-- **Next moat builds (not started):** indexed event history (free RPC caps `eth_getLogs` at ~10
-  blocks → needs a D1/KV indexer, must respect the ~50-subrequest/invocation cap); cross-DEX
-  best-quote/price-impact on Base; Aave/Moonwell near-liquidation monitor.
+**Revenue (the headline).**
+- **Organic revenue is $0.00**, confirmed across three independent forensic passes:
+  blind-$0 → $0.395 (ledger integration) → $0.015 (after excluding self-traffic: 23/26 rows, 96.25%,
+  were the buyer wallet `0xC4852c…` and `payTo` `0x5765ae…`) → **$0.00** (after the sole remaining
+  "external" payer `0x7e571e…` scored `probe_score=1.000` on all three bot heuristics — nonce 3,176,
+  15× identical `giveFeedback()` calls in 120s, 3 unsolicited farm-bait tokens). No human or
+  task-driven agent has ever knowingly paid. `.metrics/revenue_usd*` both read `0.0`.
 
----
+**Atoms that require Rez's account/identity** (cannot be automated):
+- **npm publish** — `mcp-client/` is built, committed, and locally runnable but **unpublished**, so
+  every `npx x402-data-api-mcp` instruction in its README and in the MCP-directory submissions fails
+  for an outside installer. Only the in-repo `node dist/server.js` path works.
+- **Stripe activation** — `STRIPE_API_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_ID` are unset,
+  and no Checkout Session route or payment link exists, so `/token-safety`'s Subscribe button is a
+  placeholder. The KV namespace is now wired (`90cadd1`), so this is the only remaining blocker on
+  the human rail.
+- **RapidAPI seller account + Stripe payout** for the dual-rail plan.
+- **Apify deploy** — the Actor is built and committed but not verified live on Apify's platform.
+- **Glama listing** — needs a passive crawl of the now-public repo or a manual browser submit.
 
-## 9. Doc-sync 2026-07-25 — four cards closed in the last 24h
+**Engineering gaps:**
+- **No CI/CD.** There is no `.github/workflows/`. `tsc --noEmit`, the MCP client build, and the test
+  harness run only when someone runs them by hand. Both publish (`git push`) and deploy
+  (`wrangler deploy`) are manual.
+- **No automated test suite.** `smoke.js` and `mcp-client/test-mcp-client.mjs` are manual scripts
+  that spend real USDC / hit live production; there is no unit or integration test runner.
+- **The mcp-client paid path has never been demonstrated** — all 5 harness tests exercise free
+  previews. The x402 wiring is code-reviewed, not round-trip-proven.
+- **Two independent version identities:** npm `0.1.0` vs `server.json` `1.2.0` vs MCP server
+  `0.1.0` vs Agent Card `1.0.0`. Nothing syncs them, and the 22-tool list is hardcoded in
+  `mcp-client/README.md` + the test harness, so it will drift silently.
+- **`mcp-client` is invisible on the repo's own discovery surfaces** — root `README.md`,
+  `server.json`, and `glama.json` contain zero references to it.
+- **`mcp-client/README.md` step 1 points at a non-existent `.env.example`.** Inert (both vars are
+  read straight from `process.env`), not blocking.
+- **API-key credit decrement is non-atomic** and the Stripe signature compare is not constant-time
+  (§6).
+- **Agentic.Market enrichment is still not fixed** — the `t_1a11024d` card's headline goal. What
+  shipped is CDP Bazaar seeding, which sits *upstream* of Agentic.Market's own enrichment pipeline.
+  There is no code anywhere that sets `description`/`category` on that service record.
+- **`.worktrees/` accumulates stale per-card checkouts** — `auto-merge.sh` deletes *branches*, not
+  worktree directories.
 
-Each row below was checked by **reading the artifact in the working tree**, not by trusting the card
-title. Where the artifact lives outside this repo (Hermes config, hooks registry), the sandbox blocked
-verification and it is written as a **gap**, not a fact.
+**Next moat builds (not started):** indexed event history (public RPCs cap `eth_getLogs` at ~10
+blocks → needs a D1/KV indexer that respects the ~50-subrequest cap); cross-DEX best-quote /
+price-impact on Base; an Aave/Moonwell near-liquidation monitor.
 
-### 9.1 `t_5c08554f` — probe-check mode / sole external payer is a farming bot — **SHIPPED**
+## 16. Verification evidence
 
-**Code-proven.** `scripts/verify_revenue_ledger.py` is **601 lines** and really does implement a second
-mode: `--probe-check` is parsed at `scripts/verify_revenue_ledger.py:586-595`, dispatching to
-`run_probe_check(play)` at `:507`, which writes the sidecar
-`~/.hermes/data/<play>-revenue/probe_check_summary.json` (`:510`) **without mutating** the normal-mode
-files. The module docstring documents both modes (`:5`, `:11-21`). Invocation:
-`python3 scripts/verify_revenue_ledger.py --probe-check [play_name]`.
+Everything in this document was verified on **2026-07-29** against commit `90cadd1`.
 
-Finding (already recorded in §8): payer `0x7e571e95…` scores `probe_score=1.000` on three
-heuristics — nonce 3,176 (+0.40), 15× `giveFeedback()` in 120s (+0.35), 3 unsolicited farm tokens
-(+0.25). **True organic revenue $0.00.**
+**Static (this tree):**
+- `wc -l src/index.ts` → **4,652** (prior revisions of this doc said "~4,200").
+- `npx tsc --noEmit` → **exit 0, clean.**
+- 19 entries in `makeRoutes()` = 18 paid `GET` + `POST /mcp`; 22 `server.registerTool(` calls;
+  8 entries in `FREE_TOOLS`, matching the 8 registered `*_preview` tools exactly.
+- `ls .github` → **does not exist** (no CI).
+- `git ls-files seed_cdp_pm.js buyer-wallet.json` → 0 (both untracked).
 
-### 9.2 `t_913952c8` — probe-likelihood addendum to the revenue audit — **SHIPPED**
+**Live (`https://x402-data-api.sigrunner.workers.dev`):**
 
-**Code-proven.** `docs/REVENUE_LEDGER_AUDIT.md` exists on `main`, **129 lines**. The addendum starts at
-`docs/REVENUE_LEDGER_AUDIT.md:68` ("Addendum: Probe-Likelihood Analysis of External Payer") with the
-heuristic table (`:82-87`), per-heuristic derivations (`:91-95`), a revised impact table showing
-`Organic human usage $0.000` (`:105`), prerequisites (`:109-118`), and a provenance note (`:122-129`)
-explaining that this file was rescued from stranded branch `wt/t_efa5b713` and folded together with the
-smaller duplicate that `t_5c08554f` / `t_913952c8` had landed separately.
-
-> **Open inconsistency inside that doc (do not paper over):** the summary table says **26** total ledger
-> rows (`:11`) while the addendum's motivation paragraph says **221** ledger rows (`:75`). Both cannot be
-> right. The $ figures ($0.400 total / $0.385 self / $0.015 external) are internally consistent with the
-> 26-row table, so **26 is the more likely correct figure** and `221` is probably a stale or
-> different-window count — but this was **not** re-derived from the ledger in this pass. Re-run
-> `verify_revenue_ledger.py` to settle it before quoting either number externally.
-
-### 9.3 `t_70fcb2ca` — `revenue_usd_corrected` producer + milestone re-point — **HALF-PROVEN**
-
-**Proven (in-repo):** `.metrics/compute_revenue_usd.py` reads *both* audit sidecars
-(`ledger_verified_summary.json` + `probe_check_summary.json`), builds the set of `probe_likely`
-addresses, sums only ledger rows classified `external` whose payer is **not** probe-flagged, and writes
-the same value to **two** sibling files — `.metrics/revenue_usd` and `.metrics/revenue_usd_corrected`
-(`OUTPUT_PATH` / `OUTPUT_PATH_CORRECTED`). Both files exist on disk and both read **`0.0`**. Both
-sidecars are **hard-required** — the script `sys.exit(1)`s if either is missing.
-
-**GAP — the "milestone.sh shadows the producer" half is NOT verified here.** The card's thesis is that
-`milestone.sh` has a built-in branch for `name=revenue_usd` that shadows the producer file, and that the
-fix was to re-point `milestone.json`'s `target_metric` to `revenue_usd_corrected`. Both `milestone.sh`
-and `milestone.json` live **outside this repo** (Hermes config) and every read of them was
-sandbox-blocked in this session. So:
-- **Not proven:** that `milestone.json` currently has `target_metric: revenue_usd_corrected`.
-- **Not proven:** that the milestone sensor now reads the producer file rather than its built-in branch.
-- **Consequence if the re-point silently didn't land:** the milestone would keep reporting the *built-in*
-  revenue number (historically the contaminated $0.395/$0.015 figures) instead of the corrected `0.0` —
-  i.e. the exact false-positive this card existed to kill would still be live. Re-verify out-of-sandbox
-  before trusting the milestone reading.
-
-Note the producer writes the corrected value to **both** filenames, so `revenue_usd` and
-`revenue_usd_corrected` can never disagree — the split is purely a hook to escape `milestone.sh`'s
-name-matched built-in branch, not two different metrics.
-
-### 9.4 `t_06390ee0` — auto-merge `wt/<task_id>` branches on kanban completion — **HALF-PROVEN**
-
-**Proven (in-repo):** `scripts/auto-merge.sh` exists and is a real implementation, not a stub. It
-resolves `task_id` from `HERMES_KANBAN_TASK` or, failing that, parses the hook's stdin JSON payload at
-`extra.task_id` (`scripts/auto-merge.sh:11-28`); checks `wt/<task_id>` exists (`:37`); skips cleanly if
-already an ancestor of `main` (`:50-55`); otherwise `git merge --no-ff`, then pushes `main` and deletes
-the local + remote branch (`:58-68`). It is **fail-OPEN by construction** — every failure path is
-`exit 0` and a bad merge calls `git merge --abort`, so it can never block a legitimate task completion.
-Related: `.gitignore` now carries `/.worktrees/` with a comment explaining that per-card checkouts kept
-the live repo permanently dirty and were at risk from a blind `git clean -fdx` (commit `246eceb`).
-
-**GAP — registration is unverified and the hook has never been observed firing.**
-- The mapping `kanban_task_completed → scripts/auto-merge.sh` lives in the **Hermes hooks registry
-  outside this repo**; reading it was sandbox-blocked. A perfectly correct script that is not registered
-  does nothing.
-- **No commit in recent history carries the script's own merge-message signature** (`auto-merge: wt/…`).
-  The recent worktree merges are all human/SRE **rescue** commits (`rescue: merge t_70fcb2ca worktree …
-  was stranded pre-auto-merge-hook`, `rescue: merge t_913952c8 worktree …`) — i.e. evidence of the
-  *problem*, not of the *fix* working.
-- **Verdict: the fix is written but not yet demonstrated.** Do not record "worktree branches now
-  auto-merge" as shipped reality until a commit titled `auto-merge: wt/<task_id> (task …)` appears on
-  `main`. That commit is the acceptance test.
-- `.worktrees/` currently holds **10+ per-card checkouts** (`t_06390ee0`, `t_1c2d2ef4`, `t_1f6f4a5a`,
-  `t_33de6690`, `t_4fea70bb`, `t_5c08554f`, `t_70fcb2ca`, `t_736d0a19`, `t_7c5b0f37`, `t_913952c8`, …) —
-  the hook deletes branches, not worktree directories, so stale checkouts still accumulate. Unresolved.
-
-### 9.5 What none of these four changed
-
-The revenue picture is unchanged and remains **$0.00 organic**. These cards improved the *honesty of the
-measurement* (probe detection, corrected metric, audit doc) and the *plumbing* (auto-merge) — none of
-them is a distribution or demand action. The first-dollar gap in §8 stands exactly as written.
-
----
-
-## 10. SRE pass 2026-07-27 — Stripe rail rescued, worktree-bypass pattern found
-
-**`t_aef95830` (PIVOT: Stripe-billed human rail) — rescued, PASS.** The coder committed its work
-straight onto the **live main working tree** instead of its assigned worktree (`wt/t_aef95830`,
-which stayed at its pre-work SHA). SRE verified the diff matched the card's own summary exactly,
-`tsc --noEmit` clean, no secrets, then committed as `ae27bbe`: `GET /token-safety` landing page,
-`POST /stripe/webhook` (HMAC-verified, KV-backed API key issuance), an API-key bypass middleware
-ahead of the x402 gate, and `docs/TOKEN_SAFETY_STRIPE_PROBE.md`. **Still blocked on Rez:** the KV
-namespace isn't created and Stripe secrets aren't set (both commented out / unset) — no deploy yet.
-
-**`t_819dd337` (auto-merge.sh logging hardening) — rescued, PASS.** Same pattern: the fix (structured
-`auto_merge_failures/<task_id>.log` on merge failure) landed directly on main as `10fdeb3`
-("Closes t_819dd337"), while `wt/t_819dd337` stayed stale. `run_acceptance.sh`'s CHECK false-FAILed
-against the stale worktree; re-run against main HEAD, it passes for real.
-
-**`t_79490638` (A2A Agent Card) — correctly blocked, deliverable rescued to its own branch only.**
-This card is legitimately `blocked` awaiting Rez's content-accuracy sign-off, but the Agent Card was
-already deployed live to prod (version `125c4745`) while its worktree sat uncommitted — reap risk on
-code actively serving traffic. Committed to `wt/t_79490638` (`d3dee9e`) only; **main untouched**,
-still gated on review.
-
-**Systemic finding (doctrine `x402-worktree-bypass-check-main-too`, review 2026-10-27):** twice in one
-pass a coder bypassed its assigned worktree and committed straight to main. This silently defeats the
-worktree-isolation / auto-merge safety net documented in §9.4 and false-negatives any acceptance CHECK
-that only inspects the worktree. Rule going forward: an acceptance/rescue sweep must check the live
-main tree (`git status` + `git log`) for the claimed fix before trusting a worktree-only FAIL/UNRESOLVED.
-
----
-
-## 11. `mcp-client/` — local stdio MCP client (card `t_d792f3ba`, doc-sync 2026-07-28)
-
-**Code-verified by reading the working tree**, not from the card title. Second component in the
-repo alongside the Worker: `mcp-client/` is a self-contained npm package (`x402-data-api-mcp`
-v0.1.0, MIT-implied via root `LICENSE`) that runs **on the installing agent's machine** and speaks
-MCP over **stdio**, proxying to the already-deployed Worker's HTTP `/mcp`. It adds no new data
-surface — it is a transport + payment shim so stdio-only clients (Claude Desktop, Cursor) can reach
-the 22 remote tools.
-
-**What is actually in the tree:**
-
-| File | Evidence |
+| Probe | Result |
 |---|---|
-| `mcp-client/package.json` | `"bin": {"x402-data-api-mcp": "./dist/server.js"}`, `"type": "module"`, `"files": ["dist/"]`, `prepublishOnly: npm run build`. Deps: `@modelcontextprotocol/sdk ^1.29.0`, `@x402/fetch`/`@x402/evm`/`@x402/core` `^2.19.0`, `viem ^2.55.0`, `zod ^4.4.3`. |
-| `mcp-client/src/server.ts` | 149 lines — the whole implementation. |
-| `mcp-client/dist/` | Compiled `server.js` (+ `.d.ts`, maps) **committed** — `.gitignore` ignores `node_modules/` only, so the `bin` target ships. Shebang `#!/usr/bin/env node` present. |
-| `mcp-client/package-lock.json` | 114 resolved packages — deps really were installed/built. |
-| `mcp-client/test-mcp-client.mjs` | 143-line harness: spawns `dist/server.js`, asserts all 22 tool names in `tools/list`, then calls 4 free previews (`chain_block_number`, `crypto_prices`, `chain_gas_price`, `chain_token_security`) against **live production**. |
-| `mcp-client/README.md` | 90 lines — quick start, 22-tool table, free/paid split, dev loop. |
+| `GET /health` | `200` |
+| `GET /.well-known/x402` | `200`, **`resources` length = 18**, `mcp_endpoint` present |
+| `GET /.well-known/agent-card.json` | `200` |
+| `GET /token-safety` | `200` (Stripe-rail landing page is deployed) |
+| `GET /chain/gas-price` (no payment) | **`402`** — gate live |
+| `POST /mcp` `tools/list` | **22 tools**, names identical to the source registration list |
 
-**Payment path (code-proven, `src/server.ts:29-56`).** The wallet key comes from
-`X402_WALLET_PRIVATE_KEY` — **the installer's own key**, read from their env; no key, seed, or
-wallet file for this client exists in the repo. When set: dynamic `import()` of
-`wrapFetchWithPayment` (`@x402/fetch`), `x402Client` (`@x402/core/client`),
-`registerExactEvmScheme` (`@x402/evm/exact/client`), and `privateKeyToAccount` (`viem/accounts`);
-the wrapped fetch replaces `globalThis.fetch` for all Worker calls, so a 402 challenge is signed and
-retried transparently. Init failure is **non-fatal** — it logs to stderr and falls back to plain
-fetch (free/preview tools only), same as running with no key at all (`:50-56`). Target URL is
-`WORKER_BASE_URL` (default `https://x402-data-api.sigrunner.workers.dev`) + `/mcp` (`:32`, `:76`).
-
-**Response handling (`:87-113`):** parses JSON first, else scans for SSE `data: ` lines and takes
-the last valid JSON one; on neither, synthesizes a JSON-RPC error carrying the HTTP status.
-
-**Scope of the proxy — narrower than its own docstring claims.** Only **two** handlers are
-registered: `ListToolsRequestSchema` (`:117`) and `CallToolRequestSchema` (`:131`). Capabilities
-declare `tools` only (`:65-69`). `initialize` is answered **locally by the MCP SDK**, not proxied,
-so the header comment "Proxies all MCP JSON-RPC calls (tools/list, tools/call, initialize, etc.)"
-(`src/server.ts:6-7`) overstates it. No `resources`, no `prompts`, no notification pass-through.
-Not a defect for this use case — recorded so the doc isn't repeating the code's own overstatement.
-
-### Gaps (claimed or implied but **not** proven in the tree)
-
-- **Not published to npm.** Nothing in the repo proves `x402-data-api-mcp` exists on the registry,
-  and the registry probe was sandbox-blocked in this pass. `docs/MCP_SUBMISSIONS_LOG.md:71-72` states
-  the remaining atom is Rez's `npm login` + `npm publish` (+ `mcp-publisher register`) — an account
-  action, correctly out of scope for autonomous work. **Until that lands, every `npm install -g` /
-  `npx x402-data-api-mcp` instruction in `mcp-client/README.md` fails for an outside installer**;
-  only the in-repo `node dist/server.js` path works. The README's "Or run directly from the repo:
-  `npx x402-data-api-mcp`" is wrong on both counts (it resolves against the registry, not the repo).
-- **`README.md` step 1 points at a file that does not exist.** It says to copy `.env.example` to
-  `.env`; there is no `.env.example` in `mcp-client/` (ls-verified). The two env vars are read
-  straight from `process.env`, so the instruction is inert, not blocking.
-- **The "5/5 live tests pass" claim is documentation, not evidence.** The harness exists and is real,
-  but no run output is stored in the repo; the pass claim lives only at
-  `docs/MCP_SUBMISSIONS_LOG.md:71`. Re-run `node mcp-client/test-mcp-client.mjs` to re-establish it.
-- **Paid-path never demonstrated.** All 5 tests exercise **free previews**. No artifact shows a 402
-  challenge being signed and settled through this client — the x402 wiring is code-reviewed, not
-  round-trip-proven.
-- **Invisible on the repo's own discovery surfaces.** Root `README.md`, `server.json`, and
-  `glama.json` contain **zero** references to `mcp-client` / `x402-data-api-mcp` (grep-verified).
-  `server.json` still describes only the remote server (`io.github.rezearcher/tech-risk` v1.2.0).
-  A visitor to the public repo cannot discover the client exists.
-- **Two independent version identities.** npm package `0.1.0` vs `server.json` `1.2.0`. Nothing
-  syncs them; the 22-tool list is hardcoded in `mcp-client/README.md` + the test harness and will
-  drift silently if the Worker's tool set changes.
-- **No CI.** Per §8 there is still no `.github/workflows/`, so `npm run build` / the test harness
-  run only when someone runs them by hand.
-
-**Revenue note:** this is a distribution mechanism, not revenue. It changes nothing in §8 — organic
-revenue remains **$0.00**, and this package cannot begin to move that number until it is on npm.
+The deployed Worker is therefore **in sync with `main`** on tool count, resource count, and gating
+behavior. Not probed: any paid settlement round-trip (costs real USDC), and the Stripe webhook
+(no secrets set).
 
 ---
 
-## 12. `seed_batch_cdp.js` — batch CDP Bazaar seeder (card `t_1a11024d`, doc-sync 2026-07-29)
+## Appendix A — verification history
 
-Card title: *"Fix Agentic.Market enrichment gap: extend proven CDP-seed to token-security + Base-RPC
-(category-matched buyer demand proven live)."* **Read-verified against the tree**, not taken from the
-title. Landed via SRE rescue `ac53946` (deliverable had been stranded on `wt/t_1a11024d`); the
-underlying work is commit `7627eaa`.
+Condensed record of prior audit passes, kept so their verdicts are not re-litigated. Full narrative
+lives in the referenced docs and in git history.
 
-**What actually shipped:**
-
-| Artifact | Evidence |
-|---|---|
-| `seed_batch_cdp.js` | 237 lines at repo root. Iterates a hardcoded 4-route manifest (`/pm/markets`, `/chain/token-security`, `/chain/gas-price`, `/chain/block-number`), does challenge → sign → settle per route. |
-| Cooldown persistence | `.cdp_seed_cooldown.json`, 12h window (`:16-17`, `:112-121`, `:148-153`). Entry is written **only on the success path** (`:218`), so a present entry = a settle that returned OK. |
-| Settle path | POSTs `{paymentPayload, paymentRequirements}` to the Worker's `/internal/cdp-settle-raw` (`:206-211`) — that route **exists**, `src/index.ts:232` (`app.post`). Bypasses the ajv-on-Workers wall. |
-| Bazaar extension | `declareDiscoveryExtension()` from `@x402/extensions/bazaar` per route, plus a manual `bazaar.info.input.type/method` + `routeTemplate` patch for x402 issue #2156 (`:169-176`). |
-| Wallet | `buyer-wallet.json` at repo root, loaded at `:126`; signs via viem + `registerExactEvmScheme` on `eip155:8453`. |
-| `seed_endpoint.js` | 13-route registration table **does** include `/chain/token-security` (`:99`) and the full Base-RPC set (block-number, gas-price, balance, token-balance, tx, receipt, code, wallet) — this is the "extend to token-security + Base-RPC" part of the card, and it is real. |
-
-**How to run it (correcting the docs):** `node seed_batch_cdp.js` with **no arguments**.
-`node seed_endpoint.js <route>` takes one **positional** route name (`seed_endpoint.js:158`).
-
-### Gaps / doc lies found in this pass
-
-- **`docs/AGENTIC_MARKET_ENRICHMENT.md` claimed CLI flags that do not exist.** It advertised
-  `--workers-url`, `--dry-run`, and `--route` on `seed_batch_cdp.js`. The file contains **zero**
-  `process.argv` references (grep-verified); `BASE` is hardcoded at `:15` and the manifest at `:21`.
-  There is no dry-run and no route filter — a run always attempts real on-chain settles for every
-  non-cooled-down route. Corrected in that file 2026-07-29. **Real gap:** if a dry-run / target
-  override is wanted, it still has to be written.
-- **The "❌ Insufficient USDC" rows in that doc are contradicted by the repo's own artifact.**
-  `.cdp_seed_cooldown.json` holds success entries for **all four** routes — including `/pm/markets`
-  and `/chain/token-security`, the two the doc lists as failed — stamped within a ~2.5s window
-  (cooldown expiry `2026-07-29T03:09:31–34Z` ⇒ seeds at **`2026-07-28T15:09:31–34Z`**). Since the
-  cooldown key is only set after a non-error settle response, either all four settled or the doc's
-  failure table is from a different run. **Not resolved here** — treat both the failure rows and the
-  "4/4 seeded" reading as unproven until a fresh run is captured.
-- **Those doc timestamps were cooldown-*expiry* times, not seed times.** `seed_run_1785253314.log`
-  is an all-SKIP run (`Seeded: none`), and its `cooldown until …T03:09:3xZ` lines are what got
-  transcribed into the doc as seed times. Corrected.
-- **Agentic.Market enrichment itself is still NOT fixed** — the card's actual headline goal. There is
-  no enrichment code, no enrichment call, and nothing in the repo that sets `description`/`category`
-  on the Agentic.Market service record. The doc's own status table shows `enriched: False`,
-  `description: ""`, `category: ""`. What shipped is **CDP Bazaar seeding**, which is upstream of
-  Agentic.Market's own enrichment pipeline. **Open gap.**
-- **Live seeding state not re-probed in this pass** (docs-only, no network). The last on-chain claim
-  (tx `0xb5ab7…33a`, block 49,231,013) comes from the card's own summary and is **not** independently
-  verified here.
-- **Revenue impact: none.** Per §8, organic revenue remains **$0.00**. Catalog seeding is discovery
-  plumbing; `/chain/token-security` still shows zero paid calls ever.
+| Date | Pass | Verdict |
+|---|---|---|
+| 2026-07-19 | Public source repo (`t_4fea70bb`) | **PASS.** Repo public, `private == false`, created `2026-07-19T18:07:21Z`. All 7 gitleaks/trufflehog hits were the canonical Circle USDC contract `0x833589fC…` — false positives, no key material pushed. |
+| 2026-07-18/24 | Five 2026-07-17/18 "completed" cards | 3 rescued + verified (`apify-actor/` at `f9c7b37`; `docs/MCP_SUBMISSIONS_LOG.md` + `docs/DISCOVERY_LISTING_STATUS.md` at `ce8c048`); 2 superseded by re-dos (`t_d6a7f9c9` → `docs/DEMAND_RESEARCH.md`, `t_de151427` → `docs/DISTRIBUTION_STATUS.md`). External decay noted: `sol-dispenser/gold-402` and `sol-dispenser/awesome-x402` now 404 — do not count them as durable channels. |
+| 2026-07-18/19 | Dependabot cards `t_ed83c170` (rustls), `t_c70a762b` (tokio) | **Misdirected / no-op.** This is a TypeScript Worker — no `Cargo.toml`, no `.rs`, zero occurrences of either crate. Never record them as shipped here. |
+| 2026-07-20 | Discovery completeness | `/dns/{domain}` + `/whois/{domain}` added to `.well-known/x402` + `openapi.json` (deploy `2887ef85`). Re-confirmed live 2026-07-29: 18 resources. |
+| 2026-07-23/24 | Revenue forensics (`t_efa5b713`, `t_5c08554f`, `t_913952c8`, `t_70fcb2ca`) | Organic revenue walked $0.395 → $0.015 → **$0.00**. Artifacts: `scripts/verify_revenue_ledger.py`, `docs/REVENUE_LEDGER_AUDIT.md`, `.metrics/compute_revenue_usd.py`. **Open inconsistency inside `REVENUE_LEDGER_AUDIT.md`:** the summary table says 26 ledger rows (`:11`), the addendum says 221 (`:75`). The $ figures are consistent with 26; re-run the verifier before quoting either externally. **Unverified out-of-sandbox:** that Hermes' `milestone.json` actually re-points to `revenue_usd_corrected` — the producer writes both filenames so they can never disagree, but the milestone sensor's own built-in branch was never confirmed bypassed. |
+| 2026-07-27 | Worktree-bypass pattern | Twice in one pass a coder committed straight to `main` instead of its assigned `wt/<id>` worktree (`t_aef95830` → `ae27bbe`, `t_819dd337` → `10fdeb3`), silently defeating the isolation/auto-merge net and false-FAILing worktree-only acceptance checks. **Rule:** an acceptance sweep must check live `main` before trusting a worktree-only FAIL. |
+| 2026-07-29 | KV binding | `[[kv_namespaces]] binding = "API_KEYS"` wired in `90cadd1`, closing the recurring token-binding gap. Stripe secrets still unset. |
+| 2026-07-29 | **This rewrite** | Full source scan + live probe. See §16. |
 
 ---
 
-*See `docs/FIRST_DOLLAR_PLAYBOOK.md` (thesis + outreach targets), `docs/DISTRIBUTION_READY.md`
-(distribution state), `docs/QUALITY_UPGRADE_PLAN.md` (endpoint quality), and
-`docs/MARKET_ANALYSIS_2026-07-16.md` (market thesis). This file supersedes their code-level claims.*
+*Related reading: `docs/FIRST_DOLLAR_PLAYBOOK.md` (thesis + outreach), `docs/DISTRIBUTION_STATUS.md`
+and `docs/DISCOVERY_LISTING_STATUS.md` (channel state), `docs/QUALITY_UPGRADE_PLAN.md` (endpoint
+quality), `docs/MARKET_ANALYSIS_2026-07-16.md` (market thesis), `docs/REVENUE_LEDGER_AUDIT.md`
+(revenue forensics), `docs/A2A_DISCOVERY.md`, `docs/TOKEN_SAFETY_STRIPE_PROBE.md`. This file
+supersedes their code-level claims.*
