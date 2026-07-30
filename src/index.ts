@@ -27,6 +27,14 @@ type Env = {
   // Optional KV namespace for API key storage. Needs `wrangler kv namespace create API_KEYS`
   // + binding id in wrangler.toml. If absent, API key auth returns 501.
   API_KEYS?: KVNamespace;
+  // RapidAPI marketplace rail. RapidAPI bills the buyer on its own side and PROXIES the
+  // call to us, identifying itself with a per-API secret header — it does not and cannot
+  // speak x402. Without this, every RapidAPI-billed request would hit the x402 gate and
+  // 402, so the listing would sell a product that never answers. Set via:
+  //   wrangler secret put RAPIDAPI_PROXY_SECRET
+  // and paste the same value into the RapidAPI listing's secret header field.
+  // Unset = the bypass is inert and every request still pays x402 (fail closed).
+  RAPIDAPI_PROXY_SECRET?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -1547,15 +1555,53 @@ app.post("/stripe/webhook", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// API key bypass — if a valid api_key query param is present on a paid
-// endpoint, skip the x402 payment gate.
+// Paid-access bypasses — RapidAPI proxy secret, then api_key query param. Both mean
+// "this caller already paid on another rail", so they skip the x402 gate.
 // ---------------------------------------------------------------------------
+
+/** Length-safe, constant-time string compare.
+ *
+ * The Workers runtime has no crypto.timingSafeEqual, and `a === b` on a secret short-
+ * circuits at the first differing byte — that timing signal is enough to recover a
+ * secret one byte at a time. Compare every byte regardless, and fold the length
+ * difference into the result so unequal lengths cannot early-return either.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  const ab = new TextEncoder().encode(a);
+  const bb = new TextEncoder().encode(b);
+  let diff = ab.length ^ bb.length;
+  const n = Math.max(ab.length, bb.length);
+  for (let i = 0; i < n; i++) {
+    diff |= (ab[i] ?? 0) ^ (bb[i] ?? 0);
+  }
+  return diff === 0;
+}
 
 app.use(async (c, next) => {
   // Toll-free routes — never check API key or x402
   const FREE_PATHS = new Set(["/", "/health", "/token-safety", "/stripe/webhook"]);
   if (FREE_PATHS.has(c.req.path)) return next();
   if (c.req.path.startsWith("/.well-known/")) return next();
+
+  // RapidAPI bypass for paid endpoints.
+  // RapidAPI already collected money from the buyer before proxying this request, so a
+  // request carrying the correct proxy secret is ALREADY PAID and must not be x402-gated.
+  // Fails closed three ways: no configured secret => no bypass; empty header => no bypass;
+  // constant-time compare so a wrong secret leaks nothing through response timing.
+  const rapidSecret = c.env.RAPIDAPI_PROXY_SECRET;
+  if (rapidSecret) {
+    const presented = c.req.header("X-RapidAPI-Proxy-Secret") ?? "";
+    if (presented && timingSafeEqual(presented, rapidSecret)) {
+      // Never log the secret itself — only that the rail was used, so RapidAPI volume
+      // is still countable in the logs alongside api_key and x402 traffic.
+      console.log(JSON.stringify({
+        event: "rapidapi_call",
+        path: c.req.path,
+        user: c.req.header("X-RapidAPI-User") ?? null,
+      }));
+      return next();
+    }
+  }
 
   // API key bypass for paid endpoints
   const apiKey = c.req.query("api_key");
