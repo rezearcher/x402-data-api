@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { RESPONSE_EXAMPLES } from "./examples";
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
@@ -728,10 +729,36 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
  *   GET /chain/token-balance -> getChainTokenBalance
  *   GET /dns/{domain}        -> getDnsByDomain
  */
+/** Group an endpoint in the marketplace listing. Without tags all 19 render as one
+ *  flat list; RapidAPI renders one collapsible section per tag. */
+function tagFor(path: string): string {
+  if (path.startsWith("/chain/")) return "Base Chain";
+  if (path.startsWith("/crypto/") || path.startsWith("/defi/") || path.startsWith("/pm/")) {
+    return "Markets";
+  }
+  if (
+    path.startsWith("/dns/") || path.startsWith("/whois/") ||
+    path.startsWith("/enrich/") || path.startsWith("/scan/")
+  ) {
+    return "Security & Domain";
+  }
+  return "General";
+}
+
 function withOperationIds<T extends Record<string, Record<string, any>>>(paths: T): T {
   for (const [path, item] of Object.entries(paths)) {
     for (const [method, op] of Object.entries(item)) {
-      if (!op || typeof op !== "object" || op.operationId) continue;
+      if (!op || typeof op !== "object") continue;
+      // Tag + response example are added even when an operationId already exists.
+      if (!op.tags) op.tags = [tagFor(path)];
+      const example = RESPONSE_EXAMPLES[path];
+      const ok = op.responses?.["200"];
+      if (example !== undefined && ok && !ok.content) {
+        ok.content = {
+          "application/json": { schema: { type: "object" }, example },
+        };
+      }
+      if (op.operationId) continue;
       const words = path
         .split("/")
         .filter(Boolean)
@@ -758,14 +785,21 @@ app.get("/openapi.json", (c) => {
   const paid = (
     summary: string,
     price: string,
-    params: { name: string; desc: string; required?: boolean; in?: "query" | "path" }[],
+    params: {
+      name: string; desc: string; required?: boolean; in?: "query" | "path"; example?: string;
+    }[],
   ) => ({
     get: {
       summary,
       description: `${summary} Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $${price}.`,
+      // `example` populates the marketplace's interactive test console. Without it a
+      // buyer must invent an address/hash/domain before the endpoint will run, and an
+      // endpoint that errors on first click reads as broken.
       parameters: params.map((p) => ({
         name: p.name, in: p.in ?? "query", required: p.in === "path" ? true : !!p.required,
-        schema: { type: "string" }, description: p.desc,
+        schema: { type: "string", ...(p.example ? { example: p.example } : {}) },
+        ...(p.example ? { example: p.example } : {}),
+        description: p.desc,
       })),
       responses: {
         "200": { description: "Success — JSON data" },
@@ -796,24 +830,24 @@ app.get("/openapi.json", (c) => {
           responses: { "200": { description: "HTML landing page" } },
         },
       },
-      "/crypto/prices": paid("Spot token prices + change_24h (DefiLlama).", "0.001", [{ name: "coins", desc: "comma-separated coingecko ids (max 25)" }]),
-      "/crypto/funding": paid("Cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread + premium/annualized/signal/next_funding_ts.", "0.001", [{ name: "limit", desc: "max coins (default 20, max 100)" }]),
-      "/defi/yields": paid("Top DeFi lending/LP yields — APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast (DefiLlama).", "0.001", [{ name: "limit", desc: "max pools" }, { name: "project", desc: "protocol filter" }, { name: "chain", desc: "chain filter" }, { name: "stable", desc: "'true' = stablecoin only" }, { name: "sort", desc: "'tvl' (default) or 'risk_adjusted' (apy/sigma)" }]),
-      "/pm/markets": paid("Live Polymarket prediction markets, ranked by volume24hr, with bestBid/bestAsk/spread and category tags.", "0.005", [{ name: "query", desc: "keyword filter" }, { name: "limit", desc: "max markets" }]),
-      "/scan/mcp": paid("Security audit of an MCP server (tool-poisoning / prompt-injection). Findings + risk score + verdict (clear/review/block).", "0.10", [{ name: "url", desc: "target MCP server URL", required: true }]),
-      "/enrich/tech-risk": paid("Tech-stack -> CVE + EPSS + CISA-KEV risk + verdict (clear/review/block).", "0.05", [{ name: "domain", desc: "target domain", required: true }]),
-      "/enrich/domain": paid("Firmographic + tech-stack enrichment, incl. subdomain enumeration + verdict (clear/review/block, domain age).", "0.01", [{ name: "domain", desc: "target domain", required: true }]),
+      "/crypto/prices": paid("Spot token prices + change_24h (DefiLlama).", "0.001", [{ name: "coins", desc: "comma-separated coingecko ids (max 25)", example: "bitcoin,ethereum" }]),
+      "/crypto/funding": paid("Cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread + premium/annualized/signal/next_funding_ts.", "0.001", [{ name: "limit", desc: "max coins (default 20, max 100)", example: "10" }]),
+      "/defi/yields": paid("Top DeFi lending/LP yields — APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast (DefiLlama).", "0.001", [{ name: "limit", desc: "max pools", example: "10" }, { name: "project", desc: "protocol filter", example: "aave-v3" }, { name: "chain", desc: "chain filter", example: "Base" }, { name: "stable", desc: "'true' = stablecoin only", example: "true" }, { name: "sort", desc: "'tvl' (default) or 'risk_adjusted' (apy/sigma)", example: "tvl" }]),
+      "/pm/markets": paid("Live Polymarket prediction markets, ranked by volume24hr, with bestBid/bestAsk/spread and category tags.", "0.005", [{ name: "query", desc: "keyword filter", example: "election" }, { name: "limit", desc: "max markets", example: "10" }]),
+      "/scan/mcp": paid("Security audit of an MCP server (tool-poisoning / prompt-injection). Findings + risk score + verdict (clear/review/block).", "0.10", [{ name: "url", desc: "target MCP server URL", required: true, example: "https://api.greyridgesignals.ai/mcp" }]),
+      "/enrich/tech-risk": paid("Tech-stack -> CVE + EPSS + CISA-KEV risk + verdict (clear/review/block).", "0.05", [{ name: "domain", desc: "target domain", required: true, example: "stripe.com" }]),
+      "/enrich/domain": paid("Firmographic + tech-stack enrichment, incl. subdomain enumeration + verdict (clear/review/block, domain age).", "0.01", [{ name: "domain", desc: "target domain", required: true, example: "stripe.com" }]),
       "/chain/block-number": paid("Current Base mainnet block number.", "0.001", []),
       "/chain/gas-price": paid("Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd.", "0.001", []),
-      "/chain/balance": paid("ETH balance of a Base mainnet address, incl. balance_usd.", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true }]),
-      "/chain/token-balance": paid("ERC-20 token balance of a Base mainnet address, incl. symbol/decimals/balance_formatted.", "0.001", [{ name: "address", desc: "0x-prefixed holder address", required: true }, { name: "token", desc: "0x-prefixed ERC-20 contract address", required: true }]),
-      "/chain/tx": paid("Transaction details by hash on Base mainnet.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true }]),
-      "/chain/receipt": paid("Transaction receipt by hash on Base mainnet: status, gas used, full logs, L1 fee breakdown, l1_fee_usd/total_fee_usd.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true }]),
-      "/chain/code": paid("Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware).", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true }]),
-      "/chain/wallet": paid("Wallet bundle: ETH balance + balance_usd + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call.", "0.003", [{ name: "address", desc: "0x-prefixed Base address", required: true }]),
-      "/chain/token-security": paid("Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.", "0.02", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true }]),
-      "/dns/{domain}": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "path" }]),
-      "/whois/{domain}": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.02", [{ name: "domain", desc: "domain name to look up", in: "path" }]),
+      "/chain/balance": paid("ETH balance of a Base mainnet address, incl. balance_usd.", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
+      "/chain/token-balance": paid("ERC-20 token balance of a Base mainnet address, incl. symbol/decimals/balance_formatted.", "0.001", [{ name: "address", desc: "0x-prefixed holder address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "token", desc: "0x-prefixed ERC-20 contract address", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
+      "/chain/tx": paid("Transaction details by hash on Base mainnet.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }]),
+      "/chain/receipt": paid("Transaction receipt by hash on Base mainnet: status, gas used, full logs, L1 fee breakdown, l1_fee_usd/total_fee_usd.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }]),
+      "/chain/code": paid("Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware).", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
+      "/chain/wallet": paid("Wallet bundle: ETH balance + balance_usd + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call.", "0.003", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
+      "/chain/token-security": paid("Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.", "0.02", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
+      "/dns/{domain}": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "path", example: "stripe.com" }]),
+      "/whois/{domain}": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.02", [{ name: "domain", desc: "domain name to look up", in: "path", example: "cloudflare.com" }]),
     }),
   });
 });
