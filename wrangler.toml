@@ -3,6 +3,26 @@ main = "src/index.ts"
 compatibility_date = "2025-06-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Custom domain on a zone we actually own.
+# *.workers.dev is Cloudflare's domain, not ours, so we cannot create DNS records under
+# it — which blocks any marketplace/registry step that asks for a DNS record to verify
+# the origin (RapidAPI gateway DNS, MCP registry DNS-TXT ownership proof). Attaching the
+# Worker to api.greyridgesignals.ai puts the origin on a zone where we control DNS, and
+# reads as a real product rather than a dev endpoint. Cloudflare creates the DNS record
+# and provisions the TLS cert automatically on deploy. The workers.dev URL keeps working,
+# so every existing listing and the x402 Bazaar entry stay valid.
+# MUST stay true, and MUST stay above [[routes]] — it is a top-level key, and TOML would
+# otherwise swallow it into the routes table (deploy fails with "Expected routes to be an
+# array..."). Declaring any route makes Wrangler disable workers.dev by DEFAULT, which
+# silently 404s x402-data-api.sigrunner.workers.dev — the URL already baked into the x402
+# Bazaar entry, mcp.so, the MCP registry submissions, llms.txt and every doc. Losing it
+# would break live listings we cannot all edit. Both hostnames serve the same Worker.
+workers_dev = true
+
+[[routes]]
+pattern = "api.greyridgesignals.ai"
+custom_domain = true
+
 [vars]
 # Override PAY_TO in .dev.vars (local) or via `wrangler secret put PAY_TO` (deployed)
 PAY_TO = "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10"
