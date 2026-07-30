@@ -642,7 +642,41 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 `);
 });
 
-// openapi.json — OpenAPI 3.1 spec so agents can auto-integrate every paid route.
+/** Give every operation a stable operationId, derived from method + path.
+ *
+ * Marketplace importers (RapidAPI) and client-SDK generators NAME each endpoint from
+ * operationId. Without it RapidAPI imports the paths unnamed or drops them, which forces
+ * adding ~18 endpoints by hand — the exact failure hit 2026-07-30. Derived from the path
+ * rather than hand-written so an endpoint added later cannot silently ship without one.
+ * Stable by construction: renaming would break already-generated subscriber SDKs.
+ *   GET /chain/token-balance -> getChainTokenBalance
+ *   GET /dns/{domain}        -> getDnsByDomain
+ */
+function withOperationIds<T extends Record<string, Record<string, any>>>(paths: T): T {
+  for (const [path, item] of Object.entries(paths)) {
+    for (const [method, op] of Object.entries(item)) {
+      if (!op || typeof op !== "object" || op.operationId) continue;
+      const words = path
+        .split("/")
+        .filter(Boolean)
+        .flatMap((seg) =>
+          seg.startsWith("{")
+            ? ["by", seg.slice(1, -1)]        // {domain} -> "by","domain"
+            : seg.split("-"),                  // token-balance -> "token","balance"
+        );
+      op.operationId =
+        method +
+        words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("");
+      if (words.length === 0) op.operationId = method + "Root";
+    }
+  }
+  return paths;
+}
+
+// openapi.json — OpenAPI 3.0 spec so agents and marketplace importers can auto-integrate
+// every paid route. Declared 3.0.3, not 3.1.0: RapidAPI's importer (and most SDK
+// generators) parse 3.0.x reliably and choke on 3.1. Nothing here uses a 3.1-only
+// construct, so the downgrade costs nothing and buys import compatibility.
 app.get("/openapi.json", (c) => {
   const BASE = "https://x402-data-api.sigrunner.workers.dev";
   const paid = (
@@ -664,14 +698,14 @@ app.get("/openapi.json", (c) => {
     },
   });
   return c.json({
-    openapi: "3.1.0",
+    openapi: "3.0.3",
     info: {
       title: "Grey Ridge Signals — x402 Data & Security APIs",
       version: "1.0.0",
       description: "Agent-native pay-per-call data on Base (USDC via x402). No API keys, no signup. Discovery: /.well-known/x402",
     },
     servers: [{ url: BASE }],
-    paths: {
+    paths: withOperationIds({
       "/": {
         get: {
           summary: "Landing page (HTML, free).",
@@ -697,7 +731,7 @@ app.get("/openapi.json", (c) => {
       "/chain/token-security": paid("Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.", "0.02", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true }]),
       "/dns/{domain}": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "path" }]),
       "/whois/{domain}": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.02", [{ name: "domain", desc: "domain name to look up", in: "path" }]),
-    },
+    }),
   });
 });
 
