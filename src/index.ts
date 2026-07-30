@@ -698,13 +698,20 @@ app.get("/openapi.json", (c) => {
     },
   });
   return c.json({
-    openapi: "3.0.3",
+    // 3.0.0 exactly. RapidAPI accepts swagger 2.0 and openapi 3.0.0/3.0.1/3.0.2 ONLY —
+    // 3.0.3 and 3.1.x are rejected on upload (docs.rapidapi.com/docs/add-an-api-basics),
+    // and 3.0.0 is the version their own examples use, so it is the safest floor.
+    openapi: "3.0.0",
     info: {
       title: "Grey Ridge Signals — x402 Data & Security APIs",
       version: "1.0.0",
       description: "Agent-native pay-per-call data on Base (USDC via x402). No API keys, no signup. Discovery: /.well-known/x402",
     },
-    servers: [{ url: BASE }],
+    // Custom domain FIRST — an importer takes servers[0] as the base URL, and the
+    // marketplace listing should point at the zone we control DNS for. The workers.dev
+    // origin stays listed second because it is the URL already seeded into the x402
+    // Bazaar, mcp.so and llms.txt; both hostnames serve this same Worker.
+    servers: [{ url: "https://api.greyridgesignals.ai" }, { url: BASE }],
     paths: withOperationIds({
       "/": {
         get: {
