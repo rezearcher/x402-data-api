@@ -49,6 +49,82 @@ const CDP_FACILITATOR_URL = "https://api.cdp.coinbase.com/platform/v2/x402";
 const CDP_HOST = "api.cdp.coinbase.com";
 const DOH_URL = "https://cloudflare-dns.com/dns-query";
 const RDAP_URL = "https://rdap.org/domain";
+// rdap.org returns 403 to any request without a User-Agent, then 302-redirects to the
+// authoritative registry (e.g. rdap.verisign.com for .com). Measured 2026-07-30: every
+// /whois call had been failing 502 "RDAP lookup failed, status 403" for EVERY domain
+// because these headers omitted a UA — the same failure mode already documented for
+// mainnet.base.org. Workers' fetch follows the redirect automatically once past the 403.
+const RDAP_HEADERS = {
+  accept: "application/rdap+json",
+  "user-agent": "GreyRidgeSignals/1.0 (+https://greyridgesignals.ai)",
+} as const;
+
+// IANA RDAP bootstrap: TLD -> authoritative registry RDAP base URL.
+//
+// Adding a User-Agent fixed the bare 403 but not the endpoint: rdap.org kept refusing
+// THIS Worker's egress (Cloudflare IPs) while serving the identical request fine from
+// other hosts — measured 2026-07-30, 6/6 failures through the Worker vs 200 direct.
+// Depending on a third-party redirector for a PAID endpoint was the real defect. IANA
+// publishes the canonical TLD->registry map, so we resolve it once and query the
+// authoritative registry directly: one less hop and no third-party gatekeeper.
+//
+// Cached per-isolate (Workers isolates persist across requests), so the bootstrap is
+// fetched roughly once per isolate rather than per call. Falls back to rdap.org if the
+// bootstrap is unreachable or the TLD is unlisted, so this can only add coverage.
+// Supplement for TLDs the IANA file genuinely omits. Measured 2026-07-30: the bootstrap
+// carries 1200 TLDs but NOT .io or .co — ccTLD operators are not obliged to publish
+// there, so a bootstrap-only lookup silently loses popular TLDs. Only entries verified
+// to answer are listed; an unverified guess would just trade a 502 for a wrong answer.
+const RDAP_STATIC: Record<string, string> = {
+  io: "https://rdap.identitydigital.services/rdap/",
+};
+
+let rdapBootstrap: Record<string, string> | null = null;
+
+async function rdapBaseFor(tld: string): Promise<string | null> {
+  // Static first: it is verified-working, costs no network call, and — critically —
+  // still resolves when data.iana.org is unreachable. Consulting it only AFTER the
+  // bootstrap would make .io depend on IANA being up, which is the opposite of intent.
+  if (RDAP_STATIC[tld]) return RDAP_STATIC[tld];
+  if (!rdapBootstrap) {
+    try {
+      const r = await fetch("https://data.iana.org/rdap/dns.json", {
+        headers: { "user-agent": RDAP_HEADERS["user-agent"] },
+      });
+      if (!r.ok) return null;
+      const j = (await r.json()) as { services?: [string[], string[]][] };
+      const map: Record<string, string> = {};
+      for (const [tlds, urls] of j.services ?? []) {
+        const base = urls.find((u) => u.startsWith("https://")) ?? urls[0];
+        if (!base) continue;
+        for (const t of tlds) {
+          map[t.toLowerCase()] = base.endsWith("/") ? base : `${base}/`;
+        }
+      }
+      rdapBootstrap = map;
+    } catch {
+      return null;
+    }
+  }
+  return rdapBootstrap[tld] ?? RDAP_STATIC[tld] ?? null;
+}
+
+/** Fetch RDAP for a domain from the authoritative registry, falling back to rdap.org. */
+async function rdapFetch(domain: string): Promise<Response> {
+  const tld = domain.split(".").pop()?.toLowerCase() ?? "";
+  const base = tld ? await rdapBaseFor(tld) : null;
+  if (base) {
+    try {
+      const r = await fetch(`${base}domain/${encodeURIComponent(domain)}`, {
+        headers: RDAP_HEADERS,
+      });
+      if (r.ok) return r;
+    } catch {
+      /* fall through to the redirector */
+    }
+  }
+  return fetch(`${RDAP_URL}/${encodeURIComponent(domain)}`, { headers: RDAP_HEADERS });
+}
 const POLYMARKET_URL = "https://gamma-api.polymarket.com/markets";
 const POLYMARKET_EVENTS_URL = "https://gamma-api.polymarket.com/events";
 // Multiple keyless Base RPCs — rotate on 429/5xx so a single provider's rate
@@ -1845,9 +1921,7 @@ app.get("/dns/:domain", async (c) => {
 app.get("/whois/:domain", async (c) => {
   const domain = c.req.param("domain");
 
-  const res = await fetch(`${RDAP_URL}/${encodeURIComponent(domain)}`, {
-    headers: { accept: "application/rdap+json" },
-  });
+  const res = await rdapFetch(domain);
 
   if (!res.ok) {
     return c.json(
@@ -2325,9 +2399,7 @@ async function enrichDomain(domain: string): Promise<EnrichDomainResult> {
 
   // Parallel: RDAP, DoH DNS, certificates, HTTP fingerprint
   const [rdapRes, dnsFp, certResult] = await Promise.all([
-    fetch(`${RDAP_URL}/${encodeURIComponent(domain)}`, {
-      headers: { accept: "application/rdap+json" },
-    }),
+    rdapFetch(domain),
     fingerprintDomain(domain),
     searchCertificates(domain),
   ]);
