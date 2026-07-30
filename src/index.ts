@@ -107,6 +107,93 @@ const app = new Hono<{ Bindings: Env }>();
 app.get("/health", (c) => c.json({ ok: true }));
 
 // ---------------------------------------------------------------------------
+// Terms of use. Marketplace listings (RapidAPI, MCP registries) require a real,
+// dedicated terms URL. greyridgesignals.ai serves its SPA for every path, so any
+// /terms there returns 200 with the homepage — which reads as a broken link to a
+// reviewer. Serving it from the API's own origin keeps it self-contained and
+// versioned with the code it governs. Free path, never x402-gated.
+// ---------------------------------------------------------------------------
+
+const TERMS_UPDATED = "2026-07-30";
+
+app.get("/terms", (c) =>
+  c.html(`<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Terms of Use — Grey Ridge x402 Data &amp; Security API</title>
+<style>body{max-width:46rem;margin:0 auto;padding:2.5rem 1.2rem;font:16px/1.65 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1c1c1c;background:#fff}h1{font-size:1.7rem;margin:0 0 .3rem}h2{font-size:1.05rem;margin:1.9rem 0 .4rem}.upd{color:#666;font-size:.9rem;margin:0 0 2rem}footer{margin-top:2.5rem;padding-top:1rem;border-top:1px solid #ddd;color:#666;font-size:.87rem}a{color:#0b5}@media(prefers-color-scheme:dark){body{background:#0d1117;color:#e6e6e6}footer{border-color:#2a2a2a;color:#999}.upd{color:#999}}</style>
+</head><body>
+<h1>Terms of Use</h1>
+<p class="upd">Grey Ridge x402 Data &amp; Security API — last updated ${TERMS_UPDATED}</p>
+
+<p>This API (the &ldquo;Service&rdquo;) is operated by Grey Ridge Signals Group LLC
+(&ldquo;we&rdquo;, &ldquo;us&rdquo;). By calling any endpoint you agree to these terms.</p>
+
+<h2>1. The Service</h2>
+<p>The Service returns blockchain data for Base mainnet, cryptocurrency and DeFi market
+data, and domain, DNS, WHOIS and vulnerability-enrichment data over HTTP. Access is sold
+per-call or per-plan, either directly or through a marketplace such as RapidAPI. Where you
+purchased access through a marketplace, that marketplace's billing, refund and cancellation
+terms govern payment.</p>
+
+<h2>2. Acceptable use</h2>
+<p>You may not use the Service to: break any applicable law; attack, overload or probe
+infrastructure you are not authorised to test; conduct unauthorised scanning or intrusion
+against third parties; resell or redistribute raw responses as a competing bulk data feed;
+or attempt to circumvent quotas, authentication or rate limits. The security endpoints
+(including MCP auditing, domain enrichment and CVE mapping) are provided for assessing
+assets you own or are explicitly authorised to assess. You are solely responsible for
+having that authorisation.</p>
+
+<h2>3. Data sources and accuracy</h2>
+<p>Responses are assembled from public blockchain RPC nodes and third-party sources
+including DefiLlama, Polymarket, Hyperliquid, OKX, dYdX, Cloudflare DNS, RDAP/WHOIS
+registries, the NVD/CVE catalogue, EPSS and the CISA KEV catalogue. Those sources are
+independent of us and may be incomplete, delayed or wrong. Data is provided for
+informational purposes only.</p>
+<p><strong>Nothing returned by the Service is financial, investment, legal or security
+advice.</strong> Token security, honeypot and risk scores are heuristics, not guarantees;
+a &ldquo;clear&rdquo; verdict is not assurance that an asset is safe. Independently verify
+anything you rely on.</p>
+
+<h2>4. Availability</h2>
+<p>The Service is provided on an as-available basis with no uptime commitment unless agreed
+separately in writing. We may change, rate-limit, deprecate or withdraw endpoints. Where a
+marketplace plan sets a quota, that quota governs.</p>
+
+<h2>5. No warranty</h2>
+<p>THE SERVICE IS PROVIDED &ldquo;AS IS&rdquo; AND &ldquo;AS AVAILABLE&rdquo; WITHOUT
+WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE, ACCURACY AND NON-INFRINGEMENT.</p>
+
+<h2>6. Limitation of liability</h2>
+<p>To the maximum extent permitted by law, we are not liable for any indirect, incidental,
+special, consequential or exemplary damages, or for lost profits, lost data or trading
+losses, arising from use of or inability to use the Service. Our total aggregate liability
+for any claim is limited to the amount you paid for the Service in the three months before
+the event giving rise to the claim.</p>
+
+<h2>7. Suspension</h2>
+<p>We may suspend or terminate access immediately for breach of these terms, for abuse, or
+where required to protect the Service or third parties.</p>
+
+<h2>8. Changes</h2>
+<p>We may update these terms. The &ldquo;last updated&rdquo; date above reflects the current
+version, and continued use after a change constitutes acceptance.</p>
+
+<h2>9. Governing law</h2>
+<p>These terms are governed by the laws of the State of Texas, USA, excluding its conflict
+of law rules.</p>
+
+<h2>10. Contact</h2>
+<p><a href="mailto:contact@greyridgesignals.ai">contact@greyridgesignals.ai</a></p>
+
+<footer>Grey Ridge Signals Group LLC &middot;
+<a href="https://greyridgesignals.ai">greyridgesignals.ai</a> &middot;
+<a href="/">API home</a> &middot; <a href="/openapi.json">OpenAPI spec</a></footer>
+</body></html>`),
+);
+
+// ---------------------------------------------------------------------------
 // Landing page — every external listing (Bazaar, MCP registry, awesome-x402,
 // llms.txt crawlers) links back here, so a 404 undercuts credibility. Plain
 // self-contained HTML: inline CSS only, no external resources, readable by
@@ -1579,7 +1666,7 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 app.use(async (c, next) => {
   // Toll-free routes — never check API key or x402
-  const FREE_PATHS = new Set(["/", "/health", "/token-safety", "/stripe/webhook"]);
+  const FREE_PATHS = new Set(["/", "/health", "/terms", "/token-safety", "/stripe/webhook"]);
   if (FREE_PATHS.has(c.req.path)) return next();
   if (c.req.path.startsWith("/.well-known/")) return next();
 
