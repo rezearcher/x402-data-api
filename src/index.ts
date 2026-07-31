@@ -1700,7 +1700,7 @@ app.get("/token-safety", (c) => {
         <li>API key access</li>
         <li>Priority RPC routing</li>
       </ul>
-      <a class="btn" href="#" onclick="alert('Stripe checkout coming soon — subscribe via x402 in the meantime!')">Subscribe</a>
+      <a class="btn" href="#" onclick="(async () => { try { const res = await fetch('/stripe/create-checkout-session', { method: 'POST' }); const json = await res.json(); if (json.url) { window.location.href = json.url; } else { alert('Error: ' + (json.error || 'unknown')); } } catch (e) { alert('Failed to initialize checkout: ' + e); } })(); return false;">Subscribe</a>
       <p class="note" style="margin-top:0.5rem;">Prefer agent-native? Use our <a href="${BASE}/" style="color:#7fd1a8;">x402 endpoint</a> — pay per call in USDC, no account needed.</p>
     </div>
   </div>
@@ -1715,6 +1715,58 @@ app.get("/token-safety", (c) => {
 </body>
 </html>`;
   return c.html(html);
+});
+
+// ---------------------------------------------------------------------------
+// Stripe checkout session creation — initiates subscription payment flow
+// ---------------------------------------------------------------------------
+
+app.post("/stripe/create-checkout-session", async (c) => {
+  if (!c.env.STRIPE_API_KEY || !c.env.STRIPE_PRICE_ID) {
+    return c.json(
+      { error: "Stripe not configured" },
+      { status: 503 }
+    );
+  }
+
+  try {
+    const BASE = "https://x402-data-api.sigrunner.workers.dev";
+    const params = new URLSearchParams();
+    params.append("payment_method_types[]", "card");
+    params.append("mode", "subscription");
+    params.append("line_items[0][price]", c.env.STRIPE_PRICE_ID);
+    params.append("line_items[0][quantity]", "1");
+    params.append("success_url", `${BASE}/?session_id={CHECKOUT_SESSION_ID}`);
+    params.append("cancel_url", `${BASE}/`);
+
+    const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${c.env.STRIPE_API_KEY}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.log(JSON.stringify({ event: "stripe_session_error", status: response.status, error }));
+      return c.json(
+        { error: `Stripe API error: ${response.status}` },
+        502
+      );
+    }
+
+    const session = await response.json() as { id: string; url: string };
+    console.log(JSON.stringify({ event: "checkout_session_created", session_id: session.id }));
+    return c.json({ url: session.url });
+  } catch (e) {
+    console.log(JSON.stringify({ event: "stripe_session_creation_error", error: (e as Error).message }));
+    return c.json(
+      { error: "Failed to create checkout session" },
+      { status: 500 }
+    );
+  }
 });
 
 // ---------------------------------------------------------------------------
