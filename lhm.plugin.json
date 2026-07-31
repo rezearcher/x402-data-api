@@ -1,0 +1,112 @@
+{
+  "id": "x402-data-api",
+  "name": "x402 Data API",
+  "description": "MCP server providing data enrichment, portfolio tracking, market intelligence, and blockchain APIs for x402-powered AI agents. Integrates with Polymarket, Base mainnet RPC, RDAP domain info, and Stripe billing.",
+  "author": "rezearcher",
+  "version": "0.1.0",
+  "homepage": "https://github.com/rezearcher/x402-data-api",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rezearcher/x402-data-api.git"
+  },
+  "license": "MIT",
+  "tags": [
+    "data",
+    "blockchain",
+    "polymarket",
+    "base",
+    "evm",
+    "portfolio",
+    "market-intel",
+    "x402"
+  ],
+  "runtime": "node",
+  "entrypoint": {
+    "command": "npx",
+    "args": [
+      "@x402/hono",
+      "start",
+      "--port",
+      "3000"
+    ]
+  },
+  "env_schema": {
+    "PAY_TO": {
+      "type": "string",
+      "description": "Recipient address for x402 payments (Base mainnet)"
+    },
+    "CDP_API_KEY_ID": {
+      "type": "string",
+      "optional": true,
+      "description": "Coinbase CDP API key ID for CDP facilitator mode"
+    },
+    "CDP_API_KEY_SECRET": {
+      "type": "string",
+      "optional": true,
+      "description": "Coinbase CDP API secret for CDP facilitator mode"
+    },
+    "FACILITATOR_MODE": {
+      "type": "string",
+      "optional": true,
+      "default": "xpay",
+      "description": "Payment facilitator mode: 'cdp' (Coinbase CDP) or 'xpay' (default)"
+    },
+    "STRIPE_API_KEY": {
+      "type": "string",
+      "optional": true,
+      "description": "Stripe API key for payment processing"
+    },
+    "STRIPE_WEBHOOK_SECRET": {
+      "type": "string",
+      "optional": true,
+      "description": "Stripe webhook signing secret"
+    },
+    "STRIPE_PRICE_ID": {
+      "type": "string",
+      "optional": true,
+      "description": "Stripe price ID for API access"
+    },
+    "RAPIDAPI_PROXY_SECRET": {
+      "type": "string",
+      "optional": true,
+      "description": "RapidAPI marketplace proxy secret for billing bypass"
+    }
+  },
+  "capabilities": [
+    "enrichment",
+    "portfolio_tracking",
+    "market_intelligence",
+    "blockchain_rpc",
+    "domain_info"
+  ],
+  "tools": [
+    {
+      "name": "enrich",
+      "description": "Enrich data with tech risk scores, vulnerability intelligence, and market context"
+    },
+    {
+      "name": "portfolio",
+      "description": "Track positions, balances, and trading history on Base mainnet"
+    },
+    {
+      "name": "market_data",
+      "description": "Access Polymarket event and market data, odds, outcomes"
+    },
+    {
+      "name": "rpc",
+      "description": "Call Base mainnet JSON-RPC methods with automatic fallback and retry"
+    },
+    {
+      "name": "domain_lookup",
+      "description": "Look up RDAP domain registration and ownership info"
+    }
+  ],
+  "required_environment": [
+    "PAY_TO"
+  ],
+  "optional_features": [
+    "cdp_settlement",
+    "stripe_billing",
+    "rapidapi_marketplace"
+  ]
+}
