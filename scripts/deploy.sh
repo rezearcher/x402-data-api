@@ -33,8 +33,12 @@ _kanban_db="$HOME/.hermes/kanban/boards/$_board/kanban.db"
 # Detect kanban task id from the git worktree path, if any.
 _task_id=""
 _git_dir="$(git rev-parse --git-dir 2>/dev/null || true)"
-if echo "$_git_dir" | grep -qP '\.worktrees/t_[a-f0-9]+'; then
-  _task_id="$(basename "$(dirname "$_git_dir")")"
+if echo "$_git_dir" | grep -qP '/\.git/worktrees/t_[a-f0-9]+'; then
+  # git rev-parse --git-dir inside a linked worktree returns
+  # <repo>/.git/worktrees/t_<id> — the task id is the basename of that
+  # path itself, NOT of its dirname (which would resolve to "worktrees").
+  # The regex must match "/.git/worktrees/" — the dot precedes "git".
+  _task_id="$(basename "$_git_dir")"
 elif [ -n "${HERMES_KANBAN_TASK:-}" ]; then
   _task_id="$HERMES_KANBAN_TASK"
 fi
