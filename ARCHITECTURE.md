@@ -172,8 +172,8 @@ Shipped in commit `ae27bbe`; KV binding wired in `90cadd1`. Code-complete, **not
 
 1. `GET /token-safety` (`:1384`) — standalone HTML landing page selling the token-security scanner
    to humans. Free plan (preview endpoint) / Pro $9.99 per month for 100 checks. The Subscribe
-   button is still a JS `alert()` placeholder — there is **no Checkout Session creation route** in
-   the Worker; the Stripe payment link must be created out-of-band.
+   button POSTs to `/stripe/create-checkout-session` (`5c7c9ac`), which creates a Stripe Checkout
+   Session server-side and redirects the browser to Stripe's hosted checkout.
 2. `POST /stripe/webhook` (`:1498`) — verifies Stripe's `v1` signature by recomputing
    `HMAC-SHA256(timestamp + "." + rawBody, STRIPE_WEBHOOK_SECRET)` via WebCrypto and comparing hex.
    On `checkout.session.completed` it mints `sk_` + 20 random bytes (`generateApiKey`, `:1361`) and
@@ -476,9 +476,8 @@ Statements elsewhere that this pass's code read disproves. Corrected here; the r
   every `npx x402-data-api-mcp` instruction in its README and in the MCP-directory submissions fails
   for an outside installer. Only the in-repo `node dist/server.js` path works.
 - **Stripe activation** — `STRIPE_API_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_ID` are unset,
-  and no Checkout Session route or payment link exists, so `/token-safety`'s Subscribe button is a
-  placeholder. The KV namespace is now wired (`90cadd1`), so this is the only remaining blocker on
-  the human rail.
+  so `/stripe/create-checkout-session` (`5c7c9ac`) will 500 until secrets are provisioned; the
+  route itself is now in place, so this is the only remaining blocker on the human rail.
 - **RapidAPI seller account + Stripe payout** for the dual-rail plan.
 - **Apify deploy** — the Actor is built and committed but not verified live on Apify's platform.
 - **Glama listing** — needs a passive crawl of the now-public repo or a manual browser submit.
