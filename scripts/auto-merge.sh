@@ -22,6 +22,32 @@ log_run() { # $1 = reason (writes/overwrites per-task run record)
     } > "$fail_dir/${task_id:-unknown}.log"
 }
 
+# --- Remove the worktree directory (fail-open, diagnostics appended) ----------
+# Only call AFTER the merge is verified pushed — deleting the checkout earlier
+# would strand the branch. Previously only branch refs were cleaned, so
+# .worktrees/t_<id> checkouts accumulated forever (some holding full
+# node_modules trees). git branch -d can't delete a branch pinned by a live
+# worktree, so the stale dirs are exactly what kept stale refs alive.
+# git worktree remove --force is primary; rm -rf + prune is the fallback for
+# dirs git refuses (corrupt admin metadata etc). Any failure is appended to
+# the per-task run log so the "merged + pushed OK" record is never overwritten.
+cleanup_worktree_dir() {
+    local wt_dir="$REPO/.worktrees/$task_id"
+    [ -d "$wt_dir" ] || return 0
+    if ! git worktree remove --force "$wt_dir" 2>/dev/null; then
+        rm -rf "$wt_dir" 2>/dev/null
+        git worktree prune 2>/dev/null
+        if [ -d "$wt_dir" ]; then
+            {
+                echo "timestamp: $(date -Is 2>/dev/null || date)"
+                echo "task_id: ${task_id:-unknown}"
+                echo "branch: ${branch:-unknown}"
+                echo "reason: worktree dir cleanup failed: $wt_dir"
+            } >> "$fail_dir/${task_id:-unknown}.log"
+        fi
+    fi
+}
+
 # --- Extract task_id ----------------------------------------------------------
 task_id="${HERMES_KANBAN_TASK:-}"
 if [ -z "$task_id" ] && [ -t 0 ]; then
@@ -76,6 +102,7 @@ if git merge-base --is-ancestor "$branch" main 2>/dev/null; then
     if git merge-base --is-ancestor "$branch" origin/main 2>/dev/null; then
         log_run "already merged AND pushed (no-op)"
         git branch -d "$branch" 2>/dev/null || true
+        cleanup_worktree_dir
     else
         log_run "already in local main but NOT on origin/main — merge never pushed; branch kept, needs manual push"
     fi
@@ -119,4 +146,5 @@ git push origin --delete "$branch" 2>/dev/null || true
 git branch -d "$branch" 2>/dev/null || true
 
 log_run "merged + pushed OK"
+cleanup_worktree_dir
 exit 0
