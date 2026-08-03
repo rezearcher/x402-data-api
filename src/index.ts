@@ -1989,7 +1989,7 @@ app.use(async (c, next) => {
 
   // Fall through to x402 gate
   // MCP: discovery (initialize / tools/list / notifications) is FREE so agents
-  // can find the tool; only tools/call is x402-gated ($0.05). Peek at the
+  // can find the tool; only tools/call is x402-gated ($0.005). Peek at the
   // JSON-RPC method to decide. Non-JSON (GET/SSE) → free.
   if (c.req.path === "/mcp") {
     let rpcMethod: string | undefined;
@@ -4416,8 +4416,8 @@ function previewOf(r: McpScanResult) {
   for (const f of r.findings) by[f.severity]++;
   const upsell =
     r.findings.length === 0
-      ? "Clean on static checks. Run the full scan_mcp_server ($0.05) for the itemized report + evidence."
-      : `${r.findings.length} issue(s) found${by.critical ? `, ${by.critical} CRITICAL` : ""}. This preview hides WHICH tools and the evidence — get the full itemized findings + remediation via the paid scan_mcp_server tool ($0.05 USDC) or GET /scan/mcp ($0.10).`;
+      ? "Clean on static checks. Run the full scan_mcp_server ($0.005) for the itemized report + evidence."
+      : `${r.findings.length} issue(s) found${by.critical ? `, ${by.critical} CRITICAL` : ""}. This preview hides WHICH tools and the evidence — get the full itemized findings + remediation via the paid scan_mcp_server tool ($0.005 USDC) or GET /scan/mcp ($0.10).`;
   return {
     target: r.target,
     tools_scanned: r.tools_scanned,
@@ -4446,7 +4446,7 @@ app.get("/scan/mcp/preview", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// MCP endpoint — expose enrich_tech_risk as an MCP tool  ($0.05 paid via x402)
+// MCP endpoint — expose the full x402-paid tool surface (22 tools) via MCP ($0.005 per tools/call via x402)
 // ---------------------------------------------------------------------------
 
 const mcpHandler = createMcpHandler(() => {
@@ -4459,7 +4459,7 @@ const mcpHandler = createMcpHandler(() => {
     "enrich_tech_risk",
     {
       description:
-        "Security enrichment: tech-stack fingerprint + CVE mapping + EPSS + CISA KEV + verdict (clear/review/block) for a domain. Cost: $0.05 USDC per call (x402 micropayment).",
+        "Security enrichment: tech-stack fingerprint + CVE mapping + EPSS + CISA KEV + verdict (clear/review/block) for a domain. Cost: $0.005 USDC per call (x402 micropayment).",
       inputSchema: {
         domain: z.string().optional(),
         techstack: z.array(z.string()).optional(),
@@ -4482,7 +4482,7 @@ const mcpHandler = createMcpHandler(() => {
     "enrich_domain",
     {
       description:
-        "Firmographic + tech-stack enrichment: RDAP registrant/registrar, DNS records, full subdomain enumeration + certificate-transparency history, tech-stack fingerprint, verdict (clear/review/block, based on domain age) for a domain. Cost: $0.05 USDC per call via the shared MCP payment gate (the direct HTTP endpoint GET /enrich/domain is $0.01 — MCP tools/call is gated at a flat $0.05 per request today).",
+        "Firmographic + tech-stack enrichment: RDAP registrant/registrar, DNS records, full subdomain enumeration + certificate-transparency history, tech-stack fingerprint, verdict (clear/review/block, based on domain age) for a domain. Cost: $0.005 USDC per call via the shared MCP payment gate (the direct HTTP endpoint GET /enrich/domain is $0.01 — MCP tools/call is gated at a flat $0.005 per request).",
       inputSchema: {
         domain: z.string(),
       },
@@ -4504,7 +4504,7 @@ const mcpHandler = createMcpHandler(() => {
     "scan_mcp_server",
     {
       description:
-        "Security-audit a target MCP server for prompt-injection / tool-poisoning. Fetches the server's advertised tools and statically analyzes each for hidden instructions, data-exfiltration hints, dangerous capabilities, cross-tool shadowing, and invisible-unicode payloads (OWASP LLM01/LLM08). Returns findings + a 0-100 risk score + verdict (clear/review/block). Cost: $0.05 USDC per scan via x402.",
+        "Security-audit a target MCP server for prompt-injection / tool-poisoning. Fetches the server's advertised tools and statically analyzes each for hidden instructions, data-exfiltration hints, dangerous capabilities, cross-tool shadowing, and invisible-unicode payloads (OWASP LLM01/LLM08). Returns findings + a 0-100 risk score + verdict (clear/review/block). Cost: $0.005 USDC per scan via x402 (GET /scan/mcp HTTP variant is $0.10).",
       inputSchema: {
         url: z.string().describe("Target MCP server endpoint URL to audit"),
       },
