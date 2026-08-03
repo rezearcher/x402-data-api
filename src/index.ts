@@ -1863,7 +1863,7 @@ app.post("/stripe/webhook", async (c) => {
     const payload = `${timeValue}.${body}`;
     const expected = await crypto.subtle.sign("HMAC", key, enc.encode(payload));
     const expectedHex = Array.from(new Uint8Array(expected)).map(b => b.toString(16).padStart(2, "0")).join("");
-    if (expectedHex !== sigValue) {
+    if (!timingSafeEqual(expectedHex, sigValue)) {
       console.log(JSON.stringify({ event: "stripe_webhook_sig_mismatch" }));
       return c.text("Signature mismatch", 401);
     }
