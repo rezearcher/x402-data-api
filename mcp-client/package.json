@@ -1,6 +1,7 @@
 {
   "name": "x402-data-api-mcp",
   "version": "0.1.0",
+  "$comment": "Version mirrors root package.json (canonical).",
   "description": "MCP stdio client for the x402-data-api — exposes crypto, chain, security, and enrichment tools via MCP protocol over stdin/stdout. Uses @x402/fetch + @x402/evm + viem for automated x402 micropayments (installer supplies their own wallet key).",
   "license": "MIT",
   "type": "module",

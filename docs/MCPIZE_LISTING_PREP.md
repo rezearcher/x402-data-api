@@ -186,7 +186,7 @@ Already deployed at project root. No changes needed for MCPize — MCPize doesn'
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.rezearcher/tech-risk",
   "description": "x402 MCP for agents: crypto prices, funding, DeFi yields, Polymarket, Base RPC + MCP security.",
-  "version": "1.2.0",
+  "version": "0.1.0",
   "websiteUrl": "https://x402-data-api.sigrunner.workers.dev",
   "remotes": [
     {

@@ -538,7 +538,7 @@ app.get("/.well-known/agent-card.json", (c) => {
       name: "Grey Ridge Signals Group LLC",
       url: BASE,
     },
-    version: "1.0.0",
+    version: "0.1.0", // mirror root package.json (canonical)
     documentationUrl: BASE,
     capabilities: {
       streaming: false,
@@ -814,7 +814,7 @@ app.get("/openapi.json", (c) => {
     openapi: "3.0.0",
     info: {
       title: "Grey Ridge Signals — x402 Data & Security APIs",
-      version: "1.0.0",
+      version: "0.1.0", // mirror root package.json (canonical)
       description: "Agent-native pay-per-call data on Base (USDC via x402). No API keys, no signup. Discovery: /.well-known/x402",
     },
     // Custom domain FIRST — an importer takes servers[0] as the base URL, and the
@@ -4254,7 +4254,7 @@ async function scanMcpServer(target: string): Promise<McpScanResult> {
       params: {
         protocolVersion: "2025-06-18",
         capabilities: {},
-        clientInfo: { name: "x402-data-api-mcp-scanner", version: "1.0.0" },
+        clientInfo: { name: "x402-data-api-mcp-scanner", version: "0.1.0" }, // mirror root package.json (canonical)
       },
     });
 
@@ -4374,7 +4374,7 @@ app.get("/scan/mcp/preview", async (c) => {
 const mcpHandler = createMcpHandler(() => {
   const server = new McpServer({
     name: "x402-data-api",
-    version: "0.1.0",
+    version: "0.1.0", // mirror root package.json (canonical)
   });
 
   server.registerTool(
