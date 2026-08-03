@@ -45,6 +45,21 @@ FACILITATOR_MODE = "xpay"
 [[kv_namespaces]]
 binding = "API_KEYS"
 id = "b4862216375341f18f2aa6d58822c874"
+
+# Durable Object for ATOMIC credit accounting (t_2a927f81).
+# KV has no compare-and-swap, so the previous read-modify-write decrement in the
+# middleware could double-spend a credit when two requests on the same key landed
+# concurrently (both read N, both write N-1). The CreditLedger DO serializes
+# check-and-decrement per key (one instance per key via idFromName(apiKey)), which
+# makes each deduction atomic. KV remains the source of truth for key identity and
+# expiry; the DO owns the credit balance once seeded.
+[[durable_objects.bindings]]
+name = "CREDIT_LEDGER"
+class_name = "CreditLedger"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["CreditLedger"]
 # Required for routes declared with declareDiscoveryExtension to be catalogued in the Bazaar.
 # Both must be present for CDP facilitator to activate; if absent, xpay is used (default).
 #

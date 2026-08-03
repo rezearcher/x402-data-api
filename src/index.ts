@@ -9,6 +9,7 @@ import { createMcpHandler } from "@modelcontextprotocol/server";
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod/v4";
 import { keccak256 } from "viem";
+import { DurableObject } from "cloudflare:workers";
 import { createCdpFacilitator } from "./facilitator";
 
 // ---------------------------------------------------------------------------
@@ -28,6 +29,13 @@ type Env = {
   // Optional KV namespace for API key storage. Needs `wrangler kv namespace create API_KEYS`
   // + binding id in wrangler.toml. If absent, API key auth returns 501.
   API_KEYS?: KVNamespace;
+  // Per-key atomic credit ledger (Durable Object). KV read-modify-write of the
+  // balance is racy under concurrency (double-spend), so each key's balance
+  // lives in its own CreditLedger DO (idFromName(apiKey)); KV stays the source
+  // of truth for identity + expiry. Missing binding => api_key bypass fails
+  // closed (falls through to the x402 gate). Needs the [[durable_objects.bindings]]
+  // + migration in wrangler.toml.
+  CREDIT_LEDGER?: DurableObjectNamespace<CreditLedger>;
   // RapidAPI marketplace rail. RapidAPI bills the buyer on its own side and PROXIES the
   // call to us, identifying itself with a per-API secret header — it does not and cannot
   // speak x402. Without this, every RapidAPI-billed request would hit the x402 gate and
@@ -1604,6 +1612,59 @@ const PLANS = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Atomic credit ledger — per-key Durable Object
+// ---------------------------------------------------------------------------
+// KV read-modify-write (get → mutate → put) is NOT atomic: two concurrent
+// requests for the same key can both read the same balance and both write
+// back, double-spending a credit. Workers KV offers no etag/CAS, so the fix is
+// a per-key Durable Object: idFromName(apiKey) routes every check-and-decrement
+// for one key to the same DO instance, and the DO runtime serializes storage
+// access — the balance check and the decrement become a single atomic step.
+// KV remains the source of truth for identity + expiry; the DO owns the
+// balance after it is seeded (at key creation, or lazily on first use for
+// keys created before this deploy).
+export class CreditLedger extends DurableObject<Env> {
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+  }
+
+  /**
+   * Atomically deduct one credit from this key's balance.
+   *
+   * Returns the balance AFTER the deduction, or 0 when no credits remain (in
+   * which case nothing is deducted — callers treat 0 as "insufficient" and
+   * fall through to the x402 gate). DO serialization makes the read-check-write
+   * sequence race-free even under concurrent requests for the same key.
+   *
+   * seedIfEmpty: when the DO has never been initialized (a key created before
+   * this deploy), lazily seed from the KV record's credits_remaining before
+   * deducting. `undefined` storage means "never seeded" — once seeded the
+   * stored value is a number (possibly 0), so an exhausted key can never be
+   * resurrected by a stale KV record.
+   */
+  async deductCredit(seedIfEmpty?: number): Promise<number> {
+    let remaining = await this.ctx.storage.get<number>("credits_remaining");
+    if (remaining === undefined) {
+      remaining = seedIfEmpty ?? 0;
+    }
+    if (remaining <= 0) return 0;
+    const next = remaining - 1;
+    await this.ctx.storage.put("credits_remaining", next);
+    return next;
+  }
+
+  /** Current balance, no side effects. */
+  async getBalance(): Promise<number> {
+    return (await this.ctx.storage.get<number>("credits_remaining")) ?? 0;
+  }
+
+  /** Set the balance to exactly `credits`. Called at key creation. */
+  async seed(credits: number): Promise<void> {
+    await this.ctx.storage.put("credits_remaining", credits);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Human-facing landing page — token-safety scanner product
 // ---------------------------------------------------------------------------
 
@@ -1838,6 +1899,12 @@ app.post("/stripe/webhook", async (c) => {
     };
 
     await c.env.API_KEYS.put(apiKey, JSON.stringify(record));
+    // Seed the per-key ledger so the balance is atomic from birth. (Keys
+    // created before this deploy are lazily seeded on their first use.)
+    if (c.env.CREDIT_LEDGER) {
+      const id = c.env.CREDIT_LEDGER.idFromName(apiKey);
+      await c.env.CREDIT_LEDGER.get(id).seed(record.credits_remaining);
+    }
     console.log(JSON.stringify({ event: "api_key_created", session_id: sessionId, email }));
   }
 
@@ -1899,12 +1966,23 @@ app.use(async (c, next) => {
     const raw = await c.env.API_KEYS.get(apiKey);
     if (raw) {
       const record: ApiKeyRecord = JSON.parse(raw);
-      if (record.expires_at > Date.now() && record.credits_remaining > 0) {
-        // Deduct a credit and proceed
-        record.credits_remaining -= 1;
-        await c.env.API_KEYS.put(apiKey, JSON.stringify(record));
-        console.log(JSON.stringify({ event: "api_key_used", credits_remaining: record.credits_remaining }));
-        return next();
+      if (record.expires_at > Date.now()) {
+        // Atomic check-and-decrement via the per-key CreditLedger DO. The old
+        // KV read-modify-write (get → mutate → put) could double-spend a credit
+        // when two requests for the same key raced. The DO serializes storage
+        // access per key, so check + deduct is one atomic step. Fail closed:
+        // no DO binding => no api_key bypass (falls through to the x402 gate).
+        if (c.env.CREDIT_LEDGER) {
+          const id = c.env.CREDIT_LEDGER.idFromName(apiKey);
+          const stub = c.env.CREDIT_LEDGER.get(id);
+          // record.credits_remaining is the lazy seed for keys created before
+          // this deploy; the DO owns the balance from then on.
+          const remaining = await stub.deductCredit(record.credits_remaining);
+          if (remaining > 0) {
+            console.log(JSON.stringify({ event: "api_key_used", credits_remaining: remaining }));
+            return next();
+          }
+        }
       }
     }
   }
