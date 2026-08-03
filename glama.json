@@ -2,7 +2,7 @@
   "$schema": "https://glama.ai/mcp/schemas/server.json",
   "name": "x402-data-api",
   "type": "streamable-http",
-  "description": "Pay-per-call crypto, DeFi, prediction-market, and on-chain data for AI agents — HTTP 402 payment-enabled MCP server on Base mainnet.",
+  "description": "Pay-per-call crypto, DeFi, prediction-market, and on-chain data for AI agents — HTTP 402 payment-enabled MCP server on Base mainnet. Companion stdio MCP client (mcp-client/, x402-data-api-mcp) included for stdio-only agents.",
   "url": "https://x402-data-api.sigrunner.workers.dev/mcp",
   "repository": "https://github.com/rezearcher/x402-data-api",
   "authors": [

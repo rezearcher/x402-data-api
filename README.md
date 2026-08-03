@@ -73,6 +73,46 @@ are **free** so agents can discover the tools; paid `tools/call` returns an x402
 }
 ```
 
+## MCP client (`mcp-client/` — the stdio companion)
+
+For stdio-only MCP clients (Claude Desktop, Cursor, CLI agents), the repo ships a
+companion package, `x402-data-api-mcp`, in [`mcp-client/`](./mcp-client/). It runs on
+the agent's own machine, speaks MCP over **stdio**, and proxies to the same Worker
+`/mcp` endpoint — it adds no data surface, just a transport + x402 payment shim so
+stdio-only clients can reach the same tools (22 tools, including paid ones when a
+wallet key is configured).
+
+**Install / run (local path).** The package is **not yet published to npm**, so run it
+from the repo:
+
+```bash
+cd mcp-client
+npm install
+npm run build          # tsc → dist/server.js
+node dist/server.js    # start (or: npm start)
+```
+
+**Intended path (once published):** `npx x402-data-api-mcp` (the package's `bin`
+target is `dist/server.js`, so `npx` runs the same server).
+
+**Configuration.** Copy [`mcp-client/.env.example`](./mcp-client/.env.example) to
+`.env` in `mcp-client/`: `WORKER_BASE_URL` defaults to the deployed Worker (set it
+only to point at your own mirror), and `X402_WALLET_PRIVATE_KEY` is optional — set it
+to auto-settle paid tools (HTTP 402) via x402; leave it empty to run only the
+free/preview tools. The client reads both straight from `process.env` at startup.
+
+```jsonc
+// stdio client config (local path)
+{
+  "mcpServers": {
+    "grey-ridge-x402-local": {
+      "command": "node",
+      "args": ["/absolute/path/to/mcp-client/dist/server.js"]
+    }
+  }
+}
+```
+
 ## Call it (HTTP)
 
 ```bash
