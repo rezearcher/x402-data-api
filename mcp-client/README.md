@@ -23,9 +23,17 @@ npx x402-data-api-mcp
 
 ## Setup
 
-1. Copy `.env.example` to `.env` and configure:
+1. Create `.env` from the template in this directory:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Then configure:
    - `WORKER_BASE_URL` — defaults to `https://x402-data-api.sigrunner.workers.dev`
-   - `X402_WALLET_PRIVATE_KEY` — optional, enables paid tool auto-settlement
+   - `X402_WALLET_PRIVATE_KEY` — optional, enables paid tool auto-settlement.
+     The wallet address is derived from this key; there is no separate
+     wallet-address variable.
 
 2. Run your MCP client against `x402-data-api-mcp` as an stdio transport.
 
