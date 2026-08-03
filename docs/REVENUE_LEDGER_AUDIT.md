@@ -1,6 +1,6 @@
 # Revenue Ledger Audit — Self-Traffic Classification
 
-**Audit date:** 2026-07-23
+**Audit date:** 2026-07-23 (re-verified 2026-08-02)
 **Auditor:** `scripts/verify_revenue_ledger.py`
 **Method:** On-chain forensic verification via Base mainnet public RPC (`eth_getTransactionReceipt`), reading each row's USDC Transfer event's **indexed `from` topic** — same technique as `check_paid_calls.sh`.
 
@@ -8,32 +8,34 @@
 
 | Metric | Value |
 |---|---|
-| Total ledger rows | 26 |
-| Total reported USDC | \$0.400000 |
+| Total ledger rows | 28 |
+| Total reported USDC | \$0.410000 |
 | Self-traffic USDC | \$0.385000 (23 rows) |
-| Verified external USDC | \$0.015000 (3 rows) |
+| Verified external USDC | \$0.025000 (5 rows) |
 | Unresolved | \$0.000000 (0 rows) |
-| **Contamination rate** | **96.25%** |
-| **True external revenue** | **3.75%** of reported |
+| **Contamination rate** | **93.9%** |
+| **True external revenue** | **6.1%** of reported |
 
 ## Key Finding
 
-**Only 3 of 26 ledger rows represent genuine external revenue.** The remaining 23 rows (96.25% by value) are self-traffic — USDC transfers from our own wallets to the PAY_TO address, indistinguishable from real API payments in the ledger alone.
+**Only 5 of 28 ledger rows are external — and 4 of them trace to a probe/farming bot.** The remaining 23 rows (93.9% by value) are self-traffic — USDC transfers from our own wallets to the PAY_TO address, indistinguishable from real API payments in the ledger alone. After the probe check, only 1 row ($0.005) is not bot-flagged.
 
 ## Self-Traffic Breakdown
 
-- **18 rows** (`\$0.235`) — `from=0xc4852c26498d3187dec2ce1b19e840710e302d1e` — the `buyer-wallet.json` funder address
-- **5 rows** (`\$0.150`) — `from=0x5765ae06a52dc7a0bb71c36a11db512c7ea9ed10` — PAY_TO to PAY_TO self-transfers
+- **20 rows** (`\$0.235`) — `from=0xc4852c26498d3187dec2ce1b19e840710e302d1e` — the `buyer-wallet.json` funder address
+- **3 rows** (`\$0.150`) — `from=0x5765ae06a52dc7a0bb71c36a11db512c7ea9ed10` — PAY_TO to PAY_TO self-transfers
 
-## Genuine External Revenue
+## External Revenue (non-self-traffic)
 
-All 3 external rows originate from payer `0x7e571e959cc7c75ccdd2eac24f8775ea2eaa2f09`, totaling exactly **\$0.015**:
+All 5 external rows come from two payers — 4 from `0x7e571e959cc7c75ccdd2eac24f8775ea2eaa2f09` totaling **\$0.020** (probe/farming bot — see addendum) and 1 from `0x7e81988b7187eb3c3a65229bb1536fa1039234a7` totaling **\$0.005** (probe score 0.200 — likely genuine):
 
-| # | ref | Amount |
-|---|---|---|
-| 24 | `0x3e969e2dc30058ef7e...` | \$0.005 |
-| 25 | `0x87b6fe126e996a1bb5...` | \$0.005 |
-| 26 | `0x7412439d17119d2511...` | \$0.005 |
+| # | ref | Amount | Payer |
+|---|---|---|---|
+| 24 | `0x3e969e2dc30058ef7e...` | \$0.005 | `0x7e571e...` |
+| 25 | `0x87b6fe126e996a1bb5...` | \$0.005 | `0x7e571e...` |
+| 26 | `0x7412439d17119d2511...` | \$0.005 | `0x7e571e...` |
+| 27 | `0x4aa313ca4df0859ed7...` | \$0.005 | `0x7e571e...` |
+| 28 | `0x82cb9a6b66d300d2ad...` | \$0.005 | `0x7e8198...` |
 
 ## Method
 
@@ -55,7 +57,7 @@ python3 scripts/verify_revenue_ledger.py
 
 ## Gap Impact
 
-The gap.json currently reports `revenue_usd=0.4` from the ledger sum. The genuine external revenue is **$0.015** — meaning the gap to the first milestone target ($1.00) is **$0.985, not $0.60**. The contamination inflates apparent progress by 26×.
+The gap metric (`.metrics/revenue_usd`, produced by `.metrics/compute_revenue_usd.py`) reads `revenue_usd=0.005` (regenerated 2026-08-02 from the re-run sidecars: 5 external rows, 4 probe-flagged deducted, 1 organic remaining). The likely-genuine external revenue is **$0.005** — meaning the gap to the first milestone target ($1.00) is **$0.995, not $0.60**. The uncorrected ledger sum ($0.41) inflates apparent progress by 82×.
 
 ## Recommendation
 
@@ -72,15 +74,12 @@ Either:
 
 ### Motivation
 
-The original audit found only 1 external payer across all 221 ledger rows[^rowcount]:
-`0x7e571e959cc7c75ccdd2eac24f8775ea2eaa2f09` (3 payments, $0.015 total).
-
-[^rowcount]: **Inconsistency flagged 2026-07-25 (doc-sync pass), unresolved.** This paragraph says
-**221** ledger rows; the Summary table at the top of this document says **26**. The dollar figures
-($0.400 total / $0.385 self-traffic / $0.015 external) reconcile with the **26**-row table, so 221 is
-probably a stale or different-window count — but this was *not* re-derived from the ledger. Re-run
-`python3 scripts/verify_revenue_ledger.py` to settle it before quoting either number externally. The
-$0.00-organic conclusion does not depend on which is right.
+The original audit found only 1 external payer across the then-26 ledger rows:
+`0x7e571e959cc7c75ccdd2eac24f8775ea2eaa2f09` (3 payments, $0.015 total). The verifier
+re-run on 2026-08-02 (28 rows — see Summary) found 2 external payers: `0x7e571e...`
+(4 payments, $0.020) and `0x7e81988b7187eb3c3a65229bb1536fa1039234a7` (1 payment, $0.005).
+The earlier larger-window row count referenced in this addendum's original footnote is superseded
+by the 28-row verifier output; this document is reconciled to that output.
 
 To determine whether this payer represents a real human user or an automated bot/probe, we ran on-chain behavioral triage using three independent heuristics.
 
@@ -90,7 +89,7 @@ To determine whether this payer represents a real human user or an automated bot
 |-----------|-------|-------------------|
 | H1: Nonce (total tx count) | 3,176 | +0.40 |
 | H2: Repeated method burst | 15× `giveFeedback` → `0x061959...b6e` in 120s | +0.35 |
-| H3: Unsolicited farm tokens | 3 tokens (HOLD, UHODL, USGR) | +0.25 |
+| H3: Unsolicited farm tokens | 5 tokens (PDBTC, XST, USD̲C, USDC, HRI) | +0.25 |
 | **Composite Probe Score** | **1.000** | **PROBE / FARMING BOT** |
 
 ### Heuristic Details
@@ -99,19 +98,20 @@ To determine whether this payer represents a real human user or an automated bot
 
 **H2 — Method burst (15× `giveFeedback` in 120s):** The address repeatedly calls `giveFeedback(bytes32,string)` on contract `0x061959e70fb718d7891027283afbfe2875696b6e` — a gamified feedback/reputation dApp commonly used by bot farms. We detected 15 identical calls to the same contract + method within a 120-second window (1 call per 8 seconds). This is an unambiguous automation signature. Method burst ≥ 5 within any 120s window receives +0.35.
 
-**H3 — Farm tokens (3 unsolicited receipts):** The address has received transfers of HOLD, UHODL, and USGR tokens from external senders it has never transacted with. These are "dusting" / airdrop patterns typical of farm-token distribution to bot addresses. Each unique unsolicited sender contributes +0.1 (capped at +0.25).
+**H3 — Farm tokens (5 unsolicited receipts):** The address has received transfers of PDBTC, XST, USD̲C, USDC, and HRI tokens from external senders it has never transacted with. These are "dusting" / airdrop patterns typical of farm-token distribution to bot addresses. Each unique unsolicited sender contributes +0.1 (capped at +0.25).
 
 ### Revised Impact Assessment
 
-With the probe analysis confirming the sole external payer is a farming bot, **the x402 data API had zero human users** during the audit period. Both categories of ledger revenue trace to automated infrastructure — self-traffic and bot traffic. The true organic revenue is **$0.00**.
+With the probe analysis confirming 4 of the 5 external payments trace to a farming bot, **the x402 data API had effectively zero human users** during the audit period. The only non-bot-flagged payment ($0.005 from `0x7e8198...`, probe score 0.200) may be a stray human — or a second, subtler automated payer. The true organic revenue is **$0.005**.
 
 | Revenue Source | Amount | Nature |
 |----------------|--------|--------|
 | Self-traffic (own wallets) | $0.385 | Contamination |
-| Bot payer (`0x7e571e...`) | $0.015 | Automated probe |
-| **Organic human usage** | **$0.000** | **Did not exist** |
+| Bot payer (`0x7e571e...`) | $0.020 | Automated probe (4 payments) |
+| Unflagged payer (`0x7e8198...`) | $0.005 | Probe score 0.200 — likely genuine |
+| **Organic human usage** | **$0.005** | **1 payment, not bot-flagged** |
 
-**Verdict:** `probe_likely: true` — the sole external payer is a farming bot, not a genuine buyer.
+**Verdict:** `probe_likely: true` for `0x7e571e...` (farming bot); `probe_likely: false` for `0x7e8198...` (score 0.200) — see `probe_check_summary.json`.
 
 ### Prerequisites
 
