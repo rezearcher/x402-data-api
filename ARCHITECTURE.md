@@ -1,10 +1,35 @@
 # ARCHITECTURE — x402-data-api
 
-**Source of truth for what is actually shipped.** Rewritten 2026-07-29 from a full read of every
-source file in the tree at commit `90cadd1`. Counts, prices, route lists, and tool lists below were
-read out of the code — not copied from prose — and cross-checked against the **live deployment**
-(see [§16 Verification evidence](#16-verification-evidence)). Where another doc conflicts with the
-code, the code wins and the conflict is recorded in [§13 Doc-drift corrections](#13-doc-drift-corrections).
+**Source of truth for what is actually shipped.** Base body rewritten 2026-07-29 from a full read of
+every source file at commit `90cadd1`; **synced 2026-08-06** against `main` (HEAD `0eba557`) after a
+batch of cards landed post-rewrite. Counts, prices, route lists, and tool lists below were read out of
+the code — not copied from prose. Where another doc conflicts with the code, the code wins and the
+conflict is recorded in [§13 Doc-drift corrections](#13-doc-drift-corrections).
+
+**Changed since the 2026-07-29 base rewrite** (each verified in code, not from a card title):
+- **API-key credit decrement is now atomic** — moved into a per-key `CreditLedger` Durable Object
+  (`src/index.ts:1626`, DO binding `CREDIT_LEDGER` in `wrangler.toml`). The old non-atomic
+  read-modify-write bug is gone (§6). — commit `3e15740`
+- **Stripe webhook signature compare is now constant-time** via `timingSafeEqual` (`:1866`), not the
+  old plain `!==` (§6). — commit `9b16f8c`
+- **Stripe Subscribe button is wired** — `/token-safety` Subscribe POSTs to
+  `/stripe/create-checkout-session` (`:1785`), which creates a real Checkout Session (§6). — `5c7c9ac`
+- **RapidAPI proxy-auth rail** — the gate honors `X-RapidAPI-Proxy-Secret` against
+  `RAPIDAPI_PROXY_SECRET` (`:1948`), letting RapidAPI-billed calls bypass x402 (new rail, §6). — `8185d56`
+- **GitHub Actions CI shipped** — `.github/workflows/ci.yml` (typecheck + mcp-client build + deploy-on-main).
+  The "no CI" gap is closed. — commit `c0c1ece`
+- **Versions aligned to `0.1.0`** across root `package.json`, `mcp-client/package.json`, `server.json`
+  (was `1.2.0`), and the Agent Card (`:535`, "mirror root package.json (canonical)"). — commit `5018ccb`
+- **mcp-client is now referenced** from root `README.md`, `server.json`, and `glama.json`; its
+  `.env.example` now exists and the README step-1 path is real. — commits `7d7bbaa`, `6004534`
+- **mcp-client paid path now has an integration test** (`test-paid-path.mjs`, `concurrent-gate-test.mjs`).
+  — commit `c6a58a1`
+- **auto-merge.sh now cleans the worktree directory** and logs untracked-file conflict paths (§13). — `b023713`
+- **Revenue ledger audit reconciled** to 28 rows / 5 external (the old 26-vs-221 inconsistency is
+  resolved); organic revenue is **$0.005** (Appendix). — commit `dfe76d2`
+- **Custom domain** `api.greyridgesignals.ai` now also serves the Worker. — commit `519e3d7`
+
+The live-probe table in §16 reflects the 2026-07-29 pass and has **not** been re-run for this sync.
 
 ---
 
@@ -24,8 +49,10 @@ before paying.
 - **MCP endpoint:** `POST /mcp` (streamable-http), 22 tools
 - **A2A endpoint:** `GET /.well-known/agent-card.json`
 
-Two payment rails are wired (§5, §6): the **agent rail** (x402/USDC, live) and the
-**human rail** (Stripe subscription → KV-stored API key, code-complete, secrets not yet set).
+Three payment rails are wired in code (§5, §6): the **agent rail** (x402/USDC, live), the
+**human rail** (Stripe subscription → KV/DO-backed API key; Subscribe button + Checkout endpoint
+shipped, secrets not yet set), and the **RapidAPI rail** (`X-RapidAPI-Proxy-Secret` bypass;
+inert until `RAPIDAPI_PROXY_SECRET` is set).
 
 ## 2. Repo map
 
@@ -61,6 +88,7 @@ gate and it currently passes clean.
 | `vars.NETWORK` | `eip155:8453` | Base mainnet. |
 | `vars.FACILITATOR_MODE` | `xpay` | **Do not set to `cdp`** — see §5. |
 | `kv_namespaces[0]` | binding `API_KEYS`, id `b48622…c874` | Wired 2026-07-29 (commit `90cadd1`); backs the Stripe rail (§6). |
+| `durable_objects.bindings[0]` | name `CREDIT_LEDGER`, class `CreditLedger` | Added post-rewrite; `new_sqlite_classes = ["CreditLedger"]` migration. Serializes per-key credit decrement so it is race-free (§6). |
 
 `Env` type (`src/index.ts:16-29`) — everything beyond `PAY_TO` is optional, and every consumer
 degrades gracefully when absent:
@@ -71,6 +99,10 @@ degrades gracefully when absent:
   `200 ok (unconfigured)` so Stripe does not retry during setup.
 - `API_KEYS` (KVNamespace) — absent → API-key issuance/lookup is skipped and every caller falls
   through to the x402 gate.
+- `CREDIT_LEDGER` (DurableObjectNamespace) — absent → the gate falls back to the legacy KV
+  read-modify-write for credit decrement (non-atomic path preserved as a degradation only).
+- `RAPIDAPI_PROXY_SECRET` — absent → the RapidAPI bypass is disabled and RapidAPI-billed callers
+  would hit the x402 gate. When set, a matching `X-RapidAPI-Proxy-Secret` header skips x402 (§6).
 
 Local dev: copy `.dev.vars.example` → `.dev.vars`, `npm run dev`. Deploy: `npm run deploy`, or
 `bash scripts/deploy.sh` which resolves `CF_WORKERS_TOKEN` (the token with Workers:Write scope)
@@ -176,15 +208,25 @@ Shipped in commit `ae27bbe`; KV binding wired in `90cadd1`. Code-complete, **not
    Session server-side and redirects the browser to Stripe's hosted checkout.
 2. `POST /stripe/webhook` (`:1498`) — verifies Stripe's `v1` signature by recomputing
    `HMAC-SHA256(timestamp + "." + rawBody, STRIPE_WEBHOOK_SECRET)` via WebCrypto and comparing hex.
-   On `checkout.session.completed` it mints `sk_` + 20 random bytes (`generateApiKey`, `:1361`) and
+   On `checkout.session.completed` it mints `sk_` + 20 random bytes (`generateApiKey`) and
    writes an `ApiKeyRecord` to KV: `{key, stripe_session_id, customer_email, credits_remaining: 100,
-   created_at, expires_at: +30d}`.
-   *Signature comparison is a plain `!==` string compare, not constant-time.*
-3. **API-key bypass** inside the gate (`:1581-1595`) — `?api_key=sk_…` → KV `get` → if unexpired and
-   `credits_remaining > 0`, decrement, write back, and `return next()`, skipping x402 entirely.
-   *Read-modify-write is non-atomic; concurrent calls on one key can double-spend a credit.
-   Acceptable at this volume, noted so it isn't rediscovered as a bug.*
-4. `PLANS` (`:1376`) currently holds exactly one tier: `pro` — $9.99, 100 monthly credits,
+   created_at, expires_at: +30d}`, then seeds the key's `CreditLedger` DO from `credits_remaining`.
+   *Signature comparison is now constant-time — `timingSafeEqual(expectedHex, sigValue)` (`:1866`).*
+   The old plain `!==` compare was replaced (commit `9b16f8c`).
+3. **API-key bypass** inside the gate (`:1965`) — `?api_key=sk_…` → KV `get` → if unexpired, the
+   credit is decremented **atomically** through the per-key `CreditLedger` Durable Object
+   (`CREDIT_LEDGER.idFromName(apiKey).deductCredit(...)`, `:1975`). DO serialization makes the
+   read-check-write race-free, so concurrent calls on one key can no longer double-spend
+   (commit `3e15740`). `deductCredit` returns the post-decrement balance, or `0` (nothing deducted)
+   when exhausted, in which case the caller falls through to the x402 gate.
+4. **Subscribe → checkout.** `/token-safety`'s Subscribe button POSTs to
+   `POST /stripe/create-checkout-session` (`:1785`), which calls Stripe's
+   `POST /v1/checkout/sessions` (`:1803`) and returns `{url}` for a client-side redirect. Returns 500
+   until `STRIPE_API_KEY` / `STRIPE_PRICE_ID` are set (§14). Commit `5c7c9ac` (rescued in `d75b90a`).
+5. **RapidAPI rail.** Before the x402 gate, if `RAPIDAPI_PROXY_SECRET` is set and the request carries
+   a matching `X-RapidAPI-Proxy-Secret` header (`:1948`), the request is treated as pre-paid by
+   RapidAPI's marketplace billing and skips x402 entirely. No key set → rail inert. Commit `8185d56`.
+6. `PLANS` currently holds exactly one tier: `pro` — $9.99, 100 monthly credits,
    price id read from `STRIPE_PRICE_ID`.
 
 ## 7. HTTP surface
@@ -423,7 +465,7 @@ secret, and generates no x402 revenue — it is a distribution surface. Note `_f
 | `register_x402scan.js` (57) | SIWX (wallet-signature, not payment) registration with x402scan.com — `register-origin` by default, or a single resource URL as `argv[2]`. |
 | `scripts/verify_revenue_ledger.py` (601) | Two modes. Normal: reads `~/.hermes/data/<play>-revenue/ledger.jsonl`, resolves each row's USDC `Transfer` `from` via `eth_getTransactionReceipt`, classifies self-traffic vs external, writes `ledger_verified_summary.json`. `--probe-check` (`:586`→`run_probe_check`, `:507`): scores each "external" payer on three bot heuristics — total nonce, identical-method bursts within 120s, unsolicited farm-token receipts — writing `probe_check_summary.json` **without mutating** normal-mode files. |
 | `.metrics/compute_revenue_usd.py` (91) | Reads both sidecars, sums only `external` rows whose payer is **not** probe-flagged, writes the same value to `.metrics/revenue_usd` **and** `.metrics/revenue_usd_corrected`. Hard-fails if either sidecar is missing. Both files currently read **`0.0`**. |
-| `scripts/auto-merge.sh` (86) | `kanban_task_completed` hook: merges `wt/<task_id>` into `main`, pushes, deletes the branch. **Fail-OPEN by construction** — every failure path is `exit 0`, a failed merge calls `git merge --abort` and writes a diagnostic to `~/.hermes/data/x402-data-api-health/auto_merge_failures/<task_id>.log`. |
+| `scripts/auto-merge.sh` | `kanban_task_completed` hook: merges `wt/<task_id>` into `main`, pushes, deletes the branch **and now removes the `.worktrees/<task_id>` directory** (`cleanup_worktree_dir`, only after the push is verified against `origin/main`). **Fail-OPEN by construction** — every terminal path is `exit 0` and writes a trace to `~/.hermes/data/x402-data-api-health/auto_merge_failures/<task_id>.log` so a no-op is never silent. On an **untracked-file** merge failure it now grep-detects `"untracked working tree files would be overwritten"` and logs the conflicting paths before aborting (commits `b023713`, `t_819dd337`/`t_c7d8bcf7`). |
 | `scripts/deploy.sh` (39) | Resolves `CF_WORKERS_TOKEN` (Workers:Write scope — **not** `CF_API_TOKEN`) then `npx wrangler deploy`. |
 
 **Wallets:** `buyer-wallet.json` (throwaway buyer, gitignored) and `~/.hermes/secrets/base-wallet.json`
@@ -464,12 +506,13 @@ Statements elsewhere that this pass's code read disproves. Corrected here; the r
 ## 15. Gaps — claimed, planned, or implied but not shipped
 
 **Revenue (the headline).**
-- **Organic revenue is $0.00**, confirmed across three independent forensic passes:
-  blind-$0 → $0.395 (ledger integration) → $0.015 (after excluding self-traffic: 23/26 rows, 96.25%,
-  were the buyer wallet `0xC4852c…` and `payTo` `0x5765ae…`) → **$0.00** (after the sole remaining
-  "external" payer `0x7e571e…` scored `probe_score=1.000` on all three bot heuristics — nonce 3,176,
-  15× identical `giveFeedback()` calls in 120s, 3 unsolicited farm-bait tokens). No human or
-  task-driven agent has ever knowingly paid. `.metrics/revenue_usd*` both read `0.0`.
+- **Organic revenue is $0.005** (per the 2026-08-02 reconciliation, Appendix). Forensic passes walked
+  blind-$0 → $0.395 (ledger integration) → $0.015 (excluding self-traffic) → $0.00 → **$0.005**: the
+  28-row re-run found a second external payer, `0x7e81988b…`, whose single $0.005 row scored
+  `probe_score=0.200` (likely genuine, not clearly a bot). The 4 rows from `0x7e571e…`
+  (`probe_score=1.000` — nonce 3,176, identical `giveFeedback()` bursts, farm-bait tokens) are still
+  excluded. No human or task-driven agent has *knowingly* paid; the $0.005 is one low-confidence
+  external hit. `.metrics/revenue_usd` reads `0.005`.
 
 **Atoms that require Rez's account/identity** (cannot be automated):
 - **npm publish** — `mcp-client/` is built, committed, and locally runnable but **unpublished**, so
@@ -482,28 +525,33 @@ Statements elsewhere that this pass's code read disproves. Corrected here; the r
 - **Apify deploy** — the Actor is built and committed but not verified live on Apify's platform.
 - **Glama listing** — needs a passive crawl of the now-public repo or a manual browser submit.
 
-**Engineering gaps:**
-- **No CI/CD.** There is no `.github/workflows/`. `tsc --noEmit`, the MCP client build, and the test
-  harness run only when someone runs them by hand. Both publish (`git push`) and deploy
-  (`wrangler deploy`) are manual.
-- **No automated test suite.** `smoke.js` and `mcp-client/test-mcp-client.mjs` are manual scripts
-  that spend real USDC / hit live production; there is no unit or integration test runner.
-- **The mcp-client paid path has never been demonstrated** — all 5 harness tests exercise free
-  previews. The x402 wiring is code-reviewed, not round-trip-proven.
-- **Two independent version identities:** npm `0.1.0` vs `server.json` `1.2.0` vs MCP server
-  `0.1.0` vs Agent Card `1.0.0`. Nothing syncs them, and the 22-tool list is hardcoded in
-  `mcp-client/README.md` + the test harness, so it will drift silently.
-- **`mcp-client` is invisible on the repo's own discovery surfaces** — root `README.md`,
-  `server.json`, and `glama.json` contain zero references to it.
-- **`mcp-client/README.md` step 1 points at a non-existent `.env.example`.** Inert (both vars are
-  read straight from `process.env`), not blocking.
-- **API-key credit decrement is non-atomic** and the Stripe signature compare is not constant-time
-  (§6).
+**Engineering gaps (remaining):**
+- **CI is partial, not full CD.** `.github/workflows/ci.yml` now runs typecheck + mcp-client build on
+  every push/PR and has a deploy-on-`main` job — but npm **publish** is still not automated (there is
+  no publish job), and `smoke.js` / the mcp-client tests are not wired into CI (they spend real USDC /
+  hit live prod). *(Was "no CI/CD" — closed by commit `c0c1ece`.)*
+- **No hermetic test suite.** `smoke.js`, `mcp-client/test-mcp-client.mjs`, `test-paid-path.mjs`, and
+  `concurrent-gate-test.mjs` are manual scripts that hit live production / spend real USDC; there is
+  no offline unit/integration runner.
 - **Agentic.Market enrichment is still not fixed** — the `t_1a11024d` card's headline goal. What
   shipped is CDP Bazaar seeding, which sits *upstream* of Agentic.Market's own enrichment pipeline.
   There is no code anywhere that sets `description`/`category` on that service record.
-- **`.worktrees/` accumulates stale per-card checkouts** — `auto-merge.sh` deletes *branches*, not
-  worktree directories.
+- **`vpe-key literal-tilde` defect (`t_fff1bf09`)** — not reproducible in this repo's code. `deploy.sh`
+  reads `~/.hermes/.env` unquoted (tilde expands correctly); no literal-`~` path bug is present in the
+  tracked tree. The card concerned Division/hermes-side key handling, not this Worker — treat as
+  out-of-repo unless it resurfaces here.
+
+**Closed since the 2026-07-29 rewrite** (verified in code — no longer gaps):
+- ~~mcp-client paid path never demonstrated~~ → integration tests added (`test-paid-path.mjs`,
+  `concurrent-gate-test.mjs`), commit `c6a58a1`. Still hits live prod, not a hermetic proof.
+- ~~Version drift (npm/server.json/MCP/Agent Card)~~ → all aligned to `0.1.0`, commit `5018ccb`.
+  The 22-tool list is still hardcoded in `mcp-client/README.md` + the test harness and can drift.
+- ~~mcp-client invisible on README/server.json/glama~~ → references added, commit `7d7bbaa`.
+- ~~mcp-client/README.md points at a non-existent `.env.example`~~ → file created, commit `6004534`.
+- ~~API-key decrement non-atomic / signature not constant-time~~ → both fixed (§6), commits `3e15740`,
+  `9b16f8c`.
+- ~~`.worktrees/` accumulates stale checkouts~~ → `auto-merge.sh` now removes the worktree dir after a
+  verified push, commit `b023713` (§13).
 
 **Next moat builds (not started):** indexed event history (public RPCs cap `eth_getLogs` at ~10
 blocks → needs a D1/KV indexer that respects the ~50-subrequest cap); cross-DEX best-quote /
@@ -518,7 +566,8 @@ Everything in this document was verified on **2026-07-29** against commit `90cad
 - `npx tsc --noEmit` → **exit 0, clean.**
 - 19 entries in `makeRoutes()` = 18 paid `GET` + `POST /mcp`; 22 `server.registerTool(` calls;
   8 entries in `FREE_TOOLS`, matching the 8 registered `*_preview` tools exactly.
-- `ls .github` → **does not exist** (no CI).
+- `ls .github` → at the 2026-07-29 pass this did not exist; **as of the 2026-08-06 sync
+  `.github/workflows/ci.yml` is present** (typecheck + mcp-client build + deploy-on-main).
 - `git ls-files seed_cdp_pm.js buyer-wallet.json` → 0 (both untracked).
 
 **Live (`https://x402-data-api.sigrunner.workers.dev`):**
@@ -549,7 +598,8 @@ lives in the referenced docs and in git history.
 | 2026-07-18/24 | Five 2026-07-17/18 "completed" cards | 3 rescued + verified (`apify-actor/` at `f9c7b37`; `docs/MCP_SUBMISSIONS_LOG.md` + `docs/DISCOVERY_LISTING_STATUS.md` at `ce8c048`); 2 superseded by re-dos (`t_d6a7f9c9` → `docs/DEMAND_RESEARCH.md`, `t_de151427` → `docs/DISTRIBUTION_STATUS.md`). External decay noted: `sol-dispenser/gold-402` and `sol-dispenser/awesome-x402` now 404 — do not count them as durable channels. |
 | 2026-07-18/19 | Dependabot cards `t_ed83c170` (rustls), `t_c70a762b` (tokio) | **Misdirected / no-op.** This is a TypeScript Worker — no `Cargo.toml`, no `.rs`, zero occurrences of either crate. Never record them as shipped here. |
 | 2026-07-20 | Discovery completeness | `/dns/{domain}` + `/whois/{domain}` added to `.well-known/x402` + `openapi.json` (deploy `2887ef85`). Re-confirmed live 2026-07-29: 18 resources. |
-| 2026-07-23/24 | Revenue forensics (`t_efa5b713`, `t_5c08554f`, `t_913952c8`, `t_70fcb2ca`) | Organic revenue walked $0.395 → $0.015 → **$0.00**. Artifacts: `scripts/verify_revenue_ledger.py`, `docs/REVENUE_LEDGER_AUDIT.md`, `.metrics/compute_revenue_usd.py`. **Open inconsistency inside `REVENUE_LEDGER_AUDIT.md`:** the summary table says 26 ledger rows (`:11`), the addendum says 221 (`:75`). The $ figures are consistent with 26; re-run the verifier before quoting either externally. **Unverified out-of-sandbox:** that Hermes' `milestone.json` actually re-points to `revenue_usd_corrected` — the producer writes both filenames so they can never disagree, but the milestone sensor's own built-in branch was never confirmed bypassed. |
+| 2026-07-23/24 | Revenue forensics (`t_efa5b713`, `t_5c08554f`, `t_913952c8`, `t_70fcb2ca`) | Organic revenue walked $0.395 → $0.015 → **$0.00**. Artifacts: `scripts/verify_revenue_ledger.py`, `docs/REVENUE_LEDGER_AUDIT.md`, `.metrics/compute_revenue_usd.py`. |
+| 2026-08-02 | Ledger reconciliation (`t_32f32c93`, commit `dfe76d2`) | **The 26-vs-221 row-count inconsistency is resolved.** `REVENUE_LEDGER_AUDIT.md` now states a single figure: **28 total rows, 5 external, 23 self-traffic**; after the probe check only **1 row ($0.005)** is not bot-flagged, so `.metrics/revenue_usd` reads **`0.005`** (not `0.0`). Organic revenue is therefore **$0.005**, gap to the $1.00 milestone is **$0.995**. Supersedes the earlier "$0.00 / 26 rows" line above. |
 | 2026-07-27 | Worktree-bypass pattern | Twice in one pass a coder committed straight to `main` instead of its assigned `wt/<id>` worktree (`t_aef95830` → `ae27bbe`, `t_819dd337` → `10fdeb3`), silently defeating the isolation/auto-merge net and false-FAILing worktree-only acceptance checks. **Rule:** an acceptance sweep must check live `main` before trusting a worktree-only FAIL. |
 | 2026-07-29 | KV binding | `[[kv_namespaces]] binding = "API_KEYS"` wired in `90cadd1`, closing the recurring token-binding gap. Stripe secrets still unset. |
 | 2026-07-29 | **This rewrite** | Full source scan + live probe. See §16. |
