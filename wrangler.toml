@@ -57,6 +57,11 @@ id = "b4862216375341f18f2aa6d58822c874"
 name = "CREDIT_LEDGER"
 class_name = "CreditLedger"
 
+# Analytics Engine binding for request-level traffic telemetry.
+# Write-only; enables per-path and per-method traffic counting without full request logging.
+[[analytics_engine_datasets]]
+binding = "TRAFFIC_AE"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["CreditLedger"]

@@ -44,6 +44,10 @@ type Env = {
   // and paste the same value into the RapidAPI listing's secret header field.
   // Unset = the bypass is inert and every request still pays x402 (fail closed).
   RAPIDAPI_PROXY_SECRET?: string;
+  // Analytics Engine binding for request-level traffic telemetry (observability only,
+  // never blocks a response). Allows us to distinguish zero-discovery from
+  // discovery-but-zero-conversion. Binding must be declared in wrangler.toml.
+  TRAFFIC_AE?: AnalyticsEngineDataset;
 };
 
 // ---------------------------------------------------------------------------
@@ -1935,6 +1939,20 @@ function timingSafeEqual(a: string, b: string): boolean {
 }
 
 app.use(async (c, next) => {
+  // Request-level traffic telemetry via Analytics Engine.
+  // Fires on every request (free + paid) before any auth check, so we can distinguish
+  // zero-discovery from discovery-but-zero-conversion. Wrapped in try/catch so a write
+  // failure never blocks a response (Analytics Engine is observability, not critical path).
+  try {
+    c.env.TRAFFIC_AE?.writeDataPoint({
+      blobs: [c.req.path, c.req.method, c.req.header("user-agent") ?? ""],
+      doubles: [1],
+      indexes: [c.req.path],
+    });
+  } catch (err) {
+    // Silently ignore telemetry failures; they must never disrupt response flow.
+  }
+
   // Toll-free routes — never check API key or x402
   const FREE_PATHS = new Set(["/", "/health", "/terms", "/token-safety", "/stripe/webhook"]);
   if (FREE_PATHS.has(c.req.path)) return next();
