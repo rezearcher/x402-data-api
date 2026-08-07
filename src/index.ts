@@ -1935,6 +1935,18 @@ function timingSafeEqual(a: string, b: string): boolean {
 }
 
 app.use(async (c, next) => {
+  // Request-level traffic telemetry: fires on every request (free + paid) so we can
+  // distinguish "zero discovery" from "discovery but zero conversion" (t_53a440db).
+  try {
+    c.env.TRAFFIC_AE?.writeDataPoint({
+      blobs: [c.req.path, c.req.method, c.req.header("user-agent") ?? ""],
+      doubles: [1],
+      indexes: [c.req.path],
+    });
+  } catch {
+    // Telemetry write failure must never block a response.
+  }
+
   // Toll-free routes — never check API key or x402
   const FREE_PATHS = new Set(["/", "/health", "/terms", "/token-safety", "/stripe/webhook"]);
   if (FREE_PATHS.has(c.req.path)) return next();
