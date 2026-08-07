@@ -44,6 +44,10 @@ type Env = {
   // and paste the same value into the RapidAPI listing's secret header field.
   // Unset = the bypass is inert and every request still pays x402 (fail closed).
   RAPIDAPI_PROXY_SECRET?: string;
+  // Cloudflare Analytics Engine dataset for request-level traffic telemetry.
+  // Captures path, method, user-agent on every request to diagnose whether
+  // zero revenue is due to zero discovery or zero conversion (t_53a440db).
+  TRAFFIC_AE?: AnalyticsEngineDataset;
 };
 
 // ---------------------------------------------------------------------------
