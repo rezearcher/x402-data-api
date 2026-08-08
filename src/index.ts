@@ -5111,66 +5111,6 @@ app.all("/mcp", async (c) => {
   return mcpHandler.fetch(c.req.raw, { parsedBody });
 });
 
-// ---------------------------------------------------------------------------
-// SEO: robots.txt — crawlers must respect this before indexing
-// ---------------------------------------------------------------------------
-
-app.get("/robots.txt", (c) => {
-  const robots = `User-agent: *
-Allow: /
-
-# Key entry points for SEO crawlers
-Allow: /
-Allow: /openapi.json
-Allow: /llms.txt
-Allow: /.well-known/agent-card.json
-
-# Disallow internal/probe endpoints
-Disallow: /internal/
-Disallow: /.well-known/402index-verify.txt
-Disallow: /.well-known/mcp-registry-auth
-
-Sitemap: https://x402-data-api.sigrunner.workers.dev/sitemap.xml
-`;
-  return c.text(robots, 200, { "Content-Type": "text/plain" });
-});
-
-// ---------------------------------------------------------------------------
-// SEO: sitemap.xml — static discovery index for search engines
-// ---------------------------------------------------------------------------
-
-app.get("/sitemap.xml", (c) => {
-  const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://x402-data-api.sigrunner.workers.dev/</loc>
-    <changefreq>weekly</changefreq>
-    <priority>1.0</priority>
-  </url>
-  <url>
-    <loc>https://x402-data-api.sigrunner.workers.dev/token-safety</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://x402-data-api.sigrunner.workers.dev/openapi.json</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://x402-data-api.sigrunner.workers.dev/llms.txt</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://x402-data-api.sigrunner.workers.dev/.well-known/agent-card.json</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-</urlset>
-`;
-  return c.text(sitemap, 200, { "Content-Type": "application/xml" });
-});
 
 // ---------------------------------------------------------------------------
 // Export
