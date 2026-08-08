@@ -301,6 +301,16 @@ app.get("/", (c) => {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Agent-native, pay-per-call data on Base mainnet. Base RPC reads, crypto/DeFi/prediction markets, and security endpoints—no account, no API key. Settled inline in USDC over x402 protocol.">
+<meta property="og:title" content="Grey Ridge Signals — Base-native x402 Data API">
+<meta property="og:description" content="Agent-native, pay-per-call data on Base mainnet. Base RPC reads, crypto/DeFi/prediction markets, and security endpoints—no account, no API key.">
+<meta property="og:url" content="https://x402-data-api.sigrunner.workers.dev/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Grey Ridge Signals — Base-native x402 Data API">
+<meta name="twitter:description" content="Agent-native, pay-per-call data on Base mainnet. No account, no API key. Settled in USDC via x402.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://x402-data-api.sigrunner.workers.dev/">
 <title>Grey Ridge Signals — Base-native x402 Data API</title>
 <style>
   :root { color-scheme: dark; }
@@ -729,6 +739,44 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/scan/mcp/preview?url=<mcp-server> — free preview (counts + risk score; withholds detail).
 - GET ${BASE}/.well-known/x402 — machine-readable discovery manifest.
 `);
+});
+
+// robots.txt — Instruct crawlers how to index the site. Allow everything; sitemap
+// tells them where the canonical discovery/documentation routes are.
+app.get("/robots.txt", (c) => {
+  const BASE = "https://x402-data-api.sigrunner.workers.dev";
+  return c.text(`User-agent: *
+Allow: /
+
+Sitemap: ${BASE}/sitemap.xml
+`);
+});
+
+// sitemap.xml — XML sitemap for SEO crawlers. Links canonical pages + key discovery
+// routes so crawlers prioritize indexing the public API docs over transient queries.
+app.get("/sitemap.xml", (c) => {
+  const BASE = "https://x402-data-api.sigrunner.workers.dev";
+  const lastmod = new Date().toISOString().split("T")[0];
+  const pages = [
+    { path: "/", priority: "1.0", changefreq: "daily" },
+    { path: "/.well-known/x402", priority: "0.9", changefreq: "weekly" },
+    { path: "/openapi.json", priority: "0.9", changefreq: "weekly" },
+    { path: "/llms.txt", priority: "0.8", changefreq: "weekly" },
+    { path: "/terms", priority: "0.7", changefreq: "monthly" },
+    { path: "/token-safety", priority: "0.8", changefreq: "daily" },
+  ];
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${pages.map((p) => `  <url>
+    <loc>${BASE}${p.path}</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>${p.changefreq}</changefreq>
+    <priority>${p.priority}</priority>
+  </url>`).join("\n")}
+</urlset>`;
+  return c.text(xml, {
+    headers: { "content-type": "application/xml" },
+  });
 });
 
 /** Give every operation a stable operationId, derived from method + path.
@@ -1679,6 +1727,16 @@ app.get("/token-safety", (c) => {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Real-time honeypot detection for Base chain tokens. Analyze any ERC-20 for proxy risks, mint/pause/blacklist functions, and simulate transfers before you buy.">
+<meta property="og:title" content="Token Safety Scanner — Base Chain Honeypot Detector">
+<meta property="og:description" content="Real-time honeypot detection for Base chain tokens. Analyze proxy risks, mint/pause/blacklist functions, and simulate transfers.">
+<meta property="og:url" content="https://x402-data-api.sigrunner.workers.dev/token-safety">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Token Safety Scanner — Base Chain Honeypot Detector">
+<meta name="twitter:description" content="Real-time honeypot detection for Base chain tokens. Analyze before you swap.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://x402-data-api.sigrunner.workers.dev/token-safety">
 <title>Token Safety Scanner — Base Chain Honeypot Detector | Grey Ridge Signals</title>
 <style>
   :root { color-scheme: dark; }
