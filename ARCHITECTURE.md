@@ -1,7 +1,7 @@
 # ARCHITECTURE — x402-data-api
 
 **Source of truth for what is actually shipped.** Base body rewritten 2026-07-29 from a full read of
-every source file at commit `90cadd1`; **synced 2026-08-06** against `main` (HEAD `0eba557`) after a
+every source file at commit `90cadd1`; **synced 2026-08-09** against `main` (HEAD `1a3f0e7`) after a
 batch of cards landed post-rewrite. Counts, prices, route lists, and tool lists below were read out of
 the code — not copied from prose. Where another doc conflicts with the code, the code wins and the
 conflict is recorded in [§13 Doc-drift corrections](#13-doc-drift-corrections).
@@ -10,8 +10,8 @@ conflict is recorded in [§13 Doc-drift corrections](#13-doc-drift-corrections).
 - **API-key credit decrement is now atomic** — moved into a per-key `CreditLedger` Durable Object
   (`src/index.ts:1626`, DO binding `CREDIT_LEDGER` in `wrangler.toml`). The old non-atomic
   read-modify-write bug is gone (§6). — commit `3e15740`
-- **Stripe webhook signature compare is now constant-time** via `timingSafeEqual` (`:1866`), not the
-  old plain `!==` (§6). — commit `9b16f8c`
+- **Stripe webhook + RapidAPI proxy-secret compare are now constant-time** via `timingSafeEqual`
+  (`:1988`), guarding both rails — not just the old plain `!==` (§6). — commits `9b16f8c`, `8185d56`
 - **Stripe Subscribe button is wired** — `/token-safety` Subscribe POSTs to
   `/stripe/create-checkout-session` (`:1785`), which creates a real Checkout Session (§6). — `5c7c9ac`
 - **RapidAPI proxy-auth rail** — the gate honors `X-RapidAPI-Proxy-Secret` against
@@ -28,6 +28,15 @@ conflict is recorded in [§13 Doc-drift corrections](#13-doc-drift-corrections).
 - **Revenue ledger audit reconciled** to 28 rows / 5 external (the old 26-vs-221 inconsistency is
   resolved); organic revenue is **$0.005** (Appendix). — commit `dfe76d2`
 - **Custom domain** `api.greyridgesignals.ai` now also serves the Worker. — commit `519e3d7`
+- **SEO/discoverability markup shipped** — `<meta>` + OpenGraph tags on `/` (`:304-308`) and
+  `/token-safety` (`:1730-1737`), `GET /robots.txt` (`:746`, free), `GET /sitemap.xml` (`:757`,
+  free, valid `urlset` over all discovery routes). — commit `bc636be`
+- **Constant-time compare extended to RapidAPI** — `timingSafeEqual` (`:1988`) now guards the
+  `X-RapidAPI-Proxy-Secret` header (`:2016`) in addition to the Stripe webhook (`:1928`);
+  previously only the webhook had constant-time protection. — commit `8185d56`
+- **Deploy pipeline unblocked** — `npm ci` ERESOLVE resolved; `TRAFFIC_AE` Analytics Engine
+  binding removed from `wrangler.toml` (account entitlement unavailable).
+  CI deploys from `main` again. — commits `8de3c40`, `1a3f0e7` (merge `t_73b934c8`)
 
 The live-probe table in §16 reflects the 2026-07-29 pass and has **not** been re-run for this sync.
 
@@ -266,7 +275,8 @@ All declared in `makeRoutes()`; prices are the literal values in that function.
   `0x4200…0006`); `/scan/mcp/preview` (real scan of the caller's target, but returns only counts +
   severity histogram + score + verdict — withholds which tools and the evidence).
 - **Discovery/meta:** `/`, `/health`, `/llms.txt`, `/openapi.json`, `/.well-known/x402`,
-  `/.well-known/agent-card.json`, `/.well-known/mcp-registry-auth`, `/.well-known/402index-verify.txt`.
+  `/.well-known/agent-card.json`, `/.well-known/mcp-registry-auth`, `/.well-known/402index-verify.txt`,
+  `/robots.txt`, `/sitemap.xml`.
 - **Human rail:** `/token-safety`, `POST /stripe/webhook`.
 - **Internal:** `/internal/cdp-probe`, `/internal/cdp-settle-raw`.
 
@@ -412,6 +422,8 @@ API keys** — which is why it can be a single stateless Worker.
 | MCP Registry auth | `/.well-known/mcp-registry-auth` (`:280`) | `v=MCPv1; k=ed25519; p=…` — domain-namespace proof for `mcp-publisher`. |
 | 402index proof | `/.well-known/402index-verify.txt` (`:274`) | Static ownership hash. |
 | Landing page | `/` (`:107`) | Self-contained HTML, inline CSS, zero external resources — pitch, price table, curl sample, MCP client config JSON, discovery links. |
+| robots.txt | `/robots.txt` (`:746`) | `Allow: /`, `Sitemap: <BASE>/sitemap.xml`. Served free above the gate. |
+| sitemap.xml | `/sitemap.xml` (`:757`) | Valid `urlset` over `/`, `/.well-known/x402`, `/openapi.json`, `/llms.txt`, `/terms`, `/token-safety`. Served free above the gate. |
 
 **Registry manifests in-repo:** `server.json` (MCP Registry, `io.github.rezearcher/tech-risk`
 v1.2.0, streamable-http remote) and `glama.json` (Glama listing).
@@ -526,6 +538,13 @@ Statements elsewhere that this pass's code read disproves. Corrected here; the r
 - **Glama listing** — needs a passive crawl of the now-public repo or a manual browser submit.
 
 **Engineering gaps (remaining):**
+- **Traffic telemetry is unwired.** `TRAFFIC_AE` Analytics Engine binding was removed from
+  `wrangler.toml` (2026-08-08; account entitlement unavailable on `9b5a408f…`). The
+  `Env.TRAFFIC_AE?: AnalyticsEngineDataset` type stub still exists (`src/index.ts:50`) but
+  **zero `writeDataPoint` calls** exist anywhere — the closed task removed the binding but never
+  shipped actual telemetry. The binding removal is reversible: add back `[[analytics_engine_datasets]]`
+  + a `writeDataPoint` call site when the account has the entitlement. Until then, the Worker has
+  no per-request traffic observability.
 - **CI is partial, not full CD.** `.github/workflows/ci.yml` now runs typecheck + mcp-client build on
   every push/PR and has a deploy-on-`main` job — but npm **publish** is still not automated (there is
   no publish job), and `smoke.js` / the mcp-client tests are not wired into CI (they spend real USDC /
@@ -559,11 +578,11 @@ price-impact on Base; an Aave/Moonwell near-liquidation monitor.
 
 ## 16. Verification evidence
 
-Everything in this document was verified on **2026-07-29** against commit `90cadd1`.
+Everything in this document was verified on **2026-08-09** against `main` HEAD `1a3f0e7`.
 
 **Static (this tree):**
-- `wc -l src/index.ts` → **4,652** (prior revisions of this doc said "~4,200").
-- `npx tsc --noEmit` → **exit 0, clean.**
+- `wc -l src/index.ts` → **5,108** (up from 4,652 at the 2026-07-29 rewrite; prior revisions said "~4,200").
+- `npx tsc --noEmit` → **exit 0, clean.** (typecheck runs in CI `.github/workflows/ci.yml:19`)
 - 19 entries in `makeRoutes()` = 18 paid `GET` + `POST /mcp`; 22 `server.registerTool(` calls;
   8 entries in `FREE_TOOLS`, matching the 8 registered `*_preview` tools exactly.
 - `ls .github` → at the 2026-07-29 pass this did not exist; **as of the 2026-08-06 sync
