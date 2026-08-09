@@ -57,10 +57,10 @@ id = "b4862216375341f18f2aa6d58822c874"
 name = "CREDIT_LEDGER"
 class_name = "CreditLedger"
 
-# Analytics Engine binding for request-level traffic telemetry.
-# Write-only; enables per-path and per-method traffic counting without full request logging.
-[[analytics_engine_datasets]]
-binding = "TRAFFIC_AE"
+# Analytics Engine binding removed 2026-08-08: account entitlement not available.
+# writeDataPoint is wrapped in try/catch (non-critical observability-only).
+# Decision: remove binding + call rather than keep commented-out code.
+# Reversible: add back if Rez enables Analytics Engine on account 9b5a408f758c052fd9ab99f5d0f32bea.
 
 [[migrations]]
 tag = "v1"
