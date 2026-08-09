@@ -1996,21 +1996,10 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-app.use(async (c, next) => {
-  // Request-level traffic telemetry via Analytics Engine.
-  // Fires on every request (free + paid) before any auth check, so we can distinguish
-  // zero-discovery from discovery-but-zero-conversion. Wrapped in try/catch so a write
-  // failure never blocks a response (Analytics Engine is observability, not critical path).
-  try {
-    c.env.TRAFFIC_AE?.writeDataPoint({
-      blobs: [c.req.path, c.req.method, c.req.header("user-agent") ?? ""],
-      doubles: [1],
-      indexes: [c.req.path],
-    });
-  } catch (err) {
-    // Silently ignore telemetry failures; they must never disrupt response flow.
-  }
+// Removed 2026-08-08: Analytics Engine binding not available on account.
+// See wrangler.toml for decision + rationale. Reversible via wrangler config.
 
+app.use(async (c, next) => {
   // Toll-free routes — never check API key or x402
   const FREE_PATHS = new Set(["/", "/health", "/terms", "/token-safety", "/stripe/webhook"]);
   if (FREE_PATHS.has(c.req.path)) return next();
