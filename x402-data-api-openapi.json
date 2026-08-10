@@ -1,0 +1,1192 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Grey Ridge Signals \u2014 x402 Data & Security APIs",
+        "version": "1.0.0",
+        "description": "Agent-native pay-per-call data on Base (USDC via x402). No API keys, no signup. Discovery: /.well-known/x402"
+    },
+    "servers": [
+        {
+            "url": "https://api.greyridgesignals.ai"
+        },
+        {
+            "url": "https://x402-data-api.sigrunner.workers.dev"
+        }
+    ],
+    "paths": {
+        "/": {
+            "get": {
+                "summary": "Landing page (HTML, free).",
+                "description": "Self-contained HTML landing page \u2014 pitch, endpoint-group pricing table, free curl sample, MCP install snippet, discovery links. No payment required.",
+                "responses": {
+                    "200": {
+                        "description": "HTML landing page"
+                    }
+                },
+                "tags": [
+                    "General"
+                ],
+                "operationId": "getRoot"
+            }
+        },
+        "/crypto/prices": {
+            "get": {
+                "summary": "Spot token prices + change_24h (DefiLlama).",
+                "description": "Spot token prices + change_24h (DefiLlama). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.001.",
+                "parameters": [
+                    {
+                        "name": "coins",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "bitcoin,ethereum"
+                        },
+                        "example": "bitcoin,ethereum",
+                        "description": "comma-separated coingecko ids (max 25)"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                },
+                                "example": [
+                                    {
+                                        "id": "bitcoin",
+                                        "symbol": "BTC",
+                                        "price": 64822.994470780264,
+                                        "change_24h": 1.503623026961424,
+                                        "confidence": 0.99,
+                                        "timestamp": 1785451925
+                                    },
+                                    {
+                                        "id": "ethereum",
+                                        "symbol": "ETH",
+                                        "price": 1926.2911886620323,
+                                        "change_24h": 1.162663532957758,
+                                        "confidence": 0.99,
+                                        "timestamp": 1785451925
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "402": {
+                        "description": "Payment required ($0.001 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getCryptoPrices"
+            }
+        },
+        "/crypto/funding": {
+            "get": {
+                "summary": "Cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread + premium/annualized/signal/next_funding_ts.",
+                "description": "Cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread + premium/annualized/signal/next_funding_ts. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.001.",
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "10"
+                        },
+                        "example": "10",
+                        "description": "max coins (default 20, max 100)"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                },
+                                "example": [
+                                    {
+                                        "coin": "BTC",
+                                        "funding": {
+                                            "hyperliquid": 1.25e-05,
+                                            "okx": 8.05484410423e-05,
+                                            "dydx": 2.5e-07
+                                        },
+                                        "funding_spread_bps": 0.8,
+                                        "best_long_venue": "dydx",
+                                        "best_short_venue": "okx",
+                                        "premium": -0.0003252258,
+                                        "annualized_hl": 0.10950000000000001,
+                                        "annualized_okx": 0.0882005429413185,
+                                        "signal": "LONGS_PAY",
+                                        "next_funding_ts": 1785484800000,
+                                        "markPx": 64853,
+                                        "oraclePx": 64878,
+                                        "openInterest": 33649.10066,
+                                        "dayNtlVlm": 1276087392.0635614
+                                    },
+                                    {
+                                        "coin": "ETH",
+                                        "funding": {
+                                            "hyperliquid": 1.25e-05,
+                                            "okx": 2.07481484366e-05,
+                                            "dydx": 9.125e-06
+                                        },
+                                        "funding_spread_bps": 0.12,
+                                        "best_long_venue": "dydx",
+                                        "best_short_venue": "okx",
+                                        "premium": -0.000326928,
+                                        "annualized_hl": 0.10950000000000001,
+                                        "annualized_okx": 0.022719222538077,
+                                        "signal": "LONGS_PAY",
+                                        "next_funding_ts": 1785484800000,
+                                        "markPx": 1926.3,
+                                        "oraclePx": 1927.03,
+                                        "openInterest": 952113.552,
+                                        "dayNtlVlm": 770057207.2642807
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "402": {
+                        "description": "Payment required ($0.001 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getCryptoFunding"
+            }
+        },
+        "/defi/yields": {
+            "get": {
+                "summary": "Top DeFi lending/LP yields \u2014 APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast (DefiLlama).",
+                "description": "Top DeFi lending/LP yields \u2014 APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast (DefiLlama). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.001.",
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "10"
+                        },
+                        "example": "10",
+                        "description": "max pools"
+                    },
+                    {
+                        "name": "project",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "aave-v3"
+                        },
+                        "example": "aave-v3",
+                        "description": "protocol filter"
+                    },
+                    {
+                        "name": "chain",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "Base"
+                        },
+                        "example": "Base",
+                        "description": "chain filter"
+                    },
+                    {
+                        "name": "stable",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "true"
+                        },
+                        "example": "true",
+                        "description": "'true' = stablecoin only"
+                    },
+                    {
+                        "name": "sort",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "tvl"
+                        },
+                        "example": "tvl",
+                        "description": "'tvl' (default) or 'risk_adjusted' (apy/sigma)"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                },
+                                "example": [
+                                    {
+                                        "project": "lido",
+                                        "chain": "Ethereum",
+                                        "symbol": "STETH",
+                                        "pool": "747c1d2a-c668-4682-b9f9-296708a3dd90",
+                                        "apy": 2.283,
+                                        "apyBase": 2.283,
+                                        "apyReward": null,
+                                        "apyPct1D": 0.088,
+                                        "apyPct7D": 0.12,
+                                        "apyPct30D": -0.034,
+                                        "apyBase7d": null,
+                                        "apyMean30d": 2.21748,
+                                        "tvlUsd": 18026769268,
+                                        "stablecoin": false,
+                                        "ilRisk": "no",
+                                        "il7d": null,
+                                        "exposure": "single",
+                                        "outlier": false,
+                                        "rewardTokens": null,
+                                        "underlyingTokens": [
+                                            "0x0000000000000000000000000000000000000000"
+                                        ],
+                                        "mu": 3.46514,
+                                        "sigma": 0.05358,
+                                        "risk_adjusted_apy": 42.60918253079507,
+                                        "predicted_probability": 72
+                                    },
+                                    {
+                                        "project": "binance-staked-eth",
+                                        "chain": "Ethereum",
+                                        "symbol": "WBETH",
+                                        "pool": "80b8bf92-b953-4c20-98ea-c9653ef2bb98",
+                                        "apy": 2.35936,
+                                        "apyBase": 2.35936,
+                                        "apyReward": null,
+                                        "apyPct1D": -0.01058,
+                                        "apyPct7D": -0.01533,
+                                        "apyPct30D": -0.09162,
+                                        "apyBase7d": null,
+                                        "apyMean30d": 2.40728,
+                                        "tvlUsd": 6714776905,
+                                        "stablecoin": false,
+                                        "ilRisk": "no",
+                                        "il7d": null,
+                                        "exposure": "single",
+                                        "outlier": false,
+                                        "rewardTokens": null,
+                                        "underlyingTokens": [
+                                            "0x0000000000000000000000000000000000000000"
+                                        ],
+                                        "mu": 2.95837,
+                                        "sigma": 0.03016,
+                                        "risk_adjusted_apy": 78.22811671087534,
+                                        "predicted_probability": 70
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "402": {
+                        "description": "Payment required ($0.001 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getDefiYields"
+            }
+        },
+        "/pm/markets": {
+            "get": {
+                "summary": "Live Polymarket prediction markets, ranked by volume24hr, with bestBid/bestAsk/spread and category tags.",
+                "description": "Live Polymarket prediction markets, ranked by volume24hr, with bestBid/bestAsk/spread and category tags. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.005.",
+                "parameters": [
+                    {
+                        "name": "query",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "election"
+                        },
+                        "example": "election",
+                        "description": "keyword filter"
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "10"
+                        },
+                        "example": "10",
+                        "description": "max markets"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                },
+                                "example": [
+                                    {
+                                        "question": "Will Adanech Abiebie be the next Prime Minister of Ethiopia?",
+                                        "slug": "will-adanech-abiebie-be-the-next-prime-minister-of-ethiopia",
+                                        "outcomes": [
+                                            "Yes",
+                                            "No"
+                                        ],
+                                        "outcomePrices": [
+                                            0.003,
+                                            0.997
+                                        ],
+                                        "volume": 72535263.35507399,
+                                        "volume24hr": 15362775.357997999,
+                                        "volume1wk": 28277205.211992,
+                                        "liquidity": 30686.02315,
+                                        "endDate": "2026-06-01T00:00:00Z",
+                                        "active": true,
+                                        "bestBid": 0.002,
+                                        "bestAsk": 0.004,
+                                        "spread": 0.002,
+                                        "oneDayPriceChange": -0.0005,
+                                        "clobTokenIds": [
+                                            "27146956652877944551877724690365745048289675287536243265951843487691050802191",
+                                            "33216695217861742195941369663873573949679634432452142092545486849801915283392"
+                                        ],
+                                        "conditionId": "0x7d0aaf81bbd3fd73b6a1651cce08a452c0cbf9c0cbb4520ce0f981065b639d88",
+                                        "tags": [
+                                            "Ethiopia",
+                                            "Elections"
+                                        ]
+                                    },
+                                    {
+                                        "question": "Will the U.S. invade Iran before 2027?",
+                                        "slug": "will-the-us-invade-iran-before-2027",
+                                        "outcomes": [
+                                            "Yes",
+                                            "No"
+                                        ],
+                                        "outcomePrices": [
+                                            0.245,
+                                            0.755
+                                        ],
+                                        "volume": 50871210.363267995,
+                                        "volume24hr": 1673757.9753350026,
+                                        "volume1wk": 4407296.077431004,
+                                        "liquidity": 1041232.5786,
+                                        "endDate": "2026-12-31T00:00:00Z",
+                                        "active": true,
+                                        "bestBid": 0.24,
+                                        "bestAsk": 0.25,
+                                        "spread": 0.01,
+                                        "oneDayPriceChange": null,
+                                        "clobTokenIds": [
+                                            "55115078421062885512539156303747803058407616201213034911037320915726138659123",
+                                            "1910830010387565971650098373488592514702818137344973088263643820608151819241"
+                                        ],
+                                        "conditionId": "0x5db999fad322cea2914535aae5517060c3f80ad6d8c0231cde2124a434d16846",
+                                        "tags": [
+                                            "Military Strikes",
+                                            "Politics"
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "402": {
+                        "description": "Payment required ($0.005 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getPmMarkets"
+            }
+        },
+        "/scan/mcp": {
+            "get": {
+                "summary": "Security audit of an MCP server (tool-poisoning / prompt-injection). Findings + risk score + verdict (clear/review/block).",
+                "description": "Security audit of an MCP server (tool-poisoning / prompt-injection). Findings + risk score + verdict (clear/review/block). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.10.",
+                "parameters": [
+                    {
+                        "name": "url",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "https://api.greyridgesignals.ai/mcp"
+                        },
+                        "example": "https://api.greyridgesignals.ai/mcp",
+                        "description": "target MCP server URL"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.10 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Security & Domain"
+                ],
+                "operationId": "getScanMcp"
+            }
+        },
+        "/enrich/tech-risk": {
+            "get": {
+                "summary": "Tech-stack -> CVE + EPSS + CISA-KEV risk + verdict (clear/review/block).",
+                "description": "Tech-stack -> CVE + EPSS + CISA-KEV risk + verdict (clear/review/block). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.05.",
+                "parameters": [
+                    {
+                        "name": "domain",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "stripe.com"
+                        },
+                        "example": "stripe.com",
+                        "description": "target domain"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                },
+                                "example": {
+                                    "tech_stack": [
+                                        "cloudflare",
+                                        "Cloudflare"
+                                    ],
+                                    "domain": "stripe.com",
+                                    "vulnerabilities": [
+                                        {
+                                            "id": "CVE-2017-7235",
+                                            "description": "An issue was discovered in cloudflare-scrape 1.6.6 through 1.7.1. A malicious website owner could craft a page that executes arbitrary Python code against an...",
+                                            "cvss_score": 8.8,
+                                            "epss_score": 0.01548,
+                                            "in_kev": false,
+                                            "exploit_available": false
+                                        },
+                                        {
+                                            "id": "CVE-2019-10842",
+                                            "description": "Arbitrary code execution (via backdoor code) was discovered in bootstrap-sass 3.2.0.3, when downloaded from rubygems.org. An unauthenticated attacker can cra...",
+                                            "cvss_score": 9.8,
+                                            "epss_score": 0.04923,
+                                            "in_kev": false,
+                                            "exploit_available": false
+                                        }
+                                    ],
+                                    "verdict": "review",
+                                    "summary": "Risk: cloudflare, Cloudflare \u2014 3 high-severity. Prioritize patching known-exploited vulnerabilities first.",
+                                    "generated_at": "2026-07-30T22:52:48.012Z"
+                                }
+                            }
+                        }
+                    },
+                    "402": {
+                        "description": "Payment required ($0.05 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Security & Domain"
+                ],
+                "operationId": "getEnrichTechRisk"
+            }
+        },
+        "/enrich/domain": {
+            "get": {
+                "summary": "Firmographic + tech-stack enrichment, incl. subdomain enumeration + verdict (clear/review/block, domain age).",
+                "description": "Firmographic + tech-stack enrichment, incl. subdomain enumeration + verdict (clear/review/block, domain age). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.01.",
+                "parameters": [
+                    {
+                        "name": "domain",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "stripe.com"
+                        },
+                        "example": "stripe.com",
+                        "description": "target domain"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                },
+                                "example": {
+                                    "domain": "stripe.com",
+                                    "dns": {
+                                        "AAAA": [],
+                                        "A": [
+                                            "198.202.176.161",
+                                            "198.137.150.161"
+                                        ],
+                                        "NS": [
+                                            "ns-1087.awsdns-07.org.",
+                                            "ns-1882.awsdns-43.co.uk."
+                                        ],
+                                        "MX": [
+                                            "10 aspmx.l.google.com.",
+                                            "20 alt1.aspmx.l.google.com."
+                                        ],
+                                        "TXT": [
+                                            "\"00D50000000JV6w=1TBTQ0000000CIv;00DDn000000HWol=1TBVY00000002Hx;00D4x000003vxGL=1TBPQ00000008Tp;00Dfn00000BUlWD=1TBan0000000LPR\"",
+                                            "\"MS=ms80697640\""
+                                        ]
+                                    },
+                                    "organization": null,
+                                    "registrar": null,
+                                    "created": null,
+                                    "certificates": [
+                                        {
+                                            "issuer": "C=US, O=DigiCert Inc, CN=DigiCert Global G2 TLS RSA SHA256 2020 CA1",
+                                            "common_name": "m.stripe.com",
+                                            "valid_from": "2026-07-28T00:00:00",
+                                            "valid_to": "2026-11-12T23:59:59"
+                                        },
+                                        {
+                                            "issuer": "C=US, O=DigiCert Inc, CN=DigiCert Global G3 TLS ECC SHA384 2020 CA1",
+                                            "common_name": "stripe.com\nwww.stripe.com",
+                                            "valid_from": "2026-07-28T00:00:00",
+                                            "valid_to": "2026-11-12T23:59:59"
+                                        }
+                                    ],
+                                    "subdomains": [
+                                        "09123--stripe.com",
+                                        "09223--stripe.com"
+                                    ],
+                                    "tech_stack": [
+                                        "cloudflare",
+                                        "Cloudflare"
+                                    ],
+                                    "verdict": "review",
+                                    "generated_at": "2026-07-30T22:52:48.819Z"
+                                }
+                            }
+                        }
+                    },
+                    "402": {
+                        "description": "Payment required ($0.01 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Security & Domain"
+                ],
+                "operationId": "getEnrichDomain"
+            }
+        },
+        "/chain/block-number": {
+            "get": {
+                "summary": "Current Base mainnet block number.",
+                "description": "Current Base mainnet block number. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.001.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                },
+                                "example": {
+                                    "block_number": 49331303,
+                                    "chain": "base"
+                                }
+                            }
+                        }
+                    },
+                    "402": {
+                        "description": "Payment required ($0.001 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainBlockNumber"
+            }
+        },
+        "/chain/gas-price": {
+            "get": {
+                "summary": "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd.",
+                "description": "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.001.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                },
+                                "example": {
+                                    "gas_price_wei": "6000000",
+                                    "gas_price_gwei": 0.006,
+                                    "base_fee_gwei": 0.005,
+                                    "priority_fee_gwei": 0.001,
+                                    "gas_price_usd": 1.156018186935566e-08,
+                                    "chain": "base"
+                                }
+                            }
+                        }
+                    },
+                    "402": {
+                        "description": "Payment required ($0.001 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainGasPrice"
+            }
+        },
+        "/chain/balance": {
+            "get": {
+                "summary": "ETH balance of a Base mainnet address, incl. balance_usd.",
+                "description": "ETH balance of a Base mainnet address, incl. balance_usd. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.001.",
+                "parameters": [
+                    {
+                        "name": "address",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10"
+                        },
+                        "example": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10",
+                        "description": "0x-prefixed Base address"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                },
+                                "example": {
+                                    "address": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10",
+                                    "balance_wei": "564502350338975",
+                                    "balance_eth": 0.000564502350338975,
+                                    "balance_usd": 1.087624972599546,
+                                    "chain": "base"
+                                }
+                            }
+                        }
+                    },
+                    "402": {
+                        "description": "Payment required ($0.001 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainBalance"
+            }
+        },
+        "/chain/token-balance": {
+            "get": {
+                "summary": "ERC-20 token balance of a Base mainnet address, incl. symbol/decimals/balance_formatted.",
+                "description": "ERC-20 token balance of a Base mainnet address, incl. symbol/decimals/balance_formatted. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.001.",
+                "parameters": [
+                    {
+                        "name": "address",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10"
+                        },
+                        "example": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10",
+                        "description": "0x-prefixed holder address"
+                    },
+                    {
+                        "name": "token",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+                        },
+                        "example": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+                        "description": "0x-prefixed ERC-20 contract address"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                },
+                                "example": {
+                                    "address": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10",
+                                    "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+                                    "symbol": "USDC",
+                                    "decimals": 6,
+                                    "balance_raw": "33024220",
+                                    "balance_formatted": 33.02422,
+                                    "chain": "base"
+                                }
+                            }
+                        }
+                    },
+                    "402": {
+                        "description": "Payment required ($0.001 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainTokenBalance"
+            }
+        },
+        "/chain/tx": {
+            "get": {
+                "summary": "Transaction details by hash on Base mainnet.",
+                "description": "Transaction details by hash on Base mainnet. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.001.",
+                "parameters": [
+                    {
+                        "name": "hash",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba"
+                        },
+                        "example": "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba",
+                        "description": "0x-prefixed 32-byte transaction hash"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                },
+                                "example": {
+                                    "type": "0x7e",
+                                    "sourceHash": "0xe6d0547c7f84a2c6e6c42f456f085481946a8d01ce8459f297aaff79573f5224",
+                                    "from": "0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001",
+                                    "to": "0x4200000000000000000000000000000000000015",
+                                    "mint": "0x0",
+                                    "value": "0",
+                                    "gas": "1000000",
+                                    "input": "0x3db6be2b000008dd00101c120000000000000000000000006a6bd56b0000000001875e820000000000000000000000000000000000000000000000000000000005ccf12e0000000000000000000...",
+                                    "hash": "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba",
+                                    "r": "0x0",
+                                    "s": "0x0",
+                                    "yParity": "0x0",
+                                    "v": "0x0",
+                                    "blockHash": "0xd0982e299b02dcd387e22b9709f883fdb05cc415da34854ff530249c165ceb49",
+                                    "blockNumber": "49331296",
+                                    "transactionIndex": "0x0",
+                                    "blockTimestamp": "0x6a6bd5a3",
+                                    "depositReceiptVersion": "0x1",
+                                    "gasPrice": "0",
+                                    "nonce": "49331299"
+                                }
+                            }
+                        }
+                    },
+                    "402": {
+                        "description": "Payment required ($0.001 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainTx"
+            }
+        },
+        "/chain/receipt": {
+            "get": {
+                "summary": "Transaction receipt by hash on Base mainnet: status, gas used, full logs, L1 fee breakdown, l1_fee_usd/total_fee_usd.",
+                "description": "Transaction receipt by hash on Base mainnet: status, gas used, full logs, L1 fee breakdown, l1_fee_usd/total_fee_usd. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.001.",
+                "parameters": [
+                    {
+                        "name": "hash",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba"
+                        },
+                        "example": "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba",
+                        "description": "0x-prefixed 32-byte transaction hash"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                },
+                                "example": {
+                                    "status": 1,
+                                    "block_number": 49331296,
+                                    "gas_used": 57406,
+                                    "cumulative_gas_used": 57406,
+                                    "effective_gas_price_wei": "0",
+                                    "from": "0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001",
+                                    "to": "0x4200000000000000000000000000000000000015",
+                                    "contract_address": null,
+                                    "tx_hash": "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba",
+                                    "logs_count": 0,
+                                    "logs": [],
+                                    "l1_fee_wei": "0",
+                                    "l1_gas_price_wei": "97317166",
+                                    "l1_gas_used": 1781,
+                                    "l1_fee_usd": 0,
+                                    "total_fee_usd": 0
+                                }
+                            }
+                        }
+                    },
+                    "402": {
+                        "description": "Payment required ($0.001 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainReceipt"
+            }
+        },
+        "/chain/code": {
+            "get": {
+                "summary": "Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware).",
+                "description": "Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.001.",
+                "parameters": [
+                    {
+                        "name": "address",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10"
+                        },
+                        "example": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10",
+                        "description": "0x-prefixed Base address"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                },
+                                "example": {
+                                    "address": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+                                    "is_contract": true,
+                                    "is_eip7702_delegate": false,
+                                    "delegate_address": null,
+                                    "code_size_bytes": 1852,
+                                    "chain": "base"
+                                }
+                            }
+                        }
+                    },
+                    "402": {
+                        "description": "Payment required ($0.001 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainCode"
+            }
+        },
+        "/chain/wallet": {
+            "get": {
+                "summary": "Wallet bundle: ETH balance + balance_usd + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call.",
+                "description": "Wallet bundle: ETH balance + balance_usd + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [
+                    {
+                        "name": "address",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10"
+                        },
+                        "example": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10",
+                        "description": "0x-prefixed Base address"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                },
+                                "example": {
+                                    "address": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10",
+                                    "balance_wei": "564502350338975",
+                                    "balance_eth": 0.000564502350338975,
+                                    "balance_usd": 1.087624972599546,
+                                    "tx_count": 11,
+                                    "is_contract": false,
+                                    "is_eip7702_delegate": false,
+                                    "delegate_address": null,
+                                    "chain": "base"
+                                }
+                            }
+                        }
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainWallet"
+            }
+        },
+        "/chain/token-security": {
+            "get": {
+                "summary": "Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.",
+                "description": "Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.02.",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+                        },
+                        "example": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+                        "description": "0x-prefixed ERC-20 contract address on Base mainnet"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                },
+                                "example": {
+                                    "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+                                    "chain": "base",
+                                    "is_contract": true,
+                                    "is_eip7702_delegate": false,
+                                    "delegate_address": null,
+                                    "meta": {
+                                        "name": "USD Coin",
+                                        "symbol": "USDC",
+                                        "decimals": 6,
+                                        "total_supply_raw": "4283502362276780",
+                                        "total_supply_formatted": 4283502362.27678
+                                    },
+                                    "proxy": {
+                                        "is_proxy": true,
+                                        "proxy_standard": "OZ zOS AdminUpgradeabilityProxy (pre-EIP-1967)",
+                                        "implementation_address": "0x2ce6311ddae708829bc0784c967b7d77d19fd779",
+                                        "admin_address": "0x4fc7850364958d97b4d3f5a08f79db2493f8ca44",
+                                        "is_upgradeable": true
+                                    },
+                                    "capabilities": {
+                                        "can_mint": true,
+                                        "can_burn": true,
+                                        "can_pause": true,
+                                        "has_blacklist": true,
+                                        "has_fee_setter": false,
+                                        "has_ownership": true,
+                                        "detected_selectors": [
+                                            {
+                                                "selector": "0x40c10f19",
+                                                "signature": "mint(address,uint256)",
+                                                "category": "can_mint"
+                                            },
+                                            {
+                                                "selector": "0x42966c68",
+                                                "signature": "burn(uint256)",
+                                                "category": "can_burn"
+                                            }
+                                        ],
+                                        "scanned_address": "0x2ce6311ddae708829bc0784c967b7d77d19fd779"
+                                    },
+                                    "ownership": {
+                                        "owner": "0x3abd6f64a422225e61e435bae41db12096106df7",
+                                        "ownership_renounced": false,
+                                        "owner_type": "eoa"
+                                    },
+                                    "honeypot_sim": {
+                                        "sim_status": "unavailable",
+                                        "method": "eth_call with a stateDiff override: gives a synthetic wallet (0x1111...1111) a token balance out-of-band (no real funds move) by overriding the ERC-20's bala...",
+                                        "balance_slot_index": null,
+                                        "transferable": null,
+                                        "revert_reason": null,
+                                        "note": "Could not locate this token's balance storage slot by probing simple mapping(address=>uint256) layouts (slots 0-3). Likely a non-standard storage layout (pac..."
+                                    },
+                                    "risk_score": 65,
+                                    "verdict": "review",
+                                    "flags": [
+                                        "upgradeable proxy (OZ zOS AdminUpgradeabilityProxy (pre-EIP-1967)) \u2014 contract logic can be changed by the admin after you hold this token",
+                                        "owner/admin can mint unlimited new supply"
+                                    ],
+                                    "risk_summary": "5 risk flag(s) detected. Risk 65/100. Honeypot simulation was unavailable for this token \u2014 see honeypot_sim.note.",
+                                    "analyzed_at": "2026-07-30T22:52:46.231Z"
+                                }
+                            }
+                        }
+                    },
+                    "402": {
+                        "description": "Payment required ($0.02 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainTokenSecurity"
+            }
+        },
+        "/dns/{domain}": {
+            "get": {
+                "summary": "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.",
+                "description": "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.01.",
+                "parameters": [
+                    {
+                        "name": "domain",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "stripe.com"
+                        },
+                        "example": "stripe.com",
+                        "description": "domain name to resolve"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                },
+                                "example": {
+                                    "domain": "stripe.com",
+                                    "NS": [
+                                        "ns-1087.awsdns-07.org.",
+                                        "ns-1882.awsdns-43.co.uk."
+                                    ],
+                                    "MX": [
+                                        "10 aspmx.l.google.com.",
+                                        "20 alt1.aspmx.l.google.com."
+                                    ],
+                                    "AAAA": [],
+                                    "A": [
+                                        "198.137.150.111",
+                                        "198.202.176.111"
+                                    ],
+                                    "TXT": [
+                                        "\"00D50000000JV6w=1TBTQ0000000CIv;00DDn000000HWol=1TBVY00000002Hx;00D4x000003vxGL=1TBPQ00000008Tp;00Dfn00000BUlWD=1TBan0000000LPR\"",
+                                        "\"MS=ms80697640\""
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "402": {
+                        "description": "Payment required ($0.01 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Security & Domain"
+                ],
+                "operationId": "getDnsByDomain"
+            }
+        },
+        "/whois/{domain}": {
+            "get": {
+                "summary": "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.",
+                "description": "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.02.",
+                "parameters": [
+                    {
+                        "name": "domain",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "cloudflare.com"
+                        },
+                        "example": "cloudflare.com",
+                        "description": "domain name to look up"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                },
+                                "example": {
+                                    "domain": "CLOUDFLARE.COM",
+                                    "registrar": "1910",
+                                    "created": "2009-02-17T22:07:54Z",
+                                    "expiry": "2033-02-17T22:07:54Z",
+                                    "registrant": null,
+                                    "status": [
+                                        "client delete prohibited",
+                                        "client transfer prohibited"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "402": {
+                        "description": "Payment required ($0.02 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Security & Domain"
+                ],
+                "operationId": "getWhoisByDomain"
+            }
+        }
+    }
+}
