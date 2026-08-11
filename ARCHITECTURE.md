@@ -38,6 +38,27 @@ conflict is recorded in [§13 Doc-drift corrections](#13-doc-drift-corrections).
   binding removed from `wrangler.toml` (account entitlement unavailable).
   CI deploys from `main` again. — commits `8de3c40`, `1a3f0e7` (merge `t_73b934c8`)
 
+**Changed since the 2026-08-09 sync** (verified in code at HEAD `19c774c`, 2026-08-11):
+- **CDP facilitator flip is now wired in code** (`t_d7c234aa`, "dry-run only"). `src/facilitator.ts`
+  (`createCdpFacilitator`, tracked) is imported (`src/index.ts:13`) and `selectResourceServer`
+  (`:992`) now **actually swaps in a CDP-backed `x402ResourceServer`** when `FACILITATOR_MODE === "cdp"`
+  **and** both `CDP_API_KEY_ID`/`CDP_API_KEY_SECRET` are set; otherwise it falls back to the xpay
+  `resourceServer` (unchanged default). This supersedes §5's prior "would be swapped in" future-tense
+  note. **Live CDP settlement is NOT proven** — the flip is flag-gated, `wrangler.toml` still defaults
+  `FACILITATOR_MODE = "xpay"` (`:35`), no CDP secrets are set, and the ajv-`new Function`-on-Workers
+  constraint documented in §5 has **not** been retired (the new path constructs the same
+  `x402ResourceServer` class). Treat it as code-complete + flag-gated, xpay-proven-only until a live
+  CDP round-trip is captured. The card's dry-run verification was run **out-of-repo**; there is **no**
+  `scripts/verify_cdp_facilitator.sh` committed here (scripts/ holds only `auto-merge.sh`, `deploy.sh`,
+  `submit_x402_list.sh`, `verify_revenue_ledger.py`).
+- **Fleet-infra cards touched no files in this repo.** `t_4340baf2`/`t_a08b537c` (duplicate title —
+  one logical change: `fleet_unblock` never auto-unblocks human-gated cards), `t_409a8350` (SECENG:
+  fleet_unblock overriding human-only sign-off gates), and `t_6570598b` (SRE: broken ACCEPTANCE CHECK
+  for fleet_unblock guardrail cards) all live in the Hermes fleet layer (`~/.hermes`), **not** in the
+  x402-data-api tracked tree — `grep -r "fleet_unblock\|HUMAN_GATE"` over this repo returns nothing.
+  Recorded here only so downstream agents don't hunt for them in the Worker source; they are not part
+  of this service's architecture.
+
 The live-probe table in §16 reflects the 2026-07-29 pass and has **not** been re-run for this sync.
 
 ---
@@ -95,7 +116,7 @@ gate and it currently passes clean.
 | `vars.PAY_TO` | `0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10` | Base wallet Rez controls; overridable via `wrangler secret put PAY_TO`. |
 | `vars.FACILITATOR_URL` | `https://facilitator.xpay.sh` | |
 | `vars.NETWORK` | `eip155:8453` | Base mainnet. |
-| `vars.FACILITATOR_MODE` | `xpay` | **Do not set to `cdp`** — see §5. |
+| `vars.FACILITATOR_MODE` | `xpay` | `cdp` now activates a real CDP-backed resource server (`:992`, needs both CDP secrets) but is **live-unproven** — see §5. Keep `xpay` for live money. |
 | `kv_namespaces[0]` | binding `API_KEYS`, id `b48622…c874` | Wired 2026-07-29 (commit `90cadd1`); backs the Stripe rail (§6). |
 | `durable_objects.bindings[0]` | name `CREDIT_LEDGER`, class `CreditLedger` | Added post-rewrite; `new_sqlite_classes = ["CreditLedger"]` migration. Serializes per-key credit decrement so it is race-free (§6). |
 
@@ -190,12 +211,17 @@ agent ──GET /chain/gas-price──►  Worker
 - **Facilitator:** xpay, non-custodial (`FACILITATOR_URL = https://facilitator.xpay.sh`,
   `src/index.ts:37`). No Coinbase/CDP account is required to take money.
 - **Resource server** (`:664-676`): `new x402ResourceServer(new HTTPFacilitatorClient({url}))`
-  registered with `ExactEvmScheme`. `selectResourceServer(env)` (`:703`) is where a CDP-backed
-  server *would* be swapped in when `FACILITATOR_MODE === "cdp"`.
+  registered with `ExactEvmScheme`. `selectResourceServer(env)` (`:992`) now **actually** swaps in a
+  CDP-backed `x402ResourceServer` (via `createCdpFacilitator`, `src/facilitator.ts`) when
+  `FACILITATOR_MODE === "cdp"` **and** both CDP secrets are present; otherwise it returns the xpay
+  `resourceServer` (`t_d7c234aa`, flag-gated, live-unproven — see the header "Changed since 2026-08-09").
 - **The CDP wall — the single most important operational constraint.** Routing live settlement
-  through CDP breaks on Cloudflare Workers: the `@x402` resource server validates the Bazaar
-  discovery extension with **ajv**, which compiles schemas via `new Function` — blocked in the
-  Workers runtime. `FACILITATOR_MODE` must stay `xpay`. CDP is reachable **only** through
+  through CDP has been shown to break on Cloudflare Workers: the `@x402` resource server validates the
+  Bazaar discovery extension with **ajv**, which compiles schemas via `new Function` — blocked in the
+  Workers runtime. The new `FACILITATOR_MODE=cdp` code path constructs the **same** `x402ResourceServer`
+  class, so this constraint is **not** retired by the flip — a live CDP round-trip has not been
+  captured, and `FACILITATOR_MODE` must stay `xpay` for real money until it is. CDP is also reachable
+  through
   `POST /internal/cdp-settle-raw` (`:232`), which mints a CDP JWT and POSTs a pre-signed
   `{paymentPayload, paymentRequirements}` pair straight at the CDP facilitator's `/verify` then
   `/settle`, bypassing the resource server entirely. That path exists solely so routes get
