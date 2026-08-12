@@ -225,7 +225,15 @@ agent ──GET /chain/gas-price──►  Worker
   `POST /internal/cdp-settle-raw` (`:232`), which mints a CDP JWT and POSTs a pre-signed
   `{paymentPayload, paymentRequirements}` pair straight at the CDP facilitator's `/verify` then
   `/settle`, bypassing the resource server entirely. That path exists solely so routes get
-  catalogued in the CDP x402 Bazaar (§12).
+  catalogued in the CDP x402 Bazaar (§13).
+- **Bazaar freshness is blind to xpay.** CDP's Bazaar updates a route's freshness/ranking signal
+  (`quality.lastCalledAt` / `lastUpdated`) **only when a payment settles through the CDP facilitator**.
+  Production settles via xpay, so every real payment is invisible to Bazaar — all catalogued routes'
+  quality blocks froze at 2026-07-16..07-28 despite real external payers. `scripts/refresh_bazaar_catalog.js`
+  (§13) exists to counter this by firing self-funded CDP-facilitated canary settlements. **Efficacy is
+  unproven — see §15:** an SRE pass paginated the full discovery catalog (~15k items) after `t_291eefba`
+  was marked done and found at least one refreshed route (`/chain/balance`) *absent entirely*, so a
+  one-shot canary settlement is not confirmed to durably re-index/refresh a route.
 - **Discovery extensions.** Every entry in `makeRoutes` carries `declareDiscoveryExtension({...})`
   with an input schema and a realistic output example, so the live 402 challenge itself advertises
   the route to Bazaar crawlers. Query-method routes pass `method: "GET"` and are cast to the
@@ -497,6 +505,7 @@ secret, and generates no x402 revenue — it is a distribution surface. Note `_f
 | `seed_batch_cdp.js` (237) | Batch CDP Bazaar seeder. Iterates a **hardcoded 4-route manifest** (`/pm/markets`, `/chain/token-security`, `/chain/gas-price`, `/chain/block-number`); per route: live 402 → sign → `POST /internal/cdp-settle-raw`. Persists a **12h cooldown** to `.cdp_seed_cooldown.json`, written only on the success path. **Takes no arguments** — no `process.argv` handling exists. |
 | `seed_endpoint.js` (263) | Single-route seeder, one **positional** arg: `node seed_endpoint.js /crypto/funding`. Carries a 13-route metadata table incl. `/chain/token-security` and the full Base-RPC set. Price/asset/payTo are read from the **live** 402, so it is price-agnostic. |
 | `seed_raw_cdp.js` (118) | The original single-purpose `/pm/markets` CDP seeder that the two above generalize. |
+| `scripts/refresh_bazaar_catalog.js` (474) | **Bazaar freshness refresher** (`t_291eefba`, commit `c54d519`). Iterates a hardcoded **13-route manifest** (the query/oracle routes catalogued in the Bazaar; path-param routes excluded); per route: live 402 → sign EIP-3009 → attach Bazaar discovery extension → `POST /internal/cdp-settle-raw` (same proven path as the seed scripts). Goal: force a CDP-facilitated settlement so the route's `quality.lastCalledAt`/`lastUpdated` freshness signal updates, since production xpay settlement is invisible to it (§5, §15). Per-route **20h cooldown** in `scripts/.bazaar_refresh_cooldown.json` (`--force` bypasses; `--route <path>` targets one). Payer/payee are both `SELF_ADDRS`, so any on-chain row classifies as self-traffic and is excluded from revenue. **Does not touch the live xpay path** — `FACILITATOR_MODE` unchanged. |
 | `seed_normal_xpay.js` (132) / `test_payment_flow.js` (132) | **Near-duplicates** — identical except the wallet path (`buyer-wallet.json` vs `~/.hermes/secrets/base-wallet.json`) and the target URL (`/pm/markets` vs `/enrich/tech-risk`). Real paid xpay round-trips. |
 | `smoke.js` (55) | Paid smoke test against any path: `node smoke.js "/crypto/prices?coins=bitcoin"` — pays the advertised price and prints the body. The end-to-end paid→data proof. |
 | `fund_buyer.js` (49) | One-time: generate a throwaway buyer wallet and fund it with 0.03 USDC from the main wallet. Needed because CDP rejects self-sends, so seeds require `from != payTo`. |
@@ -578,7 +587,16 @@ Statements elsewhere that this pass's code read disproves. Corrected here; the r
 - **No hermetic test suite.** `smoke.js`, `mcp-client/test-mcp-client.mjs`, `test-paid-path.mjs`, and
   `concurrent-gate-test.mjs` are manual scripts that hit live production / spend real USDC; there is
   no offline unit/integration runner.
-- **Agentic.Market enrichment is still not fixed** — the `t_1a11024d` card's headline goal. What
+- **Bazaar freshness refresh is shipped but its efficacy is UNPROVEN.** `scripts/refresh_bazaar_catalog.js`
+  (`t_291eefba`, commit `c54d519`) exists and its settlement path (`/internal/cdp-settle-raw`) is the
+  proven seed path — but the *thesis* that a single self-funded canary settlement durably re-indexes or
+  refreshes a route in CDP's public Bazaar catalog is **not verified**. An SRE pass paginated the full
+  discovery API (~15,073 items, all offsets) after the card was closed and found a supposedly-refreshed
+  route (`/chain/balance`) **completely absent** — not stale, not present. Treat "Bazaar freshness
+  restored" as an open question until a before/after catalog diff proves a canary settlement bumps
+  `lastUpdated`. **Scheduling is also unverified in-repo:** the script's header calls it "scheduled" and
+  assumes a daily cron (hence the 20h cooldown), but no cron/wrangler-trigger wiring for it exists in the
+  tracked tree — any schedule lives outside this repo (hermes cron) and was not confirmed by this pass. — the `t_1a11024d` card's headline goal. What
   shipped is CDP Bazaar seeding, which sits *upstream* of Agentic.Market's own enrichment pipeline.
   There is no code anywhere that sets `description`/`category` on that service record.
 - **`vpe-key literal-tilde` defect (`t_fff1bf09`)** — not reproducible in this repo's code. `deploy.sh`
