@@ -360,7 +360,7 @@ app.get("/", (c) => {
     <thead><tr><th>Group</th><th>Price</th><th>Endpoints</th></tr></thead>
     <tbody>
       <tr><td>Base on-chain reads</td><td class="price">$0.001&ndash;$0.003</td><td><code>/chain/block-number</code>, <code>/chain/gas-price</code>, <code>/chain/balance</code>, <code>/chain/token-balance</code>, <code>/chain/tx</code>, <code>/chain/receipt</code>, <code>/chain/code</code>, <code>/chain/wallet</code></td></tr>
-      <tr><td>Crypto / DeFi / prediction markets</td><td class="price">$0.001&ndash;$0.005</td><td><code>/crypto/prices</code>, <code>/crypto/funding</code>, <code>/defi/yields</code>, <code>/pm/markets</code></td></tr>
+      <tr><td>Crypto / DeFi / prediction markets</td><td class="price">$0.001&ndash;$0.005</td><td><code>/crypto/prices</code> ($0.004), <code>/crypto/funding</code> ($0.004), <code>/defi/yields</code>, <code>/pm/markets</code></td></tr>
       <tr><td>Security</td><td class="price">$0.01&ndash;$0.10</td><td><code>/enrich/domain</code>, <code>/enrich/tech-risk</code>, <code>/scan/mcp</code>, <code>/chain/token-security</code></td></tr>
     </tbody>
   </table>
@@ -519,9 +519,9 @@ app.get("/.well-known/x402", (c) => {
     mcp_endpoint: `${BASE}/mcp`,
     resources: [
       mk("/pm/markets", "GET", "0.005", "5000", "Live Polymarket prediction markets — question, outcomes, bestBid/bestAsk/spread, volume24hr/volume1wk, oneDayPriceChange, clobTokenIds, conditionId, category tags, liquidity, end date. Ranked by volume24hr; filter by keyword.", ["prediction-markets", "polymarket", "markets", "crypto", "data"]),
-      mk("/crypto/funding", "GET", "0.001", "1000", "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, premium/basis, annualized_hl/annualized_okx, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices, open interest.", ["crypto", "funding", "perps", "hyperliquid", "okx", "dydx", "arbitrage", "defi", "data"]),
+      mk("/crypto/funding", "GET", "0.004", "1000", "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, premium/basis, annualized_hl/annualized_okx, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices, open interest.", ["crypto", "funding", "perps", "hyperliquid", "okx", "dydx", "arbitrage", "defi", "data"]),
       mk("/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, pool id, APY breakdown + 1d/7d/30d APY trend, IL risk (incl. il7d), exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL. Filter by project, chain, or stablecoin-only; sort by TVL or risk-adjusted APY.", ["defi", "yield", "lending", "apy", "tvl", "data"]),
-      mk("/crypto/prices", "GET", "0.001", "1000", "Spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/change_24h/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "defi", "data"]),
+      mk("/crypto/prices", "GET", "0.004", "1000", "Spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/change_24h/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "defi", "data"]),
       mk("/scan/mcp", "GET", "0.10", "100000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score + verdict (clear/review/block).", ["security", "mcp", "audit", "prompt-injection"]),
       mk("/enrich/tech-risk", "GET", "0.05", "50000", "Tech-stack fingerprint -> CVE (NVD) + EPSS + CISA-KEV attack-surface risk + verdict (clear/review/block) for a domain.", ["security", "cve", "risk"]),
       mk("/enrich/domain", "GET", "0.01", "10000", "Firmographic + tech-stack enrichment for a domain, incl. full subdomain enumeration via certificate-transparency logs (crt.sh, RDAP, DoH, HTTP fingerprint) + verdict (clear/review/block, based on domain age).", ["data", "domain", "enrichment"]),
@@ -575,7 +575,7 @@ app.get("/.well-known/agent-card.json", (c) => {
         description:
           "Live spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/change_24h/symbol/confidence/timestamp. " +
           "Route: GET /crypto/prices. Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. " +
-          "Price: $0.001. Free preview at GET /crypto/prices/preview. " +
+          "Price: $0.004. Free preview at GET /crypto/prices/preview. " +
           "Machine-readable payment manifest: /.well-known/x402. MCP tool interface: /mcp (tool: crypto_prices).",
         tags: ["crypto", "prices", "defi", "data"],
         examples: [
@@ -589,7 +589,7 @@ app.get("/.well-known/agent-card.json", (c) => {
           "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h volume, per-venue funding + arb spread (bps), " +
           "best long/short venue, premium/annualized signal, next_funding_ts, mark/oracle prices, open interest. " +
           "Route: GET /crypto/funding. Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. " +
-          "Price: $0.001. Free preview at GET /crypto/funding/preview. " +
+          "Price: $0.004. Free preview at GET /crypto/funding/preview. " +
           "Machine-readable payment manifest: /.well-known/x402. MCP tool interface: /mcp (tool: crypto_funding).",
         tags: ["crypto", "funding", "perps", "hyperliquid", "arbitrage", "data"],
         examples: [
@@ -711,8 +711,8 @@ Each paid GET returns HTTP 402 with an x402 v2 payment-required challenge (netwo
 Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 
 ## Endpoints
-- GET ${BASE}/crypto/prices?coins=bitcoin,ethereum,solana — $0.001 — spot token prices + change_24h (DefiLlama), keyless.
-- GET ${BASE}/crypto/funding?limit=20 — $0.001 — cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread (bps) + best long/short venue + premium/annualized/signal/next_funding_ts.
+- GET ${BASE}/crypto/prices?coins=bitcoin,ethereum,solana — $0.004 — spot token prices + change_24h (DefiLlama), keyless.
+- GET ${BASE}/crypto/funding?limit=20 — $0.004 — cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread (bps) + best long/short venue + premium/annualized/signal/next_funding_ts.
 - GET ${BASE}/defi/yields?limit=20&project=&chain=&stable=&sort=tvl|risk_adjusted — $0.001 — top DeFi lending/LP yields, APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast + TVL (DefiLlama).
 - GET ${BASE}/pm/markets?query=&limit=20 — $0.005 — live Polymarket prediction markets, ranked by volume24hr (bestBid/bestAsk/spread, clobTokenIds, category tags, liquidity).
 - GET ${BASE}/scan/mcp?url=<mcp-server> — $0.10 — security audit of an MCP server (tool-poisoning / prompt-injection, OWASP LLM01/LLM08); findings + risk score + verdict (clear/review/block).
@@ -890,8 +890,8 @@ app.get("/openapi.json", (c) => {
           responses: { "200": { description: "HTML landing page" } },
         },
       },
-      "/crypto/prices": paid("Spot token prices + change_24h (DefiLlama).", "0.001", [{ name: "coins", desc: "comma-separated coingecko ids (max 25)", example: "bitcoin,ethereum" }]),
-      "/crypto/funding": paid("Cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread + premium/annualized/signal/next_funding_ts.", "0.001", [{ name: "limit", desc: "max coins (default 20, max 100)", example: "10" }]),
+      "/crypto/prices": paid("Spot token prices + change_24h (DefiLlama).", "0.004", [{ name: "coins", desc: "comma-separated coingecko ids (max 25)", example: "bitcoin,ethereum" }]),
+      "/crypto/funding": paid("Cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread + premium/annualized/signal/next_funding_ts.", "0.004", [{ name: "limit", desc: "max coins (default 20, max 100)", example: "10" }]),
       "/defi/yields": paid("Top DeFi lending/LP yields — APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast (DefiLlama).", "0.001", [{ name: "limit", desc: "max pools", example: "10" }, { name: "project", desc: "protocol filter", example: "aave-v3" }, { name: "chain", desc: "chain filter", example: "Base" }, { name: "stable", desc: "'true' = stablecoin only", example: "true" }, { name: "sort", desc: "'tvl' (default) or 'risk_adjusted' (apy/sigma)", example: "tvl" }]),
       "/pm/markets": paid("Live Polymarket prediction markets, ranked by volume24hr, with bestBid/bestAsk/spread and category tags.", "0.005", [{ name: "query", desc: "keyword filter", example: "election" }, { name: "limit", desc: "max markets", example: "10" }]),
       "/scan/mcp": paid("Security audit of an MCP server (tool-poisoning / prompt-injection). Findings + risk score + verdict (clear/review/block).", "0.10", [{ name: "url", desc: "target MCP server URL", required: true, example: "https://api.greyridgesignals.ai/mcp" }]),
@@ -920,7 +920,7 @@ app.get("/crypto/prices/preview", async (c) => {
     const all = await fetchTokenPrices(["bitcoin", "ethereum", "solana"]);
     return c.json({
       preview: all.slice(0, 1),
-      note: "Free 1-of-N sample. Full: GET /crypto/prices?coins=<ids> ($0.001) — up to 25 tokens, keyless x402 on Base.",
+      note: "Free 1-of-N sample. Full: GET /crypto/prices?coins=<ids> ($0.004) — up to 25 tokens, keyless x402 on Base.",
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
