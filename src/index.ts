@@ -483,6 +483,19 @@ app.get("/.well-known/x402", (c) => {
   const BASE = "https://x402-data-api.sigrunner.workers.dev";
   const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
   const payTo = c.env.PAY_TO;
+  // Short human-readable route name for Bazaar discovery (e.g. "/pm/markets" -> "PM Markets").
+  const shortRouteName = (p: string): string =>
+    p
+      .replace(/^\/+|\/+$/g, "")
+      .split("/")
+      .map((seg) =>
+        seg
+          .replace(/[{}]/g, "")
+          .split("-")
+          .map((w) => (w === "defi" ? "DeFi" : w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
+          .join(" ")
+      )
+      .join(" ");
   const mk = (p: string, method: string, price: string, units: string, desc: string, tags: string[]) => ({
     x402Version: 2,
     type: "http",
@@ -499,7 +512,10 @@ app.get("/.well-known/x402", (c) => {
     accepts: [{
       scheme: "exact", network: NETWORK, amount: units, maxAmountRequired: units,
       asset: USDC, payTo, maxTimeoutSeconds: 300, resource: `${BASE}${p}`,
-      description: desc, mimeType: "application/json", extra: { name: "USD Coin", version: "2" },
+      description: desc, mimeType: "application/json",
+      serviceName: shortRouteName(p),
+      tags,
+      extra: { name: "USD Coin", version: "2", serviceName: shortRouteName(p), tags },
     }],
   });
   return c.json({
