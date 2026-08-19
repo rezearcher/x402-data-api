@@ -59,6 +59,24 @@ conflict is recorded in [§13 Doc-drift corrections](#13-doc-drift-corrections).
   Recorded here only so downstream agents don't hunt for them in the Worker source; they are not part
   of this service's architecture.
 
+**Changed since the 2026-08-11 sync** (verified in code at HEAD `628a045`, 2026-08-19):
+- **Traffic telemetry is now SHIPPED** — the old "unwired" gap in §15 is closed. `t_9e3fec95`
+  replaced the dead Analytics-Engine sink with a SQLite-backed Durable Object, `TrafficLog`
+  (`src/index.ts:1748`), with table `hits (ts, path, method, ua)` and `logHit()` / `getStats()`
+  methods. It is **actually wired**: bound as `TRAFFIC_LOG` in `wrangler.toml` (migration tag `v2`,
+  `new_sqlite_classes = ["TrafficLog"]`; the `CreditLedger` v1 tag is untouched) and hooked
+  fire-and-forget in the global middleware (`:2048-2053`) via
+  `executionCtx.waitUntil(stub.logHit(...).catch(() => {}))` — logging happens **before** the
+  `FREE_PATHS` short-circuit, so every request (free previews, discovery, paid) is counted, and a
+  DO failure fails open (never blocks a request). A read path exists: `GET /internal/traffic-stats`
+  (`:467`) returns per-path counts over a window, gated by a constant-time `timingSafeEqual` against
+  `TRAFFIC_STATS_SECRET` (401 if the secret is unset or mismatched, 503 if the DO is unbound). The
+  old `Env.TRAFFIC_AE?: AnalyticsEngineDataset` stub and every `writeDataPoint` reference are now
+  **fully removed** from `src/index.ts` (previously the stub lingered). — commits `24dca5c`, `a04c5d1`
+  (merge `628a045`). **Not verified live:** no probe of a populated `hits` table or the stats endpoint
+  was run this pass, and `TRAFFIC_STATS_SECRET` is a Worker secret whose set/unset state is not
+  visible in the tree — until it is set, `/internal/traffic-stats` returns 401 for every caller.
+
 The live-probe table in §16 reflects the 2026-07-29 pass and has **not** been re-run for this sync.
 
 ---
@@ -118,7 +136,8 @@ gate and it currently passes clean.
 | `vars.NETWORK` | `eip155:8453` | Base mainnet. |
 | `vars.FACILITATOR_MODE` | `xpay` | `cdp` now activates a real CDP-backed resource server (`:992`, needs both CDP secrets) but is **live-unproven** — see §5. Keep `xpay` for live money. |
 | `kv_namespaces[0]` | binding `API_KEYS`, id `b48622…c874` | Wired 2026-07-29 (commit `90cadd1`); backs the Stripe rail (§6). |
-| `durable_objects.bindings[0]` | name `CREDIT_LEDGER`, class `CreditLedger` | Added post-rewrite; `new_sqlite_classes = ["CreditLedger"]` migration. Serializes per-key credit decrement so it is race-free (§6). |
+| `durable_objects.bindings[0]` | name `CREDIT_LEDGER`, class `CreditLedger` | Added post-rewrite; migration tag `v1` `new_sqlite_classes = ["CreditLedger"]`. Serializes per-key credit decrement so it is race-free (§6). |
+| `durable_objects.bindings[1]` | name `TRAFFIC_LOG`, class `TrafficLog` | Added by `t_9e3fec95` (2026-08-19); migration tag `v2` `new_sqlite_classes = ["TrafficLog"]`. SQLite request-telemetry counter that replaced the removed Analytics-Engine binding (§15, header 2026-08-19 entry). |
 
 `Env` type (`src/index.ts:16-29`) — everything beyond `PAY_TO` is optional, and every consumer
 degrades gracefully when absent:
@@ -573,13 +592,17 @@ Statements elsewhere that this pass's code read disproves. Corrected here; the r
 - **Glama listing** — needs a passive crawl of the now-public repo or a manual browser submit.
 
 **Engineering gaps (remaining):**
-- **Traffic telemetry is unwired.** `TRAFFIC_AE` Analytics Engine binding was removed from
-  `wrangler.toml` (2026-08-08; account entitlement unavailable on `9b5a408f…`). The
-  `Env.TRAFFIC_AE?: AnalyticsEngineDataset` type stub still exists (`src/index.ts:50`) but
-  **zero `writeDataPoint` calls** exist anywhere — the closed task removed the binding but never
-  shipped actual telemetry. The binding removal is reversible: add back `[[analytics_engine_datasets]]`
-  + a `writeDataPoint` call site when the account has the entitlement. Until then, the Worker has
-  no per-request traffic observability.
+- **Traffic telemetry is SHIPPED (was the standing gap).** `t_9e3fec95` closed this. After the
+  `TRAFFIC_AE` Analytics-Engine binding was removed 2026-08-08 (account entitlement unavailable on
+  `9b5a408f…`), the sink was replaced with a SQLite-backed Durable Object, `TrafficLog`
+  (`src/index.ts:1748`), bound as `TRAFFIC_LOG` (migration `v2`) and hooked fire-and-forget in the
+  global middleware (`:2048-2053`) — verified in code, see the 2026-08-19 header entry. The old
+  `Env.TRAFFIC_AE` stub and all `writeDataPoint` references are gone. **Residual limits, not a full
+  gap:** (a) `getStats` aggregates by path only and keeps every raw `hits` row indefinitely — there
+  is no retention/pruning, so the DO's SQLite grows unbounded; (b) the read endpoint
+  `/internal/traffic-stats` is unusable until the `TRAFFIC_STATS_SECRET` Worker secret is set (401
+  otherwise), and whether it is set is not visible in the tree; (c) no live probe of a populated
+  table was run this pass.
 - **CI is partial, not full CD.** `.github/workflows/ci.yml` now runs typecheck + mcp-client build on
   every push/PR and has a deploy-on-`main` job — but npm **publish** is still not automated (there is
   no publish job), and `smoke.js` / the mcp-client tests are not wired into CI (they spend real USDC /
@@ -625,7 +648,10 @@ price-impact on Base; an Aave/Moonwell near-liquidation monitor.
 Everything in this document was verified on **2026-08-09** against `main` HEAD `1a3f0e7`.
 
 **Static (this tree):**
-- `wc -l src/index.ts` → **5,108** (up from 4,652 at the 2026-07-29 rewrite; prior revisions said "~4,200").
+- `wc -l src/index.ts` → **5,160** (2026-08-19, after `t_9e3fec95` added the `TrafficLog` DO; was
+  5,108 at the 2026-08-09 sync, 4,652 at the 2026-07-29 rewrite).
+- **Two Durable Object classes** now exported: `CreditLedger` (`:1626`-era) and `TrafficLog` (`:1748`),
+  with migration tags `v1` and `v2` respectively in `wrangler.toml`.
 - `npx tsc --noEmit` → **exit 0, clean.** (typecheck runs in CI `.github/workflows/ci.yml:19`)
 - 19 entries in `makeRoutes()` = 18 paid `GET` + `POST /mcp`; 22 `server.registerTool(` calls;
   8 entries in `FREE_TOOLS`, matching the 8 registered `*_preview` tools exactly.
