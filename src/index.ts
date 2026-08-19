@@ -44,10 +44,10 @@ type Env = {
   // and paste the same value into the RapidAPI listing's secret header field.
   // Unset = the bypass is inert and every request still pays x402 (fail closed).
   RAPIDAPI_PROXY_SECRET?: string;
-  // Analytics Engine binding for request-level traffic telemetry (observability only,
-  // never blocks a response). Allows us to distinguish zero-discovery from
-  // discovery-but-zero-conversion. Binding must be declared in wrangler.toml.
-  TRAFFIC_AE?: AnalyticsEngineDataset;
+  // Durable Object SQLite traffic log (t_9e3fec95); replaces dead AE binding.
+  TRAFFIC_LOG?: DurableObjectNamespace<TrafficLog>;
+  // Secret gate for GET /internal/traffic-stats (constant-time compare).
+  TRAFFIC_STATS_SECRET?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -460,6 +460,18 @@ app.post("/internal/cdp-settle-raw", async (c) => {
   let settle = null;
   if (verify.status === 200) settle = await call("settle");
   return c.json({ verify, settle });
+});
+
+// GET /internal/traffic-stats?window_hours=24&secret=<TRAFFIC_STATS_SECRET> — per-path
+// hit counts from the TrafficLog DO (t_9e3fec95). Constant-time secret gate.
+app.get("/internal/traffic-stats", async (c) => {
+  const configured = c.env.TRAFFIC_STATS_SECRET;
+  const presented = c.req.query("secret") ?? "";
+  if (!configured || !presented || !timingSafeEqual(presented, configured)) return c.json({ error: "unauthorized" }, 401);
+  if (!c.env.TRAFFIC_LOG) return c.json({ error: "traffic logging not configured" }, 503);
+  const hours = Math.min(Math.max(parseInt(c.req.query("window_hours") ?? "24") || 24, 1), 720);
+  const stats = await c.env.TRAFFIC_LOG.get(c.env.TRAFFIC_LOG.idFromName("default")).getStats(hours * 3600);
+  return c.json({ ok: true, window_hours: hours, stats, timestamp: Math.floor(Date.now() / 1000) });
 });
 
 // ---------------------------------------------------------------------------
@@ -1732,6 +1744,24 @@ export class CreditLedger extends DurableObject<Env> {
   }
 }
 
+// Traffic log — SQLite request telemetry (t_9e3fec95); replaces dead AE binding.
+export class TrafficLog extends DurableObject<Env> {
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+  }
+
+  async logHit(path: string, method: string, ua: string): Promise<void> {
+    await this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS hits (ts INTEGER, path TEXT, method TEXT, ua TEXT)");
+    await this.ctx.storage.sql.exec("INSERT INTO hits (ts, path, method, ua) VALUES (?, ?, ?, ?)", Math.floor(Date.now() / 1000), path, method, ua);
+  }
+
+  async getStats(windowSeconds: number = 86400): Promise<Array<{ path: string; count: number }>> {
+    await this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS hits (ts INTEGER, path TEXT, method TEXT, ua TEXT)");
+    const cursor = await this.ctx.storage.sql.exec("SELECT path, COUNT(*) FROM hits WHERE ts > ? GROUP BY path ORDER BY 2 DESC", Math.floor(Date.now() / 1000) - windowSeconds);
+    return Array.from(cursor.raw()).map((row) => ({ path: String(row[0]), count: Number(row[1]) }));
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Human-facing landing page — token-safety scanner product
 // ---------------------------------------------------------------------------
@@ -2016,6 +2046,12 @@ function timingSafeEqual(a: string, b: string): boolean {
 // See wrangler.toml for decision + rationale. Reversible via wrangler config.
 
 app.use(async (c, next) => {
+  // Fire-and-forget traffic logging (t_9e3fec95): waitUntil + catch, fail open.
+  if (c.env.TRAFFIC_LOG) {
+    const stub = c.env.TRAFFIC_LOG.get(c.env.TRAFFIC_LOG.idFromName("default"));
+    c.executionCtx.waitUntil(stub.logHit(c.req.path, c.req.method, c.req.header("User-Agent") ?? "unknown").catch(() => {}));
+  }
+
   // Toll-free routes — never check API key or x402
   const FREE_PATHS = new Set(["/", "/health", "/terms", "/token-safety", "/stripe/webhook"]);
   if (FREE_PATHS.has(c.req.path)) return next();

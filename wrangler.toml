@@ -57,6 +57,10 @@ id = "b4862216375341f18f2aa6d58822c874"
 name = "CREDIT_LEDGER"
 class_name = "CreditLedger"
 
+[[durable_objects.bindings]]
+name = "TRAFFIC_LOG"
+class_name = "TrafficLog"
+
 # Analytics Engine binding removed 2026-08-08: account entitlement not available.
 # writeDataPoint is wrapped in try/catch (non-critical observability-only).
 # Decision: remove binding + call rather than keep commented-out code.
@@ -65,6 +69,10 @@ class_name = "CreditLedger"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["CreditLedger"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["TrafficLog"]
 # Required for routes declared with declareDiscoveryExtension to be catalogued in the Bazaar.
 # Both must be present for CDP facilitator to activate; if absent, xpay is used (default).
 #
