@@ -44,11 +44,10 @@ type Env = {
   // and paste the same value into the RapidAPI listing's secret header field.
   // Unset = the bypass is inert and every request still pays x402 (fail closed).
   RAPIDAPI_PROXY_SECRET?: string;
-  // Durable Object for SQLite-backed traffic logging (t_9e3fec95). Replaces dead
-  // Analytics Engine binding (AE not available on account 9b5a408f758c052fd9ab99f5d0f32bea).
-  // TrafficLog DO writes request (ts, path, method, ua) asynchronously via waitUntil(),
-  // never blocking responses. Missing binding => traffic logging is inert (fail open).
+  // Durable Object SQLite traffic log (t_9e3fec95); replaces dead AE binding.
   TRAFFIC_LOG?: DurableObjectNamespace<TrafficLog>;
+  // Secret gate for GET /internal/traffic-stats (constant-time compare).
+  TRAFFIC_STATS_SECRET?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -463,41 +462,16 @@ app.post("/internal/cdp-settle-raw", async (c) => {
   return c.json({ verify, settle });
 });
 
-// Internal traffic stats endpoint (t_9e3fec95): query hit counts by path from TrafficLog DO.
-// Gated behind a constant-time secret check like RapidAPI proxy secret.
-// GET /internal/traffic-stats?window_hours=24&secret=<TRAFFIC_STATS_SECRET>
+// GET /internal/traffic-stats?window_hours=24&secret=<TRAFFIC_STATS_SECRET> — per-path
+// hit counts from the TrafficLog DO (t_9e3fec95). Constant-time secret gate.
 app.get("/internal/traffic-stats", async (c) => {
-  const secret = c.req.query("secret") ?? "";
-  const configuredSecret = c.env.TRAFFIC_STATS_SECRET;
-
-  // Fail closed: if no secret is configured or presented secret doesn't match (via
-  // constant-time compare), refuse the request. Matches the RapidAPI pattern.
-  if (!configuredSecret || !secret || !timingSafeEqual(secret, configuredSecret)) {
-    return c.json({ error: "unauthorized" }, 401);
-  }
-
-  // Query window: default 24h, allow override via query param (in hours).
-  const windowHours = Math.min(Math.max(parseInt(c.req.query("window_hours") ?? "24"), 1), 720); // 1h to 30d
-  const windowSeconds = windowHours * 3600;
-
-  if (!c.env.TRAFFIC_LOG) {
-    return c.json({ error: "traffic logging not configured" }, 503);
-  }
-
-  try {
-    const trafficDo = c.env.TRAFFIC_LOG.get(c.env.TRAFFIC_LOG.idFromName("default"));
-    const stats = await trafficDo.getStats(windowSeconds);
-    return c.json({
-      ok: true,
-      window_hours: windowHours,
-      window_seconds: windowSeconds,
-      stats,
-      timestamp: Math.floor(Date.now() / 1000),
-    });
-  } catch (e) {
-    console.log(JSON.stringify({ event: "traffic_stats_query_error", error: (e as Error).message }));
-    return c.json({ error: "query failed" }, 500);
-  }
+  const configured = c.env.TRAFFIC_STATS_SECRET;
+  const presented = c.req.query("secret") ?? "";
+  if (!configured || !presented || !timingSafeEqual(presented, configured)) return c.json({ error: "unauthorized" }, 401);
+  if (!c.env.TRAFFIC_LOG) return c.json({ error: "traffic logging not configured" }, 503);
+  const hours = Math.min(Math.max(parseInt(c.req.query("window_hours") ?? "24") || 24, 1), 720);
+  const stats = await c.env.TRAFFIC_LOG.get(c.env.TRAFFIC_LOG.idFromName("default")).getStats(hours * 3600);
+  return c.json({ ok: true, window_hours: hours, stats, timestamp: Math.floor(Date.now() / 1000) });
 });
 
 // ---------------------------------------------------------------------------
@@ -1770,47 +1744,21 @@ export class CreditLedger extends DurableObject<Env> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Traffic log — SQLite-backed request telemetry (no latency impact)
-// ---------------------------------------------------------------------------
-// Replaces dead Analytics Engine binding (entitlement error 10089 on account
-// 9b5a408f758c052fd9ab99f5d0f32bea). Durable Objects provide durable storage
-// (SQLite) backed by Cloudflare's infrastructure. Writes are async (waitUntil)
-// and never block responses. Table: hits (ts INTEGER, path TEXT, method TEXT, ua TEXT).
+// Traffic log — SQLite request telemetry (t_9e3fec95); replaces dead AE binding.
 export class TrafficLog extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
   }
 
-  /** Initialize the SQLite schema on first request (idempotent). */
-  private async initSchema(): Promise<void> {
-    await this.ctx.storage.sql.exec(`
-      CREATE TABLE IF NOT EXISTS hits (
-        ts INTEGER NOT NULL,
-        path TEXT NOT NULL,
-        method TEXT NOT NULL,
-        ua TEXT NOT NULL
-      )
-    `);
-  }
-
-  /** Log a single request hit asynchronously. */
   async logHit(path: string, method: string, ua: string): Promise<void> {
-    await this.initSchema();
-    const ts = Math.floor(Date.now() / 1000); // Unix seconds
-    await this.ctx.storage.sql.exec("INSERT INTO hits (ts, path, method, ua) VALUES (?, ?, ?, ?)", [ts, path, method, ua]);
+    await this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS hits (ts INTEGER, path TEXT, method TEXT, ua TEXT)");
+    await this.ctx.storage.sql.exec("INSERT INTO hits (ts, path, method, ua) VALUES (?, ?, ?, ?)", Math.floor(Date.now() / 1000), path, method, ua);
   }
 
-  /** Query hit counts by path, grouped and ordered by count descending. Window is 24h by default. */
   async getStats(windowSeconds: number = 86400): Promise<Array<{ path: string; count: number }>> {
-    await this.initSchema();
-    const now = Math.floor(Date.now() / 1000);
-    const since = now - windowSeconds;
-    const results = await this.ctx.storage.sql.exec(
-      "SELECT path, COUNT(*) as count FROM hits WHERE ts > ? GROUP BY path ORDER BY count DESC",
-      [since]
-    );
-    return (results as any[]).map(row => ({ path: row[0], count: row[1] }));
+    await this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS hits (ts INTEGER, path TEXT, method TEXT, ua TEXT)");
+    const cursor = await this.ctx.storage.sql.exec("SELECT path, COUNT(*) FROM hits WHERE ts > ? GROUP BY path ORDER BY 2 DESC", Math.floor(Date.now() / 1000) - windowSeconds);
+    return Array.from(cursor.raw()).map((row) => ({ path: String(row[0]), count: Number(row[1]) }));
   }
 }
 
@@ -2098,19 +2046,10 @@ function timingSafeEqual(a: string, b: string): boolean {
 // See wrangler.toml for decision + rationale. Reversible via wrangler config.
 
 app.use(async (c, next) => {
-  // Fire-and-forget traffic logging via Durable Object (t_9e3fec95).
-  // Uses waitUntil() so the write never adds request latency.
-  // Wraps in try/catch so a DO failure never blocks a response (fail open).
+  // Fire-and-forget traffic logging (t_9e3fec95): waitUntil + catch, fail open.
   if (c.env.TRAFFIC_LOG) {
-    const trafficDo = c.env.TRAFFIC_LOG.get(c.env.TRAFFIC_LOG.idFromName("default"));
-    const path = c.req.path;
-    const method = c.req.method;
-    const ua = c.req.header("User-Agent") ?? "unknown";
-    c.executionCtx.waitUntil(
-      trafficDo.logHit(path, method, ua).catch((e) => {
-        console.log(JSON.stringify({ event: "traffic_log_error", error: (e as Error).message }));
-      })
-    );
+    const stub = c.env.TRAFFIC_LOG.get(c.env.TRAFFIC_LOG.idFromName("default"));
+    c.executionCtx.waitUntil(stub.logHit(c.req.path, c.req.method, c.req.header("User-Agent") ?? "unknown").catch(() => {}));
   }
 
   // Toll-free routes — never check API key or x402
