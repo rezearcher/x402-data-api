@@ -11,12 +11,14 @@ import { z } from "zod/v4";
 import { keccak256 } from "viem";
 import { DurableObject } from "cloudflare:workers";
 import { createCdpFacilitator } from "./facilitator";
+import { trackPaidRequest, getMetrics, type Rail } from "./usage.ts";
+import { makeUsageCounter, type UsageCounter } from "./usage_counter.ts";
 
 // ---------------------------------------------------------------------------
 // Environment bindings
 // ---------------------------------------------------------------------------
 
-type Env = {
+export type Env = {
   PAY_TO: string;
   // CDP facilitator credentials (Worker secrets) — enable Bazaar discovery/settlement.
   CDP_API_KEY_ID?: string;
@@ -46,6 +48,11 @@ type Env = {
   RAPIDAPI_PROXY_SECRET?: string;
   // Durable Object SQLite traffic log (t_9e3fec95); replaces dead AE binding.
   TRAFFIC_LOG?: DurableObjectNamespace<TrafficLog>;
+  // Atomic paid-usage counters (audit F-05, mirrored from x402-cve-triage):
+  // per-route/per-rail aggregates for the daily chain-verified reconcile
+  // ledger. One DO instance ("paid-usage") holds every counter. Missing
+  // binding => tracking no-ops (graceful degradation).
+  USAGE_COUNTER?: DurableObjectNamespace<UsageCounter>;
   // Secret gate for GET /internal/traffic-stats (constant-time compare).
   TRAFFIC_STATS_SECRET?: string;
 };
@@ -187,13 +194,31 @@ async function baseRpc(method: string, params: unknown[]): Promise<any> {
 // App factory — called fresh per Worker request (Hono is stateless)
 // ---------------------------------------------------------------------------
 
-const app = new Hono<{ Bindings: Env }>();
+// `rail` is set by the gate middleware on every gated request so the route
+// handlers can attribute a successful paid call to its payment rail.
+type AppEnv = {
+  Bindings: Env;
+  Variables: { rail: Rail };
+};
+
+const app = new Hono<AppEnv>();
 
 // ---------------------------------------------------------------------------
 // Free health endpoint
 // ---------------------------------------------------------------------------
 
 app.get("/health", (c) => c.json({ ok: true }));
+
+// ---------------------------------------------------------------------------
+// Paid-usage metrics (audit F-05) — gate-bypassed, aggregate-only
+// ---------------------------------------------------------------------------
+// Per-route/per-rail counters consumed by the daily chain-verified reconcile
+// ledger (mirrors x402-cve-triage /metrics). Aggregate-only — no per-request
+// data, no PAY_TO, no keys. Never x402-gated: FREE_PATHS in the middleware.
+app.get("/metrics", async (c) => {
+  const metrics = await getMetrics(makeUsageCounter(c.env));
+  return c.json(metrics);
+});
 
 // ---------------------------------------------------------------------------
 // Terms of use. Marketplace listings (RapidAPI, MCP registries) require a real,
@@ -2053,7 +2078,7 @@ app.use(async (c, next) => {
   }
 
   // Toll-free routes — never check API key or x402
-  const FREE_PATHS = new Set(["/", "/health", "/terms", "/token-safety", "/stripe/webhook"]);
+  const FREE_PATHS = new Set(["/", "/health", "/terms", "/token-safety", "/stripe/webhook", "/metrics"]);
   if (FREE_PATHS.has(c.req.path)) return next();
   if (c.req.path.startsWith("/.well-known/")) return next();
 
@@ -2073,6 +2098,8 @@ app.use(async (c, next) => {
         path: c.req.path,
         user: c.req.header("X-RapidAPI-User") ?? null,
       }));
+      // Attribute this request to the RapidAPI rail (already-paid, non-chain).
+      c.set("rail", "rapidapi-bypass");
       return next();
     }
   }
@@ -2097,6 +2124,8 @@ app.use(async (c, next) => {
           const remaining = await stub.deductCredit(record.credits_remaining);
           if (remaining > 0) {
             console.log(JSON.stringify({ event: "api_key_used", credits_remaining: remaining }));
+            // Attribute this request to the prepaid api-key rail (non-chain).
+            c.set("rail", "api-key");
             return next();
           }
         }
@@ -2155,8 +2184,26 @@ app.use(async (c, next) => {
       false,
     );
   }
+  // Fall-through rail: the request is about to pay (or has paid) via x402 —
+  // the only rail that settles USDC on Base, so the only one that counts as
+  // a paid call in the reconcile ledger.
+  c.set("rail", "x402-paid");
   return cachedMiddleware(c, next);
 });
+
+// Track a successful paid call fire-and-forget. Never on the response path:
+// the write rides ctx.waitUntil so the buyer's response is not slowed by the
+// counter round-trip (DO fetch). Hono's `executionCtx` getter THROWS when no
+// ExecutionContext is present (e.g. bare app.request in tests), so access it
+// defensively.
+function fireAndForget(c: { executionCtx?: { waitUntil(p: Promise<void>): void } }, p: Promise<void>): void {
+  try {
+    c.executionCtx?.waitUntil?.(p);
+  } catch {
+    // No ExecutionContext — run the write detached; trackPaidRequest swallows
+    // its own errors, so this can never produce an unhandled rejection.
+  }
+}
 
 // ---------------------------------------------------------------------------
 // DNS enrichment endpoint  ($0.01)
@@ -2191,6 +2238,8 @@ app.get("/dns/:domain", async (c) => {
       ts: new Date().toISOString(),
     }),
   );
+  const rail = c.get("rail") ?? "x402-paid";
+  fireAndForget(c, trackPaidRequest("GET /dns/:domain", rail, makeUsageCounter(c.env)));
 
   return c.json({ domain, ...results });
 });
@@ -2241,6 +2290,8 @@ app.get("/whois/:domain", async (c) => {
       ts: new Date().toISOString(),
     }),
   );
+  const rail = c.get("rail") ?? "x402-paid";
+  fireAndForget(c, trackPaidRequest("GET /whois/:domain", rail, makeUsageCounter(c.env)));
 
   return c.json({
     domain: raw.ldhName ?? domain,
@@ -2576,6 +2627,8 @@ app.get("/enrich/tech-risk", async (c) => {
         ts: startTs,
       }),
     );
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /enrich/tech-risk", rail, makeUsageCounter(c.env)));
 
     return c.json(result);
   } catch (e) {
@@ -2769,6 +2822,8 @@ app.get("/enrich/domain", async (c) => {
       ts: result.generated_at,
     }),
   );
+  const rail = c.get("rail") ?? "x402-paid";
+  fireAndForget(c, trackPaidRequest("GET /enrich/domain", rail, makeUsageCounter(c.env)));
 
   return c.json(result);
 });
@@ -2925,6 +2980,8 @@ app.get("/pm/markets", async (c) => {
         ts: new Date().toISOString(),
       }),
     );
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /pm/markets", rail, makeUsageCounter(c.env)));
 
     return c.json(markets);
   } catch (e) {
@@ -3137,6 +3194,8 @@ app.get("/crypto/funding", async (c) => {
         ts: new Date().toISOString(),
       }),
     );
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /crypto/funding", rail, makeUsageCounter(c.env)));
 
     return c.json(rates);
   } catch (e) {
@@ -3282,6 +3341,8 @@ app.get("/defi/yields", async (c) => {
         ts: new Date().toISOString(),
       }),
     );
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /defi/yields", rail, makeUsageCounter(c.env)));
 
     return c.json(pools);
   } catch (e) {
@@ -3382,6 +3443,8 @@ app.get("/crypto/prices", async (c) => {
         ts: new Date().toISOString(),
       }),
     );
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /crypto/prices", rail, makeUsageCounter(c.env)));
 
     return c.json(prices);
   } catch (e) {
@@ -3453,6 +3516,8 @@ app.get("/chain/block-number", async (c) => {
     console.log(
       JSON.stringify({ event: "paid_request", endpoint: "/chain/block-number", ts: new Date().toISOString() }),
     );
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/block-number", rail, makeUsageCounter(c.env)));
 
     return c.json(result);
   } catch (e) {
@@ -3517,6 +3582,8 @@ app.get("/chain/gas-price", async (c) => {
     console.log(
       JSON.stringify({ event: "paid_request", endpoint: "/chain/gas-price", ts: new Date().toISOString() }),
     );
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/gas-price", rail, makeUsageCounter(c.env)));
 
     return c.json(result);
   } catch (e) {
@@ -3572,6 +3639,8 @@ app.get("/chain/balance", async (c) => {
     console.log(
       JSON.stringify({ event: "paid_request", endpoint: "/chain/balance", address, ts: new Date().toISOString() }),
     );
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/balance", rail, makeUsageCounter(c.env)));
 
     return c.json(result);
   } catch (e) {
@@ -3654,6 +3723,8 @@ app.get("/chain/token-balance", async (c) => {
     console.log(
       JSON.stringify({ event: "paid_request", endpoint: "/chain/token-balance", address, token, ts: new Date().toISOString() }),
     );
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/token-balance", rail, makeUsageCounter(c.env)));
 
     return c.json(result);
   } catch (e) {
@@ -3685,6 +3756,8 @@ app.get("/chain/tx", async (c) => {
     console.log(
       JSON.stringify({ event: "paid_request", endpoint: "/chain/tx", hash, ts: new Date().toISOString() }),
     );
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/tx", rail, makeUsageCounter(c.env)));
 
     return c.json(result);
   } catch (e) {
@@ -3749,6 +3822,8 @@ app.get("/chain/receipt", async (c) => {
     console.log(
       JSON.stringify({ event: "paid_request", endpoint: "/chain/receipt", hash, ts: new Date().toISOString() }),
     );
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/receipt", rail, makeUsageCounter(c.env)));
 
     return c.json(result);
   } catch (e) {
@@ -3794,6 +3869,8 @@ app.get("/chain/code", async (c) => {
     console.log(
       JSON.stringify({ event: "paid_request", endpoint: "/chain/code", address, ts: new Date().toISOString() }),
     );
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/code", rail, makeUsageCounter(c.env)));
 
     return c.json(result);
   } catch (e) {
@@ -3829,6 +3906,8 @@ app.get("/chain/wallet", async (c) => {
     console.log(
       JSON.stringify({ event: "paid_request", endpoint: "/chain/wallet", address, ts: new Date().toISOString() }),
     );
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/wallet", rail, makeUsageCounter(c.env)));
 
     return c.json(result);
   } catch (e) {
@@ -4291,6 +4370,8 @@ app.get("/chain/token-security", async (c) => {
         ts: result.analyzed_at,
       }),
     );
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/token-security", rail, makeUsageCounter(c.env)));
     return c.json(result);
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -4518,6 +4599,8 @@ app.get("/scan/mcp", async (c) => {
   try {
     const result = await scanMcpServer(target);
     console.log(JSON.stringify({ event: "paid_request", endpoint: "/scan/mcp", target, findings: result.findings.length, ts: result.scanned_at }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /scan/mcp", rail, makeUsageCounter(c.env)));
     return c.json(result);
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -5149,7 +5232,16 @@ app.all("/mcp", async (c) => {
       return c.text("Invalid JSON", 400);
     }
   }
-  return mcpHandler.fetch(c.req.raw, { parsedBody });
+  const res = await mcpHandler.fetch(c.req.raw, { parsedBody });
+  // The gate middleware sets `rail` ONLY on paid tools/call (x402-paid after
+  // payment, or rapidapi-bypass / api-key on the marketplace rails). MCP
+  // discovery (initialize / tools/list / notifications) and free preview
+  // tools never set it, so they are never counted as paid. Fire-and-forget.
+  const rail = c.get("rail");
+  if (rail) {
+    fireAndForget(c, trackPaidRequest("POST /mcp", rail, makeUsageCounter(c.env)));
+  }
+  return res;
 });
 
 
@@ -5157,4 +5249,5 @@ app.all("/mcp", async (c) => {
 // Export
 // ---------------------------------------------------------------------------
 
+export { UsageCounter } from "./usage_counter.ts";
 export default app;
