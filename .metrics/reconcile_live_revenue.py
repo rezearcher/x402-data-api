@@ -28,8 +28,21 @@ def is_unprobed(address):
 # Function to determine if an address is unprobed (dummy implementation)
 
 def is_unprobed(address):
-    # Placeholder: implement the actual logic here
-    return False
+    return address.lower() not in EXCLUDED_ADDRESSES
+
+# Function logic should aggregate revenues while excluding addresses that are either excluded or unprobed
+for transfer in scan_state.get('transfers', []):
+    if isinstance(transfer, str):
+        continue
+    if 'from' not in transfer or 'value' not in transfer:
+        continue
+    from_address = transfer['from'].lower()
+    value = transfer['value']
+
+    if from_address in EXCLUDED_ADDRESSES or is_unprobed(from_address):
+        continue
+    organic_total += value
+    pending_probe_check.append(from_address)
 
 # Iterate through transfers
 for transfer in scan_state.get('transfers', []):
