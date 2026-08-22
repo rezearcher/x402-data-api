@@ -132,3 +132,5 @@ An AI agent discovering this service can:
 | **awesome-x402** | 🟡 PR #887 Open | Pending Merge | Track PR — no action needed |
 
 **Conclusion:** The service is **production-ready** with full x402 compliance, CDP Bazaar indexing, and pending listings on gold-402 + awesome-x402. All protocol verification checks pass. The primary discovery path (CDP Bazaar) is live and functional today.
+
+- **mcpservers.org**: Proven structurally dead. The submission required a real browser-rendered CSRF/session token (TanStack Start server function), confirmed dead as of 2026-07-19 and reconfirmed on 2026-08-15.
