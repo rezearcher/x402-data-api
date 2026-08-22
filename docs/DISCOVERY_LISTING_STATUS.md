@@ -24,7 +24,7 @@
 - **Payment:** **1000 wei USDC** (Base chain, `eip155:8453`)
 - **Alt Payment:** **1000 wei SOL** (Solana mainnet, `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`)
 - **Discovery Methods:**
-  - Semantic search: `https://api.cdp.coinbase.com/platform/v2/x402/discovery/search?query=gas+price+chain`
+  - Semantic search: `https://api.cdp.coinbase.com/platform/v2/x402/discovery/search?query=gas+price`
   - Catalog browse: `https://api.cdp.coinbase.com/platform/v2/x402/discovery/resources`
   - MCP Server: `https://api.cdp.coinbase.com/platform/v2/x402/discovery/mcp`
 - **Validation Endpoint:** `POST https://api.cdp.coinbase.com/platform/v2/x402/validate`
