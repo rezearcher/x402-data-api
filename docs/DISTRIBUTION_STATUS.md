@@ -1,4 +1,4 @@
-# Distribution Status — updated 2026-07-19
+# Distribution Status — updated 2026-08-24
 
 Current state of all open distribution channels for Grey Ridge Signals / x402-data-api.
 
@@ -31,37 +31,39 @@ Current state of all open distribution channels for Grey Ridge Signals / x402-da
 
 ---
 
-## 2. awesome-x402 [#868](https://github.com/xpaysh/awesome-x402/pull/868) — OPEN, BLOCKED (merge conflict)
+## 2. awesome-x402 [#868](https://github.com/xpaysh/awesome-x402/pull/868) — CLOSED 2026-08-24 (superseded; listing already live upstream)
 
 **Title:** Add Grey Ridge Signals — Base-native x402 data (RPC + crypto + Polymarket) + 19-tool MCP
 
 **Author:** `rezearcher` (fork: `rezearcher/awesome-x402`)
-**Created:** 2026-07-16 · **Last updated:** 2026-07-17 · **Comments:** 0
+**Created:** 2026-07-16 · **Last updated:** 2026-07-17 · **Comments:** 1
 **Labels:** none · **Draft:** No
 
-### Blocker
+### Outcome: superseded by direct upstream merge — GOAL ACHIEVED
 
-**`mergeable_state: dirty`** — merge conflict with `xpaysh/awesome-x402` main branch.
-- Single file changed: `README.md` (+1/-0 line)
-- Conflict arises because the base repo's README was updated after the PR fork point.
-- 2 commits on the PR branch: initial add + reframe to Base-RPC-first.
+The PR's substantive outcome (Grey Ridge Signals listed in the human-curated
+`xpaysh/awesome-x402` README, 261 stars) was **already merged upstream directly**
+on 2026-07-17 as commit `6fba258` — one day after the PR's last commit. That
+commit was authored and committed by `rezearcher` (write access to upstream),
+and the listing is live in upstream main today at README.md line 355:
 
-### Resolution
-Rebase onto upstream main and resolve the trivial conflict:
+> - [Grey Ridge Signals — x402 Data & Security APIs](https://x402-data-api.sigrunner.workers.dev) - 17 agent-native pay-per-call endpoints: ... $0.001–$0.05 USDC on Base. ([OpenAPI] | [Discovery])
 
-```bash
-git remote add upstream git@github.com:xpaysh/awesome-x402.git
-git fetch upstream
-git rebase upstream/main
-# resolve README.md conflict (likely just applying the +1 line)
-git push --force-with-lease origin main
-```
+The PR was closed 2026-08-24 (t_1d49a163) as **duplicate** — the rebase path
+(t_151427's original plan) was abandoned because rebasing `rezearcher/awesome-x402`
+`main` onto current upstream would have produced a *second, duplicate* Grey Ridge
+entry (upstream also grew ~60 new lines in the same section since the fork point,
+so the "trivial 1-line conflict" diagnosis no longer holds). Force-pushing a
+duplicate listing would have been rejected by a human curator and polluted the
+list. Verified via GitHub API at close time: `state=open → closed`, `mergeable_state=dirty`.
+
+### Status
+- ✅ **Distribution goal achieved** — Grey Ridge Signals is listed in the 261-star awesome-x402 list (live since 2026-07-17)
+- ✅ PR #868 closed as superseded/duplicate (comment references upstream commit `6fba258`)
+- ❌ No further action needed on this channel
 
 ### Next actions
-1. Rebase onto upstream/main
-2. Resolve README.md merge conflict
-3. Force-push to update PR
-4. Monitor for maintainer review
+- None — channel is done. Do NOT reopen #868 or open a new awesome-x402 PR.
 
 ---
 
@@ -143,7 +145,7 @@ The discussion is well-crafted with technical depth, but it's easy to blend into
 | # | Channel | Type | Status | Mergeable | Action needed |
 |---|---------|------|--------|-----------|---------------|
 | 1 | awesome-mcp-servers | Curated list PR | OPEN | ✅ Yes (clean) | Blocker A only — Glama listing (passive/manual) |
-| 2 | awesome-x402 | Curated list PR | OPEN, CONFLICT | ❌ Dirty | Rebase + resolve README conflict |
+| 2 | awesome-x402 | Curated list PR | ✅ DONE — CLOSED | ✅ Live upstream | None — merged upstream directly as 6fba258 (2026-07-17); PR closed as duplicate |
 | 3 | BankrBot/skills | Skill catalog PR | OPEN | 🤷 Unknown | Wait for manual review |
 | 4 | mcp.so | Catalog issue | OPEN | N/A (issue) | Optional value-add comment |
 | 5 | Aeon/discussions | Community post | OPEN | N/A (discussion) | Follow-up with integration detail |
@@ -151,6 +153,6 @@ The discussion is well-crafted with technical depth, but it's easy to blend into
 | 7 | LobeHub | MCP marketplace | BLOCKED | N/A | Needs Rez: browser OIDC login (`lhm login`) |
 | 8 | mcpservers.org | Curated directory | BLOCKED | N/A | Needs Rez: browser submit form |
 
-**Immediate work items:** (#2) rebase and fix merge conflict — (#1) Glama listing is passive/manual now that the repo blocker is fixed
+**Immediate work items:** (#1) Glama listing is passive/manual now that the repo blocker is fixed — (#2) DONE: merged upstream directly, PR closed
 **Waiting game:** (#3) Bankr review — (#4) mcp.so review — (#5) Aeon reply
 **Needs Rez (structurally un-automatable — browser session required):** (#7) LobeHub — (#8) mcpservers.org
