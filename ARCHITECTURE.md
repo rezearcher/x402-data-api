@@ -152,6 +152,9 @@ degrades gracefully when absent:
   read-modify-write for credit decrement (non-atomic path preserved as a degradation only).
 - `RAPIDAPI_PROXY_SECRET` — absent → the RapidAPI bypass is disabled and RapidAPI-billed callers
   would hit the x402 gate. When set, a matching `X-RapidAPI-Proxy-Secret` header skips x402 (§6).
+  **Since audit-q3 F1 (2026-08-25, t_2576bb7f) this is also the auth for `/internal/cdp-probe` and
+  `/internal/cdp-settle-raw`** — they 401 without the exact secret (constant-time compare,
+  fails closed; §4), so this secret must stay set in production or Bazaar canary settlements break.
 
 Local dev: copy `.dev.vars.example` → `.dev.vars`, `npm run dev`. Deploy: `npm run deploy`, or
 `bash scripts/deploy.sh` which resolves `CF_WORKERS_TOKEN` (the token with Workers:Write scope)
@@ -209,10 +212,14 @@ Details worth knowing:
 - **The `FREE_PATHS` set inside the gate** (`/`, `/health`, `/token-safety`, `/stripe/webhook`) is
   belt-and-braces — all four are registered above the gate and never reach it. Harmless redundancy,
   documented so nobody "fixes" one layer and assumes the other still holds.
-- **`/internal/*` is unauthenticated.** Both internal routes are free by position and neither checks
-  a shared secret; they are gated only by the fact that they 500 without CDP secrets in env, and
-  `/internal/cdp-settle-raw` merely forwards a *caller-supplied, caller-signed* payment to CDP.
-  Treat that as intentional-but-noted, not as a designed authz boundary.
+- **`/internal/*` is gated (audit-q3 F1, 2026-08-25).** Both internal CDP routes are free by
+  position (above the gate) but now require the shared `RAPIDAPI_PROXY_SECRET` in the
+  `X-RapidAPI-Proxy-Secret` header — constant-time compare via `timingSafeEqual()` (§2),
+  checked by `cdpInternalAuthOk()` before any handler logic runs. Fails closed: no configured
+  secret, absent header, or mismatched header ⇒ 401 `{"error":"unauthorized"}`. This closes the
+  previous finding that any unauthenticated caller could mint a CDP JWT from Worker secrets
+  (cdp-probe) or relay caller-supplied settlements at CDP's expense (cdp-settle-raw).
+  `/internal/traffic-stats` has its own separate `?secret=` gate (§15).
 
 ## 5. Payment architecture (agent rail — x402)
 
@@ -244,7 +251,10 @@ agent ──GET /chain/gas-price──►  Worker
   `POST /internal/cdp-settle-raw` (`:232`), which mints a CDP JWT and POSTs a pre-signed
   `{paymentPayload, paymentRequirements}` pair straight at the CDP facilitator's `/verify` then
   `/settle`, bypassing the resource server entirely. That path exists solely so routes get
-  catalogued in the CDP x402 Bazaar (§13).
+  catalogued in the CDP x402 Bazaar (§13). Since audit-q3 F1 (t_2576bb7f) it requires the shared
+  `RAPIDAPI_PROXY_SECRET` header (§4) — the seeding scripts read it from the gitignored `.env`
+  (tiny inline loader, no dotenv dependency) and the `x402_bazaar_refresh.sh` cron wrapper sources
+  `.env` before invoking the refresher.
 - **Bazaar freshness is blind to xpay.** CDP's Bazaar updates a route's freshness/ranking signal
   (`quality.lastCalledAt` / `lastUpdated`) **only when a payment settles through the CDP facilitator**.
   Production settles via xpay, so every real payment is invisible to Bazaar — all catalogued routes'

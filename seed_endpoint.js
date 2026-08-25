@@ -10,12 +10,33 @@
  * whatever the deployed endpoint advertises is what the buyer signs. Buyer = the
  * throwaway funded wallet (from != payTo; CDP rejects self-sends). Seeds move USDC
  * buyer -> our payTo (recycled). Human-only (moves on-chain funds).
+ * Requires RAPIDAPI_PROXY_SECRET env var (source from .env or shell).
  */
 const path = require('path');
 const fs = require('fs');
 
 const projectDir = path.resolve(process.env.HOME, 'projects/x402-data-api');
 const BASE = 'https://x402-data-api.sigrunner.workers.dev';
+
+// audit-q3 F1 (t_2576bb7f): /internal/cdp-settle-raw is gated behind
+// RAPIDAPI_PROXY_SECRET. Load .env (gitignored) if present, then require the
+// secret — the gate fails closed, so without it every settle 401s.
+try {
+  const envFile = path.join(projectDir, '.env');
+  if (fs.existsSync(envFile)) {
+    for (const raw of fs.readFileSync(envFile, 'utf-8').split('\n')) {
+      const m = raw.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+      if (m && !(m[1] in process.env)) {
+        process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+      }
+    }
+  }
+} catch {}
+const RAPIDAPI_PROXY_SECRET = process.env.RAPIDAPI_PROXY_SECRET;
+if (!RAPIDAPI_PROXY_SECRET) {
+  console.error('FATAL: RAPIDAPI_PROXY_SECRET is required (audit-q3 F1 gates /internal/cdp-settle-raw). Add it to ' + path.join(projectDir, '.env') + ' or export it.');
+  process.exit(1);
+}
 
 // Per-route discovery config + searchable metadata. Discovery example MUST be an
 // OBJECT (CDP validator: /output/example must be object) even for array endpoints.
@@ -239,7 +260,10 @@ async function main() {
   console.log(`--- POSTing raw settle for ${route} ---`);
   const res = await fetch(`${BASE}/internal/cdp-settle-raw`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      'X-RapidAPI-Proxy-Secret': RAPIDAPI_PROXY_SECRET,
+    },
     body: JSON.stringify({ paymentPayload, paymentRequirements }),
   });
   const out = await res.json();

@@ -6,5 +6,8 @@ PAY_TO=0x0000000000000000000000000000000000000000
 # RapidAPI marketplace rail (optional — leave unset and the bypass stays inert).
 # RapidAPI bills the buyer itself and proxies the call to us with this shared secret in
 # the X-RapidAPI-Proxy-Secret header. Must match the value in the RapidAPI listing.
+# Since audit-q3 F1 (2026-08-25) this same secret also gates /internal/cdp-probe and
+# /internal/cdp-settle-raw (fails closed — see ARCHITECTURE.md §4), and the CDP seeding
+# scripts read it from .env (gitignored).
 # Production: `wrangler secret put RAPIDAPI_PROXY_SECRET` (never commit the real value).
 RAPIDAPI_PROXY_SECRET=

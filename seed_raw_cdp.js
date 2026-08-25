@@ -4,6 +4,7 @@
  * the CDP facilitator via the Worker's raw /internal/cdp-settle-raw proxy (which
  * bypasses the @x402 resource server's ajv-on-Workers wall). We manually attach a
  * correctly-`method`-ed bazaar discovery extension so CDP catalogs the route.
+ * Requires RAPIDAPI_PROXY_SECRET env var (source from .env or shell).
  */
 const path = require('path');
 const fs = require('fs');
@@ -13,6 +14,27 @@ const walletPath = path.join(path.resolve(process.env.HOME, 'projects/x402-data-
 const wallet = JSON.parse(fs.readFileSync(walletPath, 'utf-8'));
 
 const projectDir = path.resolve(process.env.HOME, 'projects/x402-data-api');
+
+// audit-q3 F1 (t_2576bb7f): /internal/cdp-settle-raw is gated behind
+// RAPIDAPI_PROXY_SECRET. Load .env (gitignored) if present, then require the
+// secret — the gate fails closed, so without it every settle 401s.
+try {
+  const envFile = path.join(projectDir, '.env');
+  if (fs.existsSync(envFile)) {
+    for (const raw of fs.readFileSync(envFile, 'utf-8').split('\n')) {
+      const m = raw.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+      if (m && !(m[1] in process.env)) {
+        process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+      }
+    }
+  }
+} catch {}
+const RAPIDAPI_PROXY_SECRET = process.env.RAPIDAPI_PROXY_SECRET;
+if (!RAPIDAPI_PROXY_SECRET) {
+  console.error('FATAL: RAPIDAPI_PROXY_SECRET is required (audit-q3 F1 gates /internal/cdp-settle-raw). Add it to ' + path.join(projectDir, '.env') + ' or export it.');
+  process.exit(1);
+}
+
 const viemAccounts = require(path.join(projectDir, 'node_modules/viem/accounts'));
 const { createWalletClient, createPublicClient, http } = require(path.join(projectDir, 'node_modules/viem'));
 const { toClientEvmSigner } = require(path.join(projectDir, 'node_modules/@x402/evm'));
@@ -107,7 +129,10 @@ async function main() {
   console.log('\n--- POSTing raw to /internal/cdp-settle-raw ---');
   const res = await fetch(`${BASE}/internal/cdp-settle-raw`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      'X-RapidAPI-Proxy-Secret': RAPIDAPI_PROXY_SECRET,
+    },
     body: JSON.stringify({ paymentPayload, paymentRequirements }),
   });
   const out = await res.json();

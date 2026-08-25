@@ -413,9 +413,28 @@ app.get("/", (c) => {
   return c.html(html);
 });
 
+// ---------------------------------------------------------------------------
+// Internal CDP endpoints — auth gate (audit-q3 F1, t_2576bb7f)
+// ---------------------------------------------------------------------------
+// These two routes are registered ABOVE the payment gate (§4), so before this
+// fix any unauthenticated caller could mint a CDP JWT from Worker secrets
+// (cdp-probe) or relay caller-supplied settlements at CDP's expense
+// (cdp-settle-raw). Both now require the shared RAPIDAPI_PROXY_SECRET in the
+// X-RapidAPI-Proxy-Secret header — the same constant-time compare the RapidAPI
+// bypass rail uses below — and FAIL CLOSED: no configured secret, absent
+// header, or mismatched header => 401 before any handler logic runs.
+function cdpInternalAuthOk(c: { env: Env; req: { header(n: string): string | undefined } }): boolean {
+  const configured = c.env.RAPIDAPI_PROXY_SECRET;
+  const presented = c.req.header("X-RapidAPI-Proxy-Secret") ?? "";
+  return !!configured && presented !== "" && timingSafeEqual(presented, configured);
+}
+
 // Staged CDP-auth probe (temporary): confirms we can mint a CDP JWT from Worker
 // secrets and that the CDP facilitator accepts it, before swapping the live gate.
 app.get("/internal/cdp-probe", async (c) => {
+  if (!cdpInternalAuthOk(c)) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
   const env = c.env;
   if (!env.CDP_API_KEY_ID || !env.CDP_API_KEY_SECRET) {
     return c.json({ ok: false, error: "CDP secrets absent from env" }, 500);
@@ -450,6 +469,9 @@ app.get("/internal/cdp-probe", async (c) => {
 // CDP facilitator so a route gets catalogued in the Bazaar. Body:
 //   { paymentPayload, paymentRequirements }
 app.post("/internal/cdp-settle-raw", async (c) => {
+  if (!cdpInternalAuthOk(c)) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
   const env = c.env;
   if (!env.CDP_API_KEY_ID || !env.CDP_API_KEY_SECRET) {
     return c.json({ error: "CDP secrets absent" }, 500);

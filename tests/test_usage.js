@@ -589,6 +589,68 @@ async function testConcurrentIncrementsLossless() {
   console.log("  ok 11: concurrency losslessness — 50 concurrent increments end at exactly 50 (F-05)");
 }
 
+// 12. audit-q3 F1 (t_2576bb7f): /internal/cdp-probe + /internal/cdp-settle-raw
+//     are registered ABOVE the payment gate, so they must carry their own auth.
+//     Both are gated behind RAPIDAPI_PROXY_SECRET (same constant-time compare
+//     as the RapidAPI rail). Fails closed: absent header => 401, wrong secret
+//     => 401, unconfigured secret => 401. The exact secret reaches the handler
+//     (which 500s "CDP secrets absent" — hermetic, no network).
+async function testInternalCdpEndpointsGated() {
+  installFetchStub();
+  const ENV = {
+    ...BASE_ENV,
+    CACHE: makeFakeKV(),
+    RAPIDAPI_PROXY_SECRET: "rapidapi-proxy-secret-test-0123456789abcdef",
+  };
+  const H = { "X-RapidAPI-Proxy-Secret": ENV.RAPIDAPI_PROXY_SECRET };
+
+  // Absent header -> 401 on both routes.
+  const probeNoHeader = await app.request("/internal/cdp-probe", {}, ENV);
+  assert.strictEqual(probeNoHeader.status, 401, "cdp-probe without secret header must 401");
+  const settleNoHeader = await app.request(
+    "/internal/cdp-settle-raw",
+    { method: "POST", headers: { "content-type": "application/json" }, body: "{}" },
+    ENV,
+  );
+  assert.strictEqual(settleNoHeader.status, 401, "cdp-settle-raw without secret header must 401");
+
+  // Wrong secret -> 401.
+  const probeWrong = await app.request(
+    "/internal/cdp-probe",
+    { headers: { "X-RapidAPI-Proxy-Secret": "a".repeat(48) } },
+    ENV,
+  );
+  assert.strictEqual(probeWrong.status, 401, "cdp-probe with wrong secret must 401");
+
+  // Fails closed: no RAPIDAPI_PROXY_SECRET configured at all -> 401 even with a header.
+  const noCfgEnv = { ...BASE_ENV, CACHE: makeFakeKV() };
+  const probeNoCfg = await app.request("/internal/cdp-probe", { headers: H }, noCfgEnv);
+  assert.strictEqual(probeNoCfg.status, 401, "no configured secret must fail closed (401)");
+
+  // Exact secret reaches the handler. cdp-probe 500s "CDP secrets absent from
+  // env" (CDP_API_KEY_ID/SECRET unset here) — proving the gate let it through.
+  const probeOk = await app.request("/internal/cdp-probe", { headers: H }, ENV);
+  assert.strictEqual(probeOk.status, 500, "exact secret must reach the cdp-probe handler");
+  const probeBody = await probeOk.json();
+  assert.strictEqual(probeBody.error, "CDP secrets absent from env", "handler-level 500 proves the gate passed");
+
+  // Same for cdp-settle-raw: exact secret reaches the handler (500, no network).
+  const settleOk = await app.request(
+    "/internal/cdp-settle-raw",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", ...H },
+      body: JSON.stringify({ paymentPayload: {}, paymentRequirements: {} }),
+    },
+    ENV,
+  );
+  assert.strictEqual(settleOk.status, 500, "exact secret must reach the cdp-settle-raw handler");
+  const settleBody = await settleOk.json();
+  assert.strictEqual(settleBody.error, "CDP secrets absent", "settle handler-level 500 proves the gate passed");
+
+  console.log("  ok 12: /internal/cdp-probe + /internal/cdp-settle-raw gated behind RAPIDAPI_PROXY_SECRET (audit-q3 F1)");
+}
+
 // ---------------------------------------------------------------------------
 
 async function main() {
@@ -604,6 +666,7 @@ async function main() {
     testUnpaidMcpGatedNoTracking,
     testMetricsEndpointReadsDoCounters,
     testConcurrentIncrementsLossless,
+    testInternalCdpEndpointsGated,
   ];
 
   console.log("test_usage.js — paid-usage accounting (atomic DO counters + /metrics)\n");
