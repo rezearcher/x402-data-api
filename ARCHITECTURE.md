@@ -77,6 +77,25 @@ conflict is recorded in [§13 Doc-drift corrections](#13-doc-drift-corrections).
   was run this pass, and `TRAFFIC_STATS_SECRET` is a Worker secret whose set/unset state is not
   visible in the tree — until it is set, `/internal/traffic-stats` returns 401 for every caller.
 
+**Changed since the 2026-08-19 sync** (verified in code at HEAD `5f6c1f3`, 2026-08-26):
+- **The live-revenue reconciler is now correct and the organic sensor is UNFROZEN.** `t_0392bc5e`
+  (fix `c66b5e1`, merge `d25e346`) repaired `.metrics/reconcile_live_revenue.py` (59) — a script
+  **not previously in this doc** (see the new file-table row below). Two stacked bugs on the same
+  ~15-line aggregation had held its output at `0` for 27+ days: (1) the payer loop iterated
+  `scan_state['transfers']` **as a list**, but that field is a **dict** keyed by `"<txhash>:<index>"`,
+  so every one of the 269 transfer records was walked as a bare string and skipped; (2) exclusion
+  matching was case-sensitive, so `EXCLUDED_ADDRESSES` / probe-summary literals never matched the
+  observed payer addresses. The fix iterates `scan_state.get('transfers', {}).values()` (`:39`, with
+  a guard that `continue`s on non-dict / missing `from`/`value`) and lowercases **both** sides of
+  every address comparison — the three `EXCLUDED_ADDRESSES` literals (`:22-26`), `KNOWN_ADDRESSES` /
+  `BOT_ADDRESSES` built from the probe summary (`:18-19`), and the observed `from` (`:44`). **Verified
+  live:** the script's two outputs — the gap sensor
+  `~/.hermes/data/x402-data-api/metrics/revenue_usd_corrected` and the repo mirror
+  `.metrics/revenue_usd_corrected` (`:53-55`) — now both read **`0.005`**, matching the "$0.005
+  organic" figure §14 already cites. Note this script writes `revenue_usd_corrected` too, so it and
+  `compute_revenue_usd.py` (file table) are **two writers of the same repo file**; the last cron to
+  run wins. Not re-derived here: whether the two agree on every run.
+
 The live-probe table in §16 reflects the 2026-07-29 pass and has **not** been re-run for this sync.
 
 ---
@@ -540,7 +559,8 @@ secret, and generates no x402 revenue — it is a distribution surface. Note `_f
 | `fund_buyer.js` (49) | One-time: generate a throwaway buyer wallet and fund it with 0.03 USDC from the main wallet. Needed because CDP rejects self-sends, so seeds require `from != payTo`. |
 | `register_x402scan.js` (57) | SIWX (wallet-signature, not payment) registration with x402scan.com — `register-origin` by default, or a single resource URL as `argv[2]`. |
 | `scripts/verify_revenue_ledger.py` (601) | Two modes. Normal: reads `~/.hermes/data/<play>-revenue/ledger.jsonl`, resolves each row's USDC `Transfer` `from` via `eth_getTransactionReceipt`, classifies self-traffic vs external, writes `ledger_verified_summary.json`. `--probe-check` (`:586`→`run_probe_check`, `:507`): scores each "external" payer on three bot heuristics — total nonce, identical-method bursts within 120s, unsolicited farm-token receipts — writing `probe_check_summary.json` **without mutating** normal-mode files. |
-| `.metrics/compute_revenue_usd.py` (91) | Reads both sidecars, sums only `external` rows whose payer is **not** probe-flagged, writes the same value to `.metrics/revenue_usd` **and** `.metrics/revenue_usd_corrected`. Hard-fails if either sidecar is missing. Both files currently read **`0.0`**. |
+| `.metrics/compute_revenue_usd.py` (91) | Reads both sidecars, sums only `external` rows whose payer is **not** probe-flagged, writes the same value to `.metrics/revenue_usd` **and** `.metrics/revenue_usd_corrected`. Hard-fails if either sidecar is missing. Both files currently read **`0.005`** (unfrozen 2026-08-26; see the "Changed since 2026-08-19" header). |
+| `.metrics/reconcile_live_revenue.py` (59) | The **live on-chain** organic-revenue reconciler (distinct from `compute_revenue_usd.py`, which reads ledger sidecars). Loads `~/.hermes/data/x402-revenue/scan_state.json` (`transfers` **dict** keyed by `<txhash>:<index>`) and `~/.hermes/data/x402-data-api-revenue/probe_check_summary.json`, sums each transfer `value` whose lowercased `from` is neither a self-owned `EXCLUDED_ADDRESSES` wallet (PAY_TO / buyer / farming-bot) nor unprobed/bot-flagged, and writes the total to **both** the gap sensor `~/.hermes/data/x402-data-api/metrics/revenue_usd_corrected` and the repo mirror `.metrics/revenue_usd_corrected`. Dict-iteration + case-sensitivity bugs fixed by `t_0392bc5e` (`c66b5e1`); now reads **`0.005`**. |
 | `scripts/auto-merge.sh` | `kanban_task_completed` hook: merges `wt/<task_id>` into `main`, pushes, deletes the branch **and now removes the `.worktrees/<task_id>` directory** (`cleanup_worktree_dir`, only after the push is verified against `origin/main`). **Fail-OPEN by construction** — every terminal path is `exit 0` and writes a trace to `~/.hermes/data/x402-data-api-health/auto_merge_failures/<task_id>.log` so a no-op is never silent. On an **untracked-file** merge failure it now grep-detects `"untracked working tree files would be overwritten"` and logs the conflicting paths before aborting (commits `b023713`, `t_819dd337`/`t_c7d8bcf7`). |
 | `scripts/deploy.sh` (39) | Resolves `CF_WORKERS_TOKEN` (Workers:Write scope — **not** `CF_API_TOKEN`) then `npx wrangler deploy`. |
 
