@@ -128,14 +128,15 @@ function makeFakeDONamespace(store) {
 
 // ---------------------------------------------------------------------------
 // Fake CreditLedger DO namespace for the api_key bypass test: get(id) must
-// return a stub exposing deductCredit(seed) -> remaining credits.
+// return a stub exposing deductCredit(seed) -> { deducted, remaining }
+// (discriminated contract, audit F3).
 // ---------------------------------------------------------------------------
 function makeFakeLedgerNamespace(initialRemaining) {
   return {
     idFromName: (name) => `ledger:${name}`,
     get: () => ({
       async deductCredit(_seed) {
-        return initialRemaining;
+        return { deducted: initialRemaining > 0, remaining: initialRemaining };
       },
     }),
   };

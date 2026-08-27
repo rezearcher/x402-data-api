@@ -314,13 +314,114 @@ of law rules.</p>
 // both humans and agents. Hono auto-serves HEAD from this GET handler.
 // ---------------------------------------------------------------------------
 
-app.get("/", (c) => {
+// ---------------------------------------------------------------------------
+// F4 fix: One-time API key redemption by Stripe session_id
+// ---------------------------------------------------------------------------
+
+app.get("/api-key", async (c) => {
+  const sessionId = c.req.query("session_id");
+  if (!sessionId) {
+    return c.json({ error: "Missing session_id query parameter" }, 400);
+  }
+
+  if (!c.env.API_KEYS) {
+    return c.json({ error: "API_KEYS KV not configured" }, 500);
+  }
+
+  // Lookup the dedup record to get the API key
+  const dedup_key = `stripe_session_${sessionId}`;
+  const dedup_record = await c.env.API_KEYS.get(dedup_key);
+  if (!dedup_record) {
+    return c.json({ error: "Session not found or key already redeemed" }, 404);
+  }
+
+  const dedup = JSON.parse(dedup_record);
+  if (dedup.redeemed) {
+    return c.json({ error: "API key already redeemed for this session" }, 410);
+  }
+
+  // Mark as redeemed
+  await c.env.API_KEYS.put(dedup_key, JSON.stringify({ ...dedup, redeemed: true }));
+
+  // Return the API key
+  const apiKey = dedup.api_key;
+  // The key record is written right after the session index in the webhook;
+  // if it's missing (crash between the two puts) the buyer STILL gets their
+  // key — the index is the source of truth for delivery (audit F4).
+  const record = await c.env.API_KEYS.get(apiKey);
+  let credits: number | null = null;
+  let expiresAt: number | null = null;
+  let createdAt: number | null = null;
+  if (record) {
+    const apiKeyRecord: ApiKeyRecord = JSON.parse(record);
+    credits = apiKeyRecord.credits_remaining ?? null;
+    expiresAt = apiKeyRecord.expires_at ?? null;
+    createdAt = apiKeyRecord.created_at ?? null;
+  }
+  console.log(JSON.stringify({ event: "api_key_redeemed", session_id: sessionId }));
+
+  return c.json({
+    api_key: apiKey,
+    credits_remaining: credits,
+    expires_at: expiresAt,
+    created_at: createdAt,
+  });
+});
+
+app.get("/", async (c) => {
   const BASE = "https://x402-data-api.sigrunner.workers.dev";
   const mcpConfig = JSON.stringify(
     { mcpServers: { "grey-ridge-x402": { type: "streamable-http", url: `${BASE}/mcp` } } },
     null,
     2,
   );
+
+  // F4: the Stripe success_url redirects here with ?session_id={CHECKOUT_SESSION_ID}.
+  // Consume it: look up the session index the webhook recorded and deliver the
+  // buyer's key inline. Nothing here ever mints — the webhook mints exactly
+  // once per session (F2 dedup); this page only reads and displays the record.
+  let keyPanel = "";
+  let provisionMeta = "";
+  const sessionId = c.req.query("session_id");
+  if (sessionId && c.env.API_KEYS) {
+    // session_id is attacker-controllable (query string); escape before any
+    // reflection into the HTML so the paid page can't be used for XSS.
+    const esc = (s: string) =>
+      s.replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m] as string);
+    try {
+      const raw = await c.env.API_KEYS.get(`stripe_session_${sessionId}`);
+      if (raw) {
+        const index = JSON.parse(raw) as { api_key: string };
+        const key = esc(index.api_key);
+        const masked = esc(index.api_key.slice(0, 8) + "…" + index.api_key.slice(-4));
+        keyPanel = `
+  <div style="border:1px solid #2f6f4f;border-radius:10px;padding:1.1rem 1.25rem;margin:0 0 1.5rem;background:#0f1a14;">
+    <h2 style="margin:0 0 .4rem;color:#7fd1a8;border:0;padding:0;">✓ Payment received — your API key</h2>
+    <p style="margin:0 0 .6rem;color:#b9c4d0;">Save it now — 100 credits, valid 30 days from purchase.</p>
+    <pre style="white-space:pre-wrap;word-break:break-all;padding:.8rem 1rem;">${key}</pre>
+    <p style="margin:.7rem 0 0;color:#8b9bab;font-size:.85rem;">Pass it as <code>?api_key=${masked}</code> or header <code>X-API-Key</code> on any paid endpoint. Also available once via <a href="/api-key?session_id=${esc(sessionId)}">/api-key</a>.</p>
+  </div>`;
+        console.log(JSON.stringify({ event: "api_key_delivered_landing", session_id: sessionId }));
+      } else if (!c.req.query("retry")) {
+        // The webhook usually lands within seconds of the redirect; refresh once.
+        keyPanel = `
+  <div style="border:1px solid #5b6b7b;border-radius:10px;padding:1.1rem 1.25rem;margin:0 0 1.5rem;background:#10161d;">
+    <h2 style="margin:0 0 .4rem;color:#e8eef5;border:0;padding:0;">Payment received — issuing your key…</h2>
+    <p style="margin:0;color:#b9c4d0;">This can take a few seconds after payment. Refreshing automatically…</p>
+  </div>`;
+        provisionMeta = `<meta http-equiv="refresh" content="5;url=/?session_id=${esc(sessionId)}&retry=1">`;
+      } else {
+        keyPanel = `
+  <div style="border:1px solid #7a5b2f;border-radius:10px;padding:1.1rem 1.25rem;margin:0 0 1.5rem;background:#1a140f;">
+    <h2 style="margin:0 0 .4rem;color:#e0b870;border:0;padding:0;">Still provisioning…</h2>
+    <p style="margin:0;color:#b9c4d0;">Your payment is confirmed but the key hasn't been issued yet. Try <code><a href="/api-key?session_id=${esc(sessionId)}">/api-key?session_id=${esc(sessionId)}</a></code> in a minute, or contact support with your session id.</p>
+  </div>`;
+      }
+    } catch (e) {
+      console.log(JSON.stringify({ event: "api_key_delivery_lookup_error", error: (e as Error).message }));
+    }
+  }
+
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -337,6 +438,7 @@ app.get("/", (c) => {
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://x402-data-api.sigrunner.workers.dev/">
 <title>Grey Ridge Signals — Base-native x402 Data API</title>
+${provisionMeta}
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -371,6 +473,7 @@ app.get("/", (c) => {
 <main>
   <h1>Grey Ridge Signals — Base-native x402 Data API</h1>
   <p class="tagline">Agent-native, pay-per-call data on Base — no account, no API key.</p>
+  ${keyPanel}
   <p>
     Every endpoint here is paid inline in USDC over the <a href="https://x402.org">x402</a> protocol on
     Base mainnet — an agent gets a 402 challenge, signs, retries, and gets data back in the same request.
@@ -1758,26 +1861,29 @@ export class CreditLedger extends DurableObject<Env> {
   /**
    * Atomically deduct one credit from this key's balance.
    *
-   * Returns the balance AFTER the deduction, or 0 when no credits remain (in
-   * which case nothing is deducted — callers treat 0 as "insufficient" and
-   * fall through to the x402 gate). DO serialization makes the read-check-write
-   * sequence race-free even under concurrent requests for the same key.
+   * Discriminated result (audit F3): `{ deducted: true, remaining }` on a
+   * successful spend, `{ deducted: false, remaining: 0 }` when exhausted.
+   * The OLD API returned the bare post-decrement number, so 0 was ambiguous —
+   * it meant both "exhausted" and "just spent the last credit" — and the gate
+   * denied the final paid call while the x402 fallback double-billed the same
+   * request. Callers MUST branch on `deducted`.
    *
    * seedIfEmpty: when the DO has never been initialized (a key created before
    * this deploy), lazily seed from the KV record's credits_remaining before
    * deducting. `undefined` storage means "never seeded" — once seeded the
    * stored value is a number (possibly 0), so an exhausted key can never be
-   * resurrected by a stale KV record.
+   * resurrected by a stale KV record. DO serialization makes the
+   * read-check-write sequence race-free under concurrent requests.
    */
-  async deductCredit(seedIfEmpty?: number): Promise<number> {
+  async deductCredit(seedIfEmpty?: number): Promise<{ deducted: boolean; remaining: number }> {
     let remaining = await this.ctx.storage.get<number>("credits_remaining");
     if (remaining === undefined) {
       remaining = seedIfEmpty ?? 0;
     }
-    if (remaining <= 0) return 0;
+    if (remaining <= 0) return { deducted: false, remaining: 0 };
     const next = remaining - 1;
     await this.ctx.storage.put("credits_remaining", next);
-    return next;
+    return { deducted: true, remaining: next };
   }
 
   /** Current balance, no side effects. */
@@ -2023,6 +2129,16 @@ app.post("/stripe/webhook", async (c) => {
       return c.text("Signature mismatch", 401);
     }
 
+    // F2 fix: Validate webhook timestamp freshness (prevent replay attacks)
+    // Stripe signatures include a Unix timestamp; reject if older than 5 minutes.
+    const webhookTimestamp = parseInt(timeValue, 10);
+    const currentTime = Math.floor(Date.now() / 1000);
+    const MAX_WEBHOOK_AGE_SECONDS = 5 * 60; // 5 minutes
+    if (isNaN(webhookTimestamp) || Math.abs(currentTime - webhookTimestamp) > MAX_WEBHOOK_AGE_SECONDS) {
+      console.log(JSON.stringify({ event: "stripe_webhook_timestamp_stale", timestamp: timeValue }));
+      return c.text("Webhook timestamp too old", 401);
+    }
+
     // Parse webhook body as JSON
     event = JSON.parse(body);
   } catch (e) {
@@ -2036,10 +2152,29 @@ app.post("/stripe/webhook", async (c) => {
     const session = event.data.object;
     const sessionId = session.id;
     const email = session.customer_details?.email;
+    const paymentStatus = session.payment_status;
 
     if (!c.env.API_KEYS) {
       console.log(JSON.stringify({ event: "stripe_webhook_no_kv" }));
       return c.json({ received: true, note: "KV not configured — key would be created here" });
+    }
+
+    // F2 fix: Only mint keys for paid sessions. Subscription sessions can complete
+    // with unpaid first invoices on async payment methods (e.g., bank transfer).
+    if (paymentStatus !== "paid") {
+      console.log(JSON.stringify({ event: "api_key_not_minted_unpaid", session_id: sessionId, payment_status: paymentStatus }));
+      return c.json({ received: true, note: "Session not yet paid" });
+    }
+
+    // F2 fix: idempotency — dedup by session_id. Stripe retries and any replay
+    // both send the same session_id; only mint once. A captured signed request
+    // can be replayed forever, so this check (not the freshness window alone)
+    // is what stops unlimited credit farming.
+    const dedup_key = `stripe_session_${sessionId}`;
+    const existing = await c.env.API_KEYS.get(dedup_key);
+    if (existing) {
+      console.log(JSON.stringify({ event: "api_key_already_created", session_id: sessionId }));
+      return c.json({ received: true, note: "API key already created for this session" });
     }
 
     // Create API key for the customer
@@ -2054,6 +2189,9 @@ app.post("/stripe/webhook", async (c) => {
     };
 
     await c.env.API_KEYS.put(apiKey, JSON.stringify(record));
+    // Mark this session_id as processed (one-time redemption check)
+    await c.env.API_KEYS.put(dedup_key, JSON.stringify({ api_key: apiKey, redeemed: false }));
+
     // Seed the per-key ledger so the balance is atomic from birth. (Keys
     // created before this deploy are lazily seeded on their first use.)
     if (c.env.CREDIT_LEDGER) {
@@ -2143,9 +2281,9 @@ app.use(async (c, next) => {
           const stub = c.env.CREDIT_LEDGER.get(id);
           // record.credits_remaining is the lazy seed for keys created before
           // this deploy; the DO owns the balance from then on.
-          const remaining = await stub.deductCredit(record.credits_remaining);
-          if (remaining > 0) {
-            console.log(JSON.stringify({ event: "api_key_used", credits_remaining: remaining }));
+          const result = await stub.deductCredit(record.credits_remaining);
+          if (result.deducted) {
+            console.log(JSON.stringify({ event: "api_key_used", credits_remaining: result.remaining }));
             // Attribute this request to the prepaid api-key rail (non-chain).
             c.set("rail", "api-key");
             return next();
