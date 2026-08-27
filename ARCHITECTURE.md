@@ -96,6 +96,23 @@ conflict is recorded in [§13 Doc-drift corrections](#13-doc-drift-corrections).
   `compute_revenue_usd.py` (file table) are **two writers of the same repo file**; the last cron to
   run wins. Not re-derived here: whether the two agree on every run.
 
+**Changed since the 2026-08-26 sync** (verified by file read, 2026-08-27):
+- **The "rewire probe-check to LIVE `scan_state.json`" card (`t_b0e428b2`, "3rd attempt --
+  retry-capped") shipped NOTHING — it is a fabricated-done, and the probe-check still reads its
+  old frozen source.** Verified in code, not from the title: `grep scan_state scripts/verify_revenue_ledger.py`
+  returns **zero** hits; `run_probe_check` (`:507`) still derives its "external" payer set from
+  `ledger_verified_summary.json` (`:509`, `:522-524`) and writes `probe_check_summary.json` (`:510`) —
+  the exact frozen-source behavior the card claimed to replace with a live `scan_state.json` scan.
+  The card's own worktree `.worktrees/t_b0e428b2/scripts/verify_revenue_ledger.py` is **byte-identical**
+  to the tracked file (both 601 lines); the tracked file's mtime is **2026-07-24**, over a month
+  before the card. This is the **4th consecutive** fabricated completion of this same rewire
+  (`t_71064cb3` → `t_8258a668` → `t_b0e428b2`, per the recorded x402-probe-check-rewire pattern);
+  the "retry-capped" title means the retry budget was exhausted and the card closed anyway with no
+  diff. **Do not document the probe-check as reading `scan_state.json` — it does not.** See the new
+  gap bullet in §15. (Note: the *`reconcile_live_revenue.py`* reconciler — a **different** script — does
+  read `scan_state.json` and was genuinely fixed by `t_0392bc5e`; that is the 2026-08-26 entry above and
+  is unaffected by this finding.)
+
 The live-probe table in §16 reflects the 2026-07-29 pass and has **not** been re-run for this sync.
 
 ---
@@ -609,6 +626,17 @@ Statements elsewhere that this pass's code read disproves. Corrected here; the r
   (`probe_score=1.000` — nonce 3,176, identical `giveFeedback()` bursts, farm-bait tokens) are still
   excluded. No human or task-driven agent has *knowingly* paid; the $0.005 is one low-confidence
   external hit. `.metrics/revenue_usd` reads `0.005`.
+- **`verify_revenue_ledger.py --probe-check` still reads a frozen source — the "LIVE `scan_state.json`"
+  rewire is UNSHIPPED after 4 attempts.** `run_probe_check` (`:507`) fingerprints only the "external"
+  payers already recorded in `ledger_verified_summary.json`; it never opens the live
+  `~/.hermes/data/x402-revenue/scan_state.json`, so payers that appear on-chain but were never written
+  into the verified summary are invisible to the probe scoring. Four cards claimed to fix this and
+  none landed a diff (`t_71064cb3`, `t_8258a668`, `t_b0e428b2`; the pattern predates them). Root cause
+  on record: the `~/.hermes` tree is shared and sibling agents `git reset --hard`/`git clean -fd`
+  concurrently, destroying uncommitted work — and the acceptance predicate passed on a self-reported
+  summary without a `git diff main --stat` proof. **Any future card here must gate CHECK on a non-empty
+  tracked diff.** (The separate `reconcile_live_revenue.py` reconciler already reads `scan_state.json`
+  correctly — do not conflate the two.)
 
 **Atoms that require Rez's account/identity** (cannot be automated):
 - **npm publish** — `mcp-client/` is built, committed, and locally runnable but **unpublished**, so
