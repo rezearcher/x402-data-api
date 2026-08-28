@@ -113,6 +113,41 @@ conflict is recorded in [§13 Doc-drift corrections](#13-doc-drift-corrections).
   read `scan_state.json` and was genuinely fixed by `t_0392bc5e`; that is the 2026-08-26 entry above and
   is unaffected by this finding.)
 
+**Changed since the 2026-08-27 sync** (verified in code at HEAD `135f72c`, 2026-08-28):
+- **The three pre-activation Stripe-rail audit findings (audit-q3 F2/F3/F4) are FIXED in code** —
+  `t_d2c77884`, commit `135f72c`. Each verified by reading the wiring, not the card title. All three
+  live on the **dormant** human rail (Stripe secrets still unset, §14), so they are **code-verified,
+  not live-proven** — no webhook has ever fired and no `sk_` key has ever been minted in production.
+  - **F2 (webhook replay → credit farming).** `POST /stripe/webhook` (`:2098`) now, on
+    `checkout.session.completed`, (a) rejects a stale signature — `|now − t| > 300s`
+    (`MAX_WEBHOOK_AGE_SECONDS`, `:2136-2137`, 401 "Webhook timestamp too old"); (b) requires
+    `session.payment_status === "paid"` (else `200 {received:true, note:"Session not yet paid"}`,
+    no mint); (c) dedups on `stripe_session_${sessionId}` in KV (`:2173`) — if the index already
+    exists it returns `200 already-created` without minting. The constant-time HMAC compare is
+    untouched. The dedup (not the freshness window) is what stops a captured signed request from
+    farming unlimited 100-credit keys.
+  - **F3 (last-credit off-by-one → double-billing).** `CreditLedger.deductCredit` (`:1878`) now
+    returns a discriminated `{ deducted: boolean; remaining: number }` instead of the old bare
+    post-decrement number where `0` was ambiguous ("exhausted" vs "just spent the last credit").
+    The gate call site (`:2284`) branches on `result.deducted` — so the **final** paid call now
+    authorizes on the api-key rail instead of being denied and silently re-charged through the x402
+    fallback. This is the one F-fix on a rail that *does* execute today (api-key `?api_key=sk_…`
+    path), but it is exercised only if a key exists, and none do until Stripe mints one.
+  - **F4 (paid key never delivered).** Two delivery paths, both **read-only — neither ever mints**
+    (the webhook mints exactly once, F2): (1) new `GET /api-key?session_id=…` (`:321`, free by
+    position — registered above the gate at `:2233`) looks up the session index and returns the key
+    once, flipping `redeemed:true`; a second call gets `410` (`:339`). Missing `session_id` → 400,
+    unknown session → 404. (2) The Stripe `success_url` redirects to `/?session_id=…`; the landing
+    handler (`:383-425`) consumes it and renders the key inline in a `keyPanel` (`:476`), with a
+    5s meta-refresh (`:410`) if the webhook hasn't landed yet and a "still provisioning" fallback
+    after one retry. The reflected `session_id` is HTML-escaped before output (`:389`), so the paid
+    page is not an XSS sink.
+- **`FREE_PATHS` set gained `/terms` and `/metrics`** (`:2241`) alongside the documented
+  `/`, `/health`, `/token-safety`, `/stripe/webhook`. `/api-key` is **not** in that set — it is free
+  purely by registration position (above the gate), same belt-and-braces caveat as §4.
+- **`wc -l src/index.ts` → 5,413** (was 5,160 at the 2026-08-19 static pass). The §16 static/live
+  evidence table below was **not** re-run for this sync.
+
 The live-probe table in §16 reflects the 2026-07-29 pass and has **not** been re-run for this sync.
 
 ---
@@ -314,19 +349,31 @@ Shipped in commit `ae27bbe`; KV binding wired in `90cadd1`. Code-complete, **not
    to humans. Free plan (preview endpoint) / Pro $9.99 per month for 100 checks. The Subscribe
    button POSTs to `/stripe/create-checkout-session` (`5c7c9ac`), which creates a Stripe Checkout
    Session server-side and redirects the browser to Stripe's hosted checkout.
-2. `POST /stripe/webhook` (`:1498`) — verifies Stripe's `v1` signature by recomputing
+2. `POST /stripe/webhook` (`:2098`) — verifies Stripe's `v1` signature by recomputing
    `HMAC-SHA256(timestamp + "." + rawBody, STRIPE_WEBHOOK_SECRET)` via WebCrypto and comparing hex.
    On `checkout.session.completed` it mints `sk_` + 20 random bytes (`generateApiKey`) and
    writes an `ApiKeyRecord` to KV: `{key, stripe_session_id, customer_email, credits_remaining: 100,
    created_at, expires_at: +30d}`, then seeds the key's `CreditLedger` DO from `credits_remaining`.
-   *Signature comparison is now constant-time — `timingSafeEqual(expectedHex, sigValue)` (`:1866`).*
-   The old plain `!==` compare was replaced (commit `9b16f8c`).
-3. **API-key bypass** inside the gate (`:1965`) — `?api_key=sk_…` → KV `get` → if unexpired, the
-   credit is decremented **atomically** through the per-key `CreditLedger` Durable Object
-   (`CREDIT_LEDGER.idFromName(apiKey).deductCredit(...)`, `:1975`). DO serialization makes the
+   *Signature comparison is constant-time — `timingSafeEqual` (commit `9b16f8c`).* **Replay/dedup
+   guards (audit-q3 F2, `t_d2c77884`):** it now also rejects a signature older than 300s
+   (`:2136`), requires `session.payment_status === "paid"`, and dedups on a `stripe_session_${id}`
+   KV index (`:2173`) — so Stripe retries or a replayed signed request can never mint a second key.
+   Right after the key record it writes the session index `{api_key, redeemed:false}` (`:2184`),
+   which is the source of truth for one-time delivery (F4).
+3. **API-key bypass** inside the gate (`:2233` gate; api-key branch ~`:2284`) — `?api_key=sk_…` → KV
+   `get` → if unexpired, the credit is decremented **atomically** through the per-key `CreditLedger`
+   Durable Object (`CREDIT_LEDGER.idFromName(apiKey).deductCredit(...)`). DO serialization makes the
    read-check-write race-free, so concurrent calls on one key can no longer double-spend
-   (commit `3e15740`). `deductCredit` returns the post-decrement balance, or `0` (nothing deducted)
-   when exhausted, in which case the caller falls through to the x402 gate.
+   (commit `3e15740`). **`deductCredit` now returns a discriminated `{ deducted, remaining }`
+   (audit-q3 F3, `:1878`)** instead of a bare number; the gate branches on `result.deducted`
+   (`:2285`), so the **final** credit authorizes the request instead of being denied while the x402
+   fallback double-bills. When `deducted` is false (exhausted) the caller falls through to x402.
+7. **Key delivery (audit-q3 F4, `t_d2c77884`).** After paying, the buyer receives the `sk_` key two
+   ways, both **read-only** (neither mints): the Stripe `success_url` redirects to `/?session_id=…`
+   and the landing handler (`:383`) renders the key inline (`keyPanel`, `:476`); and `GET
+   /api-key?session_id=…` (`:321`, free by position) returns it once as JSON, then `410` on any
+   repeat (`:339`). Reflected `session_id` is HTML-escaped (`:389`). Before this fix the rail was
+   undeliverable — a paying customer had no way to learn their key.
 4. **Subscribe → checkout.** `/token-safety`'s Subscribe button POSTs to
    `POST /stripe/create-checkout-session` (`:1785`), which calls Stripe's
    `POST /v1/checkout/sessions` (`:1803`) and returns `{url}` for a client-side redirect. Returns 500
@@ -376,7 +423,8 @@ All declared in `makeRoutes()`; prices are the literal values in that function.
 - **Discovery/meta:** `/`, `/health`, `/llms.txt`, `/openapi.json`, `/.well-known/x402`,
   `/.well-known/agent-card.json`, `/.well-known/mcp-registry-auth`, `/.well-known/402index-verify.txt`,
   `/robots.txt`, `/sitemap.xml`.
-- **Human rail:** `/token-safety`, `POST /stripe/webhook`.
+- **Human rail:** `/token-safety`, `POST /stripe/webhook`, `GET /api-key` (one-time key delivery,
+  audit-q3 F4 — free by position, above the gate).
 - **Internal:** `/internal/cdp-probe`, `/internal/cdp-settle-raw`.
 
 The preview tier is the deliberate conversion mechanism: free previews are *real* (live upstream
@@ -644,7 +692,13 @@ Statements elsewhere that this pass's code read disproves. Corrected here; the r
   for an outside installer. Only the in-repo `node dist/server.js` path works.
 - **Stripe activation** — `STRIPE_API_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_ID` are unset,
   so `/stripe/create-checkout-session` (`5c7c9ac`) will 500 until secrets are provisioned; the
-  route itself is now in place, so this is the only remaining blocker on the human rail.
+  route itself is in place, so this is the only remaining blocker on the human rail. **The four
+  pre-activation audit findings are now closed in code** — F1 (ungated internal CDP endpoints,
+  `t_2576bb7f`) and F2/F3/F4 (webhook replay, last-credit off-by-one, key delivery — `t_d2c77884`,
+  §6, header 2026-08-28). But **F2/F3/F4 are code-verified only, never live-proven**: they guard a
+  webhook that has never fired and a key that has never been minted, and cannot be exercised until
+  the Stripe secrets are set. Do not treat "audit-q3 fixed" as "human rail working" — the rail is
+  still inert.
 - **RapidAPI seller account + Stripe payout** for the dual-rail plan.
 - **Apify deploy** — the Actor is built and committed but not verified live on Apify's platform.
 - **Glama listing** — needs a passive crawl of the now-public repo or a manual browser submit.

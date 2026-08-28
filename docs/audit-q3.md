@@ -1,5 +1,14 @@
 # Audit — x402-data-api (Q3 onboarding: secrets / sell-path / risk-guards)
 
+> **RESOLUTION (2026-08-28).** All four actionable findings are now **fixed in code**, verified by
+> reading the wiring (not the card titles): **F1** ungated internal CDP endpoints → gated behind
+> `RAPIDAPI_PROXY_SECRET`, constant-time compare (`t_2576bb7f`, 2026-08-25); **F2** webhook replay,
+> **F3** last-credit off-by-one, **F4** key delivery → all three fixed in commit `135f72c`
+> (`t_d2c77884`, 2026-08-27) — see ARCHITECTURE.md §6 + the "Changed since the 2026-08-27 sync"
+> header for line-cited proof. **Caveat:** F2/F3/F4 are **code-verified, not live-proven** — they
+> guard the dormant Stripe rail (secrets still unset), so no webhook has fired and no key has been
+> minted in production. The verdict body below is the original 2026-08-16 snapshot, kept for record.
+
 **Audit date:** 2026-08-16
 **Repo:** `/home/rez/projects/x402-data-api` @ HEAD `6e4a6f61d5505936dca67481d6e6f9e12aa52b3d`
 **Audit scope:** Q3 onboarding — credential/wallet-key handling, paid-settlement (sell) path, financial risk guards; docs/ + ARCHITECTURE.md claims cross-checked against code at HEAD.
