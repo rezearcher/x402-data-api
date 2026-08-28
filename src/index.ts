@@ -393,13 +393,12 @@ app.get("/", async (c) => {
       if (raw) {
         const index = JSON.parse(raw) as { api_key: string };
         const key = esc(index.api_key);
-        const masked = esc(index.api_key.slice(0, 8) + "…" + index.api_key.slice(-4));
         keyPanel = `
   <div style="border:1px solid #2f6f4f;border-radius:10px;padding:1.1rem 1.25rem;margin:0 0 1.5rem;background:#0f1a14;">
     <h2 style="margin:0 0 .4rem;color:#7fd1a8;border:0;padding:0;">✓ Payment received — your API key</h2>
     <p style="margin:0 0 .6rem;color:#b9c4d0;">Save it now — 100 credits, valid 30 days from purchase.</p>
     <pre style="white-space:pre-wrap;word-break:break-all;padding:.8rem 1rem;">${key}</pre>
-    <p style="margin:.7rem 0 0;color:#8b9bab;font-size:.85rem;">Pass it as <code>?api_key=${masked}</code> or header <code>X-API-Key</code> on any paid endpoint. Also available once via <a href="/api-key?session_id=${esc(sessionId)}">/api-key</a>.</p>
+    <p style="margin:.7rem 0 0;color:#8b9bab;font-size:.85rem;">Pass it as the <code>X-API-Key</code> header on any paid endpoint — never in the URL. Also available once via <a href="/api-key?session_id=${esc(sessionId)}">/api-key</a>.</p>
   </div>`;
         console.log(JSON.stringify({ event: "api_key_delivered_landing", session_id: sessionId }));
       } else if (!c.req.query("retry")) {
@@ -2030,7 +2029,7 @@ app.get("/token-safety", (c) => {
   <h2>API access</h2>
   <p>Subscribe via Stripe to get an API key. Use it directly:</p>
   <div class="demo-box">
-    <pre>curl "https://x402-data-api.sigrunner.workers.dev/chain/token-security?token=0x...&api_key=sk_..."</pre>
+    <pre>curl -H "X-API-Key: sk_..." "https://x402-data-api.sigrunner.workers.dev/chain/token-security?token=0x..."</pre>
   </div>
   <p style="font-size:0.9rem;">Or pay-per-call via <a href="${BASE}/" style="color:#7fd1a8;">x402</a> (agent-native, no account).</p>
 </main>
@@ -2205,7 +2204,7 @@ app.post("/stripe/webhook", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// Paid-access bypasses — RapidAPI proxy secret, then api_key query param. Both mean
+// Paid-access bypasses — RapidAPI proxy secret, then the X-API-Key header. Both mean
 // "this caller already paid on another rail", so they skip the x402 gate.
 // ---------------------------------------------------------------------------
 
@@ -2264,8 +2263,10 @@ app.use(async (c, next) => {
     }
   }
 
-  // API key bypass for paid endpoints
-  const apiKey = c.req.query("api_key");
+  // API key bypass for paid endpoints. F5 (audit-q3): the key travels ONLY as
+  // an X-API-Key header — never as a query parameter, so it cannot leak into
+  // Cloudflare access logs, browser history, referrer chains, or proxy logs.
+  const apiKey = c.req.header("X-API-Key");
   if (apiKey && c.env.API_KEYS) {
     const raw = await c.env.API_KEYS.get(apiKey);
     if (raw) {

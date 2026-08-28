@@ -23,7 +23,8 @@
  *     and reads DO-backed counters through the USAGE_COUNTER binding
  *   - end-to-end RapidAPI bypass: exact secret only, rail counter only, bogus
  *     secret 402s and writes no counters anywhere
- *   - end-to-end prepaid api_key bypass: valid key 200 + api-key rail only
+ *   - end-to-end prepaid api_key bypass via X-API-Key header (audit-q3 F5):
+ *     valid key 200 + api-key rail only; query-string form removed (402)
  *   - unpaid POST /mcp tools/call is 402-gated, zero counters written
  *   - no-counter degradation: counters no-op, metrics return zeros
  *   - concurrency losslessness (F-05): 50 concurrent increments must end at
@@ -132,10 +133,13 @@ function makeFakeDONamespace(store) {
 // (discriminated contract, audit F3).
 // ---------------------------------------------------------------------------
 function makeFakeLedgerNamespace(initialRemaining) {
+  const calls = { deductCredit: 0 };
   return {
+    calls,
     idFromName: (name) => `ledger:${name}`,
     get: () => ({
       async deductCredit(_seed) {
+        calls.deductCredit += 1;
         return { deducted: initialRemaining > 0, remaining: initialRemaining };
       },
     }),
@@ -396,7 +400,8 @@ async function testRapidapiBypassEndToEnd() {
   console.log("  ok 7: end-to-end RapidAPI bypass — exact secret only, rail counter only, bogus 402");
 }
 
-// 8. End-to-end: prepaid api_key bypass — valid key 200 + api-key rail only.
+// 8. End-to-end: prepaid api_key bypass via X-API-Key header (audit-q3 F5) —
+//    valid key 200 + api-key rail only; the ?api_key= query form is DEAD.
 async function testApiKeyBypassEndToEnd() {
   installFetchStub();
   const doStore = new Map();
@@ -413,13 +418,23 @@ async function testApiKeyBypassEndToEnd() {
     USAGE_COUNTER: makeFakeDONamespace(doStore),
   };
 
-  const res = await app.request("/chain/block-number?api_key=key-test-1234", {}, ENV);
-  assert.strictEqual(res.status, 200, "valid api_key must bypass and succeed");
+  // Positive: the key travels as an X-API-Key header — never in the URL.
+  const res = await app.request(
+    "/chain/block-number",
+    { headers: { "X-API-Key": "key-test-1234" } },
+    ENV,
+  );
+  assert.strictEqual(res.status, 200, "valid X-API-Key header must bypass and succeed");
   const body = await res.json();
   assert.strictEqual(body.block_number, 1);
 
   await new Promise((r) => setTimeout(r, 10));
 
+  assert.strictEqual(
+    ENV.CREDIT_LEDGER.calls.deductCredit,
+    1,
+    "valid header key must deduct exactly one credit (F3 discriminated contract)",
+  );
   assert.strictEqual(
     doStore.get("usage:rail:api-key"),
     1,
@@ -431,17 +446,43 @@ async function testApiKeyBypassEndToEnd() {
     "end-to-end api_key bypass must NOT increment the paid route counter (guardrail)",
   );
 
-  // Negative: unknown key falls through to the x402 gate => 402.
-  const bogus = await app.request("/chain/block-number?api_key=key-unknown", {}, ENV);
-  assert.strictEqual(bogus.status, 402, "unknown api_key must NOT bypass the gate");
+  // F5 guardrail: the ?api_key= query-string form is fully removed. A request
+  // carrying the key ONLY in the URL (no header) falls through to the x402 gate
+  // and must be challenged, even though the key itself is valid.
+  const queryForm = await app.request("/chain/block-number?api_key=key-test-1234", {}, ENV);
+  assert.strictEqual(queryForm.status, 402, "query-string api_key must NOT bypass (F5 removed it)");
   await new Promise((r) => setTimeout(r, 10));
+  assert.strictEqual(
+    ENV.CREDIT_LEDGER.calls.deductCredit,
+    1,
+    "query-string key must not deduct a credit",
+  );
+  assert.strictEqual(
+    doStore.get("usage:rail:api-key"),
+    1,
+    "query-string key must not move the api-key rail counter",
+  );
+
+  // Negative: unknown key in the header falls through to the x402 gate => 402.
+  const bogus = await app.request(
+    "/chain/block-number",
+    { headers: { "X-API-Key": "key-unknown" } },
+    ENV,
+  );
+  assert.strictEqual(bogus.status, 402, "unknown X-API-Key must NOT bypass the gate");
+  await new Promise((r) => setTimeout(r, 10));
+  assert.strictEqual(
+    ENV.CREDIT_LEDGER.calls.deductCredit,
+    1,
+    "a 402'd request must not deduct a credit",
+  );
   assert.strictEqual(
     doStore.get("usage:rail:api-key"),
     1,
     "a 402'd request must not move the api-key rail counter",
   );
 
-  console.log("  ok 8: end-to-end api_key bypass — valid key 200 + api-key rail only, unknown key 402");
+  console.log("  ok 8: end-to-end api_key bypass — X-API-Key header 200 + api-key rail only, query-string form dead (F5), unknown key 402");
 }
 
 // 9. End-to-end: unpaid POST /mcp tools/call is 402-gated and never reaches
