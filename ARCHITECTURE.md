@@ -131,8 +131,9 @@ conflict is recorded in [§13 Doc-drift corrections](#13-doc-drift-corrections).
     post-decrement number where `0` was ambiguous ("exhausted" vs "just spent the last credit").
     The gate call site (`:2284`) branches on `result.deducted` — so the **final** paid call now
     authorizes on the api-key rail instead of being denied and silently re-charged through the x402
-    fallback. This is the one F-fix on a rail that *does* execute today (api-key `?api_key=sk_…`
-    path), but it is exercised only if a key exists, and none do until Stripe mints one.
+    fallback. This is the one F-fix on a rail that *does* execute today (the api-key `X-API-Key`
+    header path — F5, 2026-08-29, replaced the old `?api_key=` query form), but it is exercised only
+    if a key exists, and none do until Stripe mints one.
   - **F4 (paid key never delivered).** Two delivery paths, both **read-only — neither ever mints**
     (the webhook mints exactly once, F2): (1) new `GET /api-key?session_id=…` (`:321`, free by
     position — registered above the gate at `:2233`) looks up the session index and returns the key
@@ -147,6 +148,19 @@ conflict is recorded in [§13 Doc-drift corrections](#13-doc-drift-corrections).
   purely by registration position (above the gate), same belt-and-braces caveat as §4.
 - **`wc -l src/index.ts` → 5,413** (was 5,160 at the 2026-08-19 static pass). The §16 static/live
   evidence table below was **not** re-run for this sync.
+
+**Changed since the 2026-08-28 sync** (verified in code at HEAD `12dd457`, 2026-08-29):
+- **The API-key rail is now `X-API-Key` header ONLY — the `?api_key=sk_…` query form is REMOVED**
+  (audit-q3 F5, `t_47df1b6a`, commit `12dd457`). Verified by reading the gate, not the card title:
+  the paid-access bypass reads `const apiKey = c.req.header("X-API-Key")` (`:2269`) with an explicit
+  comment (`:2267`) that the key is accepted "as an `X-API-Key` header — never as a query parameter,
+  so it cannot leak" into URLs/logs/referrers. There is **no** `c.req.query("api_key")` read anywhere
+  in `src/index.ts` (grep confirms zero query-param reads of the key). The `/` landing page's key
+  panel now instructs "Pass it as the `X-API-Key` header on any paid endpoint — never in the URL"
+  (`:401`), and the sample curl uses `-H "X-API-Key: sk_..."` (`:2032`). This closes the F5 finding
+  that a secret key in the query string leaks via access logs, `Referer`, and browser history.
+  **Rail-execution caveat unchanged:** this path still only fires if a key exists, and none do until
+  Stripe mints one (§14) — so like F3 it is code-verified, not live-exercised.
 
 The live-probe table in §16 reflects the 2026-07-29 pass and has **not** been re-run for this sync.
 
@@ -259,7 +273,8 @@ registered *below* it.
  ─────────────────────────────────────────────────────────────────────────────
   :1574 app.use(...)  ◄── THE GATE
           1. FREE_PATHS short-circuit + /.well-known/* prefix skip
-          2. API-key bypass:  ?api_key=sk_… → KV lookup → credit decrement
+          2. API-key bypass:  X-API-Key: sk_… header → KV lookup → credit decrement
+                                 (query form ?api_key= removed — F5, `:2269`)
           3. /mcp JSON-RPC peek: free unless method === "tools/call"
                                  with a non-FREE_TOOLS tool name
           4. ensureInitialized(env) → selectResourceServer(env)
@@ -360,7 +375,9 @@ Shipped in commit `ae27bbe`; KV binding wired in `90cadd1`. Code-complete, **not
    KV index (`:2173`) — so Stripe retries or a replayed signed request can never mint a second key.
    Right after the key record it writes the session index `{api_key, redeemed:false}` (`:2184`),
    which is the source of truth for one-time delivery (F4).
-3. **API-key bypass** inside the gate (`:2233` gate; api-key branch ~`:2284`) — `?api_key=sk_…` → KV
+3. **API-key bypass** inside the gate (`:2233` gate; api-key branch ~`:2269`) — the caller sends the
+   key in an **`X-API-Key: sk_…` header** (the `?api_key=` query form was **removed** by audit-q3 F5,
+   `t_47df1b6a`, commit `12dd457`, so the secret can no longer leak via URLs/logs/`Referer`) → KV
    `get` → if unexpired, the credit is decremented **atomically** through the per-key `CreditLedger`
    Durable Object (`CREDIT_LEDGER.idFromName(apiKey).deductCredit(...)`). DO serialization makes the
    read-check-write race-free, so concurrent calls on one key can no longer double-spend
@@ -692,13 +709,14 @@ Statements elsewhere that this pass's code read disproves. Corrected here; the r
   for an outside installer. Only the in-repo `node dist/server.js` path works.
 - **Stripe activation** — `STRIPE_API_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_ID` are unset,
   so `/stripe/create-checkout-session` (`5c7c9ac`) will 500 until secrets are provisioned; the
-  route itself is in place, so this is the only remaining blocker on the human rail. **The four
+  route itself is in place, so this is the only remaining blocker on the human rail. **The five
   pre-activation audit findings are now closed in code** — F1 (ungated internal CDP endpoints,
-  `t_2576bb7f`) and F2/F3/F4 (webhook replay, last-credit off-by-one, key delivery — `t_d2c77884`,
-  §6, header 2026-08-28). But **F2/F3/F4 are code-verified only, never live-proven**: they guard a
-  webhook that has never fired and a key that has never been minted, and cannot be exercised until
-  the Stripe secrets are set. Do not treat "audit-q3 fixed" as "human rail working" — the rail is
-  still inert.
+  `t_2576bb7f`), F2/F3/F4 (webhook replay, last-credit off-by-one, key delivery — `t_d2c77884`,
+  §6, header 2026-08-28), and F5 (API key moved to `X-API-Key` header, `?api_key=` query form
+  removed — `t_47df1b6a`, commit `12dd457`, header 2026-08-29). But **F2/F3/F4/F5 are code-verified
+  only, never live-proven**: they guard a webhook that has never fired and a key that has never been
+  minted, and cannot be exercised until the Stripe secrets are set. Do not treat "audit-q3 fixed" as
+  "human rail working" — the rail is still inert.
 - **RapidAPI seller account + Stripe payout** for the dual-rail plan.
 - **Apify deploy** — the Actor is built and committed but not verified live on Apify's platform.
 - **Glama listing** — needs a passive crawl of the now-public repo or a manual browser submit.
