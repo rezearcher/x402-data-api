@@ -149,6 +149,15 @@ conflict is recorded in [§13 Doc-drift corrections](#13-doc-drift-corrections).
 - **`wc -l src/index.ts` → 5,413** (was 5,160 at the 2026-08-19 static pass). The §16 static/live
   evidence table below was **not** re-run for this sync.
 
+**Changed since the 2026-08-29 sync** (verified by live probe, 2026-08-31 07:50 UTC):
+- **`glama.json` manifest corrected: tools count now 22 (was 19).** Verified 2026-08-31 07:50 UTC by
+  live-probing `POST /mcp` tools/list — the server returns exactly the 22 tools §8 documents
+  (14 paid + 8 `*_preview` free tools), matching the probe's tool names byte-for-byte. glama.json
+  `tools` field was stale per §14 doc-drift note; ARCHITECTURE.md already documented the 22-tool
+  reality. This sync makes the manifest match the live server, enabling the awesome-mcp-servers
+  PR #10277 submission (Blocker A, Appendix A, 2026-08-24 entry) to proceed without rejections on
+  a manifest-registry validation gate.
+
 **Changed since the 2026-08-28 sync** (verified in code at HEAD `12dd457`, 2026-08-29):
 - **The API-key rail is now `X-API-Key` header ONLY — the `?api_key=sk_…` query form is REMOVED**
   (audit-q3 F5, `t_47df1b6a`, commit `12dd457`). Verified by reading the gate, not the card title:

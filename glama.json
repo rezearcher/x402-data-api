@@ -27,7 +27,7 @@
     "data-access",
     "payment-aware"
   ],
-  "tools": 19,
+  "tools": 22,
   "pricing": "HTTP 402 pay-per-call (USDC, $0.001–$0.005 per call)",
   "network": "Base mainnet (eip155:8453)",
   "features": [
