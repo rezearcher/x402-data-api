@@ -663,8 +663,7 @@ secret, and generates no x402 revenue — it is a distribution surface. Note `_f
 Statements elsewhere that this pass's code read disproves. Corrected here; the referenced files are
 **not** edited by this doc.
 
-- **`glama.json` says `"tools": 19`.** The server registers and serves **22** (live-verified §16).
-  Stale by three.
+- **`glama.json` tool count verified 2026-08-31.** ✓ **Corrected:** glama.json now declares `"tools": 22` with reconciled `toolList` of all 22 tools (live POST /mcp probe, 2026-08-31 03:04 UTC). Tools: chain_balance, chain_block_number, chain_block_number_preview, chain_gas_price, chain_gas_price_preview, chain_token_balance, chain_token_security, chain_token_security_preview, chain_tx, chain_wallet, crypto_funding, crypto_funding_preview, crypto_prices, crypto_prices_preview, defi_yields, defi_yields_preview, enrich_domain, enrich_tech_risk, pm_markets, pm_markets_preview, scan_mcp_preview, scan_mcp_server. No manifest-vs-live drift; glama.json truth-anchored.
 - **MCP tool descriptions overstate price 10× on three tools.** `enrich_tech_risk` (`:4072`),
   `enrich_domain` (`:4095`), and `scan_mcp_server` (`:4117`) advertise *"Cost: $0.05 USDC per call"*.
   The actual gate is the flat `POST /mcp` price of **$0.005** (`makeRoutes`, `:742`). The other 11
