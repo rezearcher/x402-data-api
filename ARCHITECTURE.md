@@ -6,6 +6,20 @@ batch of cards landed post-rewrite. Counts, prices, route lists, and tool lists 
 the code — not copied from prose. Where another doc conflicts with the code, the code wins and the
 conflict is recorded in [§13 Doc-drift corrections](#13-doc-drift-corrections).
 
+**Changed since the 2026-08-31 sync** (verified in code at HEAD `a67eb73`, 2026-09-01):
+- **glama.json 22-tool sync re-verified against live code — no drift.** Four cards
+  (`t_cc5662bd`, `t_7a57b806`, `t_1b7e3e80`, `t_77b7884d`, commits `36ef543` + `a67eb73`)
+  reconciled the manifest to the live 22-tool `/mcp` surface. Confirmed by reading the code, not
+  the titles: `src/index.ts` has **exactly 22 `server.registerTool(...)` calls** (`:4819`–`:5361`)
+  whose tool names match glama.json's `tools: 22` + 22-item `toolList` **byte-for-byte**, and the
+  `FREE_TOOLS` set (`:2317`) has **exactly 8 members**, so 14 paid + 8 free = 22 (§8 holds). The
+  earlier 19-tool manifest value is gone. **Not re-probed live this pass** — verification was
+  static (registration count + name match), not a fresh `POST /mcp` tools/list round-trip; the
+  2026-08-31 entry below records the last live probe.
+- **Fixed two code-proven stale references while here:** §2 repo-map listed `src/index.ts` at
+  `4,652` lines (actual `wc -l` = **5,414**), and §8 pointed `FREE_TOOLS` at `:1616-1625` (actual
+  declaration is at **`:2317`**). Both corrected below.
+
 **Changed since the 2026-07-29 base rewrite** (each verified in code, not from a card title):
 - **API-key credit decrement is now atomic** — moved into a per-key `CreditLedger` Durable Object
   (`src/index.ts:1626`, DO binding `CREDIT_LEDGER` in `wrangler.toml`). The old non-atomic
@@ -200,7 +214,7 @@ inert until `RAPIDAPI_PROXY_SECRET` is set).
 
 | Path | Lines | What it is |
 |---|--:|---|
-| `src/index.ts` | 4,652 | **The entire Worker.** Single file: routes, payment gate, all data/compute logic, MCP server. |
+| `src/index.ts` | 5,414 | **The entire Worker.** Single file: routes, payment gate, all data/compute logic, MCP server. |
 | `mcp-client/` | 149 (src) | Standalone npm package `x402-data-api-mcp` — local **stdio** MCP client that proxies to the deployed Worker (§10). |
 | `apify-actor/` | 410 (src) | Python Apify Actor `grey-ridge-base-onchain` — wraps the free preview endpoints + public RPC for the Apify marketplace (§11). |
 | `scripts/` | 726 | `deploy.sh` (token-resolving `wrangler deploy`), `auto-merge.sh` (kanban worktree merge hook), `verify_revenue_ledger.py` (on-chain revenue forensics). |
@@ -470,7 +484,7 @@ only `tools/call` does. That is what makes the server discoverable by any MCP cl
 `chain_block_number`, `chain_gas_price`, `chain_balance`, `chain_token_balance`, `chain_tx`,
 `chain_wallet`, `chain_token_security`, `enrich_tech_risk`, `enrich_domain`, `scan_mcp_server`.
 
-**8 free tools** (the `FREE_TOOLS` set at `:1616-1625`, which matches the registered preview tools
+**8 free tools** (the `FREE_TOOLS` set at `:2317-2325`, which matches the registered preview tools
 exactly): `crypto_prices_preview`, `crypto_funding_preview`, `defi_yields_preview`,
 `pm_markets_preview`, `chain_block_number_preview`, `chain_gas_price_preview`,
 `chain_token_security_preview`, `scan_mcp_preview`.
