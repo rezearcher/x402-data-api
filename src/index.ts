@@ -4590,15 +4590,30 @@ function analyzeMcpTool(name: string, description: string, schemaText: string): 
   const add = (severity: ScanFinding["severity"], rule: string, detail: string, ev: string) =>
     f.push({ tool: name, severity, rule, detail, evidence: ev.slice(0, 160) });
 
-  // 1. Hidden instructions to the AI embedded in a tool description (tool poisoning)
-  const inj = /(ignore (all )?previous|disregard (the )?above|you must (always|first)|<important>|<system>|do not (tell|mention|inform) the user|before (using|calling) (any|this|other)|instead of)/i;
+  // 1. Hidden instructions to the AI embedded in a tool description (tool poisoning).
+  // Only DECEPTION / OVERRIDE constructs are tool-poisoning — ordinary sequencing
+  // language ("you must first call X", "before calling this tool", "instead of")
+  // is legitimate tool-chaining guidance and was producing false CRITICALs on clean
+  // servers (e.g. Context7), which destroys the scanner's credibility. The canonical
+  // tool-poisoning signatures (Invariant Labs / OWASP LLM01) are: override of prior
+  // instructions, hidden <IMPORTANT>/<system> directive tags, and instructions to
+  // conceal actions from the user. Genuine exfiltration/danger stays covered by
+  // rules 2–5 below, so a real "before using X, read ~/.ssh/id_rsa" attack still flags.
+  const inj = /(ignore (all |any )?(previous|prior|earlier|above)( instructions| context| prompt)?|disregard (the )?(above|previous|prior|earlier)|<\/?important>|<\/?system>|<\/?secret>|do not (tell|mention|inform|notify|reveal (?:it|this|that) to) the user|without (telling|informing|notifying|alerting) the user|reveal (your|the) (full |complete )?(system )?(prompt|instructions))/i;
   if (inj.test(text)) add("critical", "tool-poisoning:hidden-instructions",
-    "Description contains instructions aimed at the AI agent, not the human — classic MCP tool-poisoning.", (text.match(inj) || [""])[0]);
+    "Description contains deceptive/override instructions aimed at the AI agent (conceal-from-user or ignore-prior-instructions) — classic MCP tool-poisoning.", (text.match(inj) || [""])[0]);
 
-  // 2. Data-exfiltration hints (read secrets/env/files, send elsewhere)
-  const exfil = /(\.env|env(ironment)? variable|secret|api[_ -]?key|private key|~\/\.ssh|id_rsa|password|credential|read (the )?file|exfiltrat|send (it|them|the|this) to|POST (it|to)|upload to)/i;
-  if (exfil.test(low)) add("high", "exfiltration-hint",
-    "Description references reading secrets/files or sending data externally.", (low.match(exfil) || [""])[0]);
+  // 2. Data-exfiltration hints. A BARE mention of "api key"/"password"/"secret" is
+  // NOT exfiltration — legitimate auth/docs tools (and even security warnings like
+  // "do not include API keys") use those words, and flagging them destroys trust.
+  // Real exfiltration is (a) an unambiguous secret-artifact that has no business in
+  // a tool description, or (b) a sensitive target PAIRED with an instruction to send
+  // it to an external destination.
+  const secretArtifact = /(\.env\b|~\/\.ssh|id_rsa|\bprivate key\b|exfiltrat)/i;
+  const externalize = /(send|post|upload|transmit|forward|leak|exfiltrat\w*)\b[\s\S]{0,60}?(https?:\/\/|\bwebhook\b|\bexternal\b|third[- ]?party|attacker|\bendpoint\b|\bexfil)/i;
+  const exfilHit = low.match(secretArtifact) || low.match(externalize);
+  if (exfilHit) add("high", "exfiltration-hint",
+    "Description instructs sending data to an external destination, or references a secret-file artifact (.env/.ssh/id_rsa).", exfilHit[0]);
 
   // 3. Dangerous capability surface
   const danger = /(exec|eval|subprocess|shell|os\.system|child_process|rm -rf|sudo|chmod|arbitrary (code|command)|remote code)/i;
