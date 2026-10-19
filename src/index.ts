@@ -3465,7 +3465,7 @@ async function enrichDomain(domain: string): Promise<EnrichDomainResult> {
 }
 
 app.get("/enrich/domain", async (c) => {
-  const domain = c.req.query("domain");
+  const domain = c.req.query("domain") || "coinbase.com";
   if (!domain) {
     return c.json({ error: "domain is required" }, { status: 400 });
   }
@@ -4954,7 +4954,7 @@ app.get("/ai/ask/preview", async (c) => {
 });
 
 app.get("/ai/ask", async (c) => {
-  const q = (c.req.query("q") ?? "").trim();
+  const q = (c.req.query("q") || "What is the x402 payment protocol?").trim();
   if (!q || q.length > 500) return c.json({ error: "q required, max 500 chars" }, { status: 400 });
   if (!c.env.AI) return c.json({ error: "ai unavailable" }, { status: 501 });
   // Hard daily cap keeps Workers AI inside the free allowance (no capital spend).
