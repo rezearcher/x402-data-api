@@ -5090,9 +5090,11 @@ function previewToken(q: string | undefined): string {
 }
 app.get("/chain/token-report/preview", async (c) => {
   try {
-    const result = await buildTokenReport(previewToken(c.req.query("token")));
+    const t = await trialToken(c, c.req.query("token"));
+    const result = await buildTokenReport(t.token);
     return c.json({
       ...result,
+      ...(t.left !== null ? { trial: { real_token_checks_left_today: t.left } } : {}),
       note: "Free live sample (Base USDC) — same depth as the paid route. Full: GET /chain/token-report?token=<0x…> ($0.02) for ANY Base ERC-20.",
     });
   } catch (e) {

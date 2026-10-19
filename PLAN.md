@@ -165,3 +165,4 @@ branch@dexter.cash (audition support) queued: outreach/queue/dexter-audition-sup
 - 2026-10-19: added /gate/swap + /chain/token-report to refresh_bazaar_catalog.js ROUTES and re-seeded (new prices in Bazaar).
 - 2026-10-19: idea logged (free daily real-token trial). Competitors price 0.003-0.01; no further price change made.
 - 2026-10-19: SHIPPED free real-token trial on /gate/swap/preview (3/IP/day via KV, any 0x Base address). Deployed cd9e4ae4+. Use in pitches: .../gate/swap/preview?token=<their token>.
+- 2026-10-19: same 3/IP/day real-token trial on /chain/token-report/preview (shared counter with gate/swap/preview). Deployed 5499dec2.
