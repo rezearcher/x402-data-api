@@ -39,7 +39,8 @@ const fs = require('fs');
 
 const projectDir = path.resolve(process.env.HOME, 'projects/x402-data-api');
 const BASE = 'https://x402-data-api.sigrunner.workers.dev';
-const COOLDOWN_PATH = path.join(__dirname, '.bazaar_refresh_cooldown.json');
+const PAYAI = process.env.FACILITATOR === 'payai'; // seed PayAI discovery catalog instead of CDP
+const COOLDOWN_PATH = path.join(__dirname, PAYAI ? '.payai_refresh_cooldown.json' : '.bazaar_refresh_cooldown.json');
 const COOLDOWN_MS = 20 * 60 * 60 * 1000; // 20h
 
 // audit-q3 F1 (t_2576bb7f): /internal/cdp-settle-raw is gated behind
@@ -543,6 +544,19 @@ async function main() {
       };
 
       // 5. POST to the Worker's raw CDP settle proxy (CDP JWT minted server-side)
+      if (PAYAI) {
+        const pr = await fetch('https://facilitator.payai.network/settle', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ x402Version: 2, paymentPayload, paymentRequirements }),
+        });
+        const pt = await pr.text();
+        console.log(`PAYAI settle ${pr.status} ${pt.slice(0, 300)}`);
+        if (!pr.ok) throw new Error(`PayAI settle ${pr.status}`);
+        cooldowns[r.route] = Date.now();
+        results.refreshed.push(r.route);
+        continue;
+      }
       const settleRes = await fetch(`${BASE}/internal/cdp-settle-raw`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'X-RapidAPI-Proxy-Secret': RAPIDAPI_PROXY_SECRET },
