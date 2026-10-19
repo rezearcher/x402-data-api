@@ -18,5 +18,8 @@
   "/chain/wallet": 1792401705904,
   "/gate/swap": 1792401706367,
   "/chain/token-report": 1792401707371,
-  "/chain/token-security": 1792401707972
+  "/chain/token-security": 1792401707972,
+  "/chain/total-supply": 1792406488669,
+  "/chain/proxy-info": 1792408449557,
+  "/chain/storage-at": 1792408450084
 }
