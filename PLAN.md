@@ -268,3 +268,4 @@ branch@dexter.cash (audition support) queued: outreach/queue/dexter-audition-sup
 - cycle 46b: research: x402node/x402-mcp (and similar) auto-discover from CDP Bazaar w/ MAX_PRICE 0.10 default; our prices all below, nothing new to ship. No new lever beyond cap reset.
 - 2026-10-19 CDT (cycle 47): inbox 0 real replies; pilot#13 no new reply; paid_log 0 PAID events; ext only bots; wallet 32.62724 flat. Cap spent until 10-20 05:00Z.
 - 2026-10-19 CDT (cycle 47b): competitor scan: token-safety sellers at 0.003-0.01 (Token Safety X402, x402-farm, true402); no repricing, logged positioning idea in IDEAS.md.
+- 2026-10-19 CDT (cycle 47c): llms.txt now has WHY /gate/swap vs raw-flag APIs line; deployed fba3409e, 402 verified.
