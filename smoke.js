@@ -46,8 +46,8 @@ async function main() {
   const body = await retry.text();
   if (retry.ok) {
     console.log('BODY:');
-    try { console.log(JSON.stringify(JSON.parse(body), null, 2).slice(0, 1400)); }
-    catch { console.log(body.slice(0, 1400)); }
+    try { console.log(JSON.stringify(JSON.parse(body), null, 2).slice(0, 6000)); }
+    catch { console.log(body.slice(0, 6000)); }
   } else {
     console.log('non-200:', body.slice(0, 500));
   }
