@@ -122,3 +122,4 @@ Inbox clean (0 replies/bounces to 15 pitches). Endpoints 200/402 healthy. Cap us
 ## Cycle note 2026-10-19T05:15Z
 Inbox: 0 replies/bounces to the 15 pitches. Wallet flat 32.30424 (self-test only). Smithery lacks us (needs login) -> outreach/blockers/smithery-publish.md. Email cap spent until 2026-10-20 00:00Z; queue apibase.md + dexter.md first then.
 - 2026-10-19 05:2xZ: AgentShare MCP registry (agentshare.dev) listing SUBMITTED keylessly via POST /api/v1/registry/submit (id 116, pending_review 24-48h; status token in outreach/agentshare_submission.json). Recheck status_api_url after 10-21. 2s.io register costs $0.0012 (capital gate, skipped). Inbox 0 replies; cap spent until 10-20 00:00Z; apibase/dexter queued first.
+- 2026-10-19 05:2xZ cycle: inbox 0 replies; CurlShip POST /api/submit and apidirectory /submit are redirect/HTML-only (no keyless API) - dead ends. Cap spent until 10-20 00:00Z; send apibase+dexter first.
