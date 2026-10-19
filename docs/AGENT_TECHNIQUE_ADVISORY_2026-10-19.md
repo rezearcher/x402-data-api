@@ -154,7 +154,7 @@ Sources: Google SRE Book/Workbook, coinbase/x402 README, CDP Bazaar + "get disco
 5. **Less context, better curated** — more prose past ~200 lines lowers adherence.
 
 ## 8. Whole-stack ranked adoptions (if/when you say "go")
-1. **ExpeL voted-insight ledger** (prune → convergence; fixes breadth-spray). [layer 2]
+1. **ExpeL voted-insight ledger** (prune → convergence; fixes breadth-spray). [layer 2] — ✅ **BUILT 2026-10-19** (`INSIGHTS.md` + one goal pointer line; gate-core untouched).
 2. **Split the global CLAUDE.md to <200-line core + scoped rules** (stop the adherence decay; cheap, safe). [layer 2]
 3. **GEPA/OPRO self-improving GOAL strategy, held-out-oracle-gated, git-rollback** (the "prompt master" upgrade). [layer 2]
 4. **Hard non-hook guards** on the loop (`--max-budget-usd`, `--permission-prompts none`, `maxTurns`). [layer 1]
