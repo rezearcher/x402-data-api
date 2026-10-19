@@ -326,3 +326,4 @@ Inbox: 0 replies. Issue watch: only x402-pilot#13 (already answered). trace_inbo
 - cycle 61f: shipped /ai/classify (0.003).
 - cycle 62: no replies; wallet flat 32.62724; /ai/* routes 402 live; IndexNow pinged for ai routes. Cap resets 10-20 05:00Z -> send queue/apibase.md + dexter.md.
 - cycle 62b: Bazaar-seeded /ai/classify,summarize,translate,extract via seed_endpoint.js (new ROUTES entries); settled, bazaar status processing (self canary, 0.016 recycled). Recheck Bazaar listing next cycle.
+- cycle 62c: Bazaar merchant listing now shows /ai/{ask,classify,extract,summarize,translate}. x402scan register-origin re-run: 43 registered/46 total (single-URL mode 404s no_discovery; use origin mode). Wallet flat 32.62724.
