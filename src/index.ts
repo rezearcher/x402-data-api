@@ -532,7 +532,7 @@ ${provisionMeta}
   <table>
     <thead><tr><th>Group</th><th>Price</th><th>Endpoints</th></tr></thead>
     <tbody>
-      <tr><td>Base on-chain reads</td><td class="price">$0.001&ndash;$0.003</td><td><code>/chain/block-number</code>, <code>/chain/gas-price</code>, <code>/chain/balance</code>, <code>/chain/token-balance</code>, <code>/chain/tx</code>, <code>/chain/receipt</code>, <code>/chain/code</code>, <code>/chain/wallet</code></td></tr>
+      <tr><td>Base on-chain reads</td><td class="price">$0.001&ndash;$0.003</td><td><code>/chain/block-number</code>, <code>/chain/gas-price</code>, <code>/chain/balance</code>, <code>/chain/token-balance</code>, <code>/chain/tx</code>, <code>/chain/receipt</code>, <code>/chain/code</code>, <code>/chain/nonce</code>, <code>/chain/erc20-meta</code>, <code>/chain/wallet</code></td></tr>
       <tr><td>Crypto / DeFi / prediction markets</td><td class="price">$0.001&ndash;$0.005</td><td><code>/crypto/prices</code> ($0.004), <code>/crypto/funding</code> ($0.004), <code>/defi/yields</code>, <code>/pm/markets</code></td></tr>
       <tr><td>Security</td><td class="price">$0.01&ndash;$0.05</td><td><code>/chain/token-report</code> ($0.02 verdict), <code>/enrich/domain</code>, <code>/enrich/tech-risk</code>, <code>/scan/mcp</code>, <code>/chain/token-security</code></td></tr>
     </tbody>
@@ -755,6 +755,8 @@ app.get("/.well-known/x402", (c) => {
       mk("/chain/tx", "GET", "0.001", "1000", "Transaction details by hash on Base mainnet.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/receipt", "GET", "0.001", "1000", "Transaction receipt by hash on Base mainnet — status, gas used, full logs, and the L1 fee breakdown (l1_fee_wei, l1_gas_price_wei, l1_gas_used, effective_gas_price_wei) + l1_fee_usd/total_fee_usd an ETH-only competitor can't offer.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/code", "GET", "0.001", "1000", "Contract-code check for a Base mainnet address (is_contract + code size + EIP-7702 delegated-EOA detection).", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/erc20-meta", "GET", "0.005", "5000", "ERC-20 metadata on Base: name, symbol, decimals, totalSupply for any token contract.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
+      mk("/chain/nonce", "GET", "0.001", "1000", "Transaction count (nonce) for a Base address, latest and pending.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/wallet", "GET", "0.003", "3000", "Wallet bundle: ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]),
       mk("/chain/token-report", "GET", "0.02", "20000", "Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "verdict", "trading", "data"]),
       mk("/gate/swap", "GET", "0.008", "8000", "Pre-trade GO / HOLD / BLOCK gate for autonomous Base trading agents: honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your trade size, one decision + reason in one call.", ["security", "base", "onchain", "trading", "gate", "agents", "token", "data"]),
@@ -1145,6 +1147,8 @@ app.get("/openapi.json", (c) => {
       "/chain/token-balance": paid("ERC-20 token balance of a Base mainnet address, incl. symbol/decimals/balance_formatted.", "0.001", [{ name: "address", desc: "0x-prefixed holder address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "token", desc: "0x-prefixed ERC-20 contract address", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
       "/chain/tx": paid("Transaction details by hash on Base mainnet.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }]),
       "/chain/receipt": paid("Transaction receipt by hash on Base mainnet: status, gas used, full logs, L1 fee breakdown, l1_fee_usd/total_fee_usd.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }]),
+      "/chain/erc20-meta": paid("ERC-20 name/symbol/decimals/totalSupply on Base.", "0.005", [{ name: "token", desc: "0x-prefixed ERC-20 address on Base", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }]),
+      "/chain/nonce": paid("Nonce (tx count) of a Base address, latest and pending.", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
       "/chain/code": paid("Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware).", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
       "/chain/wallet": paid("Wallet bundle: ETH balance + balance_usd + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call.", "0.003", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
       "/chain/token-report": paid("Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade.", "0.02", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
@@ -1803,6 +1807,28 @@ function makeRoutes(payTo: string) {
         output: {
           example: { address: "0x4200000000000000000000000000000000000006", is_contract: true, is_eip7702_delegate: false, delegate_address: null, code_size_bytes: 6234, chain: "base" },
         },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /chain/erc20-meta": {
+      accepts: { scheme: "exact" as const, price: "$0.005", network: NETWORK, payTo },
+      description: "ERC-20 metadata on Base: name, symbol, decimals, totalSupply (raw + formatted) for any token contract.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" },
+        inputSchema: { type: "object", properties: { token: { type: "string", description: "0x-prefixed ERC-20 contract address on Base" } } },
+        output: { example: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913", name: "USD Coin", symbol: "USDC", decimals: 6, total_supply_raw: "3500000000000000", total_supply: 3500000000, chain: "base" } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /chain/nonce": {
+      accepts: { scheme: "exact" as const, price: "$0.001", network: NETWORK, payTo },
+      description: "Transaction count (nonce) for a Base address, latest and pending.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { address: "0x4200000000000000000000000000000000000006" },
+        inputSchema: { type: "object", properties: { address: { type: "string", description: "0x-prefixed 20-byte Base address" } } },
+        output: { example: { address: "0x4200000000000000000000000000000000000006", nonce_latest: 1, nonce_pending: 1, chain: "base" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /chain/wallet": {
@@ -4222,6 +4248,54 @@ app.get("/chain/code", async (c) => {
     fireAndForget(c, trackPaidRequest("GET /chain/code", rail, makeUsageCounter(c.env)));
 
     return c.json(result);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/erc20-meta", async (c) => {
+  const token = c.req.query("token");
+  if (!token || !ADDR_RE.test(token)) {
+    return c.json({ error: "token query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
+  }
+  try {
+    const call = (data: string) => baseRpc("eth_call", [{ to: token, data }, "latest"]).catch(() => "0x") as Promise<string>;
+    const [n, sy, d, ts] = await Promise.all([call("0x06fdde03"), call("0x95d89b41"), call("0x313ce567"), call("0x18160ddd")]);
+    if (d === "0x" && ts === "0x") return c.json({ error: "not an ERC-20 contract on Base" }, { status: 422 });
+    const decimals = d && d !== "0x" ? Number(BigInt(d)) : null;
+    const raw = ts && ts !== "0x" ? BigInt(ts) : null;
+    const result = {
+      token,
+      name: decodeAbiString(n),
+      symbol: decodeAbiString(sy),
+      decimals,
+      total_supply_raw: raw === null ? null : raw.toString(),
+      total_supply: raw === null || decimals === null ? null : Number(raw) / 10 ** decimals,
+      chain: "base",
+    };
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/chain/erc20-meta", token, ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/erc20-meta", rail, makeUsageCounter(c.env)));
+    return c.json(result);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/nonce", async (c) => {
+  const address = c.req.query("address");
+  if (!address || !ADDR_RE.test(address)) {
+    return c.json({ error: "address query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
+  }
+  try {
+    const [l, p] = await Promise.all([
+      baseRpc("eth_getTransactionCount", [address, "latest"]) as Promise<string>,
+      baseRpc("eth_getTransactionCount", [address, "pending"]) as Promise<string>,
+    ]);
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/chain/nonce", address, ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/nonce", rail, makeUsageCounter(c.env)));
+    return c.json({ address, nonce_latest: Number(BigInt(l)), nonce_pending: Number(BigInt(p)), chain: "base" });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }

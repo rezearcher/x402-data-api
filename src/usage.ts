@@ -45,6 +45,8 @@ export type Route =
   | "GET /chain/tx"
   | "GET /chain/receipt"
   | "GET /chain/code"
+  | "GET /chain/erc20-meta"
+  | "GET /chain/nonce"
   | "GET /chain/wallet"
   | "POST /mcp";
 
@@ -133,6 +135,8 @@ const ALL_ROUTES: Route[] = [
   "GET /chain/tx",
   "GET /chain/receipt",
   "GET /chain/code",
+  "GET /chain/erc20-meta",
+  "GET /chain/nonce",
   "GET /chain/wallet",
   "POST /mcp",
 ];
