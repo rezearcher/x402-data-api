@@ -10,3 +10,5 @@ nirholas/universal-crypto-mcp
 nirholas/x402-preflight
 presidio-v/presidio-hardened-x402
 withgrokbot/x402-spotcheck
+ak10082247-max/base-trading-bot-starter
+tianzizhiming-svg/agentbridge
