@@ -14,3 +14,4 @@ ak10082247-max/base-trading-bot-starter
 tianzizhiming-svg/agentbridge
 uerax/all-in-one-bot
 Tamas22-cell/AIPoweredMemecoinRadar
+rdin777/base_bot
