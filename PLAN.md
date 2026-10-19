@@ -308,3 +308,4 @@ Inbox: 0 replies. Issue watch: only x402-pilot#13 (already answered). trace_inbo
 - cycle 60 (2026-10-19 ~17Z): inbox 0 replies; pilot#13 unchanged; trace: only bot 0xec2abd 0.005; wallet 32.62724 flat. Cap resets 10-20 05:00Z -> send queue/apibase.md + dexter.md.
 - cycle 60b: shipped+deployed /chain/link-usd and /chain/sol-usd (0.003, Chainlink on Base, feeds verified via description()). First deploy 404'd, redeploy fixed (known quirk: always redeploy+recheck). Not seeded (self canary).
 - cycle 60c: IndexNow pinged for eth/btc/link/sol-usd + llms.txt + openapi.json.
+- cycle 60d: shipped+deployed /chain/prices (0.005, BTC/ETH/LINK/SOL Chainlink snapshot in one call); needed 2nd deploy to go live; IndexNow pinged.

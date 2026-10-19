@@ -768,6 +768,7 @@ app.get("/.well-known/x402", (c) => {
       mk("/chain/blob-base-fee", "GET", "0.003", "3000", "Base EIP-4844 blob base fee from the GasPriceOracle (wei/gwei). Use when an agent estimates L1 data-availability cost for Base batches.", ["rpc", "base", "onchain", "gas", "blob", "fees", "data"]),
       mk("/chain/eth-usd", "GET", "0.003", "3000", "Base ETH/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain ETH price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]),
       mk("/chain/btc-usd", "GET", "0.003", "3000", "Base BTC/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain BTC price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]),
+      mk("/chain/prices", "GET", "0.005", "5000", "Base crypto price snapshot in one call: BTC, ETH, LINK and SOL USD spot from Chainlink aggregators with per-feed staleness. Use when an agent needs a multi-asset trusted on-chain price board.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "snapshot", "data"]),
       mk("/chain/sol-usd", "GET", "0.003", "3000", "Base SOL/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain SOL price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]),
       mk("/chain/link-usd", "GET", "0.003", "3000", "Base LINK/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain LINK price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]),
       mk("/chain/total-supply", "GET", "0.003", "3000", "ERC-20 total supply on Base (raw + formatted, with symbol and decimals).", ["rpc", "base", "onchain", "token", "erc20", "data"]),
@@ -992,6 +993,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/chain/blob-base-fee — $0.003 — Base EIP-4844 blob base fee (wei/gwei) from the GasPriceOracle.
 - GET ${BASE}/chain/eth-usd — $0.003 — Chainlink ETH/USD spot price on Base with staleness.
 - GET ${BASE}/chain/btc-usd — $0.003 — Chainlink BTC/USD spot price on Base with staleness.
+- GET ${BASE}/chain/prices — $0.005 — BTC/ETH/LINK/SOL Chainlink USD prices in one call.
 - GET ${BASE}/chain/sol-usd — $0.003 — Chainlink SOL/USD spot price on Base with staleness.
 - GET ${BASE}/chain/link-usd — $0.003 — Chainlink LINK/USD spot price on Base with staleness.
 - GET ${BASE}/chain/total-supply?token=<0x…> — $0.003 — ERC-20 total supply (raw + formatted).
@@ -1196,6 +1198,7 @@ app.get("/openapi.json", (c) => {
       "/chain/blob-base-fee": paid("Base EIP-4844 blob base fee (wei/gwei) from the GasPriceOracle.", "0.003", []),
       "/chain/eth-usd": paid("Chainlink ETH/USD spot price on Base with staleness.", "0.003", []),
       "/chain/btc-usd": paid("Chainlink BTC/USD spot price on Base with staleness.", "0.003", []),
+      "/chain/prices": paid("BTC/ETH/LINK/SOL Chainlink USD prices on Base in one call.", "0.005", []),
       "/chain/sol-usd": paid("Chainlink SOL/USD spot price on Base with staleness.", "0.003", []),
       "/chain/link-usd": paid("Chainlink LINK/USD spot price on Base with staleness.", "0.003", []),
       "/chain/total-supply": paid("ERC-20 total supply on Base, raw + formatted.", "0.003", [{ name: "token", desc: "0x-prefixed ERC-20 address", required: true, example: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" }]),
@@ -1958,6 +1961,16 @@ function makeRoutes(payTo: string) {
         input: {},
         inputSchema: { type: "object", properties: {} },
         output: { example: { price_usd: 100000.5, chain: "base" } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },    "GET /chain/prices": {
+      accepts: { scheme: "exact" as const, price: "$0.005", network: NETWORK, payTo },
+      description: "Base crypto price snapshot in one call: BTC, ETH, LINK and SOL USD spot from Chainlink aggregators with per-feed staleness. Use when an agent needs a multi-asset trusted on-chain price board.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: {},
+        inputSchema: { type: "object", properties: {} },
+        output: { example: { prices: { BTC: 100000.5, ETH: 3500.1, LINK: 12.5, SOL: 104.2 }, chain: "base" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },    "GET /chain/sol-usd": {
       accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
@@ -4667,6 +4680,31 @@ app.get("/chain/btc-usd", async (c) => {
       source: "chainlink BTC/USD aggregator on Base",
       chain: "base",
     });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/prices", async (c) => {
+  try {
+    const feeds: Record<string, string> = {
+      BTC: "0x64c911996D3c6aC71f9b455B1E8E7266BcbD848F",
+      ETH: "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70",
+      LINK: "0x17CAb8FE31E32f08326e5E27412894e49B0f9D65",
+      SOL: "0x975043adBb80fc32276CbF9Bbcfd4A601a12462D",
+    };
+    const now = Math.floor(Date.now() / 1000);
+    const entries = await Promise.all(Object.entries(feeds).map(async ([sym, to]) => {
+      const r = (await baseRpc("eth_call", [{ to, data: "0xfeaf968c" }, "latest"])) as string;
+      const h = r.slice(2);
+      const answer = BigInt("0x" + h.slice(64, 128));
+      const updatedAt = Number(BigInt("0x" + h.slice(192, 256)));
+      return [sym, { price_usd: Number(answer) / 1e8, updated_at: new Date(updatedAt * 1000).toISOString(), age_seconds: Math.max(0, now - updatedAt) }] as const;
+    }));
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/chain/prices", ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/prices", rail, makeUsageCounter(c.env)));
+    return c.json({ prices: Object.fromEntries(entries), source: "chainlink aggregators on Base", chain: "base" });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }

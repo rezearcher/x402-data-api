@@ -54,6 +54,7 @@ export type Route =
   | "GET /chain/blob-base-fee"
   | "GET /chain/eth-usd"
   | "GET /chain/btc-usd"
+  | "GET /chain/prices"
   | "GET /chain/sol-usd"
   | "GET /chain/link-usd"
   | "GET /chain/total-supply"
@@ -162,6 +163,7 @@ const ALL_ROUTES: Route[] = [
   "GET /chain/blob-base-fee",
   "GET /chain/eth-usd",
   "GET /chain/btc-usd",
+  "GET /chain/prices",
   "GET /chain/sol-usd",
   "GET /chain/link-usd",
   "GET /chain/total-supply",
