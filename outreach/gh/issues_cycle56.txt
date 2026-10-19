@@ -1,0 +1,3 @@
+https://github.com/presidio-v/presidio-hardened-x402-mcp/issues/78
+https://github.com/floortomproductions-droid/nemo-x402-gateway/issues/1
+https://github.com/nicsins/x402-mcp-notes/issues/1
