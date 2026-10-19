@@ -1,4 +1,5 @@
 # Public contacts found 2026-10-19 (ready to send once contact@greyridgesignals.ai Gmail MCP is OAuth'd)
+- QUEUED 2026-10-19: outreach/queue/orthogonal.md -> founders@orthogonal.com (YC/Pantera-backed aggregator, 60+ providers; mailto "Missing a provider?" confirms intake). Send after apibase+dexter on 10-20.
 
 ## QUEUED 2026-10-19 (send FIRST after UTC reset 2026-10-20): outreach/queue/apibase.md, outreach/queue/dexter.md (agent402.md = PR route). Rationale: marketplaces/aggregators resell -> distribution; APIbase has no token-safety tool.
 - team@heurist.xyz (Heurist Mesh) | gm@builders.garden (Builders Garden, servex-rs) | gwizdala.kr@gmail.com (krystiangw/agenticpay) | kinance@gmail.com (x402-anthropic wrappers) | hey@gitlawb.com
