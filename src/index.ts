@@ -761,6 +761,7 @@ app.get("/.well-known/x402", (c) => {
       mk("/chain/erc20-meta", "GET", "0.005", "5000", "ERC-20 metadata on Base: name, symbol, decimals, totalSupply for any token contract.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
       mk("/chain/nonce", "GET", "0.001", "1000", "Transaction count (nonce) for a Base address, latest and pending.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/total-supply", "GET", "0.003", "3000", "ERC-20 total supply on Base (raw + formatted, with symbol and decimals).", ["rpc", "base", "onchain", "token", "erc20", "data"]),
+      mk("/chain/storage-at", "GET", "0.002", "2000", "Raw storage slot read (eth_getStorageAt) for any Base contract; slot defaults to 0x0. Use when an agent needs proxy implementation/admin slots or raw contract state.", ["rpc", "base", "onchain", "contract", "data"]),
       mk("/chain/allowance", "GET", "0.002", "2000", "ERC-20 allowance(owner, spender) on Base, raw + formatted, flags unlimited approvals.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
       mk("/ai/ask", "GET", "0.002", "2000", "Cheap LLM answer (Llama 3.2 3B on Workers AI): ?q=<prompt up to 500 chars>, returns concise text. Pay-per-call, no API key.", ["ai", "llm", "inference", "chat", "data"]),
       mk("/chain/block", "GET", "0.001", "1000", "Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.", ["rpc", "base", "onchain", "blockchain", "data"]),
@@ -1166,6 +1167,7 @@ app.get("/openapi.json", (c) => {
       "/chain/erc20-meta": paid("ERC-20 name/symbol/decimals/totalSupply on Base.", "0.005", [{ name: "token", desc: "0x-prefixed ERC-20 address on Base", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }]),
       "/chain/nonce": paid("Nonce (tx count) of a Base address, latest and pending.", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
       "/chain/total-supply": paid("ERC-20 total supply on Base, raw + formatted.", "0.003", [{ name: "token", desc: "0x-prefixed ERC-20 address", required: true, example: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" }]),
+      "/chain/storage-at": paid("Raw eth_getStorageAt slot read on Base.", "0.002", [{ name: "address", desc: "0x-prefixed contract address", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }, { name: "slot", desc: "storage slot hex (default 0x0)", required: false, example: "0x0" }]),
       "/chain/allowance": paid("ERC-20 allowance(owner, spender) on Base.", "0.002", [{ name: "token", desc: "ERC-20 address", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }, { name: "owner", desc: "owner address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "spender", desc: "spender address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
       "/ai/ask": paid("Cheap LLM answer (Llama 3.2 3B) for a prompt up to 500 chars.", "0.002", [{ name: "q", desc: "prompt, max 500 chars", required: true, example: "Explain x402 in one sentence" }]),
       "/chain/block": paid("Base block summary by number or latest.", "0.001", [{ name: "number", desc: "decimal block number or 'latest'", required: false, example: "latest" }]),
@@ -1860,6 +1862,17 @@ function makeRoutes(payTo: string) {
         input: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" },
         inputSchema: { type: "object", properties: { token: { type: "string", description: "0x-prefixed ERC-20 contract address on Base" } } },
         output: { example: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913", symbol: "USDC", decimals: 6, total_supply_raw: "3500000000000000", total_supply: 3500000000, chain: "base" } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /chain/storage-at": {
+      accepts: { scheme: "exact" as const, price: "$0.002", network: NETWORK, payTo },
+      description: "Raw storage slot (eth_getStorageAt) of a Base contract. Use when an agent needs proxy implementation/admin slots or raw contract state.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { address: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913", slot: "0x0" },
+        inputSchema: { type: "object", properties: { address: { type: "string", description: "0x-prefixed contract address on Base" }, slot: { type: "string", description: "storage slot hex, default 0x0" } } },
+        output: { example: { address: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913", slot: "0x0", value: "0x0000000000000000000000000000000000000000000000000000000000000001", chain: "base" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /chain/allowance": {
@@ -4412,6 +4425,26 @@ app.get("/chain/total-supply", async (c) => {
       total_supply: decimals === null ? null : Number(raw) / 10 ** decimals,
       chain: "base",
     });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/storage-at", async (c) => {
+  const address = c.req.query("address");
+  const slot = c.req.query("slot") ?? "0x0";
+  if (!address || !ADDR_RE.test(address)) {
+    return c.json({ error: "address query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
+  }
+  if (!/^0x[a-fA-F0-9]{1,64}$/.test(slot)) {
+    return c.json({ error: "slot must be 0x-prefixed hex (up to 32 bytes)" }, { status: 400 });
+  }
+  try {
+    const value = (await baseRpc("eth_getStorageAt", [address, slot, "latest"])) as string;
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/chain/storage-at", address, ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/storage-at", rail, makeUsageCounter(c.env)));
+    return c.json({ address, slot, value, chain: "base" });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }

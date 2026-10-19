@@ -99,6 +99,18 @@ const ROUTES = [
     },
   },
   {
+    route: '/chain/storage-at',
+    desc: 'Raw storage slot (eth_getStorageAt) of a Base contract. Use when an agent needs proxy implementation/admin slots or raw contract state.',
+    serviceName: 'Base Contract Storage Slot',
+    tags: ['storage', 'contract', 'base', 'evm', 'data'],
+    disc: {
+      method: 'GET',
+      input: { address: '0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913', slot: '0x0' },
+      inputSchema: { type: 'object', properties: { address: { type: 'string' }, slot: { type: 'string' } } },
+      output: { example: { slot: '0x0', value: '0x00', chain: 'base' } },
+    },
+  },
+  {
     route: '/chain/nonce',
     desc: 'Transaction count (nonce) for a Base address, latest and pending.',
     serviceName: 'Base Address Nonce',
