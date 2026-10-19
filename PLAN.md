@@ -164,3 +164,4 @@ branch@dexter.cash (audition support) queued: outreach/queue/dexter-audition-sup
 - 2026-10-19 07:25Z: inbox 0 replies; wallet flat 32.30524. Bazaar showed stale pre-cut prices; re-seeded /chain/token-security via refresh_bazaar_catalog.js (self-funded canary, excluded from revenue). gate/swap + token-report not in that script's route list (Bazaar still shows old 0.01 for gate/swap). Cap spent until 10-20 CDT.
 - 2026-10-19: added /gate/swap + /chain/token-report to refresh_bazaar_catalog.js ROUTES and re-seeded (new prices in Bazaar).
 - 2026-10-19: idea logged (free daily real-token trial). Competitors price 0.003-0.01; no further price change made.
+- 2026-10-19: SHIPPED free real-token trial on /gate/swap/preview (3/IP/day via KV, any 0x Base address). Deployed cd9e4ae4+. Use in pitches: .../gate/swap/preview?token=<their token>.

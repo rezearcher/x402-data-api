@@ -1149,7 +1149,7 @@ app.get("/openapi.json", (c) => {
       "/chain/wallet": paid("Wallet bundle: ETH balance + balance_usd + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call.", "0.003", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
       "/chain/token-report": paid("Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade.", "0.02", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
       "/gate/swap": paid("Pre-trade GO/HOLD/BLOCK gate for Base trading agents: token safety + liquidity-vs-size price-impact check in one call.", "0.008", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }, { name: "side", desc: "buy or sell", required: false, example: "buy" }, { name: "notional_usd", desc: "intended trade size in USD", required: false, example: "500" }]),
-      "/gate/swap/preview": { get: { summary: "FREE live sample of /gate/swap (no payment).", description: "Free go/hold/block sample for a demo token. Try ?token=degen. Paid /gate/swap accepts ANY Base ERC-20 ($0.01).", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
+      "/gate/swap/preview": { get: { summary: "FREE live sample of /gate/swap (no payment).", description: "Free go/hold/block sample for a demo token (?token=degen) OR any real Base 0x address, 3 free real-token checks per IP per day. Paid /gate/swap accepts ANY Base ERC-20 ($0.01).", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-report/preview": { get: { summary: "FREE live sample of /chain/token-report (no payment).", description: "Free full trade-safety report for a demo token. Try ?token=aero. Paid /chain/token-report accepts ANY Base ERC-20 ($0.05).", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-security": paid("Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.", "0.009", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
       "/dns/{domain}": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "path", example: "stripe.com" }]),
@@ -5100,9 +5100,24 @@ app.get("/chain/token-report/preview", async (c) => {
   }
 });
 
+// Free real-token trial: 3 arbitrary-token checks per IP per UTC day (approximate; KV is eventually consistent).
+const TRIAL_PER_DAY = 3;
+async function trialToken(c: any, q: string | undefined): Promise<{ token: string; left: number | null }> {
+  const raw = (q ?? "").trim();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(raw) || !c.env.API_KEYS) return { token: previewToken(q), left: null };
+  if (Object.values(PREVIEW_DEMO_TOKENS).some((a) => a.toLowerCase() === raw.toLowerCase())) return { token: raw, left: null };
+  const ip = c.req.header("cf-connecting-ip") ?? "unknown";
+  const key = `trial:${ip}:${new Date().toISOString().slice(0, 10)}`;
+  const used = parseInt((await c.env.API_KEYS.get(key)) ?? "0", 10) || 0;
+  if (used >= TRIAL_PER_DAY) return { token: previewToken(q), left: 0 };
+  await c.env.API_KEYS.put(key, String(used + 1), { expirationTtl: 90000 });
+  return { token: raw, left: TRIAL_PER_DAY - used - 1 };
+}
 app.get("/gate/swap/preview", async (c) => {
   try {
-    const out = await buildSwapGate(previewToken(c.req.query("token")), "buy", 100);
+    const t = await trialToken(c, c.req.query("token"));
+    const out = await buildSwapGate(t.token, "buy", 100);
+    if (t.left !== null) return c.json({ ...out, trial: { real_token_checks_left_today: t.left }, note: t.left === 0 && t.token === previewToken(c.req.query("token")) ? "Free real-token trial exhausted for today (3/day/IP); showing demo token. Paid: GET /gate/swap?token=<0x…> ($0.008)." : `Free real-token trial (${t.left} left today). Paid: GET /gate/swap?token=<0x…>&side=buy|sell&notional_usd=<n> ($0.008).` });
     return c.json({ ...out, note: "Free live sample (demo tokens via ?token=usdc|weth|cbbtc|aero|degen; default Base USDC, buy, $100) — full: GET /gate/swap?token=<0x…>&side=buy|sell&notional_usd=<n> ($0.01) for ANY Base ERC-20." });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
