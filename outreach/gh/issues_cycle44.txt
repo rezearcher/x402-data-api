@@ -7,3 +7,11 @@ aaron11998/lending-liquidation-sentinel https://github.com/aaron11998/lending-li
 dchu3/x402-agent-mcp https://github.com/dchu3/x402-agent-mcp/issues/51
 OnchainRouter/onchain-router https://github.com/OnchainRouter/onchain-router/issues/20
 Djtrixuk/moltydex https://github.com/Djtrixuk/moltydex/issues/1
+jaysperspective/thebuyside-x402-agent https://github.com/jaysperspective/thebuyside-x402-agent/issues/17
+up2itnow0822/agentpay-mcp GraphQL: Repository was archived so is read-only (createIssue)
+hypeprinter007-stack/x402-agent-kit https://github.com/hypeprinter007-stack/x402-agent-kit/issues/1
+kotoba-lang/x402-sdk https://github.com/kotoba-lang/x402-sdk/issues/3
+nirholas/x402-bridge https://github.com/nirholas/x402-bridge/issues/1
+ihint/merchant-context https://github.com/ihint/merchant-context/issues/44
+srotzin/hive-x402-helpers https://github.com/srotzin/hive-x402-helpers/issues/1
+harpd-dev/harpd-agent-examples https://github.com/harpd-dev/harpd-agent-examples/issues/1
