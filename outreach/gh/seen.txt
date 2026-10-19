@@ -1,0 +1,12 @@
+BlockRunAI/ClawRouter
+JasonColapietro/agentix
+JonasFuchss/x402-trust-mcp
+Libertai/libertai-agents
+Sahveli01/hazine-ajani
+desplega-ai/agent-swarm
+iamonuwa/kanon
+manavaga/x402-scanner
+nirholas/universal-crypto-mcp
+nirholas/x402-preflight
+presidio-v/presidio-hardened-x402
+withgrokbot/x402-spotcheck

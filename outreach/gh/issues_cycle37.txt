@@ -9,3 +9,9 @@ https://github.com/iamonuwa/kanon/issues/45
 https://github.com/Sahveli01/hazine-ajani/issues/1
 https://github.com/presidio-v/presidio-hardened-x402/issues/150
 https://github.com/manavaga/x402-scanner/issues/3
+https://github.com/Recall-Kitchen/awesome-x402-mcp-services/issues/108
+https://github.com/dchu3/x402-agent-mcp/issues/49
+https://github.com/NovaCorpAI/agentpos/issues/2
+https://github.com/lizjq66/AgentBudget/issues/1
+https://github.com/revanthrajeev/spendveto/issues/3
+https://github.com/DrVelvetFog/x402-pilot/issues/13
