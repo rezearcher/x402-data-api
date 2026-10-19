@@ -3,7 +3,28 @@ import { RESPONSE_EXAMPLES } from "./examples";
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
-import { declareDiscoveryExtension } from "@x402/extensions/bazaar";
+import { declareDiscoveryExtension as declareDiscoveryExtensionBase } from "@x402/extensions/bazaar";
+
+// Infer a JSON Schema (field names, types, required) from an example payload so
+// the 402 discovery metadata carries a real output contract, not just {type, example}.
+function inferSchema(v: unknown): Record<string, unknown> {
+  if (v === null) return { type: "null" };
+  if (Array.isArray(v)) return { type: "array", items: v.length ? inferSchema(v[0]) : {} };
+  if (typeof v === "object") {
+    const props: Record<string, unknown> = {};
+    for (const [k, x] of Object.entries(v as Record<string, unknown>)) props[k] = inferSchema(x);
+    return { type: "object", properties: props, required: Object.keys(props) };
+  }
+  if (typeof v === "number") return { type: Number.isInteger(v) ? "integer" : "number" };
+  return { type: typeof v };
+}
+function declareDiscoveryExtension(cfg: any): any {
+  const ex = cfg?.output?.example;
+  if (ex && typeof ex === "object" && !cfg.output.schema) {
+    return declareDiscoveryExtensionBase({ ...cfg, output: { ...cfg.output, schema: inferSchema(ex) } });
+  }
+  return declareDiscoveryExtensionBase(cfg);
+}
 import { generateJwt } from "@coinbase/cdp-sdk/auth";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { McpServer } from "@modelcontextprotocol/server";
