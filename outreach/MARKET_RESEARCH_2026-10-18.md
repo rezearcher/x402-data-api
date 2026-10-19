@@ -17,3 +17,20 @@
 - dev.to/ofirbaranesadagent "I fixed the payment rail. Still $0..." (2026-08-28 data)
 - dev.to/tanod "What AI agents pay per call, part 3" (2026-10-09 Bazaar snapshot)
 - agent402.tools leaderboard; goldrush.dev, nansen.ai x402 docs
+
+## DEEP-DIVE ADDENDUM (buyer repos + full Bazaar crawl, 25,798 resources)
+### #1 concrete $0 cause: WE ARE DELISTED FROM SEARCH
+- Our 13 resources: lastCalledAt 2026-08-12..09-01. CDP drops a resource from catalog+search after 30d with no settlement. We're in merchant feed but NOT in the paged /resources search buyers use. We rank last (quality = recent calls × unique payers = 0).
+- FIX (highest leverage): settle ONE real call through the CDP Facilitator w/ bazaar extension to re-enter search. Per CDP docs this is legitimate+required. Do NOT repeat to inflate (that's the fraud line).
+
+### Product defect: honeypot sim broken where it matters
+- Our state-override sim probes balance slots 0-3 only → "unavailable" on proxy/USDC-style tokens (seen in our own live challenge example). The sim IS our differentiator; fix slot detection (ERC-1967 proxy-aware, wider slot scan / known-slot map) before selling it.
+
+### Sharpest monetizable product (evidence-ranked)
+- `GET /gate/swap?token=&side=buy&notional=` → {go|hold|block, reason}, <1s, $0.01. Buyers = autonomous Base execution agents (CrewAI/Virtuals/true402 meme-traders, wallet-agents like keyring-agent $0.05/send). Hot-path recurring calls: sniperx 17 payers→22.9k calls; keyring ~55 payers→14.6k calls; x402node honeypot 22 payers@$0.01. One-off audits die (1-6 calls).
+- Pricing: $0.02-0.05 band gets ~50% of all calls. Our $0.001 reads & $0.10 scan are fine; discovery is the problem, not price.
+- Only uncapped example: AX1 Console — $0.02 entertainment "roast verdict" social card on Base tokens, ~$6k/mo, 2,992 payers. Consumer social product, not an API. The shape worth testing for real upside.
+- DEAD, don't build: static MCP-scan audits, cross-venue funding ($85 total), prediction-market feeds.
+
+### Market size reality-check
+- x402scan: ~3.0M tx / $1.12M / 36.4k buyers (30d). Bazaar-visible: ~815k calls/30d, ~$24k est rev, top-10 take ~75%. 25-30% of volume is leaderboard-farming (Coinbase's own head of AI product). The "79k/day" figure is inflated per Visa/Artemis.
