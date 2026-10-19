@@ -107,6 +107,8 @@ export async function trackPaidRequest(
   rail: Rail,
   counter: UsageCounterLike | undefined,
 ): Promise<void> {
+  // Workers Logs line survives a Durable Object outage; one JSON line per paid call.
+  console.log(JSON.stringify({ evt: "paid_call", route, rail, ts: Math.floor(Date.now() / 1000) }));
   if (!counter) return;
   try {
     const now = Math.floor(Date.now() / 1000);

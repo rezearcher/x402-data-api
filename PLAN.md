@@ -271,3 +271,4 @@ branch@dexter.cash (audition support) queued: outreach/queue/dexter-audition-sup
 - 2026-10-19 CDT (cycle 47c): llms.txt now has WHY /gate/swap vs raw-flag APIs line; deployed fba3409e, 402 verified.
 - 2026-10-19 CDT (cycle 48): inbox 0 real replies (CF DO-limit alerts only); pilot#13 last comment still ours; ext only bots (0xec2abd/0x54e163); wallet 32.62724 flat. Cap spent until 10-20 05:00Z.
 - 2026-10-19 CDT (cycle 49): notifications show no new replies (pilot#13 last comment ours 12:33Z); ext only bots; wallet 32.62724 flat. Cap spent until 10-20 05:00Z; no new lever.
+- 2026-10-19 CDT (cycle 49b): shipped paid_call JSON log line in trackPaidRequest (Workers Logs per-route attribution, DO-outage-proof); deployed 202c48e9.
