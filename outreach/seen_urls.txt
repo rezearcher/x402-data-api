@@ -1,2 +1,4 @@
 https://github.com/BlockRunAI/Franklin/pull/214
 https://github.com/Bitterbot-AI/bitterbot-desktop/pull/280
+madebyshun/blue-agent
+furkan3152/Kletia
