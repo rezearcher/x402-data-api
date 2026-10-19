@@ -352,3 +352,4 @@ Inbox: 0 replies. Issue watch: only x402-pilot#13 (already answered). trace_inbo
 - cycle 62y: research: CoinGecko/Nansen sell natively on x402; our CoinGecko proxy routes are commodity. Idea logged: cross-source composite (/defi/protocol-risk).
 - cycle 62z: shipped /defi/protocol-risk composite (0.01, TVL+age+audits+hacks score; version 8ece6257 after 3 deploys, 402 x4); seeded, x402scan 60/63, IndexNow.
 - cycle 62aa: protocol-risk hack matching now by DefiLlama id (Aave V3 hack 2026-03-12 $862k is a real record); added free fixed-sample /defi/protocol-risk/preview (aave-v3 only), verified 200 x3 end-to-end; paid route 402 x3 (version e0cf61f1). Preview needs ~30s to propagate after deploy.
+- cycle 62ab: llms.txt now lists protocol-risk + preview (version d3e178a1); paid 402 x3, preview 200 x3.
