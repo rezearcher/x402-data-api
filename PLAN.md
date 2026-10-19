@@ -393,3 +393,4 @@ Inbox: 0 replies. Issue watch: only x402-pilot#13 (already answered). trace_inbo
 - payer_bar_sensor.py (distinct external payers vs x402stats bar): public RPC rate-limits getLogs, 9/10 chunks fail on 2-day window (status=partial); needs a keyed RPC or fewer days. Not yet cron-wired.
 - 2026-10-19 cycle16: pitched deonmenezes/opentradex#23 (found via code search wrapFetchWithPayment; other hits were SDK/facilitator sellers or stale)
 - 2026-10-19 cycle17: replied to guidoalejo (Sluzen) on Agorean/claude-plugin#1 asking buyer volume + proxy mode; watch for answer
+- 2026-10-19 (cycle 18): Polygon agent-discovery = 77 routes, single owner 0xfd13b3, proxy-wrapped, no open seller listing -> dead lever. 0 replies, wallet flat 32.81524.
