@@ -333,6 +333,30 @@ const ROUTES = [
     },
   },
   {
+    route: '/gate/swap',
+    desc: 'Pre-trade GO / HOLD / BLOCK gate for an agent about to swap into a Base token: honeypot sim, upgradeability, ownership, liquidity checks in one call.',
+    serviceName: 'Base Swap Gate',
+    tags: ['swap-gate', 'pre-trade', 'honeypot', 'rug-check', 'base', 'agent-guardrail'],
+    disc: {
+      method: 'GET',
+      input: { token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' },
+      inputSchema: { type: 'object', properties: { token: { type: 'string', description: '0x-prefixed ERC-20 address on Base' } } },
+      output: { example: { token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', chain: 'base', decision: 'GO', reasons: [] } },
+    },
+  },
+  {
+    route: '/chain/token-report',
+    desc: 'Decision-grade token trade-safety report for a Base ERC-20: security flags, risk score, verdict and rationale.',
+    serviceName: 'Base Token Trade-Safety Report',
+    tags: ['token-report', 'honeypot', 'rug-check', 'base', 'evm', 'security'],
+    disc: {
+      method: 'GET',
+      input: { token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' },
+      inputSchema: { type: 'object', properties: { token: { type: 'string', description: '0x-prefixed ERC-20 address on Base' } } },
+      output: { example: { token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', chain: 'base', risk_score: 20, verdict: 'ok' } },
+    },
+  },
+  {
     route: '/chain/token-security',
     desc: 'Token security / honeypot detector for a Base ERC-20: proxy/upgradeability check, mint/pause/blacklist/fee-setter bytecode scan, ownership check, honeypot simulation. Risk score + verdict + flags.',
     serviceName: 'Base Token Security Scanner',
