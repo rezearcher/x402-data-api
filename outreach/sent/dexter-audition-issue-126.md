@@ -8,3 +8,4 @@ We ran `opendexter audition` on https://x402-data-api.sigrunner.workers.dev: 20 
 Thanks — Grey Ridge Signals, contact@greyridgesignals.ai
 
 P.S. Free real-token trial (3/day/IP, any Base token): https://api.greyridgesignals.ai/gate/swap/preview?token=<0x...>
+SENT 2026-10-19 as GH issue: Dexter-DAO/dexter-mcp#126; also sF1nX/x402station-mcp#4 (preflight classification)

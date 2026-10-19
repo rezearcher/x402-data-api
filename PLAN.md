@@ -214,3 +214,4 @@ branch@dexter.cash (audition support) queued: outreach/queue/dexter-audition-sup
 - 2026-10-19 CDT (cycle 27b): DEPLOYED 6830daca: settled paid calls now logged per route+payer in TrafficLog; read via /internal/traffic-stats?paid=1&window_hours=N&secret=<traffic_secret.txt>. Next cycle: read it to see which routes bots settle.
 - 2026-10-19 CDT (cycle 28): inbox 0 outreach replies; APM#1 + PR#416 no maintainer response; paid=1 log empty so far (no settled calls since 6830daca deploy); cap spent till 10-20 05:00Z; queue agent402.md/dexter-audition-support.md pending.
 - 2026-10-19 CDT (cycle 28b): opened Agent402 issue #1673 (token-safety tools) via GH_TOKEN_CLASSIC; not email so cap n/a. Only dexter-audition-support.md remains queued.
+- 2026-10-19 CDT (cycle 28c): GH issues (cap n/a): Dexter-DAO/dexter-mcp#126 (audition settle), sF1nX/x402station-mcp#4 (preflight). Queue now empty. Check replies next cycle.
