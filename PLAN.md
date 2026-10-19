@@ -340,3 +340,4 @@ Inbox: 0 replies. Issue watch: only x402-pilot#13 (already answered). trace_inbo
 - cycle 62n: 0 new replies (Fronesis already answered); fear-greed/trending/fees-top 402 live; wallet 32.66124 (+0.008 bot, external); DO log read-limit still exceeded (paid_log dark). Cap resets 10-20 05:00Z -> send queue/apibase.md + dexter.md.
 - cycle 62o: shipped+deployed /crypto/global (0.002) and /defi/yields-top (0.003) (version 86a83bde); seeded both (self canary), x402scan re-registered 50/55.
 - cycle 62p: IndexNow pinged (200) for all 9 parameterless data routes + llms.txt + openapi.
+- cycle 62q: shipped /crypto/markets-top + /crypto/movers (0.003, version 1d89eb8e); seeded, x402scan 54/57, IndexNow. Note: deploy BEFORE commit once served a stale/404 version - commit+push then redeploy.
