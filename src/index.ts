@@ -775,6 +775,7 @@ app.get("/.well-known/x402", (c) => {
       mk("/chain/storage-at", "GET", "0.002", "2000", "Raw storage slot read (eth_getStorageAt) for any Base contract; slot defaults to 0x0. Use when an agent needs proxy implementation/admin slots or raw contract state.", ["rpc", "base", "onchain", "contract", "data"]),
       mk("/chain/proxy-info", "GET", "0.003", "3000", "EIP-1967 proxy resolver for a Base contract: returns implementation, admin and beacon addresses (read from the standard storage slots) plus is_proxy flag. Use when an agent must know what code actually runs behind a proxy before trusting or calling it.", ["rpc", "base", "onchain", "contract", "proxy", "security", "data"]),
       mk("/chain/allowance", "GET", "0.002", "2000", "ERC-20 allowance(owner, spender) on Base, raw + formatted, flags unlimited approvals.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
+      mk("/ai/classify", "GET", "0.003", "3000", "Zero-shot text classification (Llama 3.2 3B): ?text=<up to 1000 chars>&labels=<comma-separated labels, 2-10> returns the single best label. Use when an agent needs to route or tag text (intent, sentiment, topic, spam) in one cheap call.", ["ai", "llm", "classification", "text", "data"]),
       mk("/ai/summarize", "GET", "0.003", "3000", "Text summarization (Llama 3.2 3B): ?text=<up to 1500 chars> returns a 1-3 sentence summary. Use when an agent needs to compress a passage cheaply before reasoning over it.", ["ai", "llm", "summarization", "text", "data"]),
       mk("/ai/translate", "GET", "0.003", "3000", "Text translation (Llama 3.2 3B): ?text=<up to 800 chars>&to=<target language, e.g. es, fr, de, ja> returns the translated text only. Use when an agent needs quick pay-per-call translation with no API key.", ["ai", "llm", "translation", "language", "data"]),
       mk("/ai/extract", "GET", "0.005", "5000", "Text-to-JSON extraction (Llama 3.2 3B): ?text=<up to 1500 chars>&fields=<comma-separated field names> returns a strict JSON object with exactly those keys (null when absent). Use when an agent needs messy text turned into typed structured data.", ["ai", "llm", "extraction", "json", "structured", "data"]),
@@ -993,6 +994,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/chain/network-status — $0.003 — Base chain id, latest block, block age, gas utilisation.
 - GET ${BASE}/chain/l1-base-fee — $0.003 — Ethereum L1 base fee seen by Base's GasPriceOracle + L1 data-fee estimate.
 - GET ${BASE}/chain/fee-history — $0.003 — Base base-fee history over the last 10 blocks with gas-used ratios.
+- GET ${BASE}/ai/classify?text=<…>&labels=a,b,c — $0.003 — Zero-shot classification into one of your labels.
 - GET ${BASE}/ai/summarize?text=<…> — $0.003 — 1-3 sentence summary of a passage.
 - GET ${BASE}/ai/translate?text=<…>&to=es — $0.003 — Translate text into a target language.
 - GET ${BASE}/ai/extract?text=<…>&fields=a,b,c — $0.005 — Text-to-JSON extraction into exactly the fields you name.
@@ -1211,6 +1213,7 @@ app.get("/openapi.json", (c) => {
       "/chain/storage-at": paid("Raw eth_getStorageAt slot read on Base.", "0.002", [{ name: "address", desc: "0x-prefixed contract address", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }, { name: "slot", desc: "storage slot hex (default 0x0)", required: false, example: "0x0" }]),
       "/chain/proxy-info": paid("EIP-1967 proxy resolver on Base: implementation/admin/beacon addresses + is_proxy.", "0.003", [{ name: "address", desc: "0x-prefixed contract address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
       "/chain/allowance": paid("ERC-20 allowance(owner, spender) on Base.", "0.002", [{ name: "token", desc: "ERC-20 address", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }, { name: "owner", desc: "owner address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "spender", desc: "spender address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
+      "/ai/classify": paid("Classify text into one of your labels.", "0.003", [{ name: "text", desc: "text, max 1000 chars", required: true, example: "My card was charged twice" }, { name: "labels", desc: "comma-separated labels, 2-10", required: true, example: "billing,bug,feature_request,other" }]),
       "/ai/summarize": paid("Summarize a passage into 1-3 sentences.", "0.003", [{ name: "text", desc: "passage, max 1500 chars", required: true, example: "x402 is an open HTTP 402 payment protocol letting clients pay per request in USDC on Base without accounts or API keys." }]),
       "/ai/translate": paid("Translate text into a target language.", "0.003", [{ name: "text", desc: "source text, max 800 chars", required: true, example: "Hello, how are you?" }, { name: "to", desc: "target language name or code", required: true, example: "es" }]),
       "/ai/extract": paid("Text-to-JSON extraction: text + comma-separated fields returns a strict JSON object.", "0.005", [{ name: "text", desc: "source text, max 1500 chars", required: true, example: "Invoice 4417 from Acme Corp, due 2026-11-02, total $1,250.00" }, { name: "fields", desc: "comma-separated field names, max 12", required: true, example: "invoice_number,vendor,due_date,total" }]),
@@ -2056,6 +2059,17 @@ function makeRoutes(payTo: string) {
         input: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913", owner: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10", spender: "0x4200000000000000000000000000000000000006" },
         inputSchema: { type: "object", properties: { token: { type: "string", description: "ERC-20 address" }, owner: { type: "string", description: "owner address" }, spender: { type: "string", description: "spender address" } } },
         output: { example: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913", owner: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10", spender: "0x4200000000000000000000000000000000000006", allowance_raw: "0", allowance: 0, decimals: 6, is_unlimited: false, chain: "base" } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /ai/classify": {
+      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      description: "Zero-shot text classification (Llama 3.2 3B): ?text=<up to 1000 chars>&labels=<comma-separated labels, 2-10> returns the single best label. Use when an agent needs to route or tag text (intent, sentiment, topic, spam) in one cheap call.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { text: "My card was charged twice", labels: "billing,bug,feature_request,other" },
+        inputSchema: { type: "object", properties: { text: { type: "string" }, labels: { type: "string" } }, required: ["text", "labels"] },
+        output: { example: { label: "billing", labels: ["billing", "bug", "feature_request", "other"] } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /ai/summarize": {
@@ -4958,6 +4972,33 @@ app.get("/ai/ask", async (c) => {
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /ai/ask", rail, makeUsageCounter(c.env)));
     return c.json({ answer: r.response ?? "", model: "llama-3.2-3b-instruct" });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/ai/classify", async (c) => {
+  const text = (c.req.query("text") ?? "").trim();
+  const labels = (c.req.query("labels") ?? "").split(",").map((f) => f.trim()).filter(Boolean);
+  if (!text || text.length > 1000) return c.json({ error: "text required, max 1000 chars" }, { status: 400 });
+  if (labels.length < 2 || labels.length > 10 || labels.some((l) => !/^[A-Za-z0-9_ -]{1,40}$/.test(l))) return c.json({ error: "labels required: 2-10 comma-separated labels" }, { status: 400 });
+  if (!c.env.AI) return c.json({ error: "ai unavailable" }, { status: 501 });
+  const day = new Date().toISOString().slice(0, 10);
+  const key = "aicap:" + day;
+  const used = parseInt((await c.env.API_KEYS?.get(key)) ?? "0", 10);
+  if (used >= 400) return c.json({ error: "daily capacity reached, retry after 00:00 UTC" }, { status: 503 });
+  try {
+    const r = (await c.env.AI.run("@cf/meta/llama-3.2-3b-instruct", {
+      messages: [{ role: "system", content: "Classify the user's text. Reply with ONLY one label from this list, exactly as written: " + labels.join(", ") }, { role: "user", content: text }],
+      max_tokens: 20,
+    })) as { response?: string };
+    const out = (r.response ?? "").trim().toLowerCase();
+    const label = labels.find((l) => out === l.toLowerCase()) ?? labels.find((l) => out.includes(l.toLowerCase())) ?? null;
+    await c.env.API_KEYS?.put(key, String(used + 1), { expirationTtl: 172800 });
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/ai/classify", ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /ai/classify", rail, makeUsageCounter(c.env)));
+    return c.json({ label, labels, model: "llama-3.2-3b-instruct" });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }

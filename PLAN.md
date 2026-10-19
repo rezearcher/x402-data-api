@@ -322,3 +322,5 @@ Inbox: 0 replies. Issue watch: only x402-pilot#13 (already answered). trace_inbo
 - cycle 61d: shipped /ai/summarize (0.003).
 
 - cycle 61e: /ai/extract/preview free (3/day/IP, shared with ask preview) deployed.
+
+- cycle 61f: shipped /ai/classify (0.003).
