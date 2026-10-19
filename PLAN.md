@@ -191,3 +191,4 @@ branch@dexter.cash (audition support) queued: outreach/queue/dexter-audition-sup
 - 2026-10-19 CDT (cycle 20c): shipped /check consumer verdict page (calls token-report/preview), in sitemap+llms.txt; deployed.
 - 2026-10-19 CDT (cycle 21): inbox 0 replies; all 5 PRs/issue unchanged (no maintainer response); endpoints 200. Cap spent till 10-20 CDT; no new lever.
 - 2026-10-19 CDT (cycle 21b): found lgs1520/agent-procurement-manager (APM): a reseller that buys token_risk from Bazaar suppliers with its own float (2x markup). Filed supplier-candidate issue #1 (outreach/gh/apm-supplier-issue.md). Check for reply next cycle. Other Bazaar tools (x402watch, x402-observer, onyx-bazaar) are indexes, not buyers.
+- 2026-10-19 CDT (cycle 21c): code search for x402 token-security consumers: safehands/onyx-mcp/spraay/Agent402 are all sellers wrapping GoPlus, not buyers. No further reseller leads beyond APM#1.
