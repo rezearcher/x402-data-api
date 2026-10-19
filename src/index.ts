@@ -2431,7 +2431,26 @@ app.use(async (c, next) => {
   // the only rail that settles USDC on Base, so the only one that counts as
   // a paid call in the reconcile ledger.
   c.set("rail", "x402-paid");
-  return cachedMiddleware(c, next);
+  const mwRes = await cachedMiddleware(c, next);
+  // x402 v2 carries the challenge only in the payment-required header and sends
+  // an empty `{}` body. v1-style crawlers/directories (x402-list prober etc.)
+  // look for accepts[] in the body, so mirror the decoded header there.
+  const res402 = mwRes ?? c.res;
+  if (res402 && res402.status === 402) {
+    const hdr = res402.headers.get("payment-required");
+    if (hdr) {
+      try {
+        const decoded = new TextDecoder().decode(Uint8Array.from(atob(hdr), (ch) => ch.charCodeAt(0)));
+        const headers = new Headers(res402.headers);
+        headers.set("content-type", "application/json");
+        headers.delete("content-length");
+        return new Response(decoded, { status: 402, headers });
+      } catch {
+        // fall through with the original response
+      }
+    }
+  }
+  return mwRes;
 });
 
 // Track a successful paid call fire-and-forget. Never on the response path:

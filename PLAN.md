@@ -126,3 +126,8 @@ Inbox: 0 replies/bounces to the 15 pitches. Wallet flat 32.30424 (self-test only
 - 2026-10-19 05:3xZ: CDP discovery/resources paged to offset 20000 (20000 items), 0 match greyridge/sigrunner/5765ae06 -> we are NOT in the public Bazaar discovery index (index may be larger; run takes ~4min, background it). Prior seed attempts did not stick.
 - 2026-10-19: Orthogonal (orthogonal.com, $4.3M Pantera) provider-request pitch queued: outreach/queue/orthogonal.md.
 - 2026-10-19: AgenticTrade (agentictrade.io, provider portal /portal/register, 292 services, only 4,880 total calls ever) = low-volume, skipped. Orthogonal pitch queued.
+
+## 2026-10-19 cycle (nohumans + 402 body)
+- Worker now mirrors the decoded payment-required header into the 402 body (v1-style crawlers like x402-list prober saw `{}` -> "No valid 402"). Deployed version 03d3706d.
+- x402-list.com POST /api/v1/submit done (id 7c2f94ec, probe failed pre-fix); email cooldown 7d -> resubmit/ask after 2026-10-26 to re-probe.
+- nohumans.directory (pays real USDC to verify listings = external buyer): listed gate/swap, token-report, defi/yields, token-security (crypto/prices was already listed). Tokens in ~/.config/x402-secrets/nohumans_tokens.txt. Check wallet for inbound from nohumans in ~1h+; verify via GET api.nohumans.directory/v1/resolve?url=.
