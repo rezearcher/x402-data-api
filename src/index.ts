@@ -950,6 +950,7 @@ Each paid GET returns HTTP 402 with an x402 v2 payment-required challenge (netwo
 Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 
 ## Endpoints
+- Human/agent try-it page: ${BASE}/check?token=<0x… Base ERC-20> — free verdict card (3/day/IP).
 - GET ${BASE}/crypto/prices?coins=bitcoin,ethereum,solana — $0.004 — spot token prices + change_24h (DefiLlama), keyless.
 - GET ${BASE}/crypto/funding?limit=20 — $0.004 — cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread (bps) + best long/short venue + premium/annualized/signal/next_funding_ts.
 - GET ${BASE}/defi/yields?limit=20&project=&chain=&stable=&sort=tvl|risk_adjusted — $0.001 — top DeFi lending/LP yields, APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast + TVL (DefiLlama).
@@ -1012,6 +1013,7 @@ app.get("/sitemap.xml", (c) => {
     { path: "/llms.txt", priority: "0.8", changefreq: "weekly" },
     { path: "/terms", priority: "0.7", changefreq: "monthly" },
     { path: "/token-safety", priority: "0.8", changefreq: "daily" },
+    { path: "/check", priority: "0.8", changefreq: "weekly" },
   ];
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -5301,6 +5303,29 @@ function previewToken(q: string | undefined): string {
   const hit = Object.values(PREVIEW_DEMO_TOKENS).find((a) => a.toLowerCase() === k);
   return hit ?? TOKEN_REPORT_PREVIEW_TOKEN;
 }
+
+const CHECK_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Base Token Check — honeypot, tax &amp; rug-risk verdict in one paste</title>
+<meta name="description" content="Paste a Base token address and get an instant SAFE / CAUTION / DANGER verdict: honeypot sell-simulation, owner controls, liquidity depth. Free, no signup.">
+<meta property="og:title" content="Base Token Check — is this token a honeypot?"><meta property="og:description" content="Paste a Base ERC-20 address, get a verdict: honeypot simulation, mint/pause/blacklist, liquidity.">
+<style>body{max-width:40rem;margin:0 auto;padding:2rem 1.1rem;font:16px/1.5 system-ui,sans-serif;background:#0d1117;color:#e6e6e6}input{width:100%;padding:.8rem;font:inherit;border-radius:8px;border:1px solid #333;background:#161b22;color:inherit;box-sizing:border-box}button{margin-top:.6rem;padding:.7rem 1.2rem;font:inherit;border:0;border-radius:8px;background:#0b5;color:#fff;cursor:pointer}#card{margin-top:1.4rem;padding:1.2rem;border-radius:12px;background:#161b22;display:none}.v{font-size:2rem;font-weight:700}.SAFE{color:#3fb950}.CAUTION{color:#d29922}.DANGER{color:#f85149}li{margin:.25rem 0}small,a{color:#8b949e}</style></head><body>
+<h1>Base Token Check</h1><p>Paste a Base ERC-20 address. We simulate a sell, scan owner controls and measure liquidity.</p>
+<input id="t" placeholder="0x… token address" autocomplete="off"><button onclick="go()">Check token</button>
+<div id="card"></div>
+<p><small>Free: 3 checks/day. Unlimited for agents via x402 pay-per-call: <a href="/chain/token-report">/chain/token-report</a> ($0.02) · <a href="/chain/token-security">/chain/token-security</a> ($0.009) · <a href="/llms.txt">llms.txt</a>. Heuristic signal, not financial advice.</small></p>
+<script>
+const q=new URLSearchParams(location.search).get('token');if(q){document.getElementById('t').value=q;go()}
+async function go(){const t=document.getElementById('t').value.trim(),c=document.getElementById('card');c.style.display='block';
+if(!/^0x[0-9a-fA-F]{40}$/.test(t)){c.textContent='Enter a valid 0x… address (40 hex chars).';return}
+c.textContent='Checking…';history.replaceState(null,'','?token='+t);
+try{const r=await fetch('/chain/token-report/preview?token='+t);const j=await r.json();
+if(!r.ok){c.innerHTML='<b>'+(j.error||'Limit reached')+'</b><br>Daily free limit may be used up — use the paid x402 route for more.';return}
+const m=j.token_meta||{},s=j.security||{},l=j.liquidity||{};const esc=x=>String(x).replace(/[<>&]/g,'');
+c.innerHTML='<div class="v '+esc(j.verdict)+'">'+esc(j.verdict)+'</div><div>'+esc(m.symbol||'?')+' · '+esc(m.name||'')+' · risk '+esc(j.risk_score)+'/100</div><ul>'
++'<li>Honeypot: '+(s.isHoneypot?'YES':'no')+' (sim: '+esc(s.simStatus)+')</li><li>Can mint: '+(s.canMint?'yes':'no')+' · Can pause: '+(s.canPause?'yes':'no')+' · Blacklist: '+(s.hasBlacklist?'yes':'no')+'</li><li>Upgradeable proxy: '+(s.upgradeableProxy?'yes':'no')+' · Owner renounced: '+(s.ownerRenounced?'yes':'no')+'</li><li>Liquidity (WETH pool): '+(l.wethPoolUsd==null?'n/a':'$'+Math.round(l.wethPoolUsd))+'</li></ul><div>'+(j.reasons||[]).map(esc).join('; ')+'</div>'}catch(e){c.textContent='Error: '+e}}
+</script></body></html>`;
+app.get("/check", (c) => c.html(CHECK_HTML));
+
 app.get("/chain/token-report/preview", async (c) => {
   try {
     const t = await trialToken(c, c.req.query("token"));
