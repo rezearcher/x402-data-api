@@ -949,8 +949,8 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/pm/markets/preview — free top-1 sample of /pm/markets.
 - GET ${BASE}/chain/block-number/preview — free, full live data (identical to the paid route).
 - GET ${BASE}/chain/gas-price/preview — free, full live data (identical to the paid route).
-- GET ${BASE}/gate/swap/preview — free live sample of the go/hold/block gate (Base USDC, buy, $100).
-- GET ${BASE}/chain/token-report/preview — free, full real trade-safety report for Base USDC, same depth as the paid route.
+- GET ${BASE}/gate/swap/preview?token=usdc|weth|cbbtc|aero|degen — free live sample of the go/hold/block gate (default Base USDC, buy, $100).
+- GET ${BASE}/chain/token-report/preview?token=usdc|weth|cbbtc|aero|degen — free, full real trade-safety report, same depth as the paid route.
 - GET ${BASE}/chain/token-security/preview — free, full real analysis of a fixed well-known token (Base WETH), same depth as the paid route.
 - GET ${BASE}/scan/mcp/preview?url=<mcp-server> — free preview (counts + risk score; withholds detail).
 - GET ${BASE}/.well-known/x402 — machine-readable discovery manifest.
