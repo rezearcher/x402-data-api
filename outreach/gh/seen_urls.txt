@@ -29,3 +29,8 @@ https://github.com/JonesKapedo/monroe-sniper/issues/16
 https://github.com/maxpandelakis-boop/Meme-Bot/issues/1
 https://github.com/nestumfigos/dex-trading-bot/issues/2
 https://github.com/alioanka/claudedex/issues/372
+https://github.com/Shamrock2245/shamrock-trading-bot/issues/20
+https://github.com/araxis33/meme-scout/issues/4
+https://github.com/ninhnn2/coin-rarda/issues/1
+https://github.com/richardtise/sniper-bot/issues/1
+https://github.com/Solizardking/clawd-automation/issues/4
