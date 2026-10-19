@@ -35,7 +35,7 @@ find the SAME archetype: projects that trade on Base AND need a safety gate. *Ev
 ### I3 — No trust claim ships before its measurement (Claims Law in action). **[HIGH]**
 Uptime/latency publishable only after ~14d of samples (~2026-11-02). Accuracy needs a KNOWN-honeypot set —
 GeckoTerminal new-pools + GoPlus yield 0 positives, so recall is unmeasurable and NO accuracy claim is
-allowed yet. Next: source a curated honeypot list (honeypot.is / rugcheck / community). *Evidence: cycles 1–2, benchmark 0/137.*
+allowed yet. Next: source a curated honeypot list (honeypot.is / rugcheck / community). *Evidence: cycles 1–2, benchmark 0/137; cycle c4 widened to sell_tax>=0.5/cannot_sell_all over new+trending+top pools: 0/188 positives. GoPlus-labeled recall is a dead end — need an external curated rug list (rugcheck/community) or skip accuracy claims.*
 
 ### I4 — Pitch depth beats pitch volume; batch-spraying repos converts at zero. **[MED]**
 Batch-pitching 12–21 GitHub repos/cycle has produced 0 paid calls. Prefer FEW, well-qualified targets

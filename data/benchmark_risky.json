@@ -1,0 +1,212 @@
+{
+ "scanned": 188,
+ "gp_bad": 0,
+ "rows": [
+  {
+   "token": "0x30510fd1a0e9550a5428dc844ed5b816690532b4",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0xee073c0e0f53ec499717491454a149d997bbe9d1",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0x0ecac21332b90342b77655ae46c993718bd68ea1",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0x2e261137f9894b9c35c73c29b591107425660028",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0xf7befb9dee135deb3385b5a141d7204feb4187af",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0xb7e45e0406af6b4058ede4841bb9d1b949c9116e",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0x203d6df1886e54b171fd66f806ab805e49ddb2bc",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0xb22ce1d6e98fee656ea6c89680b60d9e89e1729e",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0xcef366b411b5bc5b83a3e21171b4f52b24ab3d2f",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0x301ef53266ca92d8aa2cdad0490878f5f1fa3b91",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0xb20000000000000000000054eace0227d4618599",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0xa48b280d424e05d475df86790c9dab08d1c539d6",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0xa28823f841d6b18a3abcdd6c5221d4d1e4a83f2b",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0xb200000000000000000000f4bde5eb320ad70bda",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0x037eae317eae5d95c617cf84877f053ba9b6d5cb",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0x6d5047325792cd95d7c507a35fa89dc88f473dc8",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0x0770ebdc24a07a00f4782b6604e62796dfe7ef1f",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0x83f641e13ccfde2c9d07b0897027ef1523884d21",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0x0b3afc9b9c5341987a40e9dd14d470cf5348e2b8",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0x69034a5fd9af48d754bde308a5de42953e23c3f1",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0xb200000000000000000000d9192b6b456483c2e8",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0x3605117efd10ca0db4d81dc2851e1ec26c867da2",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0x2dbb06ebf7dbf6283542c6d5e2d27acb672013e5",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0x3c5cd672b204ba0fc48e93b98c0922920a87912d",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0x9126236476efba9ad8ab77855c60eb5bf37586eb",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0x11dc28d01984079b7efe7763b533e6ed9e3722b9",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  },
+  {
+   "token": "0x9eadbe35f3ee3bf3e28180070c429298a1b02f93",
+   "goplus_bad": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "isHoneypot": false
+  }
+ ],
+ "tp": 0,
+ "fn": 0,
+ "fp": 0
+}
