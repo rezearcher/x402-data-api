@@ -533,7 +533,7 @@ ${provisionMeta}
   <table>
     <thead><tr><th>Group</th><th>Price</th><th>Endpoints</th></tr></thead>
     <tbody>
-      <tr><td>Base on-chain reads</td><td class="price">$0.001&ndash;$0.003</td><td><code>/chain/block-number</code>, <code>/chain/gas-price</code>, <code>/chain/balance</code>, <code>/chain/token-balance</code>, <code>/chain/tx</code>, <code>/chain/receipt</code>, <code>/chain/code</code>, <code>/chain/nonce</code>, <code>/chain/erc20-meta</code>, <code>/chain/wallet</code></td></tr>
+      <tr><td>Base on-chain reads</td><td class="price">$0.002&ndash;$0.005</td><td><code>/chain/block-number</code>, <code>/chain/gas-price</code>, <code>/chain/balance</code>, <code>/chain/token-balance</code>, <code>/chain/tx</code>, <code>/chain/receipt</code>, <code>/chain/code</code>, <code>/chain/nonce</code>, <code>/chain/erc20-meta</code>, <code>/chain/wallet</code></td></tr>
       <tr><td>Crypto / DeFi / prediction markets</td><td class="price">$0.001&ndash;$0.005</td><td><code>/crypto/prices</code> ($0.004), <code>/crypto/funding</code> ($0.004), <code>/defi/yields</code>, <code>/pm/markets</code></td></tr>
       <tr><td>Security</td><td class="price">$0.01&ndash;$0.05</td><td><code>/chain/token-report</code> ($0.01 verdict), <code>/enrich/domain</code>, <code>/enrich/tech-risk</code>, <code>/scan/mcp</code>, <code>/chain/token-security</code></td></tr>
     </tbody>
@@ -751,21 +751,21 @@ app.get("/.well-known/x402", (c) => {
       mk("/scan/mcp", "GET", "0.05", "50000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score + verdict (clear/review/block).", ["security", "mcp", "audit", "prompt-injection"]),
       mk("/enrich/tech-risk", "GET", "0.01", "10000", "Tech-stack fingerprint -> CVE (NVD) + EPSS + CISA-KEV attack-surface risk + verdict (clear/review/block) for a domain.", ["security", "cve", "risk"]),
       mk("/enrich/domain", "GET", "0.01", "10000", "Firmographic + tech-stack enrichment for a domain, incl. full subdomain enumeration via certificate-transparency logs (crt.sh, RDAP, DoH, HTTP fingerprint) + verdict (clear/review/block, based on domain age).", ["data", "domain", "enrichment"]),
-      mk("/chain/block-number", "GET", "0.001", "1000", "Current Base mainnet block number.", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/gas-price", "GET", "0.001", "1000", "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, and gas_price_usd — no price oracle on ETH-only competitors.", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/balance", "GET", "0.001", "1000", "ETH balance of a Base mainnet address, incl. balance_usd (internal ETH price cross-call).", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/token-balance", "GET", "0.001", "1000", "ERC-20 token balance of a Base mainnet address, incl. symbol, decimals, balance_formatted.", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/tx", "GET", "0.001", "1000", "Transaction details by hash on Base mainnet.", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/receipt", "GET", "0.001", "1000", "Transaction receipt by hash on Base mainnet — status, gas used, full logs, and the L1 fee breakdown (l1_fee_wei, l1_gas_price_wei, l1_gas_used, effective_gas_price_wei) + l1_fee_usd/total_fee_usd an ETH-only competitor can't offer.", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/code", "GET", "0.001", "1000", "Contract-code check for a Base mainnet address (is_contract + code size + EIP-7702 delegated-EOA detection).", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/block-number", "GET", "0.005", "5000", "Current Base mainnet block number.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/gas-price", "GET", "0.005", "5000", "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, and gas_price_usd — no price oracle on ETH-only competitors.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/balance", "GET", "0.005", "5000", "ETH balance of a Base mainnet address, incl. balance_usd (internal ETH price cross-call).", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/token-balance", "GET", "0.005", "5000", "ERC-20 token balance of a Base mainnet address, incl. symbol, decimals, balance_formatted.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/tx", "GET", "0.005", "5000", "Transaction details by hash on Base mainnet.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/receipt", "GET", "0.005", "5000", "Transaction receipt by hash on Base mainnet — status, gas used, full logs, and the L1 fee breakdown (l1_fee_wei, l1_gas_price_wei, l1_gas_used, effective_gas_price_wei) + l1_fee_usd/total_fee_usd an ETH-only competitor can't offer.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/code", "GET", "0.005", "5000", "Contract-code check for a Base mainnet address (is_contract + code size + EIP-7702 delegated-EOA detection).", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/erc20-meta", "GET", "0.005", "5000", "ERC-20 metadata on Base: name, symbol, decimals, totalSupply for any token contract.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
-      mk("/chain/nonce", "GET", "0.001", "1000", "Transaction count (nonce) for a Base address, latest and pending.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/nonce", "GET", "0.005", "5000", "Transaction count (nonce) for a Base address, latest and pending.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/total-supply", "GET", "0.003", "3000", "ERC-20 total supply on Base (raw + formatted, with symbol and decimals).", ["rpc", "base", "onchain", "token", "erc20", "data"]),
       mk("/chain/storage-at", "GET", "0.002", "2000", "Raw storage slot read (eth_getStorageAt) for any Base contract; slot defaults to 0x0. Use when an agent needs proxy implementation/admin slots or raw contract state.", ["rpc", "base", "onchain", "contract", "data"]),
       mk("/chain/proxy-info", "GET", "0.003", "3000", "EIP-1967 proxy resolver for a Base contract: returns implementation, admin and beacon addresses (read from the standard storage slots) plus is_proxy flag. Use when an agent must know what code actually runs behind a proxy before trusting or calling it.", ["rpc", "base", "onchain", "contract", "proxy", "security", "data"]),
       mk("/chain/allowance", "GET", "0.002", "2000", "ERC-20 allowance(owner, spender) on Base, raw + formatted, flags unlimited approvals.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
       mk("/ai/ask", "GET", "0.002", "2000", "Cheap LLM answer (Llama 3.2 3B on Workers AI): ?q=<prompt up to 500 chars>, returns concise text. Pay-per-call, no API key.", ["ai", "llm", "inference", "chat", "data"]),
-      mk("/chain/block", "GET", "0.001", "1000", "Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/block", "GET", "0.005", "5000", "Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/wallet", "GET", "0.003", "3000", "Wallet bundle: ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]),
       mk("/chain/token-report", "GET", "0.01", "10000", "Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "verdict", "trading", "data"]),
       mk("/gate/swap", "GET", "0.008", "8000", "Pre-trade GO / HOLD / BLOCK gate for autonomous Base trading agents: honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your trade size, one decision + reason in one call.", ["security", "base", "onchain", "trading", "gate", "agents", "token", "data"]),
@@ -964,19 +964,19 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/scan/mcp?url=<mcp-server> — $0.05 — security audit of an MCP server (tool-poisoning / prompt-injection, OWASP LLM01/LLM08); findings + risk score + verdict (clear/review/block).
 - GET ${BASE}/enrich/tech-risk?domain=<domain> — $0.01 — tech-stack -> CVE (NVD) + EPSS + CISA-KEV risk + verdict (clear/review/block).
 - GET ${BASE}/enrich/domain?domain=<domain> — $0.01 — firmographic + tech-stack enrichment, incl. subdomain enumeration (crt.sh) + verdict (clear/review/block, domain age).
-- GET ${BASE}/chain/block-number — $0.001 — current Base mainnet block number.
-- GET ${BASE}/chain/gas-price — $0.001 — current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd — no price oracle on ETH-only competitors.
-- GET ${BASE}/chain/balance?address=<0x…> — $0.001 — ETH balance of a Base address, incl. balance_usd.
-- GET ${BASE}/chain/token-balance?address=<0x…>&token=<0x…> — $0.001 — ERC-20 token balance of a Base address, incl. symbol/decimals/balance_formatted.
-- GET ${BASE}/chain/tx?hash=<0x…> — $0.001 — transaction details by hash on Base.
-- GET ${BASE}/chain/receipt?hash=<0x…> — $0.001 — transaction receipt by hash on Base: status, gas used, full logs, L1 fee breakdown (l1_fee_wei/l1_gas_price_wei/l1_gas_used/effective_gas_price_wei) + l1_fee_usd/total_fee_usd.
-- GET ${BASE}/chain/nonce?address=<0x…> — $0.001 — tx count (nonce), latest + pending.
-- GET ${BASE}/chain/block?number=<n|latest> — $0.001 — block summary (hash, timestamp, tx count, gas, base fee).
+- GET ${BASE}/chain/block-number — $0.005 — current Base mainnet block number.
+- GET ${BASE}/chain/gas-price — $0.005 — current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd — no price oracle on ETH-only competitors.
+- GET ${BASE}/chain/balance?address=<0x…> — $0.005 — ETH balance of a Base address, incl. balance_usd.
+- GET ${BASE}/chain/token-balance?address=<0x…>&token=<0x…> — $0.005 — ERC-20 token balance of a Base address, incl. symbol/decimals/balance_formatted.
+- GET ${BASE}/chain/tx?hash=<0x…> — $0.005 — transaction details by hash on Base.
+- GET ${BASE}/chain/receipt?hash=<0x…> — $0.005 — transaction receipt by hash on Base: status, gas used, full logs, L1 fee breakdown (l1_fee_wei/l1_gas_price_wei/l1_gas_used/effective_gas_price_wei) + l1_fee_usd/total_fee_usd.
+- GET ${BASE}/chain/nonce?address=<0x…> — $0.005 — tx count (nonce), latest + pending.
+- GET ${BASE}/chain/block?number=<n|latest> — $0.005 — block summary (hash, timestamp, tx count, gas, base fee).
 - GET ${BASE}/ai/ask?q=<prompt> — $0.002 — cheap LLM answer (Llama 3.2 3B), no API key.
 - GET ${BASE}/chain/erc20-meta?token=<0x…> — $0.005 — ERC-20 name/symbol/decimals/totalSupply.
 - GET ${BASE}/chain/total-supply?token=<0x…> — $0.003 — ERC-20 total supply (raw + formatted).
 - GET ${BASE}/chain/allowance?token=<0x…>&owner=<0x…>&spender=<0x…> — $0.002 — ERC-20 allowance, flags unlimited approvals.
-- GET ${BASE}/chain/code?address=<0x…> — $0.001 — contract-code check for a Base address (EIP-7702 delegated-EOA aware).
+- GET ${BASE}/chain/code?address=<0x…> — $0.005 — contract-code check for a Base address (EIP-7702 delegated-EOA aware).
 - GET ${BASE}/chain/wallet?address=<0x…> — $0.003 — wallet bundle: balance + balance_usd + tx count + contract check (EIP-7702 delegated-EOA aware), one call.
 - GET ${BASE}/gate/swap?token=<0x…>&side=buy&notional_usd=500 — $0.008 — pre-trade GO/HOLD/BLOCK gate for Base trading agents: honeypot/sellability + liquidity-vs-trade-size price impact in one fast call.
 - GET ${BASE}/chain/token-report?token=<0x…> — $0.01 — DECISION-GRADE token trade-safety verdict: one call returns SAFE|CAUTION|AVOID + risk_score 0-100 + reasons, bundling honeypot/sellability simulation, owner-renounced/mint/pause/blacklist/fee-setter/upgradeable checks, symbol/name/decimals and Uniswap v3 WETH-pool liquidity USD. Replaces many RPC calls and prevents a bad trade.
@@ -1159,21 +1159,21 @@ app.get("/openapi.json", (c) => {
       "/scan/mcp": paid("Security audit of an MCP server (tool-poisoning / prompt-injection). Findings + risk score + verdict (clear/review/block).", "0.05", [{ name: "url", desc: "target MCP server URL", required: true, example: "https://api.greyridgesignals.ai/mcp" }]),
       "/enrich/tech-risk": paid("Tech-stack -> CVE + EPSS + CISA-KEV risk + verdict (clear/review/block).", "0.01", [{ name: "domain", desc: "target domain", required: true, example: "stripe.com" }]),
       "/enrich/domain": paid("Firmographic + tech-stack enrichment, incl. subdomain enumeration + verdict (clear/review/block, domain age).", "0.01", [{ name: "domain", desc: "target domain", required: true, example: "stripe.com" }]),
-      "/chain/block-number": paid("Current Base mainnet block number.", "0.001", []),
-      "/chain/gas-price": paid("Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd.", "0.001", []),
-      "/chain/balance": paid("ETH balance of a Base mainnet address, incl. balance_usd.", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
-      "/chain/token-balance": paid("ERC-20 token balance of a Base mainnet address, incl. symbol/decimals/balance_formatted.", "0.001", [{ name: "address", desc: "0x-prefixed holder address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "token", desc: "0x-prefixed ERC-20 contract address", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
-      "/chain/tx": paid("Transaction details by hash on Base mainnet.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }]),
-      "/chain/receipt": paid("Transaction receipt by hash on Base mainnet: status, gas used, full logs, L1 fee breakdown, l1_fee_usd/total_fee_usd.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }]),
+      "/chain/block-number": paid("Current Base mainnet block number.", "0.005", []),
+      "/chain/gas-price": paid("Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd.", "0.005", []),
+      "/chain/balance": paid("ETH balance of a Base mainnet address, incl. balance_usd.", "0.005", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
+      "/chain/token-balance": paid("ERC-20 token balance of a Base mainnet address, incl. symbol/decimals/balance_formatted.", "0.005", [{ name: "address", desc: "0x-prefixed holder address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "token", desc: "0x-prefixed ERC-20 contract address", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
+      "/chain/tx": paid("Transaction details by hash on Base mainnet.", "0.005", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }]),
+      "/chain/receipt": paid("Transaction receipt by hash on Base mainnet: status, gas used, full logs, L1 fee breakdown, l1_fee_usd/total_fee_usd.", "0.005", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }]),
       "/chain/erc20-meta": paid("ERC-20 name/symbol/decimals/totalSupply on Base.", "0.005", [{ name: "token", desc: "0x-prefixed ERC-20 address on Base", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }]),
-      "/chain/nonce": paid("Nonce (tx count) of a Base address, latest and pending.", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
+      "/chain/nonce": paid("Nonce (tx count) of a Base address, latest and pending.", "0.005", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
       "/chain/total-supply": paid("ERC-20 total supply on Base, raw + formatted.", "0.003", [{ name: "token", desc: "0x-prefixed ERC-20 address", required: true, example: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" }]),
       "/chain/storage-at": paid("Raw eth_getStorageAt slot read on Base.", "0.002", [{ name: "address", desc: "0x-prefixed contract address", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }, { name: "slot", desc: "storage slot hex (default 0x0)", required: false, example: "0x0" }]),
       "/chain/proxy-info": paid("EIP-1967 proxy resolver on Base: implementation/admin/beacon addresses + is_proxy.", "0.003", [{ name: "address", desc: "0x-prefixed contract address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
       "/chain/allowance": paid("ERC-20 allowance(owner, spender) on Base.", "0.002", [{ name: "token", desc: "ERC-20 address", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }, { name: "owner", desc: "owner address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "spender", desc: "spender address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
       "/ai/ask": paid("Cheap LLM answer (Llama 3.2 3B) for a prompt up to 500 chars.", "0.002", [{ name: "q", desc: "prompt, max 500 chars", required: true, example: "Explain x402 in one sentence" }]),
-      "/chain/block": paid("Base block summary by number or latest.", "0.001", [{ name: "number", desc: "decimal block number or 'latest'", required: false, example: "latest" }]),
-      "/chain/code": paid("Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware).", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
+      "/chain/block": paid("Base block summary by number or latest.", "0.005", [{ name: "number", desc: "decimal block number or 'latest'", required: false, example: "latest" }]),
+      "/chain/code": paid("Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware).", "0.005", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
       "/chain/wallet": paid("Wallet bundle: ETH balance + balance_usd + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call.", "0.003", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
       "/chain/token-report": paid("Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade.", "0.01", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
       "/gate/swap": paid("Pre-trade GO/HOLD/BLOCK gate for Base trading agents: token safety + liquidity-vs-size price-impact check in one call.", "0.008", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }, { name: "side", desc: "buy or sell", required: false, example: "buy" }, { name: "notional_usd", desc: "intended trade size in USD", required: false, example: "500" }]),
@@ -1654,7 +1654,7 @@ function makeRoutes(payTo: string) {
     "GET /chain/block-number": {
       accepts: {
         scheme: "exact" as const,
-        price: "$0.001",
+        price: "$0.005",
         network: NETWORK,
         payTo,
       },
@@ -1672,7 +1672,7 @@ function makeRoutes(payTo: string) {
     "GET /chain/gas-price": {
       accepts: {
         scheme: "exact" as const,
-        price: "$0.001",
+        price: "$0.005",
         network: NETWORK,
         payTo,
       },
@@ -1697,7 +1697,7 @@ function makeRoutes(payTo: string) {
     "GET /chain/balance": {
       accepts: {
         scheme: "exact" as const,
-        price: "$0.001",
+        price: "$0.005",
         network: NETWORK,
         payTo,
       },
@@ -1726,7 +1726,7 @@ function makeRoutes(payTo: string) {
     "GET /chain/token-balance": {
       accepts: {
         scheme: "exact" as const,
-        price: "$0.001",
+        price: "$0.005",
         network: NETWORK,
         payTo,
       },
@@ -1750,7 +1750,7 @@ function makeRoutes(payTo: string) {
     "GET /chain/tx": {
       accepts: {
         scheme: "exact" as const,
-        price: "$0.001",
+        price: "$0.005",
         network: NETWORK,
         payTo,
       },
@@ -1773,7 +1773,7 @@ function makeRoutes(payTo: string) {
     "GET /chain/receipt": {
       accepts: {
         scheme: "exact" as const,
-        price: "$0.001",
+        price: "$0.005",
         network: NETWORK,
         payTo,
       },
@@ -1813,7 +1813,7 @@ function makeRoutes(payTo: string) {
     "GET /chain/code": {
       accepts: {
         scheme: "exact" as const,
-        price: "$0.001",
+        price: "$0.005",
         network: NETWORK,
         payTo,
       },
@@ -1845,7 +1845,7 @@ function makeRoutes(payTo: string) {
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /chain/nonce": {
-      accepts: { scheme: "exact" as const, price: "$0.001", network: NETWORK, payTo },
+      accepts: { scheme: "exact" as const, price: "$0.005", network: NETWORK, payTo },
       description: "Transaction count (nonce) for a Base address, latest and pending. Use when an agent needs the next nonce for a Base address before signing a transaction.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
@@ -1911,7 +1911,7 @@ function makeRoutes(payTo: string) {
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /chain/block": {
-      accepts: { scheme: "exact" as const, price: "$0.001", network: NETWORK, payTo },
+      accepts: { scheme: "exact" as const, price: "$0.005", network: NETWORK, payTo },
       description: "Base block summary by number or 'latest': hash, timestamp, tx count, gas used/limit, base fee.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
@@ -3984,7 +3984,7 @@ app.get("/chain/block-number/preview", async (c) => {
     return c.json({
       block_number: parseInt(hex, 16),
       chain: "base",
-      note: "Free live sample — identical to the paid route. Full: GET /chain/block-number ($0.001), keyless x402 on Base.",
+      note: "Free live sample — identical to the paid route. Full: GET /chain/block-number ($0.005), keyless x402 on Base.",
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -4058,7 +4058,7 @@ app.get("/chain/gas-price/preview", async (c) => {
       priority_fee_gwei: feeHistory.priority_fee_gwei,
       gas_price_usd: ethUsd !== null ? gasPriceEth * ethUsd : null,
       chain: "base",
-      note: "Free live sample — identical to the paid route. Full: GET /chain/gas-price ($0.001), keyless x402 on Base.",
+      note: "Free live sample — identical to the paid route. Full: GET /chain/gas-price ($0.005), keyless x402 on Base.",
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -4190,7 +4190,7 @@ app.get("/chain/token-balance/preview", async (c) => {
   try {
     return c.json({
       ...(await buildTokenBalance(address, token)),
-      note: "Free live sample — identical to the paid route. Full: GET /chain/token-balance ($0.001), keyless x402 on Base.",
+      note: "Free live sample — identical to the paid route. Full: GET /chain/token-balance ($0.005), keyless x402 on Base.",
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -6282,7 +6282,7 @@ const mcpHandler = createMcpHandler(() => {
         const result = {
           block_number: parseInt(hex, 16),
           chain: "base",
-          note: "Free live sample — identical to the paid tool. Full: the paid chain_block_number tool or GET /chain/block-number ($0.001).",
+          note: "Free live sample — identical to the paid tool. Full: the paid chain_block_number tool or GET /chain/block-number ($0.005).",
         };
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
@@ -6314,7 +6314,7 @@ const mcpHandler = createMcpHandler(() => {
           priority_fee_gwei: feeHistory.priority_fee_gwei,
           gas_price_usd: ethUsd !== null ? gasPriceEth * ethUsd : null,
           chain: "base",
-          note: "Free live sample — identical to the paid tool. Full: the paid chain_gas_price tool or GET /chain/gas-price ($0.001).",
+          note: "Free live sample — identical to the paid tool. Full: the paid chain_gas_price tool or GET /chain/gas-price ($0.005).",
         };
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
