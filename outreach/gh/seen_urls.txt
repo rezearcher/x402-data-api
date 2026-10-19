@@ -1,2 +1,4 @@
 https://github.com/ak10082247-max/base-trading-bot-starter/issues/1
 https://github.com/tianzizhiming-svg/agentbridge/issues/8
+https://github.com/uerax/all-in-one-bot/issues/118
+https://github.com/Tamas22-cell/AIPoweredMemecoinRadar/issues/1
