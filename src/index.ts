@@ -760,7 +760,7 @@ app.get("/.well-known/x402", (c) => {
       mk("/gate/swap", "GET", "0.008", "8000", "Pre-trade GO / HOLD / BLOCK gate for autonomous Base trading agents: honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your trade size, one decision + reason in one call.", ["security", "base", "onchain", "trading", "gate", "agents", "token", "data"]),
       mk("/chain/token-security", "GET", "0.009", "9000", "Token security / honeypot detector for a Base mainnet ERC-20: EIP-1967/1822 proxy + upgradeability detection, bytecode dispatcher scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, and a live eth_call state-override simulation testing whether a synthetic wallet can actually transfer() the token. Real compute, not a thin data wrapper. Returns risk_score (0-100) + verdict (clear/review/block) + human-readable flags.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "data"]),
       mk("/dns/{domain}", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", ["dns", "domain", "data", "recon"]),
-      mk("/whois/{domain}", "GET", "0.02", "20000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", ["whois", "rdap", "domain", "data", "recon"]),
+      mk("/whois/{domain}", "GET", "0.01", "10000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", ["whois", "rdap", "domain", "data", "recon"]),
     ],
   });
 });
@@ -1153,7 +1153,7 @@ app.get("/openapi.json", (c) => {
       "/chain/token-report/preview": { get: { summary: "FREE live sample of /chain/token-report (no payment).", description: "Free full trade-safety report for a demo token. Try ?token=aero. Paid /chain/token-report accepts ANY Base ERC-20 ($0.05).", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-security": paid("Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.", "0.009", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
       "/dns/{domain}": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "path", example: "stripe.com" }]),
-      "/whois/{domain}": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.02", [{ name: "domain", desc: "domain name to look up", in: "path", example: "cloudflare.com" }]),
+      "/whois/{domain}": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.01", [{ name: "domain", desc: "domain name to look up", in: "path", example: "cloudflare.com" }]),
     }),
   });
 });
@@ -1343,7 +1343,7 @@ function makeRoutes(payTo: string) {
     "GET /whois/:domain": {
       accepts: {
         scheme: "exact" as const,
-        price: "$0.02",
+        price: "$0.01",
         network: NETWORK,
         payTo,
       },
