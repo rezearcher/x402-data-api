@@ -50,6 +50,9 @@ Use GH_TOKEN_CLASSIC from ~/.hermes/.env / 1Password for issues + push. Old revo
 ### I6 — For a silent issue on an ACTIVE well-starred agent, escalate to a working-code PR in their conventions. **[LOW, unproven]**
 Franklin#213 (issue) got no reply; shipped PR #214 (BaseTokenGate tool, tests 918/918, walletMayPay-gated). Upvote only if a maintainer engages or a paid call lands; downvote if ignored ~7d. *Evidence: cycle c3 2026-10-19.*
 
+### I7 — Bazaar semantic search does not surface token-report; catalog text is stale and refresh needs a settled payment. **[LOW]**
+scripts/bazaar_rank.py (CDP /discovery/search, limit<=20): of 9 buyer-style queries only "pre-trade safety gate" returns us (gate/swap rank 9/13); "token security honeypot", "rug pull", "is this token a scam" return none of ours. Bazaar entries are keyed to the workers.dev host and still carry the pre-edit description (lastUpdated 10-19 11:02) though the live 402 on api.greyridgesignals.ai has the new text. Refreshing the index needs a settled payment = self-pay, which is forbidden, so do NOT re-seed. Discovery via Bazaar is a weak lever; integrator replies remain the path. *Evidence: cycle 2026-10-19 (last).*
+
 ---
 
 ## GRAVEYARD (pruned — do NOT re-run)
