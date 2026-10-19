@@ -573,6 +573,7 @@ ${provisionMeta}
 // bypass rail uses below — and FAIL CLOSED: no configured secret, absent
 // header, or mismatched header => 401 before any handler logic runs.
 function cdpInternalAuthOk(c: { env: Env; req: { header(n: string): string | undefined } }): boolean {
+  // SECURITY TODO: one shared RAPIDAPI_PROXY_SECRET guards both RapidAPI bypass and CDP relay; split + rotate secrets.
   const configured = c.env.RAPIDAPI_PROXY_SECRET;
   const presented = c.req.header("X-RapidAPI-Proxy-Secret") ?? "";
   return !!configured && presented !== "" && timingSafeEqual(presented, configured);
@@ -2959,6 +2960,7 @@ app.use(async (c, next) => {
   // request carrying the correct proxy secret is ALREADY PAID and must not be x402-gated.
   // Fails closed three ways: no configured secret => no bypass; empty header => no bypass;
   // constant-time compare so a wrong secret leaks nothing through response timing.
+  // SECURITY TODO: shared RAPIDAPI_PROXY_SECRET bypass; split from CDP relay secret and rotate.
   const rapidSecret = c.env.RAPIDAPI_PROXY_SECRET;
   if (rapidSecret) {
     const presented = c.req.header("X-RapidAPI-Proxy-Secret") ?? "";
@@ -3012,15 +3014,11 @@ app.use(async (c, next) => {
   // can find the tool; only tools/call is x402-gated ($0.005). Peek at the
   // JSON-RPC method to decide. Non-JSON (GET/SSE) → free.
   if (c.req.path === "/mcp") {
-    let rpcMethod: string | undefined;
-    let toolName: string | undefined;
+    type RpcItem = { method?: unknown; params?: { name?: unknown } } | null;
+    let items: RpcItem[] = [];
     try {
-      const body = (await c.req.raw.clone().json()) as {
-        method?: string;
-        params?: { name?: string };
-      };
-      rpcMethod = body.method;
-      toolName = body.params?.name;
+      const body = (await c.req.raw.clone().json()) as RpcItem | RpcItem[];
+      items = Array.isArray(body) ? body : [body];
     } catch {
       /* not JSON-RPC → free pass */
     }
@@ -3038,7 +3036,13 @@ app.use(async (c, next) => {
       "chain_token_security_preview",
       "chain_token_report_preview",
     ]);
-    if (rpcMethod !== "tools/call" || (toolName && FREE_TOOLS.has(toolName))) {
+    // Batch bodies: evaluate EVERY element; any non-free tools/call requires payment.
+    const requiresPayment = items.some((it) => {
+      if (!it || typeof it !== "object" || it.method !== "tools/call") return false;
+      const name = it.params?.name;
+      return !(typeof name === "string" && FREE_TOOLS.has(name));
+    });
+    if (!requiresPayment) {
       return next();
     }
     // paid tools/call → fall through to the x402 payment gate below
