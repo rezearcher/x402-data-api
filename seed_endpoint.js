@@ -81,6 +81,22 @@ const ROUTES = {
     inputSchema: { type: 'object', properties: { limit:{type:'string',description:'Max rows (default 20, max 100)'}, chain:{type:'string',description:'Chain filter'}, stable:{type:'string',description:'true = stablecoin pools only'} } },
     example: { chain: 'Ethereum', project: 'lido', symbol: 'STETH', apy: 2.22 },
   },
+  '/crypto/markets-top': {
+    description: 'Top coins by market cap with price, volume, 24h change. No required params. Agent-native, pay-per-call via x402.',
+    serviceName: 'Top Crypto Markets (CoinGecko)',
+    tags: ['crypto','markets','price','data'],
+    input: { limit: '20' },
+    inputSchema: { type: 'object', properties: { limit:{type:'string',description:'Max rows (default 20, max 100)'} } },
+    example: { symbol: 'BTC', price_usd: 82028, change_24h_pct: 1.07 },
+  },
+  '/crypto/movers': {
+    description: 'Top 24h gainers and losers among top-100 coins. No params. Agent-native, pay-per-call via x402.',
+    serviceName: 'Crypto Movers (CoinGecko)',
+    tags: ['crypto','movers','gainers','losers','data'],
+    input: {},
+    inputSchema: { type: 'object', properties: {  } },
+    example: { gainers: [{ symbol: 'XYZ', change_24h_pct: 12.3 }] },
+  },
   '/defi/protocols-top': {
     description: 'Top DeFi protocols ranked by TVL with 1d/7d change. No required params. Agent-native, pay-per-call via x402.',
     serviceName: 'Top DeFi Protocols by TVL (DefiLlama)',
