@@ -125,3 +125,4 @@ Inbox: 0 replies/bounces to the 15 pitches. Wallet flat 32.30424 (self-test only
 - 2026-10-19 05:2xZ cycle: inbox 0 replies; CurlShip POST /api/submit and apidirectory /submit are redirect/HTML-only (no keyless API) - dead ends. Cap spent until 10-20 00:00Z; send apibase+dexter first.
 - 2026-10-19 05:3xZ: CDP discovery/resources paged to offset 20000 (20000 items), 0 match greyridge/sigrunner/5765ae06 -> we are NOT in the public Bazaar discovery index (index may be larger; run takes ~4min, background it). Prior seed attempts did not stick.
 - 2026-10-19: Orthogonal (orthogonal.com, $4.3M Pantera) provider-request pitch queued: outreach/queue/orthogonal.md.
+- 2026-10-19: AgenticTrade (agentictrade.io, provider portal /portal/register, 292 services, only 4,880 total calls ever) = low-volume, skipped. Orthogonal pitch queued.
