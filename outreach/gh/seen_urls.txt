@@ -15,3 +15,5 @@ https://github.com/Apegurus/web3agent/issues/38
 https://github.com/jiayaoqijia/cryptoskill/issues/67
 https://github.com/GoldenFarFR/ARIA/issues/76
 https://github.com/GemachDAO/gdex-skill/issues/62
+https://github.com/parsij/PistachioSwap/issues/224
+https://github.com/Sycosmile/Daemonbot/issues/2
