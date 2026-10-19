@@ -1077,6 +1077,7 @@ app.get("/openapi.json", (c) => {
         ...(p.example ? { example: p.example } : {}),
         description: p.desc,
       })),
+      "x-payment-info": { protocols: ["x402"], price: { mode: "fixed", currency: "USD", amount: price } },
       responses: {
         "200": { description: "Success — JSON data" },
         "402": { description: `Payment required ($${price} USDC via x402)` },
@@ -1092,13 +1093,16 @@ app.get("/openapi.json", (c) => {
       title: "Grey Ridge Signals — x402 Data & Security APIs",
       version: "0.1.0", // mirror root package.json (canonical)
       description: "Agent-native pay-per-call data on Base (USDC via x402). No API keys, no signup. Discovery: /.well-known/x402",
+      "x-guidance": "Pay-per-call Base (USDC, x402) APIs for trading agents: /gate/swap (GO/HOLD/BLOCK pre-trade gate, any Base ERC-20, $0.01), /chain/token-report (SAFE/CAUTION/AVOID, $0.05), /chain/token-security (honeypot sim, $0.02), plus DeFi yields, prices, funding, Polymarket and on-chain reads. Free samples: /gate/swap/preview?token=degen and /chain/token-report/preview?token=aero.",
       contact: { name: "Grey Ridge Signals", email: "contact@greyridgesignals.ai", url: "https://api.greyridgesignals.ai" },
     },
     // Custom domain FIRST — an importer takes servers[0] as the base URL, and the
     // marketplace listing should point at the zone we control DNS for. The workers.dev
     // origin stays listed second because it is the URL already seeded into the x402
     // Bazaar, mcp.so and llms.txt; both hostnames serve this same Worker.
-    servers: [{ url: "https://api.greyridgesignals.ai" }, { url: BASE }],
+    // Same-origin only: OpenDexter/x402gle rejects specs whose servers[] name a different
+    // origin than the one fetched. The first entry is whichever host served the request.
+    servers: [{ url: new URL(c.req.url).origin }],
     paths: withOperationIds({
       "/": {
         get: {
