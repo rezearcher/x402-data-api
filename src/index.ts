@@ -761,6 +761,7 @@ app.get("/.well-known/x402", (c) => {
       mk("/chain/erc20-meta", "GET", "0.01", "10000", "ERC-20 metadata on Base: name, symbol, decimals, totalSupply for any token contract.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
       mk("/chain/nonce", "GET", "0.01", "10000", "Transaction count (nonce) for a Base address, latest and pending.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/is-contract", "GET", "0.002", "2000", "Is a Base address a smart contract or an EOA (is_contract + bytecode size).", ["rpc", "base", "onchain", "contract", "data"]),
+      mk("/chain/fee-estimate", "GET", "0.003", "3000", "Base EIP-1559 fee estimate: base fee, suggested priority fee, max-fee tiers (slow/standard/fast) in gwei and a 21k-gas transfer cost.", ["rpc", "base", "onchain", "gas", "fees", "data"]),
       mk("/chain/total-supply", "GET", "0.003", "3000", "ERC-20 total supply on Base (raw + formatted, with symbol and decimals).", ["rpc", "base", "onchain", "token", "erc20", "data"]),
       mk("/chain/storage-at", "GET", "0.002", "2000", "Raw storage slot read (eth_getStorageAt) for any Base contract; slot defaults to 0x0. Use when an agent needs proxy implementation/admin slots or raw contract state.", ["rpc", "base", "onchain", "contract", "data"]),
       mk("/chain/proxy-info", "GET", "0.003", "3000", "EIP-1967 proxy resolver for a Base contract: returns implementation, admin and beacon addresses (read from the standard storage slots) plus is_proxy flag. Use when an agent must know what code actually runs behind a proxy before trusting or calling it.", ["rpc", "base", "onchain", "contract", "proxy", "security", "data"]),
@@ -976,6 +977,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/ai/ask?q=<prompt> — $0.002 — cheap LLM answer (Llama 3.2 3B), no API key.
 - GET ${BASE}/chain/erc20-meta?token=<0x…> — $0.01 — ERC-20 name/symbol/decimals/totalSupply.
 - GET ${BASE}/chain/is-contract?address=<0x…> — $0.002 — contract vs EOA + bytecode size.
+- GET ${BASE}/chain/fee-estimate — $0.003 — Base EIP-1559 fee tiers (slow/standard/fast) + transfer cost.
 - GET ${BASE}/chain/total-supply?token=<0x…> — $0.003 — ERC-20 total supply (raw + formatted).
 - GET ${BASE}/chain/allowance?token=<0x…>&owner=<0x…>&spender=<0x…> — $0.002 — ERC-20 allowance, flags unlimited approvals.
 - GET ${BASE}/chain/code?address=<0x…> — $0.01 — contract-code check for a Base address (EIP-7702 delegated-EOA aware).
@@ -1171,6 +1173,7 @@ app.get("/openapi.json", (c) => {
       "/chain/erc20-meta": paid("ERC-20 name/symbol/decimals/totalSupply on Base.", "0.01", [{ name: "token", desc: "0x-prefixed ERC-20 address on Base", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }]),
       "/chain/nonce": paid("Nonce (tx count) of a Base address, latest and pending.", "0.01", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
       "/chain/is-contract": paid("Is a Base address a smart contract or an EOA (is_contract + bytecode size).", "0.002", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
+      "/chain/fee-estimate": paid("Base EIP-1559 fee estimate: base fee, priority fee, slow/standard/fast max-fee tiers (gwei).", "0.003", []),
       "/chain/total-supply": paid("ERC-20 total supply on Base, raw + formatted.", "0.003", [{ name: "token", desc: "0x-prefixed ERC-20 address", required: true, example: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" }]),
       "/chain/storage-at": paid("Raw eth_getStorageAt slot read on Base.", "0.002", [{ name: "address", desc: "0x-prefixed contract address", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }, { name: "slot", desc: "storage slot hex (default 0x0)", required: false, example: "0x0" }]),
       "/chain/proxy-info": paid("EIP-1967 proxy resolver on Base: implementation/admin/beacon addresses + is_proxy.", "0.003", [{ name: "address", desc: "0x-prefixed contract address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
@@ -1868,6 +1871,17 @@ function makeRoutes(payTo: string) {
         input: { address: "0x4200000000000000000000000000000000000006" },
         inputSchema: { type: "object", properties: { address: { type: "string", description: "0x-prefixed 20-byte Base address" } } },
         output: { example: { address: "0x4200000000000000000000000000000000000006", is_contract: true, code_bytes: 2000, chain: "base" } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /chain/fee-estimate": {
+      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      description: "Base EIP-1559 fee estimate: current base fee, suggested priority fee and slow/standard/fast max-fee tiers in gwei. Use when an agent must set maxFeePerGas before sending a Base transaction.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: {},
+        inputSchema: { type: "object", properties: {} },
+        output: { example: { base_fee_gwei: 0.006, priority_fee_gwei: 0.001, tiers: { slow: { max_fee_gwei: 0.008 }, standard: { max_fee_gwei: 0.012 }, fast: { max_fee_gwei: 0.02 } }, transfer_cost_eth: { standard: 2.5e-7 }, chain: "base" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /chain/total-supply": {
@@ -4445,6 +4459,22 @@ app.get("/chain/is-contract", async (c) => {
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /chain/is-contract", rail, makeUsageCounter(c.env)));
     return c.json({ address, is_contract: bytes > 0, code_bytes: bytes, chain: "base" });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/fee-estimate", async (c) => {
+  try {
+    const [blk, tip] = await Promise.all([baseRpc("eth_getBlockByNumber", ["latest", false]), baseRpc("eth_maxPriorityFeePerGas", []).catch(() => "0x0")]) as [{ baseFeePerGas?: string; number: string }, string];
+    const g = (h: string) => Number(BigInt(h)) / 1e9;
+    const base = g(blk.baseFeePerGas ?? "0x0");
+    const prio = g(tip as string);
+    const tier = (bm: number, pm: number) => { const mf = base * bm + prio * pm; return { max_fee_gwei: mf, priority_fee_gwei: prio * pm, transfer_cost_eth: (mf * 21000) / 1e9 }; };
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/chain/fee-estimate", ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/fee-estimate", rail, makeUsageCounter(c.env)));
+    return c.json({ block: Number(BigInt(blk.number)), base_fee_gwei: base, priority_fee_gwei: prio, tiers: { slow: tier(1.0, 0.5), standard: tier(1.25, 1), fast: tier(1.6, 2) }, chain: "base" });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
