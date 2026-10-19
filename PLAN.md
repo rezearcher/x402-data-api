@@ -94,3 +94,4 @@ EXCLUDED (off-mission): per-target vulnerability/conviction feeds.
 - [x] 16. (2026-10-19m) GitHub repo rezearcher/x402-data-api: set homepage + 10 topics (x402, mcp, mcp-server, base, usdc, ai-agents, defi, polymarket, cloudflare-workers, pay-per-call) for GitHub/Glama topic discovery (was none).
 - [x] 17. README: added /gate/swap + token-report rows + canonical api.greyridgesignals.ai.
 - [x] 18. glama.json refreshed to live tools/list (gate_swap, chain_token_report) + canonical domain.
+- [x] 19. server.json description now leads with gate_swap/token-report.
