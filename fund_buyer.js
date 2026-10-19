@@ -13,6 +13,17 @@ const { base } = require(path.join(projectDir, 'node_modules/viem/chains'));
 
 const USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const FUND_UNITS = 30000n; // 0.03 USDC (enough for several $0.005 seeds)
+// Spend cap (2026-10-19): bound total USDC flowing OUT of the main/receiving wallet
+// to the hot buyer per day. Belt-and-suspenders over the per-call 0.03 cap above.
+// Fail-OPEN on any ledger error — never block legit funding over a read glitch.
+const DAILY_CAP_UNITS = BigInt(process.env.FUND_DAILY_CAP_UNITS || '200000'); // 0.20 USDC/day
+const FUND_LEDGER = path.resolve(process.env.HOME, '.hermes/data/wallet_fund_ledger.json');
+function _fundedToday() {
+  try { const d = JSON.parse(fs.readFileSync(FUND_LEDGER, 'utf8')); return BigInt(d[new Date().toISOString().slice(0,10)] || 0); } catch { return 0n; }
+}
+function _recordFunded(u) {
+  try { let d = {}; try { d = JSON.parse(fs.readFileSync(FUND_LEDGER, 'utf8')); } catch {} const k = new Date().toISOString().slice(0,10); d[k] = String(BigInt(d[k]||0) + u); fs.mkdirSync(path.dirname(FUND_LEDGER), {recursive:true}); fs.writeFileSync(FUND_LEDGER, JSON.stringify(d)); } catch {}
+}
 const BUYER_PATH = path.join(projectDir, 'buyer-wallet.json');
 
 async function main() {
@@ -36,6 +47,12 @@ async function main() {
   console.log('buyer USDC balance:', Number(bal) / 1e6);
   if (bal >= FUND_UNITS) { console.log('already funded enough, skipping transfer'); return; }
 
+  const already = _fundedToday();
+  if (already + FUND_UNITS > DAILY_CAP_UNITS) {
+    console.log(`SPEND CAP hit: funded ${Number(already)/1e6} USDC today; +${Number(FUND_UNITS)/1e6} exceeds daily cap ${Number(DAILY_CAP_UNITS)/1e6} USDC. Skipping (set FUND_DAILY_CAP_UNITS to raise).`);
+    return;
+  }
+
   const wallet = createWalletClient({ account: funder, chain: base, transport: http('https://mainnet.base.org') });
   const data = encodeFunctionData({ abi: [{ name: 'transfer', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }] }], functionName: 'transfer', args: [buyer.address, FUND_UNITS] });
   console.log(`funding ${Number(FUND_UNITS) / 1e6} USDC: ${funder.address} -> ${buyer.address}`);
@@ -43,6 +60,7 @@ async function main() {
   console.log('tx:', hash, '— waiting for confirmation...');
   const receipt = await pub.waitForTransactionReceipt({ hash });
   console.log('status:', receipt.status);
+  if (receipt.status === 'success') _recordFunded(FUND_UNITS);
   const bal2 = await pub.readContract({ address: USDC, abi: [{ name: 'balanceOf', type: 'function', stateMutability: 'view', inputs: [{ name: 'a', type: 'address' }], outputs: [{ type: 'uint256' }] }], functionName: 'balanceOf', args: [buyer.address] });
   console.log('buyer USDC balance now:', Number(bal2) / 1e6);
 }
