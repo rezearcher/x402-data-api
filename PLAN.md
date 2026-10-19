@@ -348,3 +348,4 @@ Inbox: 0 replies. Issue watch: only x402-pilot#13 (already answered). trace_inbo
 - cycle 62v: Bazaar merchant lookup (limit=100) now lists 43 of our routes incl. /defi/hacks-recent and /brief/market (earlier absence was async processing). Outreach queue empty; all sent.
 - cycle 62w: shipped /crypto/derivatives-exchanges (0.003, version ed249326); seeded, x402scan, IndexNow.
 - cycle 62w fix: derivatives-exchanges 404'd after 2 deploys (stale version served); a THIRD deploy (82f42497) made it stick; 402 x3, seeded, x402scan 59/62. Always curl-verify 402 repeatedly before seeding.
+- cycle 62x: traced wallet 32.698: recent window = 0.077 OURS (seeds), 0 external. The +0.037 is our own canaries; external flat.
