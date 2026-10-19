@@ -6,3 +6,6 @@ https://github.com/hifriendbot/agentwallet-mcp/issues/19
 https://github.com/sukrutkrdg/x402-bazaar-mcp/issues/11
 https://github.com/Umberto761/geld-machen-x402/issues/1
 https://github.com/MangroveTechnologies/mangrove-agent/issues/206
+https://github.com/fiatdock/fiatdock/issues/13
+https://github.com/voidly-ai/pay-marketplace-agentkit/issues/1
+https://github.com/tanod-labs/integrations/issues/1
