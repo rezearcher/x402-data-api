@@ -96,3 +96,4 @@ EXCLUDED (off-mission): per-target vulnerability/conviction feeds.
 - [x] 18. glama.json refreshed to live tools/list (gate_swap, chain_token_report) + canonical domain.
 - [x] 19. server.json description now leads with gate_swap/token-report.
 - [x] 20. llms-install.md MCP URL -> canonical api.greyridgesignals.ai (verified 200).
+- [ ] 21. (2026-10-19n) Public gist of /gate/swap examples: gh PAT lacks gist scope (403) — dead end via gh; docs/EXAMPLES.md is the canonical copy. (Note: /tmp files do not persist between Bash calls; use repo-local paths.)
