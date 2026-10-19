@@ -1,14 +1,14 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.rezearcher/tech-risk",
-  "description": "x402 MCP for agents: crypto prices, funding, DeFi yields, Polymarket, Base RPC + MCP security. Companion stdio client in mcp-client/ (x402-data-api-mcp) mirrors the same tools locally.",
+  "name": "ai.greyridgesignals/tech-risk",
+  "description": "x402 MCP: Base RPC, crypto/DeFi/Polymarket data + MCP security scans, pay-per-call USDC.",
   "version": "0.1.0",
   "$comment": "Version mirrors root package.json (canonical).",
-  "websiteUrl": "https://x402-data-api.sigrunner.workers.dev",
+  "websiteUrl": "https://api.greyridgesignals.ai",
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://x402-data-api.sigrunner.workers.dev/mcp"
+      "url": "https://api.greyridgesignals.ai/mcp"
     }
   ]
 }
