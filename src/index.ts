@@ -1053,6 +1053,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/crypto/prices/preview — free 1-token sample of /crypto/prices.
 - GET ${BASE}/crypto/funding/preview — free top-1 sample of /crypto/funding.
 - GET ${BASE}/defi/yields/preview — free top-1 sample of /defi/yields.
+- GET ${BASE}/defi/safe-yields/preview — free top-3 sample of the paid /defi/safe-yields.
 - GET ${BASE}/defi/protocol-risk/preview — free sample (aave-v3) of the paid /defi/protocol-risk risk score.
 - GET ${BASE}/pm/markets/preview — free top-1 sample of /pm/markets.
 - GET ${BASE}/chain/block-number/preview — free, full live data (identical to the paid route).
@@ -5487,10 +5488,10 @@ async function protocolRisk(c: any, paid: boolean) {
 app.get("/defi/protocol-risk", (c) => protocolRisk(c, true));
 app.get("/defi/protocol-risk/preview", (c) => protocolRisk(c, false));
 
-app.get("/defi/safe-yields", async (c) => {
+async function safeYields(c: any, paid: boolean) {
   try {
-    const limit = Math.min(30, Math.max(1, parseInt(c.req.query("limit") ?? "10", 10) || 10));
-    const chain = (c.req.query("chain") ?? "").toLowerCase();
+    const limit = paid ? Math.min(30, Math.max(1, parseInt(c.req.query("limit") ?? "10", 10) || 10)) : 3;
+    const chain = paid ? (c.req.query("chain") ?? "").toLowerCase() : "";
     const [yr, pr, hr] = await Promise.all([fetch("https://yields.llama.fi/pools"), fetch("https://api.llama.fi/protocols"), fetch("https://api.llama.fi/hacks")]);
     if (!yr.ok || !pr.ok) return c.json({ error: "upstream " + (yr.ok ? pr.status : yr.status) }, { status: 502 });
     const pools = ((await yr.json()) as { data: Array<{ chain: string; project: string; symbol: string; tvlUsd: number; apy: number | null; stablecoin: boolean; ilRisk?: string }> }).data;
@@ -5511,14 +5512,19 @@ app.get("/defi/safe-yields", async (c) => {
         return { project: x.project, chain: x.chain, symbol: x.symbol, apy: Math.round((x.apy ?? 0) * 100) / 100, tvl_usd: Math.round(x.tvlUsd), protocol_age_days: age, audits, hacked_before: hacked, safety_score: score };
       })
       .sort((a, b) => b.safety_score - a.safety_score || b.apy - a.apy).slice(0, limit);
-    console.log(JSON.stringify({ event: "paid_request", endpoint: "/defi/safe-yields", ts: new Date().toISOString() }));
-    const rail = c.get("rail") ?? "x402-paid";
-    fireAndForget(c, trackPaidRequest("GET /defi/safe-yields", rail, makeUsageCounter(c.env)));
+    if (paid) {
+      console.log(JSON.stringify({ event: "paid_request", endpoint: "/defi/safe-yields", ts: new Date().toISOString() }));
+      const rail = c.get("rail") ?? "x402-paid";
+      fireAndForget(c, trackPaidRequest("GET /defi/safe-yields", rail, makeUsageCounter(c.env)));
+    }
     return c.json({ count: out.length, pools: out, note: "heuristic safety_score 0-100 (age, audits, no hack record, TVL); not financial advice", source: "defillama", ts: new Date().toISOString() });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
-});
+}
+
+app.get("/defi/safe-yields", (c) => safeYields(c, true));
+app.get("/defi/safe-yields/preview", (c) => safeYields(c, false));
 
 app.get("/ai/ask/preview", async (c) => {
   const q = (c.req.query("q") ?? "").trim();
