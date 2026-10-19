@@ -5436,17 +5436,16 @@ app.get("/crypto/derivatives-exchanges", async (c) => {
   }
 });
 
-app.get("/defi/protocol-risk", async (c) => {
+async function protocolRisk(c: any, paid: boolean) {
   try {
-    const slug = (c.req.query("protocol") ?? "aave-v3").trim().toLowerCase().slice(0, 80);
+    const slug = paid ? (c.req.query("protocol") ?? "aave-v3").trim().toLowerCase().slice(0, 80) : "aave-v3";
     const [pr, hr] = await Promise.all([fetch("https://api.llama.fi/protocols"), fetch("https://api.llama.fi/hacks")]);
     if (!pr.ok) return c.json({ error: "upstream " + pr.status }, { status: 502 });
-    const protos = (await pr.json()) as Array<{ name: string; slug: string; tvl: number | null; change_1d: number | null; change_7d: number | null; category: string | null; chains: string[]; audits: string | null; listedAt: number | null }>;
+    const protos = (await pr.json()) as Array<{ id: string; parentProtocol?: string; name: string; slug: string; tvl: number | null; change_1d: number | null; change_7d: number | null; category: string | null; chains: string[]; audits: string | null; listedAt: number | null }>;
     const p = protos.find((x) => x.slug === slug);
     if (!p) return c.json({ error: "unknown protocol slug", hint: "use a DefiLlama slug e.g. aave-v3, uniswap-v3, lido" }, { status: 404 });
-    const hacks = hr.ok ? ((await hr.json()) as Array<{ date: number; name: string; amount: number | null }>) : [];
-    const base = p.name.toLowerCase().split(/[\s-]+/)[0];
-    const mine = hacks.filter((h) => base.length >= 4 && h.name.toLowerCase().includes(base)).sort((a, b) => b.date - a.date);
+    const hacks = hr.ok ? ((await hr.json()) as Array<{ date: number; name: string; amount: number | null; defillamaId?: string | null; parentProtocolId?: string | null }>) : [];
+    const mine = hacks.filter((h) => (h.defillamaId != null && String(h.defillamaId) === String(p.id)) || (!!p.parentProtocol && h.parentProtocolId === p.parentProtocol)).sort((a, b) => b.date - a.date);
     const tvl = p.tvl ?? 0;
     const ageDays = p.listedAt ? Math.floor((Date.now() / 1000 - p.listedAt) / 86400) : null;
     const flags: string[] = [];
@@ -5459,14 +5458,19 @@ app.get("/defi/protocol-risk", async (c) => {
     if ((p.change_7d ?? 0) <= -30) { score -= 15; flags.push("tvl_down_30pct_7d"); }
     if (mine.length) { score -= 20; flags.push("hack_history_match"); }
     score = Math.max(0, Math.min(100, score));
-    console.log(JSON.stringify({ event: "paid_request", endpoint: "/defi/protocol-risk", ts: new Date().toISOString() }));
-    const rail = c.get("rail") ?? "x402-paid";
-    fireAndForget(c, trackPaidRequest("GET /defi/protocol-risk", rail, makeUsageCounter(c.env)));
-    return c.json({ protocol: p.slug, name: p.name, category: p.category, risk_score: score, tvl_usd: Math.round(tvl), change_1d_pct: p.change_1d == null ? null : Math.round(p.change_1d * 100) / 100, change_7d_pct: p.change_7d == null ? null : Math.round(p.change_7d * 100) / 100, age_days: ageDays, audits, chain_count: (p.chains ?? []).length, hacks_matched: mine.slice(0, 3).map((h) => ({ date: new Date(h.date * 1000).toISOString().slice(0, 10), name: h.name, amount_usd: h.amount })), flags, note: "heuristic score (higher = lower risk); hack match is by name", source: "defillama", ts: new Date().toISOString() });
+    if (paid) {
+      console.log(JSON.stringify({ event: "paid_request", endpoint: "/defi/protocol-risk", ts: new Date().toISOString() }));
+      const rail = c.get("rail") ?? "x402-paid";
+      fireAndForget(c, trackPaidRequest("GET /defi/protocol-risk", rail, makeUsageCounter(c.env)));
+    }
+    return c.json({ protocol: p.slug, name: p.name, category: p.category, risk_score: score, tvl_usd: Math.round(tvl), change_1d_pct: p.change_1d == null ? null : Math.round(p.change_1d * 100) / 100, change_7d_pct: p.change_7d == null ? null : Math.round(p.change_7d * 100) / 100, age_days: ageDays, audits, chain_count: (p.chains ?? []).length, hacks_matched: mine.slice(0, 3).map((h) => ({ date: new Date(h.date * 1000).toISOString().slice(0, 10), name: h.name, amount_usd: h.amount })), flags, note: "heuristic score (higher = lower risk); hack match is by DefiLlama protocol/parent id", source: "defillama", ts: new Date().toISOString() });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
-});
+}
+
+app.get("/defi/protocol-risk", (c) => protocolRisk(c, true));
+app.get("/defi/protocol-risk/preview", (c) => protocolRisk(c, false));
 
 app.get("/ai/ask/preview", async (c) => {
   const q = (c.req.query("q") ?? "").trim();
