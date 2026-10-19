@@ -309,3 +309,4 @@ Inbox: 0 replies. Issue watch: only x402-pilot#13 (already answered). trace_inbo
 - cycle 60b: shipped+deployed /chain/link-usd and /chain/sol-usd (0.003, Chainlink on Base, feeds verified via description()). First deploy 404'd, redeploy fixed (known quirk: always redeploy+recheck). Not seeded (self canary).
 - cycle 60c: IndexNow pinged for eth/btc/link/sol-usd + llms.txt + openapi.json.
 - cycle 60d: shipped+deployed /chain/prices (0.005, BTC/ETH/LINK/SOL Chainlink snapshot in one call); needed 2nd deploy to go live; IndexNow pinged.
+- cycle 60e: 7 pitch issues (Flow, sra-riskgate, PayGuard, agentic-commerce-compliance, nanotab, losbeto, deepfirstsearch); outreach/gh/issues_cycle60.txt. Watcher cron (30m) will surface replies.
