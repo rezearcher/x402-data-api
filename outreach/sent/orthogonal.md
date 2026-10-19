@@ -13,3 +13,6 @@ Free live sample (no payment): https://api.greyridgesignals.ai/chain/token-repor
 
 Happy to provide whatever schema/auth format you need. Settlement is x402 (USDC on Base); we can also take your standard provider split.
 — Grey Ridge Signals (contact@greyridgesignals.ai)
+
+
+SENT 2026-10-19T05:55Z via gmail-me msg 1a152b4cb23819ab

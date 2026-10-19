@@ -10,3 +10,6 @@ We run a keyless x402 API on Base (same USDC rail you settle on) that fills that
 
 Could you onboard us as a provider (proxy to our endpoints, we get paid per call to our wallet / your split — whatever your standard is)? I can send a JSON schema per tool in whatever format you need.
 — Grey Ridge Signals (contact@greyridgesignals.ai)
+
+
+SENT 2026-10-19T05:55Z via gmail-me msg 1a152b4ba6ad5399
