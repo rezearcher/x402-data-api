@@ -41,6 +41,22 @@ if (!RAPIDAPI_PROXY_SECRET) {
 // Per-route discovery config + searchable metadata. Discovery example MUST be an
 // OBJECT (CDP validator: /output/example must be object) even for array endpoints.
 const ROUTES = {
+  '/defi/chains-tvl': {
+    description: 'Top blockchains ranked by total DeFi TVL. No required params. Agent-native, pay-per-call via x402.',
+    serviceName: 'DeFi TVL by Chain (DefiLlama)',
+    tags: ['defi','tvl','chains','data'],
+    input: { limit: '20' },
+    inputSchema: { type: 'object', properties: { limit:{type:'string',description:'Max rows (default 20, max 100)'} } },
+    example: { name: 'Ethereum', tvl_usd: 90000000000, token: 'ETH' },
+  },
+  '/crypto/stablecoins': {
+    description: 'Top stablecoins by circulating supply with peg price. No required params. Agent-native, pay-per-call via x402.',
+    serviceName: 'Stablecoin Supply and Peg (DefiLlama)',
+    tags: ['crypto','stablecoins','depeg','supply','data'],
+    input: { limit: '20' },
+    inputSchema: { type: 'object', properties: { limit:{type:'string',description:'Max rows (default 20, max 100)'} } },
+    example: { symbol: 'USDT', price: 0.9994, circulating_usd: 183456438967 },
+  },
   '/ai/classify': {
     description: 'Zero-shot text classification: pass text and comma-separated labels, get the single best label. Agent-native, pay-per-call via x402.',
     serviceName: 'Text Classifier (LLM)',
