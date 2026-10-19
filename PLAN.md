@@ -81,3 +81,4 @@ EXCLUDED (off-mission): per-target vulnerability/conviction feeds.
 - [ ] 3. Re-crawl Bazaar after 2026-10-20; diff settle payload vs a listed endpoint.
 - [x] 4. Paid smoke via live CDP path (200 OK, 0.001 USDC); merchant-endpoint lastCalledAt did NOT move (lag or self-payer exclusion). Bazaar-freshness lever unproven; recheck once after 2026-10-20 then stop.
 - [x] 5. (2026-10-19c) Re-checked directories: awesome-x402 #868 closed; Agoragentic list curated-only; gh PAT cannot create issues/PRs upstream (403) so remaining outreach targets (Heurist, AgentPay, inference.sh…) need email/browser — only hey@gitlawb.com has a public address.
+- [x] 6. (2026-10-19d) Email outreach via mcp__gmail-me (works): 9 pitches sent total; see outreach/EMAIL_TARGETS_READY.md. Next: poll replies; send remaining candidates.
