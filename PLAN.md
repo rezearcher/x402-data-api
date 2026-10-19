@@ -260,3 +260,4 @@ branch@dexter.cash (audition support) queued: outreach/queue/dexter-audition-sup
 - 2026-10-19 CDT (cycle 43c): extended ceiling test: token-balance, code, erc20-meta, nonce -> 0.01 (deploy dc8c8e0e). CONTROL at 0.005: tx, receipt, block. Compare bot payments per route next cycles; revert any that bots skip.
 - 2026-10-19 CDT (cycle 44): inbox 0 real replies; pilot#13 no new comment; bot 0xec2abd paid 0.005 at block 52811898 (a control route, post-repricing) - elasticity data still too thin, hold prices. Wallet 32.62224.
 - 2026-10-19 CDT (cycle 44b): CDP discovery lists 25,792 resources, mostly commodity price/rpc/ping; logged idea to stop adding raw chain routes, focus composite endpoints.
+- 2026-10-19 CDT (cycle 44c): 8 new gate/swap pitch issues on x402 guard/agent repos (outreach/gh/issues_cycle44.txt). Check replies next cycle.

@@ -1,0 +1,9 @@
+TKCollective/tanilo-x402-guard the 'TKCollective/tanilo-x402-guard' repository has disabled issues
+apeirontrade/provenance-guard https://github.com/apeirontrade/provenance-guard/issues/1
+OceanAlt666/oceanalt-x402 https://github.com/OceanAlt666/oceanalt-x402/issues/1
+ThoughtProof/thoughtproof-x402 https://github.com/ThoughtProof/thoughtproof-x402/issues/4
+DeganAI/defi-guardian https://github.com/DeganAI/defi-guardian/issues/1
+aaron11998/lending-liquidation-sentinel https://github.com/aaron11998/lending-liquidation-sentinel/issues/1
+dchu3/x402-agent-mcp https://github.com/dchu3/x402-agent-mcp/issues/51
+OnchainRouter/onchain-router https://github.com/OnchainRouter/onchain-router/issues/20
+Djtrixuk/moltydex https://github.com/Djtrixuk/moltydex/issues/1
