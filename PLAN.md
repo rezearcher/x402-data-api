@@ -204,3 +204,4 @@ branch@dexter.cash (audition support) queued: outreach/queue/dexter-audition-sup
 - 2026-10-19 CDT (cycle 23e): recheck: Dexter (0/3177) and UVD (0/1208) catalogs still do not list us after settle; dacode services.json stale (generatedAt 02:23Z). PayAI 20/20 is the only new surface; measure via trace_inbound for new external payers over next cycles.
 - 2026-10-19 CDT (cycle 23f): ~/.hermes/scripts/x402_bazaar_refresh.sh now also runs FACILITATOR=payai refresh daily (20h cooldown) so PayAI listing stays fresh.
 - 2026-10-19 CDT (cycle 23g): facilitator.mcpay.tech discovery mirrors PayAI (21k, already lists our 20). pay.openfacilitator.io catalog only 100 items, not indexing us. Facilitator-catalog lever exhausted; PayAI/mcpay is the only effective one.
+- 2026-10-19 CDT (cycle 23h): NOTE wallet 32.38524 -> 32.58224 is OUR seeding canaries (payai/dexter/uvd/mcpay/openfac), NOT revenue. Do not re-seed catalogs repeatedly; they inflate the scoreboard.
