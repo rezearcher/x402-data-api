@@ -25,3 +25,7 @@ https://github.com/Mftrferdinand/Zeline/issues/320
 https://github.com/0xSoftBoi/suwappubot/issues/1089
 https://github.com/Artem1981777/Base-Capital/issues/2
 https://github.com/theselfruleorg/polyrob/issues/27
+https://github.com/JonesKapedo/monroe-sniper/issues/16
+https://github.com/maxpandelakis-boop/Meme-Bot/issues/1
+https://github.com/nestumfigos/dex-trading-bot/issues/2
+https://github.com/alioanka/claudedex/issues/372
