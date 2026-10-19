@@ -1,2 +1,3 @@
 https://github.com/Trivenidigital/gecko-alpha/issues/601
 https://github.com/Naakugod11/0xpilot/issues/1
+https://github.com/OneZero-Network/fortress-sniper/issues/1
