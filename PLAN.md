@@ -139,3 +139,4 @@ Inbox: 0 replies/bounces to the 15 pitches. Wallet flat 32.30424 (self-test only
 - 2026-10-19 06:20Z: batch4 sent (uvd sdk, spendveto, riskgate, conetlabs, agentfeed). 15/15 CDT cap used. Next send 10-20 CDT; check replies first.
 - 2026-10-19 06:3xZ: previews now accept ?token=usdc|weth|cbbtc|aero|degen (free demo of non-USDC tokens). Deployed 2aa16943. Use in pitches: .../gate/swap/preview?token=degen. Deploy needs CLOUDFLARE_API_TOKEN=CF_WORKERS_TOKEN from ~/.hermes/.env.
 - 2026-10-19: added docs/examples/swap-gate/gate.mjs (pay-and-guard example). New public repo creation was permission-denied; use this repo for examples.
+- 2026-10-19: OpenAPI now lists free /gate/swap/preview + /chain/token-report/preview (demo tokens). Deployed aa883dfe.
