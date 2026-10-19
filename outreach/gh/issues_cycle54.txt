@@ -1,3 +1,8 @@
 https://github.com/nirholas/agenti/issues/179
 https://github.com/alsk1992/CloddsBot/issues/154
 https://github.com/Bitterbot-AI/bitterbot-desktop/issues/279
+https://github.com/nirholas/x402-payments-mcp/issues/4
+https://github.com/hifriendbot/agentwallet-mcp/issues/19
+https://github.com/sukrutkrdg/x402-bazaar-mcp/issues/11
+https://github.com/Umberto761/geld-machen-x402/issues/1
+https://github.com/MangroveTechnologies/mangrove-agent/issues/206
