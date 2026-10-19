@@ -9,3 +9,4 @@ heurist (1a1524ac0f2ae615), builders.garden (1a1524aca66cff94), gwizdala.kr (1a1
 Next: check replies with search_gmail_messages (gmail-me) query "from:(heurist.xyz OR builders.garden OR gwizdala OR kinance)".
 Also sent 2026-10-19 (gmail-me): hey@gitlawb.com, contact@spendpreflight.com, team@mangrovetechnologies.ai, hello@xenarch.com, support@0xgasless.com.
 Unsent candidates (public gh emails): contact@codalabs.xyz, info@madeonsol.com, support@recallkitchen.com, partnership@fronesislabs.com, dev@justhandledlabs.com, orbisapigit@gmail.com.
+All 6 'unsent candidates' above were sent 2026-10-19 via gmail-me (15 pitches total). No replies/bounces at send time.
