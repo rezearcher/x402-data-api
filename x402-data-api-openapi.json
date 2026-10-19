@@ -678,7 +678,7 @@
         "/chain/block-number": {
             "get": {
                 "summary": "Current Base mainnet block number.",
-                "description": "Current Base mainnet block number. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.001.",
+                "description": "Current Base mainnet block number. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.005.",
                 "parameters": [],
                 "x-payment-info": {
                     "protocols": [
@@ -687,7 +687,7 @@
                     "price": {
                         "mode": "fixed",
                         "currency": "USD",
-                        "amount": "0.001"
+                        "amount": "0.005"
                     }
                 },
                 "responses": {
@@ -706,7 +706,7 @@
                         }
                     },
                     "402": {
-                        "description": "Payment required ($0.001 USDC via x402)"
+                        "description": "Payment required ($0.005 USDC via x402)"
                     }
                 },
                 "tags": [
@@ -718,7 +718,7 @@
         "/chain/gas-price": {
             "get": {
                 "summary": "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd.",
-                "description": "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.001.",
+                "description": "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.005.",
                 "parameters": [],
                 "x-payment-info": {
                     "protocols": [
@@ -727,7 +727,7 @@
                     "price": {
                         "mode": "fixed",
                         "currency": "USD",
-                        "amount": "0.001"
+                        "amount": "0.005"
                     }
                 },
                 "responses": {
@@ -750,7 +750,7 @@
                         }
                     },
                     "402": {
-                        "description": "Payment required ($0.001 USDC via x402)"
+                        "description": "Payment required ($0.005 USDC via x402)"
                     }
                 },
                 "tags": [
@@ -762,7 +762,7 @@
         "/chain/balance": {
             "get": {
                 "summary": "ETH balance of a Base mainnet address, incl. balance_usd.",
-                "description": "ETH balance of a Base mainnet address, incl. balance_usd. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.001.",
+                "description": "ETH balance of a Base mainnet address, incl. balance_usd. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.005.",
                 "parameters": [
                     {
                         "name": "address",
@@ -783,7 +783,7 @@
                     "price": {
                         "mode": "fixed",
                         "currency": "USD",
-                        "amount": "0.001"
+                        "amount": "0.005"
                     }
                 },
                 "responses": {
@@ -805,7 +805,7 @@
                         }
                     },
                     "402": {
-                        "description": "Payment required ($0.001 USDC via x402)"
+                        "description": "Payment required ($0.005 USDC via x402)"
                     }
                 },
                 "tags": [
@@ -817,7 +817,7 @@
         "/chain/token-balance": {
             "get": {
                 "summary": "ERC-20 token balance of a Base mainnet address, incl. symbol/decimals/balance_formatted.",
-                "description": "ERC-20 token balance of a Base mainnet address, incl. symbol/decimals/balance_formatted. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.001.",
+                "description": "ERC-20 token balance of a Base mainnet address, incl. symbol/decimals/balance_formatted. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.005.",
                 "parameters": [
                     {
                         "name": "address",
@@ -849,7 +849,7 @@
                     "price": {
                         "mode": "fixed",
                         "currency": "USD",
-                        "amount": "0.001"
+                        "amount": "0.005"
                     }
                 },
                 "responses": {
@@ -873,7 +873,7 @@
                         }
                     },
                     "402": {
-                        "description": "Payment required ($0.001 USDC via x402)"
+                        "description": "Payment required ($0.005 USDC via x402)"
                     }
                 },
                 "tags": [
@@ -885,7 +885,7 @@
         "/chain/tx": {
             "get": {
                 "summary": "Transaction details by hash on Base mainnet.",
-                "description": "Transaction details by hash on Base mainnet. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.001.",
+                "description": "Transaction details by hash on Base mainnet. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.005.",
                 "parameters": [
                     {
                         "name": "hash",
@@ -906,7 +906,7 @@
                     "price": {
                         "mode": "fixed",
                         "currency": "USD",
-                        "amount": "0.001"
+                        "amount": "0.005"
                     }
                 },
                 "responses": {
@@ -943,7 +943,7 @@
                         }
                     },
                     "402": {
-                        "description": "Payment required ($0.001 USDC via x402)"
+                        "description": "Payment required ($0.005 USDC via x402)"
                     }
                 },
                 "tags": [
@@ -955,7 +955,7 @@
         "/chain/receipt": {
             "get": {
                 "summary": "Transaction receipt by hash on Base mainnet: status, gas used, full logs, L1 fee breakdown, l1_fee_usd/total_fee_usd.",
-                "description": "Transaction receipt by hash on Base mainnet: status, gas used, full logs, L1 fee breakdown, l1_fee_usd/total_fee_usd. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.001.",
+                "description": "Transaction receipt by hash on Base mainnet: status, gas used, full logs, L1 fee breakdown, l1_fee_usd/total_fee_usd. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.005.",
                 "parameters": [
                     {
                         "name": "hash",
@@ -976,7 +976,7 @@
                     "price": {
                         "mode": "fixed",
                         "currency": "USD",
-                        "amount": "0.001"
+                        "amount": "0.005"
                     }
                 },
                 "responses": {
@@ -1009,7 +1009,7 @@
                         }
                     },
                     "402": {
-                        "description": "Payment required ($0.001 USDC via x402)"
+                        "description": "Payment required ($0.005 USDC via x402)"
                     }
                 },
                 "tags": [
@@ -1062,7 +1062,7 @@
         "/chain/nonce": {
             "get": {
                 "summary": "Nonce (tx count) of a Base address, latest and pending.",
-                "description": "Nonce (tx count) of a Base address, latest and pending. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.001.",
+                "description": "Nonce (tx count) of a Base address, latest and pending. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.005.",
                 "parameters": [
                     {
                         "name": "address",
@@ -1083,7 +1083,7 @@
                     "price": {
                         "mode": "fixed",
                         "currency": "USD",
-                        "amount": "0.001"
+                        "amount": "0.005"
                     }
                 },
                 "responses": {
@@ -1091,7 +1091,7 @@
                         "description": "Success \u2014 JSON data"
                     },
                     "402": {
-                        "description": "Payment required ($0.001 USDC via x402)"
+                        "description": "Payment required ($0.005 USDC via x402)"
                     }
                 },
                 "tags": [
@@ -1139,6 +1139,99 @@
                     "Base Chain"
                 ],
                 "operationId": "getChainTotalSupply"
+            }
+        },
+        "/chain/storage-at": {
+            "get": {
+                "summary": "Raw eth_getStorageAt slot read on Base.",
+                "description": "Raw eth_getStorageAt slot read on Base. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.002.",
+                "parameters": [
+                    {
+                        "name": "address",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913"
+                        },
+                        "example": "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913",
+                        "description": "0x-prefixed contract address"
+                    },
+                    {
+                        "name": "slot",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "0x0"
+                        },
+                        "example": "0x0",
+                        "description": "storage slot hex (default 0x0)"
+                    }
+                ],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.002"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.002 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainStorageAt"
+            }
+        },
+        "/chain/proxy-info": {
+            "get": {
+                "summary": "EIP-1967 proxy resolver on Base: implementation/admin/beacon addresses + is_proxy.",
+                "description": "EIP-1967 proxy resolver on Base: implementation/admin/beacon addresses + is_proxy. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [
+                    {
+                        "name": "address",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "0x4200000000000000000000000000000000000006"
+                        },
+                        "example": "0x4200000000000000000000000000000000000006",
+                        "description": "0x-prefixed contract address"
+                    }
+                ],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainProxyInfo"
             }
         },
         "/chain/allowance": {
@@ -1248,7 +1341,7 @@
         "/chain/block": {
             "get": {
                 "summary": "Base block summary by number or latest.",
-                "description": "Base block summary by number or latest. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.001.",
+                "description": "Base block summary by number or latest. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.005.",
                 "parameters": [
                     {
                         "name": "number",
@@ -1269,7 +1362,7 @@
                     "price": {
                         "mode": "fixed",
                         "currency": "USD",
-                        "amount": "0.001"
+                        "amount": "0.005"
                     }
                 },
                 "responses": {
@@ -1277,7 +1370,7 @@
                         "description": "Success \u2014 JSON data"
                     },
                     "402": {
-                        "description": "Payment required ($0.001 USDC via x402)"
+                        "description": "Payment required ($0.005 USDC via x402)"
                     }
                 },
                 "tags": [
@@ -1289,7 +1382,7 @@
         "/chain/code": {
             "get": {
                 "summary": "Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware).",
-                "description": "Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.001.",
+                "description": "Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.005.",
                 "parameters": [
                     {
                         "name": "address",
@@ -1310,7 +1403,7 @@
                     "price": {
                         "mode": "fixed",
                         "currency": "USD",
-                        "amount": "0.001"
+                        "amount": "0.005"
                     }
                 },
                 "responses": {
@@ -1333,7 +1426,7 @@
                         }
                     },
                     "402": {
-                        "description": "Payment required ($0.001 USDC via x402)"
+                        "description": "Payment required ($0.005 USDC via x402)"
                     }
                 },
                 "tags": [
