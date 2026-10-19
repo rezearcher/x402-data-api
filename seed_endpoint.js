@@ -41,6 +41,38 @@ if (!RAPIDAPI_PROXY_SECRET) {
 // Per-route discovery config + searchable metadata. Discovery example MUST be an
 // OBJECT (CDP validator: /output/example must be object) even for array endpoints.
 const ROUTES = {
+  '/ai/classify': {
+    description: 'Zero-shot text classification: pass text and comma-separated labels, get the single best label. Agent-native, pay-per-call via x402.',
+    serviceName: 'Text Classifier (LLM)',
+    tags: ['ai','llm','classification','text','data'],
+    input: { text: 'My card was charged twice', labels: 'billing,bug,feature_request,other' },
+    inputSchema: { type: 'object', properties: { text:{type:'string',description:'Text, max 1000 chars'},labels:{type:'string',description:'Comma-separated labels, 2-10'} } },
+    example: { label: 'billing' },
+  },
+  '/ai/summarize': {
+    description: 'Summarize a passage into 1-3 sentences. Agent-native, pay-per-call via x402.',
+    serviceName: 'Text Summarizer (LLM)',
+    tags: ['ai','llm','summarization','text','data'],
+    input: { text: 'x402 is an open HTTP 402 payment protocol letting clients pay per request in USDC on Base without accounts or API keys.' },
+    inputSchema: { type: 'object', properties: { text:{type:'string',description:'Passage, max 1500 chars'} } },
+    example: { summary: 'x402 lets clients pay per request in USDC on Base.' },
+  },
+  '/ai/translate': {
+    description: 'Translate text into a target language. Agent-native, pay-per-call via x402.',
+    serviceName: 'Text Translator (LLM)',
+    tags: ['ai','llm','translation','language','data'],
+    input: { text: 'Hello, how are you?', to: 'es' },
+    inputSchema: { type: 'object', properties: { text:{type:'string',description:'Text, max 800 chars'},to:{type:'string',description:'Target language code, e.g. es, fr, de, ja'} } },
+    example: { translation: 'Hola, ¿cómo estás?' },
+  },
+  '/ai/extract': {
+    description: 'Extract structured JSON with exactly the fields you name from messy text. Agent-native, pay-per-call via x402.',
+    serviceName: 'Text-to-JSON Extractor (LLM)',
+    tags: ['ai','llm','extraction','json','structured','data'],
+    input: { text: 'Acme paid $40 on May 3 to Bob', fields: 'payer,amount,date' },
+    inputSchema: { type: 'object', properties: { text:{type:'string',description:'Text, max 1500 chars'},fields:{type:'string',description:'Comma-separated field names'} } },
+    example: { payer: 'Acme', amount: 40, date: 'May 3' },
+  },
   '/crypto/funding': {
     description: 'Cross-venue perpetual funding rates from Hyperliquid — per-coin hourly funding, annualized %, mark/oracle price, open interest, 24h volume. Agent-native, pay-per-call via x402.',
     serviceName: 'Crypto Perp Funding Rates (Hyperliquid)',
