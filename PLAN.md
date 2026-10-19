@@ -277,3 +277,4 @@ branch@dexter.cash (audition support) queued: outreach/queue/dexter-audition-sup
 - 2026-10-19 CDT (cycle 51): inbox 0 replies (recruiter spam only); gh notifications checked; ext only bots 0x54e163/0xec2abd (0.008/0.005); wallet 32.62724 flat. Cap spent until 10-20 05:00Z.
 - 2026-10-19 CDT (cycle 51b): x402-discovery-api.onrender.com is suspended (dead lead); logged schema/diff-field idea in IDEAS.md.
 - 2026-10-19 CDT (cycle 51c): new surfaces checked: docs.x402layer.cc marketplace (dashboard/wallet-auth listing, no API path; possible later via wallet-auth endpoints), ausrine-labs/x402-atlas (read-only market analytics, claim page; agents_at_work lists buyer wallets paying 3+ sellers = prospect source). Routes healthy. Wallet flat.
+- 2026-10-19 CDT (cycle 51d): x402layer agent listing costs $1 per endpoint (capital gate) and proxies through their layer; atlas data pages 404. Both dead for zero-capital.
