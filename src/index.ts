@@ -3810,49 +3810,104 @@ app.get("/chain/balance", async (c) => {
   }
 });
 
-// Decode an ABI-encoded dynamic `string` return value (offset + length + data).
-function decodeAbiString(hex: string): string {
+// Decode an ABI-encoded `string` return: dynamic (offset+length+data) or the
+// legacy bytes32 form (MKR-style). Returns null when undecodable/empty.
+function decodeAbiString(hex: string | null | undefined): string | null {
   try {
+    if (!hex) return null;
     const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
-    if (clean.length < 128) return "";
-    const len = parseInt(clean.slice(64, 128), 16);
-    const dataHex = clean.slice(128, 128 + len * 2);
-    const bytes = new Uint8Array(dataHex.length / 2);
+    if (clean.length < 64) return null;
+    let dataHex: string;
+    if (clean.length === 64) {
+      dataHex = clean;
+    } else {
+      const offset = parseInt(clean.slice(0, 64), 16) * 2;
+      const len = parseInt(clean.slice(offset, offset + 64), 16);
+      if (!Number.isFinite(len) || len <= 0 || len > 1024) return null;
+      dataHex = clean.slice(offset + 64, offset + 64 + len * 2);
+    }
+    const bytes = new Uint8Array(Math.floor(dataHex.length / 2));
     for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(dataHex.substr(i * 2, 2), 16);
-    return new TextDecoder().decode(bytes).replace(/\0/g, "").trim();
-  } catch {
-    return "";
-  }
-}
-
-interface TokenMeta {
-  symbol: string;
-  decimals: number;
-}
-
-// symbol()/decimals() rarely change for a deployed contract, so cache per
-// token address for this Worker isolate's lifetime — most-called RPC
-// primitive, this avoids 2 extra eth_calls on every repeat lookup.
-const tokenMetaCache = new Map<string, TokenMeta>();
-
-async function getTokenMeta(token: string): Promise<TokenMeta | null> {
-  const key = token.toLowerCase();
-  const cached = tokenMetaCache.get(key);
-  if (cached) return cached;
-  try {
-    const [symbolHex, decimalsHex] = await Promise.all([
-      baseRpc("eth_call", [{ to: token, data: "0x95d89b41" }, "latest"]) as Promise<string>,
-      baseRpc("eth_call", [{ to: token, data: "0x313ce567" }, "latest"]) as Promise<string>,
-    ]);
-    const symbol = decodeAbiString(symbolHex) || "UNKNOWN";
-    const decimals = decimalsHex && decimalsHex !== "0x" ? parseInt(decimalsHex, 16) : 18;
-    const meta: TokenMeta = { symbol, decimals: Number.isFinite(decimals) ? decimals : 18 };
-    tokenMetaCache.set(key, meta);
-    return meta;
+    const out = new TextDecoder().decode(bytes).replace(/\0/g, "").trim();
+    return out || null;
   } catch {
     return null;
   }
 }
+
+interface TokenMeta {
+  symbol: string | null;
+  name: string | null;
+  decimals: number | null;
+}
+
+// symbol()/name()/decimals() rarely change for a deployed contract, so cache
+// per token address for this Worker isolate's lifetime.
+const tokenMetaCache = new Map<string, TokenMeta>();
+
+async function getTokenMeta(token: string): Promise<TokenMeta> {
+  const key = token.toLowerCase();
+  const cached = tokenMetaCache.get(key);
+  if (cached) return cached;
+  const call = (data: string) =>
+    (baseRpc("eth_call", [{ to: token, data }, "latest"]) as Promise<string>).catch(() => null);
+  const [symbolHex, nameHex, decimalsHex] = await Promise.all([call("0x95d89b41"), call("0x06fdde03"), call("0x313ce567")]);
+  let decimals: number | null = null;
+  if (decimalsHex && decimalsHex.length > 2) {
+    const d = parseInt(decimalsHex.slice(0, 66), 16);
+    if (Number.isFinite(d) && d >= 0 && d <= 77) decimals = d;
+  }
+  const meta: TokenMeta = { symbol: decodeAbiString(symbolHex), name: decodeAbiString(nameHex), decimals };
+  // Only cache when every call answered, so a transient RPC failure isn't pinned.
+  if (symbolHex && nameHex && decimalsHex) tokenMetaCache.set(key, meta);
+  return meta;
+}
+
+function formatUnits(raw: bigint, decimals: number): string {
+  if (decimals === 0) return raw.toString();
+  const s = raw.toString().padStart(decimals + 1, "0");
+  const whole = s.slice(0, s.length - decimals);
+  const frac = s.slice(s.length - decimals).replace(/0+$/, "");
+  return frac ? `${whole}.${frac}` : whole;
+}
+
+async function buildTokenBalance(address: string, token: string) {
+  const data = `0x70a08231${address.slice(2).toLowerCase().padStart(64, "0")}`;
+  const [hex, meta] = await Promise.all([
+    baseRpc("eth_call", [{ to: token, data }, "latest"]) as Promise<string>,
+    getTokenMeta(token),
+  ]);
+  const balanceRaw = BigInt(hex);
+  const formatted = meta.decimals === null ? null : formatUnits(balanceRaw, meta.decimals);
+  return {
+    address,
+    token,
+    symbol: meta.symbol,
+    name: meta.name,
+    decimals: meta.decimals,
+    balance_raw: balanceRaw.toString(),
+    balance: formatted === null ? null : Number(formatted),
+    balance_formatted: formatted,
+    chain: "base",
+  };
+}
+
+// Free preview — same live read as the paid route; defaults to USDC + a known holder.
+app.get("/chain/token-balance/preview", async (c) => {
+  const address = c.req.query("address") ?? "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10";
+  const token = c.req.query("token") ?? "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+  if (!ADDR_RE.test(address) || !ADDR_RE.test(token)) {
+    return c.json({ error: "address and token must be 0x-prefixed 20-byte addresses" }, { status: 400 });
+  }
+  try {
+    return c.json({
+      ...(await buildTokenBalance(address, token)),
+      note: "Free live sample — identical to the paid route. Full: GET /chain/token-balance ($0.001), keyless x402 on Base.",
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
 
 app.get("/chain/token-balance", async (c) => {
   const address = c.req.query("address");
@@ -3865,22 +3920,7 @@ app.get("/chain/token-balance", async (c) => {
   }
 
   try {
-    const data = `0x70a08231${address.slice(2).toLowerCase().padStart(64, "0")}`;
-    const [hex, meta] = await Promise.all([
-      baseRpc("eth_call", [{ to: token, data }, "latest"]) as Promise<string>,
-      getTokenMeta(token),
-    ]);
-    const balanceRaw = BigInt(hex);
-    const decimals = meta?.decimals ?? 18;
-    const result = {
-      address,
-      token,
-      symbol: meta?.symbol ?? null,
-      decimals,
-      balance_raw: balanceRaw.toString(),
-      balance_formatted: Number(balanceRaw) / 10 ** decimals,
-      chain: "base",
-    };
+    const result = await buildTokenBalance(address, token);
 
     console.log(
       JSON.stringify({ event: "paid_request", endpoint: "/chain/token-balance", address, token, ts: new Date().toISOString() }),
