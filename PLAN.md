@@ -90,3 +90,4 @@ EXCLUDED (off-mission): per-target vulnerability/conviction feeds.
 - [x] 12. EXAMPLES.md decision values verified against src (lowercase go/hold/block).
 - [x] 13. (2026-10-19j) Deployed /gate/swap/preview (free live sample, in llms.txt); reply check again 0 (inbox only noise). Email budget still spent for 10-19.
 - [x] 14. (2026-10-19k) 402index.io POST /api/v1/register for token-report, gate/swap (pending review), funding, yields, pm/markets (live) with descriptions/prices on api.greyridgesignals.ai.
+- [x] 15. (2026-10-18/19l) Reply check (gmail-me, newer_than:3d): 0. 402index: our Bazaar-sourced entries mirror there (8 /chain/* still "uncategorized/no description" — inherits Bazaar metadata; no update API except POST /register). 402index opportunities feed is dominated by 130+ lhr.life spam tunnels — directory-crowding, not a gap we can fill. Email budget spent for 10-19; next window: /gate/swap pitches to execution-agent builders.
