@@ -1051,6 +1051,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/crypto/prices/preview — free 1-token sample of /crypto/prices.
 - GET ${BASE}/crypto/funding/preview — free top-1 sample of /crypto/funding.
 - GET ${BASE}/defi/yields/preview — free top-1 sample of /defi/yields.
+- GET ${BASE}/defi/protocol-risk/preview — free sample (aave-v3) of the paid /defi/protocol-risk risk score.
 - GET ${BASE}/pm/markets/preview — free top-1 sample of /pm/markets.
 - GET ${BASE}/chain/block-number/preview — free, full live data (identical to the paid route).
 - GET ${BASE}/chain/gas-price/preview — free, full live data (identical to the paid route).
