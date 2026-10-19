@@ -9,6 +9,7 @@ can taste the payload before paying.
 
 - **Base URL:** `https://x402-data-api.sigrunner.workers.dev`
 - **MCP endpoint (streamable-http):** `https://x402-data-api.sigrunner.workers.dev/mcp`
+- **Canonical domain:** `https://api.greyridgesignals.ai` (same API)
 - **Discovery:** [`/.well-known/x402`](https://x402-data-api.sigrunner.workers.dev/.well-known/x402) · [`/openapi.json`](https://x402-data-api.sigrunner.workers.dev/openapi.json) · [`/llms.txt`](https://x402-data-api.sigrunner.workers.dev/llms.txt)
 - **Network:** Base mainnet (`eip155:8453`), USDC. Settles via the non-custodial [xpay](https://facilitator.xpay.sh) facilitator — no Coinbase/CDP account needed. Also listed on the CDP x402 Bazaar.
 
@@ -37,6 +38,12 @@ Base-native, multi-provider RPC with automatic failover (never fails a paid call
 | `GET /chain/receipt?hash=` | $0.001 | Transaction receipt (status, gas used, logs) |
 | `GET /chain/code?address=` | $0.001 | Contract-code check — is it a contract, and **EIP-7702 delegated-EOA detection** (`is_eip7702_delegate` / `delegate_address`) |
 | `GET /chain/wallet?address=` | $0.003 | **Bundle:** ETH balance + tx count + contract flag in one call, EIP-7702 delegated-EOA aware (`is_eip7702_delegate` / `delegate_address`) |
+
+### Agent trading gates (new)
+| Endpoint | Price | Returns |
+|---|---|---|
+| `GET /gate/swap?token=0x…&side=buy\|sell&notional_usd=N` | $0.01 | **Pre-trade go/hold/block decision** for any Base ERC-20: safety verdict, risk score, pool liquidity and price-impact of your size, flags. One call before an agent swaps. Free live sample: [`/gate/swap/preview`](https://api.greyridgesignals.ai/gate/swap/preview) |
+| `GET /chain/token-report?token=0x…` | see `/openapi.json` | Full token due-diligence report (security + liquidity + metadata) in one call |
 
 ### Security
 | Endpoint | Price | Returns |
