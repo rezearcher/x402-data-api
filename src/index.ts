@@ -4795,7 +4795,7 @@ app.get("/chain/token-security/preview", async (c) => {
     );
     return c.json({
       ...result,
-      note: "Free live sample — full real analysis of a well-known token (Base WETH), same depth as the paid endpoint. Full: GET /chain/token-security?token=<0x…> ($0.02) to analyze ANY Base ERC-20 token.",
+      note: "Free live sample — full real analysis of a well-known token (Base WETH), same depth as the paid endpoint. Full: GET /chain/token-security?token=<0x…> ($0.009) to analyze ANY Base ERC-20 token.",
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -6010,7 +6010,7 @@ const mcpHandler = createMcpHandler(() => {
         const result = await analyzeTokenSecurity(TOKEN_SECURITY_PREVIEW_TOKEN);
         const withNote = {
           ...result,
-          note: "Free live sample — full real analysis of a well-known token (Base WETH), same depth as the paid tool. Full: the paid chain_token_security tool or GET /chain/token-security ($0.02) to analyze ANY Base ERC-20 token.",
+          note: "Free live sample — full real analysis of a well-known token (Base WETH), same depth as the paid tool. Full: the paid chain_token_security tool or GET /chain/token-security ($0.009) to analyze ANY Base ERC-20 token.",
         };
         return { content: [{ type: "text" as const, text: JSON.stringify(withNote, null, 2) }] };
       } catch (e) {
