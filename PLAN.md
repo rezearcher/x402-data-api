@@ -423,3 +423,6 @@ The goal file (`makemoney.goal`) was amended with an "AIM & CLAIMS LAW" block to
 - scripts/benchmark_token_report.py: GeckoTerminal base pools vs GoPlus honeypot flag. First run n=30, 0 GoPlus positives => agreement 100% is NOT a publishable claim (no positives; recall unmeasured). Need a known-honeypot set before any accuracy claim.
 - benchmark_honeypots.py: 137 new Base pool tokens scanned, 0 GoPlus honeypot positives -> recall still unmeasurable; DO NOT publish accuracy. Try GoPlus-flagged lists from other sources (honeypot.is, token-sniffer) or older Base pools.
 - GoPlus has no data for ~75% of fresh Base pool tokens and 0 honeypot/cannot_sell flags in 80 sampled; GeckoTerminal new_pools is a dead source for positives. Need curated honeypot list (honeypot.is/rugcheck/community lists) or synthetic: deploy a testnet honeypot.
+
+## 2026-10-19 cycle (late) — preview cap verified
+- /chain/token-report/preview shares trialToken(): 3 real-token checks/IP/UTC day (src/index.ts:6650); demo tokens (incl. WETH) uncapped. Closes the "verify per-IP cap" item. No new buyer replies (Gmail, issue sensor); wallet flat 32.81524.
