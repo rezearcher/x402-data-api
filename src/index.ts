@@ -5325,7 +5325,17 @@ const m=j.token_meta||{},s=j.security||{},l=j.liquidity||{};const esc=x=>String(
 c.innerHTML='<div class="v '+esc(j.verdict)+'">'+esc(j.verdict)+'</div><div>'+esc(m.symbol||'?')+' · '+esc(m.name||'')+' · risk '+esc(j.risk_score)+'/100</div><ul>'
 +'<li>Honeypot: '+(s.isHoneypot?'YES':'no')+' (sim: '+esc(s.simStatus)+')</li><li>Can mint: '+(s.canMint?'yes':'no')+' · Can pause: '+(s.canPause?'yes':'no')+' · Blacklist: '+(s.hasBlacklist?'yes':'no')+'</li><li>Upgradeable proxy: '+(s.upgradeableProxy?'yes':'no')+' · Owner renounced: '+(s.ownerRenounced?'yes':'no')+'</li><li>Liquidity (WETH pool): '+(l.wethPoolUsd==null?'n/a':'$'+Math.round(l.wethPoolUsd))+'</li></ul><div>'+(j.reasons||[]).map(esc).join('; ')+'</div>'}catch(e){c.textContent='Error: '+e}}
 </script></body></html>`;
-app.get("/check", (c) => c.html(CHECK_HTML));
+app.get("/check", (c) => {
+  const t = c.req.query("token") ?? "";
+  if (!/^0x[0-9a-fA-F]{40}$/.test(t)) return c.html(CHECK_HTML);
+  const short = `${t.slice(0, 6)}…${t.slice(-4)}`;
+  return c.html(
+    CHECK_HTML.replace(
+      /<meta property="og:title"[^>]*>/,
+      `<meta property="og:title" content="Is ${short} a honeypot? Base Token Check"><meta property="og:url" content="https://x402-data-api.sigrunner.workers.dev/check?token=${t}">`,
+    ),
+  );
+});
 
 app.get("/chain/token-report/preview", async (c) => {
   try {
