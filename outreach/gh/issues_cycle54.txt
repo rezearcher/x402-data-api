@@ -11,3 +11,5 @@ https://github.com/voidly-ai/pay-marketplace-agentkit/issues/1
 https://github.com/tanod-labs/integrations/issues/1
 https://github.com/parsij/PistachioSwap/issues/224
 https://github.com/Sycosmile/Daemonbot/issues/2
+https://github.com/adokav/signal-bot/issues/162
+https://github.com/yonixnetwork/Yonix-Alpha/issues/86
