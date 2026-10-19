@@ -1,0 +1,4 @@
+# 2026-10-19 (cycle 63j) — two pitch issues answered+closed by maintainers
+- imokokok/Insight#245: closed. They already run oracle pre-trade safety + token-security over x402 (competitor/seller). No action; don't re-pitch.
+- romudille-bit/agentpay#11: closed. No seller signup. AgentPay `verified_route` samples Bazaar listings per need (token security / token price / defi yields / wallet screening...), pays a few, checks a body returns after settlement, ranks by delivery + on-chain payer depth. Public receipts agentpay.tools/probes, scores agentpay.tools/scores.json (351 services; sigrunner NOT yet probed as of 15:45 CDT, they say host appeared in a token-security sweep). Nothing manufacturable; keep Bazaar metadata accurate + deliver body post-settlement.
+- Krystian (agenticpay) thread: already answered 11:45 PT; no reply since. No double-send.
