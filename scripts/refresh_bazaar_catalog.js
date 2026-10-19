@@ -39,8 +39,9 @@ const fs = require('fs');
 
 const projectDir = path.resolve(process.env.HOME, 'projects/x402-data-api');
 const BASE = 'https://x402-data-api.sigrunner.workers.dev';
-const PAYAI = ['payai','openx402'].includes(process.env.FACILITATOR); // seed another facilitator's discovery catalog instead of CDP
-const FAC_URL = process.env.FACILITATOR === 'openx402' ? 'https://facilitator.openx402.ai' : 'https://facilitator.payai.network';
+const FACS = { payai: 'https://facilitator.payai.network', openx402: 'https://facilitator.openx402.ai', dexter: 'https://x402.dexter.cash', uvd: 'https://facilitator.ultravioletadao.xyz' };
+const PAYAI = !!FACS[process.env.FACILITATOR]; // seed another facilitator's discovery catalog instead of CDP
+const FAC_URL = FACS[process.env.FACILITATOR];
 const COOLDOWN_PATH = path.join(__dirname, PAYAI ? '.' + process.env.FACILITATOR + '_refresh_cooldown.json' : '.bazaar_refresh_cooldown.json');
 const COOLDOWN_MS = 20 * 60 * 60 * 1000; // 20h
 
