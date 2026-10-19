@@ -394,3 +394,4 @@ Inbox: 0 replies. Issue watch: only x402-pilot#13 (already answered). trace_inbo
 - 2026-10-19 cycle16: pitched deonmenezes/opentradex#23 (found via code search wrapFetchWithPayment; other hits were SDK/facilitator sellers or stale)
 - 2026-10-19 cycle17: replied to guidoalejo (Sluzen) on Agorean/claude-plugin#1 asking buyer volume + proxy mode; watch for answer
 - 2026-10-19 (cycle 18): Polygon agent-discovery = 77 routes, single owner 0xfd13b3, proxy-wrapped, no open seller listing -> dead lever. 0 replies, wallet flat 32.81524.
+- 2026-10-19 (cycle 18): bot 0xec2abd = 22 transfers/$0.091 per ~9000 blocks (~5h) => ~$0.44/day; $1000 needs a new buyer class, not more cheap routes.
