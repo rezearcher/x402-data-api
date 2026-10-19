@@ -929,6 +929,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/pm/markets/preview — free top-1 sample of /pm/markets.
 - GET ${BASE}/chain/block-number/preview — free, full live data (identical to the paid route).
 - GET ${BASE}/chain/gas-price/preview — free, full live data (identical to the paid route).
+- GET ${BASE}/gate/swap/preview — free live sample of the go/hold/block gate (Base USDC, buy, $100).
 - GET ${BASE}/chain/token-report/preview — free, full real trade-safety report for Base USDC, same depth as the paid route.
 - GET ${BASE}/chain/token-security/preview — free, full real analysis of a fixed well-known token (Base WETH), same depth as the paid route.
 - GET ${BASE}/scan/mcp/preview?url=<mcp-server> — free preview (counts + risk score; withholds detail).
@@ -5009,6 +5010,15 @@ app.get("/chain/token-report/preview", async (c) => {
       ...result,
       note: "Free live sample (Base USDC) — same depth as the paid route. Full: GET /chain/token-report?token=<0x…> ($0.05) for ANY Base ERC-20.",
     });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/gate/swap/preview", async (c) => {
+  try {
+    const out = await buildSwapGate(TOKEN_REPORT_PREVIEW_TOKEN, "buy", 100);
+    return c.json({ ...out, note: "Free live sample (Base USDC, buy, $100) — full: GET /gate/swap?token=<0x…>&side=buy|sell&notional_usd=<n> ($0.01) for ANY Base ERC-20." });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }

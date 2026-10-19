@@ -88,3 +88,4 @@ EXCLUDED (off-mission): per-target vulnerability/conviction feeds.
 - [x] 10. (2026-10-19h) Re-ran register_x402scan.js: 20/21 registered incl. /gate/swap (1 skipped, unchanged), 0 failed.
 - [x] 11. (2026-10-19i) docs/EXAMPLES.md: /gate/swap + gate_swap MCP example.
 - [x] 12. EXAMPLES.md decision values verified against src (lowercase go/hold/block).
+- [x] 13. (2026-10-19j) Deployed /gate/swap/preview (free live sample, in llms.txt); reply check again 0 (inbox only noise). Email budget still spent for 10-19.
