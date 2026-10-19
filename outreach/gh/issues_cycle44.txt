@@ -15,3 +15,4 @@ nirholas/x402-bridge https://github.com/nirholas/x402-bridge/issues/1
 ihint/merchant-context https://github.com/ihint/merchant-context/issues/44
 srotzin/hive-x402-helpers https://github.com/srotzin/hive-x402-helpers/issues/1
 harpd-dev/harpd-agent-examples https://github.com/harpd-dev/harpd-agent-examples/issues/1
+open /tmp/b.md: no such file or directory
