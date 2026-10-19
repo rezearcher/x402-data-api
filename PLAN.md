@@ -80,3 +80,4 @@ EXCLUDED (off-mission): per-target vulnerability/conviction feeds.
 - [ ] 2. Open PR: https://github.com/rezearcher/x402/pull/new/add-grey-ridge-signals (needs Rez's browser login — one click)
 - [ ] 3. Re-crawl Bazaar after 2026-10-20; diff settle payload vs a listed endpoint.
 - [x] 4. Paid smoke via live CDP path (200 OK, 0.001 USDC); merchant-endpoint lastCalledAt did NOT move (lag or self-payer exclusion). Bazaar-freshness lever unproven; recheck once after 2026-10-20 then stop.
+- [x] 5. (2026-10-19c) Re-checked directories: awesome-x402 #868 closed; Agoragentic list curated-only; gh PAT cannot create issues/PRs upstream (403) so remaining outreach targets (Heurist, AgentPay, inference.sh…) need email/browser — only hey@gitlawb.com has a public address.
