@@ -1,0 +1,5 @@
+https://github.com/ak10082247-max/x402-solana-base-sniper-bot/issues/1
+https://github.com/HoudiniSwap/houdiniswap-agent/issues/28
+https://github.com/noobshole/svalin-agent/issues/2
+https://github.com/wyattpalm2-eng/x402-seller/issues/7
+https://github.com/agentsvc/x402-token-check-before-swap/issues/1
