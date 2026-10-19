@@ -789,6 +789,7 @@ app.get("/.well-known/x402", (c) => {
       mk("/crypto/exchanges-top", "GET", "0.003", "3000", "Top crypto exchanges by trust score (CoinGecko): name, country, year, trust score and rank, 24h BTC volume. No params. Use when an agent needs exchange due-diligence data.", ["crypto", "exchanges", "trust", "data"]),
       mk("/crypto/categories", "GET", "0.003", "3000", "Crypto sector performance (CoinGecko categories): market cap, 24h change, volume per sector, top by market cap. No params. Use when an agent needs sector rotation signals.", ["crypto", "sectors", "categories", "data"]),
       mk("/defi/hacks-recent", "GET", "0.003", "3000", "Most recent DeFi/crypto hacks and exploits (DefiLlama): date, name, amount lost USD, chain, technique, bridge-hack flag; ?limit= up to 50. No required params. Use when an agent needs live security-incident risk signals.", ["defi", "security", "hacks", "exploits", "data"]),
+      mk("/crypto/derivatives-exchanges", "GET", "0.003", "3000", "Top crypto derivatives exchanges (CoinGecko): open interest BTC, 24h volume BTC, perpetual and futures pair counts, year established. No params. Use when an agent needs perp/futures venue liquidity data.", ["crypto", "derivatives", "futures", "open-interest", "data"]),
       mk("/defi/yields-top", "GET", "0.003", "3000", "Top DeFi yield pools by TVL (DefiLlama): chain, project, symbol, APY, TVL USD; optional ?chain= & ?stable=true. Use when an agent needs where to earn yield.", ["defi", "yield", "apy", "data"]),
       mk("/ai/classify", "GET", "0.003", "3000", "Zero-shot text classification (Llama 3.2 3B): ?text=<up to 1000 chars>&labels=<comma-separated labels, 2-10> returns the single best label. Use when an agent needs to route or tag text (intent, sentiment, topic, spam) in one cheap call.", ["ai", "llm", "classification", "text", "data"]),
       mk("/ai/summarize", "GET", "0.003", "3000", "Text summarization (Llama 3.2 3B): ?text=<up to 1500 chars> returns a 1-3 sentence summary. Use when an agent needs to compress a passage cheaply before reasoning over it.", ["ai", "llm", "summarization", "text", "data"]),
@@ -1023,6 +1024,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/crypto/exchanges-top — $0.003 — Top exchanges by trust score and volume.
 - GET ${BASE}/crypto/categories — $0.003 — Crypto sector market cap and 24h change.
 - GET ${BASE}/defi/hacks-recent — $0.003 — Most recent DeFi hacks and exploits with amounts.
+- GET ${BASE}/crypto/derivatives-exchanges — $0.003 — Top derivatives exchanges by open interest and volume.
 - GET ${BASE}/defi/yields-top — $0.003 — Top DeFi yield pools by TVL with APY.
 - GET ${BASE}/ai/classify?text=<…>&labels=a,b,c — $0.003 — Zero-shot classification into one of your labels.
 - GET ${BASE}/ai/summarize?text=<…> — $0.003 — 1-3 sentence summary of a passage.
@@ -1257,6 +1259,7 @@ app.get("/openapi.json", (c) => {
       "/crypto/exchanges-top": paid("Top crypto exchanges by trust score (CoinGecko).", "0.003", []),
       "/crypto/categories": paid("Crypto sector performance (CoinGecko categories).", "0.003", []),
       "/defi/hacks-recent": paid("Most recent DeFi hacks and exploits (DefiLlama).", "0.003", [{ name: "limit", desc: "optional, max 50", example: "10" }]),
+      "/crypto/derivatives-exchanges": paid("Top crypto derivatives exchanges (CoinGecko).", "0.003", []),
       "/defi/yields-top": paid("Top DeFi yield pools by TVL (DefiLlama).", "0.003", [{ name: "chain", desc: "optional chain filter", example: "Ethereum" }, { name: "stable", desc: "true = stablecoin pools only", example: "true" }, { name: "limit", desc: "optional", example: "20" }]),
       "/ai/classify": paid("Classify text into one of your labels.", "0.003", [{ name: "text", desc: "text, max 1000 chars", required: true, example: "My card was charged twice" }, { name: "labels", desc: "comma-separated labels, 2-10", required: true, example: "billing,bug,feature_request,other" }]),
       "/ai/summarize": paid("Summarize a passage into 1-3 sentences.", "0.003", [{ name: "text", desc: "passage, max 1500 chars", required: true, example: "x402 is an open HTTP 402 payment protocol letting clients pay per request in USDC on Base without accounts or API keys." }]),
@@ -2269,6 +2272,17 @@ function makeRoutes(payTo: string) {
         input: { limit: "10" },
         inputSchema: { type: "object", properties: { limit: { type: "string", description: "optional, max 50" } } },
         output: { example: { hacks: [{ name: "Example Protocol", amount_usd: 1000000, chain: ["Ethereum"] }] } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /crypto/derivatives-exchanges": {
+      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      description: "Top crypto derivatives exchanges (CoinGecko): open interest BTC, 24h volume BTC, perpetual and futures pair counts, year established. No params. Use when an agent needs perp/futures venue liquidity data.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: {},
+        inputSchema: { type: "object", properties: {  } },
+        output: { example: { exchanges: [{ name: "Binance (Futures)", open_interest_btc: 403937 }] } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /ai/classify": {
@@ -5388,6 +5402,21 @@ app.get("/defi/hacks-recent", async (c) => {
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /defi/hacks-recent", rail, makeUsageCounter(c.env)));
     return c.json({ count: hacks.length, hacks, source: "defillama", ts: new Date().toISOString() });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/crypto/derivatives-exchanges", async (c) => {
+  try {
+    const r = await fetch("https://api.coingecko.com/api/v3/derivatives/exchanges?per_page=25&order=open_interest_btc_desc");
+    if (!r.ok) return c.json({ error: "upstream " + r.status }, { status: 502 });
+    const d = (await r.json()) as Array<{ name: string; open_interest_btc: number | null; trade_volume_24h_btc: string | null; number_of_perpetual_pairs: number | null; number_of_futures_pairs: number | null; year_established: number | null }>;
+    const exchanges = d.map((x) => ({ name: x.name, open_interest_btc: Math.round(x.open_interest_btc ?? 0), volume_24h_btc: Math.round(Number(x.trade_volume_24h_btc ?? 0)), perpetual_pairs: x.number_of_perpetual_pairs, futures_pairs: x.number_of_futures_pairs, year_established: x.year_established }));
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/crypto/derivatives-exchanges", ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /crypto/derivatives-exchanges", rail, makeUsageCounter(c.env)));
+    return c.json({ count: exchanges.length, exchanges, source: "coingecko", ts: new Date().toISOString() });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }

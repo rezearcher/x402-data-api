@@ -121,6 +121,14 @@ const ROUTES = {
     inputSchema: { type: 'object', properties: { limit: { type: 'string', description: 'optional, max 50' } } },
     example: { name: 'Example Protocol', amount_usd: 1000000, chain: ['Ethereum'] },
   },
+  '/crypto/derivatives-exchanges': {
+    description: 'Top crypto derivatives exchanges by open interest and volume. No params. Agent-native, pay-per-call via x402.',
+    serviceName: 'Crypto Derivatives Exchanges (CoinGecko)',
+    tags: ['crypto','derivatives','futures','open-interest','data'],
+    input: {},
+    inputSchema: { type: 'object', properties: {  } },
+    example: { name: 'Binance (Futures)', open_interest_btc: 403937 },
+  },
   '/crypto/categories': {
     description: 'Crypto sector market cap and 24h change by category. No params. Agent-native, pay-per-call via x402.',
     serviceName: 'Crypto Sector Performance (CoinGecko)',
