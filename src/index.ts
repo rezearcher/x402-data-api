@@ -716,6 +716,7 @@ app.get("/.well-known/x402", (c) => {
       mk("/chain/code", "GET", "0.001", "1000", "Contract-code check for a Base mainnet address (is_contract + code size + EIP-7702 delegated-EOA detection).", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/wallet", "GET", "0.003", "3000", "Wallet bundle: ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]),
       mk("/chain/token-report", "GET", "0.05", "50000", "Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "verdict", "trading", "data"]),
+      mk("/gate/swap", "GET", "0.01", "10000", "Pre-trade GO / HOLD / BLOCK gate for autonomous Base trading agents: honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your trade size, one decision + reason in one call.", ["security", "base", "onchain", "trading", "gate", "agents", "token", "data"]),
       mk("/chain/token-security", "GET", "0.02", "20000", "Token security / honeypot detector for a Base mainnet ERC-20: EIP-1967/1822 proxy + upgradeability detection, bytecode dispatcher scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, and a live eth_call state-override simulation testing whether a synthetic wallet can actually transfer() the token. Real compute, not a thin data wrapper. Returns risk_score (0-100) + verdict (clear/review/block) + human-readable flags.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "data"]),
       mk("/dns/{domain}", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", ["dns", "domain", "data", "recon"]),
       mk("/whois/{domain}", "GET", "0.02", "20000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", ["whois", "rdap", "domain", "data", "recon"]),
@@ -917,6 +918,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/chain/receipt?hash=<0x…> — $0.001 — transaction receipt by hash on Base: status, gas used, full logs, L1 fee breakdown (l1_fee_wei/l1_gas_price_wei/l1_gas_used/effective_gas_price_wei) + l1_fee_usd/total_fee_usd.
 - GET ${BASE}/chain/code?address=<0x…> — $0.001 — contract-code check for a Base address (EIP-7702 delegated-EOA aware).
 - GET ${BASE}/chain/wallet?address=<0x…> — $0.003 — wallet bundle: balance + balance_usd + tx count + contract check (EIP-7702 delegated-EOA aware), one call.
+- GET ${BASE}/gate/swap?token=<0x…>&side=buy&notional_usd=500 — $0.01 — pre-trade GO/HOLD/BLOCK gate for Base trading agents: honeypot/sellability + liquidity-vs-trade-size price impact in one fast call.
 - GET ${BASE}/chain/token-report?token=<0x…> — $0.05 — DECISION-GRADE token trade-safety verdict: one call returns SAFE|CAUTION|AVOID + risk_score 0-100 + reasons, bundling honeypot/sellability simulation, owner-renounced/mint/pause/blacklist/fee-setter/upgradeable checks, symbol/name/decimals and Uniswap v3 WETH-pool liquidity USD. Replaces many RPC calls and prevents a bad trade.
 - GET ${BASE}/chain/token-security?token=<0x…> — $0.02 — token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, live eth_call state-override transfer simulation — risk_score + verdict (clear/review/block) + flags. Real compute, not a thin data wrapper.
 
@@ -1100,6 +1102,7 @@ app.get("/openapi.json", (c) => {
       "/chain/code": paid("Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware).", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
       "/chain/wallet": paid("Wallet bundle: ETH balance + balance_usd + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call.", "0.003", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
       "/chain/token-report": paid("Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade.", "0.05", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
+      "/gate/swap": paid("Pre-trade GO/HOLD/BLOCK gate for Base trading agents: token safety + liquidity-vs-size price-impact check in one call.", "0.01", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }, { name: "side", desc: "buy or sell", required: false, example: "buy" }, { name: "notional_usd", desc: "intended trade size in USD", required: false, example: "500" }]),
       "/chain/token-security": paid("Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.", "0.02", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
       "/dns/{domain}": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "path", example: "stripe.com" }]),
       "/whois/{domain}": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.02", [{ name: "domain", desc: "domain name to look up", in: "path", example: "cloudflare.com" }]),
@@ -1817,6 +1820,32 @@ function makeRoutes(payTo: string) {
             risk_score: 25,
             reasons: ["upgradeable proxy; logic can change after purchase"],
           },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /gate/swap": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.01",
+        network: NETWORK,
+        payTo,
+      },
+      description:
+        "Pre-trade GO / HOLD / BLOCK gate for an autonomous Base trading agent: pass token, side (buy|sell) and notional_usd; get a one-word decision plus reason in one fast call. Combines honeypot/sellability simulation, admin-control checks and Uniswap v3 WETH-pool liquidity vs. your trade size (price-impact guard).",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", side: "buy", notional_usd: "500" },
+        inputSchema: {
+          type: "object",
+          properties: {
+            token: { type: "string", description: "0x-prefixed ERC-20 contract on Base mainnet" },
+            side: { type: "string", description: "buy or sell (default buy)" },
+            notional_usd: { type: "string", description: "intended trade size in USD (default 100)" },
+          },
+        },
+        output: {
+          example: { token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", side: "buy", notional_usd: 500, decision: "go", reason: "token passes safety checks; trade is 0.01% of pool liquidity", risk_score: 25, liquidity_usd: 5000000, impact_pct_of_pool: 0.01 },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
@@ -4915,6 +4944,51 @@ app.get("/chain/token-report", async (c) => {
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /chain/token-report", rail, makeUsageCounter(c.env)));
     return c.json(result);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+// Pre-trade gate: compact go/hold/block built on the token-report engine.
+app.get("/gate/swap", async (c) => {
+  const token = c.req.query("token");
+  if (!token || !ADDR_RE.test(token)) {
+    return c.json({ error: "token query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
+  }
+  const side = (c.req.query("side") ?? "buy").toLowerCase();
+  if (side !== "buy" && side !== "sell") return c.json({ error: "side must be buy or sell" }, { status: 400 });
+  const notional = Number(c.req.query("notional_usd") ?? c.req.query("notional") ?? "100");
+  if (!Number.isFinite(notional) || notional <= 0) return c.json({ error: "notional_usd must be a positive number" }, { status: 400 });
+  try {
+    const r = await buildTokenReport(token);
+    const liq = r.liquidity.wethPoolUsd;
+    const impact = liq && liq > 0 ? (notional / liq) * 100 : null;
+    let decision: "go" | "hold" | "block" = "go";
+    let reason = "token passes safety checks";
+    if (r.verdict === "AVOID") {
+      decision = side === "sell" && r.security.isHoneypot !== true ? "hold" : "block";
+      reason = r.reasons[0] ?? "token flagged AVOID";
+    } else if (impact !== null && impact > 10) {
+      decision = "block";
+      reason = `trade is ${impact.toFixed(1)}% of pool liquidity; severe price impact`;
+    } else if (impact !== null && impact > 2) {
+      decision = "hold";
+      reason = `trade is ${impact.toFixed(1)}% of pool liquidity; split the order`;
+    } else if (r.verdict === "CAUTION") {
+      decision = side === "buy" && r.risk_score >= 50 ? "hold" : "go";
+      reason = r.reasons[0] ?? "caution flags present";
+    } else if (impact !== null) {
+      reason = `token passes safety checks; trade is ${impact.toFixed(2)}% of pool liquidity`;
+    }
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /gate/swap", rail, makeUsageCounter(c.env)));
+    return c.json({
+      token, side, notional_usd: notional, decision, reason,
+      verdict: r.verdict, risk_score: r.risk_score, liquidity_usd: liq,
+      impact_pct_of_pool: impact === null ? null : Math.round(impact * 100) / 100,
+      flags: r.reasons, token_meta: r.token_meta, analyzed_at: r.analyzed_at,
+      disclaimer: r.disclaimer,
+    });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
