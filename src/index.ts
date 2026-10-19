@@ -2182,6 +2182,7 @@ app.get("/token-safety", (c) => {
 <main>
   <h1>🧪 Token Safety Scanner</h1>
   <p class="tagline">Real-time honeypot detection for Base chain tokens — before you buy</p>
+  <p><a href="/check" style="display:inline-block;padding:.6rem 1.1rem;background:#0b5;color:#fff;border-radius:8px;text-decoration:none">Try it free: check a token now →</a></p>
 
   <p>Paste any Base ERC-20 token address and get a full security analysis: proxy detection, bytecode risk-selector scan, ownership checks, and a live on-chain transfer simulation. Built for traders, degens, and AI agents who need to know <em>before</em> they click "swap".</p>
 
