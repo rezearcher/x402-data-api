@@ -6,3 +6,7 @@ https://github.com/Haustorium12/gold-402/issues/374
 "html_url": "https://github.com/402MCP/402mcp/issues/2"
 "html_url": "https://github.com/LumenRoute/lumenbazaar-backend/issues/67"
 "html_url": "https://github.com/Pranavms09/decentralization_DI05_/issues/16"
+"html_url": "https://github.com/romudille-bit/agentpay/issues/11"
+"html_url": "https://github.com/strale-io/strale/issues/702"
+"html_url": "https://github.com/settleonbase/x402sdk/issues/7"
+"html_url": "https://github.com/ak10082247-max/rugshield-402/issues/1"
