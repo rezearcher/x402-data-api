@@ -763,6 +763,7 @@ app.get("/.well-known/x402", (c) => {
       mk("/chain/is-contract", "GET", "0.002", "2000", "Is a Base address a smart contract or an EOA (is_contract + bytecode size).", ["rpc", "base", "onchain", "contract", "data"]),
       mk("/chain/fee-estimate", "GET", "0.003", "3000", "Base EIP-1559 fee estimate: base fee, suggested priority fee, max-fee tiers (slow/standard/fast) in gwei and a 21k-gas transfer cost.", ["rpc", "base", "onchain", "gas", "fees", "data"]),
       mk("/chain/network-status", "GET", "0.003", "3000", "Base network status snapshot: chain id, latest block, block age, gas used ratio and tx count.", ["rpc", "base", "onchain", "status", "health", "data"]),
+      mk("/chain/l1-base-fee", "GET", "0.003", "3000", "Ethereum L1 base fee as seen by Base's GasPriceOracle (wei/gwei) plus estimated L1 data fee for a simple transfer.", ["rpc", "base", "onchain", "gas", "l1", "fees", "data"]),
       mk("/chain/total-supply", "GET", "0.003", "3000", "ERC-20 total supply on Base (raw + formatted, with symbol and decimals).", ["rpc", "base", "onchain", "token", "erc20", "data"]),
       mk("/chain/storage-at", "GET", "0.002", "2000", "Raw storage slot read (eth_getStorageAt) for any Base contract; slot defaults to 0x0. Use when an agent needs proxy implementation/admin slots or raw contract state.", ["rpc", "base", "onchain", "contract", "data"]),
       mk("/chain/proxy-info", "GET", "0.003", "3000", "EIP-1967 proxy resolver for a Base contract: returns implementation, admin and beacon addresses (read from the standard storage slots) plus is_proxy flag. Use when an agent must know what code actually runs behind a proxy before trusting or calling it.", ["rpc", "base", "onchain", "contract", "proxy", "security", "data"]),
@@ -980,6 +981,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/chain/is-contract?address=<0x…> — $0.002 — contract vs EOA + bytecode size.
 - GET ${BASE}/chain/fee-estimate — $0.003 — Base EIP-1559 fee tiers (slow/standard/fast) + transfer cost.
 - GET ${BASE}/chain/network-status — $0.003 — Base chain id, latest block, block age, gas utilisation.
+- GET ${BASE}/chain/l1-base-fee — $0.003 — Ethereum L1 base fee seen by Base's GasPriceOracle + L1 data-fee estimate.
 - GET ${BASE}/chain/total-supply?token=<0x…> — $0.003 — ERC-20 total supply (raw + formatted).
 - GET ${BASE}/chain/allowance?token=<0x…>&owner=<0x…>&spender=<0x…> — $0.002 — ERC-20 allowance, flags unlimited approvals.
 - GET ${BASE}/chain/code?address=<0x…> — $0.01 — contract-code check for a Base address (EIP-7702 delegated-EOA aware).
@@ -1177,6 +1179,7 @@ app.get("/openapi.json", (c) => {
       "/chain/is-contract": paid("Is a Base address a smart contract or an EOA (is_contract + bytecode size).", "0.002", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
       "/chain/fee-estimate": paid("Base EIP-1559 fee estimate: base fee, priority fee, slow/standard/fast max-fee tiers (gwei).", "0.003", []),
       "/chain/network-status": paid("Base network status: chain id, latest block, block age seconds, gas utilisation, tx count.", "0.003", []),
+      "/chain/l1-base-fee": paid("Ethereum L1 base fee via Base GasPriceOracle (wei/gwei) + estimated L1 data fee for a transfer.", "0.003", []),
       "/chain/total-supply": paid("ERC-20 total supply on Base, raw + formatted.", "0.003", [{ name: "token", desc: "0x-prefixed ERC-20 address", required: true, example: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" }]),
       "/chain/storage-at": paid("Raw eth_getStorageAt slot read on Base.", "0.002", [{ name: "address", desc: "0x-prefixed contract address", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }, { name: "slot", desc: "storage slot hex (default 0x0)", required: false, example: "0x0" }]),
       "/chain/proxy-info": paid("EIP-1967 proxy resolver on Base: implementation/admin/beacon addresses + is_proxy.", "0.003", [{ name: "address", desc: "0x-prefixed contract address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
@@ -1896,6 +1899,17 @@ function makeRoutes(payTo: string) {
         input: {},
         inputSchema: { type: "object", properties: {} },
         output: { example: { chain_id: 8453, block: 38000000, block_age_seconds: 1, gas_used_ratio: 0.42, tx_count: 120, chain: "base" } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /chain/l1-base-fee": {
+      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      description: "Ethereum L1 base fee as reported by Base's GasPriceOracle, in wei and gwei, plus an estimated L1 data fee for a simple transfer. Use when an agent prices the L1 component of Base transaction costs.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: {},
+        inputSchema: { type: "object", properties: {} },
+        output: { example: { l1_base_fee_wei: "210000000", l1_base_fee_gwei: 0.21, est_l1_data_fee_eth_simple_transfer: 2.0e-8, chain: "base" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /chain/total-supply": {
@@ -4501,6 +4515,19 @@ app.get("/chain/network-status", async (c) => {
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /chain/network-status", rail, makeUsageCounter(c.env)));
     return c.json({ chain_id: Number(BigInt(cid)), block: Number(BigInt(blk.number)), block_age_seconds: Math.max(0, Math.floor(Date.now() / 1000) - Number(BigInt(blk.timestamp))), gas_used_ratio: Number(BigInt(blk.gasUsed)) / Number(BigInt(blk.gasLimit)), tx_count: blk.transactions.length, chain: "base" });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/l1-base-fee", async (c) => {
+  try {
+    const r = (await baseRpc("eth_call", [{ to: "0x420000000000000000000000000000000000000F", data: "0x519b4bd3" }, "latest"])) as string;
+    const wei = BigInt(r);
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/chain/l1-base-fee", ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/l1-base-fee", rail, makeUsageCounter(c.env)));
+    return c.json({ l1_base_fee_wei: wei.toString(), l1_base_fee_gwei: Number(wei) / 1e9, est_l1_data_fee_eth_simple_transfer: (Number(wei) * 16 * 200) / 1e18, assumed_tx_bytes: 200, chain: "base" });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
