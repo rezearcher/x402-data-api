@@ -2,3 +2,6 @@ https://github.com/0xSoftBoi/suwappubot/issues/1088
 https://github.com/Artem1981777/Base-Capital/issues/1
 https://github.com/BlockRunAI/Franklin/issues/213
 https://github.com/LiamVisionary/hivemindos/issues/15
+https://github.com/Iziedking/agon/issues/4
+https://github.com/estmcmxci/oikonomos/issues/55
+https://github.com/divi2806/x402-cross-bridge-sdk/issues/1
