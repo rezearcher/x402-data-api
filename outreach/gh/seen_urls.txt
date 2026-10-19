@@ -37,3 +37,5 @@ https://github.com/Solizardking/clawd-automation/issues/4
 https://github.com/Trivenidigital/gecko-alpha/issues/601
 https://github.com/Naakugod11/0xpilot/issues/1
 https://github.com/OneZero-Network/fortress-sniper/issues/1
+https://github.com/tuantqse90/chord-agentkit/issues/1
+https://github.com/Jolaolayemi/jolxo-scout/issues/2
