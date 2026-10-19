@@ -1,0 +1,5 @@
+https://github.com/lopushok9/Agent-Layer/issues/34
+https://github.com/edxzh/agent-wallet/issues/2
+https://github.com/UltraStarz/tollkit-wallet/issues/2
+https://github.com/dongsheng123132/moneyswitch/issues/23
+https://github.com/satohubai/onchain-agents/issues/19
