@@ -97,3 +97,4 @@ EXCLUDED (off-mission): per-target vulnerability/conviction feeds.
 - [x] 19. server.json description now leads with gate_swap/token-report.
 - [x] 20. llms-install.md MCP URL -> canonical api.greyridgesignals.ai (verified 200).
 - [ ] 21. (2026-10-19n) Public gist of /gate/swap examples: gh PAT lacks gist scope (403) — dead end via gh; docs/EXAMPLES.md is the canonical copy. (Note: /tmp files do not persist between Bash calls; use repo-local paths.)
+- [x] 22. docs/EXAMPLES.md base URL -> canonical api.greyridgesignals.ai.

@@ -1,6 +1,6 @@
 # Copy-paste examples
 
-Base URL: https://x402-data-api.sigrunner.workers.dev — Base mainnet, USDC, no API key.
+Base URL: https://api.greyridgesignals.ai — Base mainnet, USDC, no API key.
 Free discovery: `/.well-known/x402`, `/openapi.json`, MCP at `/mcp`.
 
 ## Node (x402-fetch)
@@ -8,7 +8,7 @@ Free discovery: `/.well-known/x402`, `/openapi.json`, MCP at `/mcp`.
 import { wrapFetchWithPayment } from "x402-fetch";
 import { privateKeyToAccount } from "viem/accounts";
 const f = wrapFetchWithPayment(fetch, privateKeyToAccount(process.env.PK));
-const r = await f("https://x402-data-api.sigrunner.workers.dev/chain/token-report?token=0x4200000000000000000000000000000000000006");
+const r = await f("https://api.greyridgesignals.ai/chain/token-report?token=0x4200000000000000000000000000000000000006");
 console.log(await r.json());
 ```
 
@@ -17,7 +17,7 @@ Call `/chain/token-report` ($0.05) before swapping into an unknown Base token; r
 
 Cheaper single-call version — `/gate/swap` ($0.01) returns go / hold / block for a specific trade size:
 ```js
-const r = await f("https://x402-data-api.sigrunner.workers.dev/gate/swap?token=0x4200000000000000000000000000000000000006&side=buy&notional_usd=500");
+const r = await f("https://api.greyridgesignals.ai/gate/swap?token=0x4200000000000000000000000000000000000006&side=buy&notional_usd=500");
 const { decision } = await r.json(); // "go" | "hold" | "block" — act only on "go"
 ```
 Also available as the `gate_swap` MCP tool at `/mcp`.
