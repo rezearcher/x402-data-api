@@ -153,13 +153,31 @@ const BASE_RPCS = [
   "https://mainnet.base.org",
   "https://base-rpc.publicnode.com",
   "https://base.drpc.org",
-  "https://base.llamarpc.com",
-  "https://base.meowrpc.com",
-  "https://1rpc.io/base",
-  "https://base.blockpi.network/v1/rpc/public",
+  "https://base.api.onfinality.io/public",
+  "https://base-pokt.nodies.app",
   "https://base-mainnet.public.blastapi.io",
   "https://base.gateway.tenderly.co",
+  "https://gateway.tenderly.co/public/base",
 ];
+
+
+// Per-isolate provider health: a provider that just 429'd / failed is skipped for a
+// short cooldown, and the starting provider round-robins. Without this every call
+// re-tries the same rate-limited providers first and burns the Worker's 50-subrequest
+// cap (which made the honeypot sim report "unavailable" for most requests).
+const rpcCooldownUntil = new Map<string, number>();
+let rpcRoundRobin = 0;
+function rpcOrder(): string[] {
+  const now = Date.now();
+  const n = BASE_RPCS.length;
+  const start = rpcRoundRobin++ % n;
+  const rotated = BASE_RPCS.map((_, i) => BASE_RPCS[(start + i) % n]);
+  const healthy = rotated.filter((u) => (rpcCooldownUntil.get(u) ?? 0) <= now);
+  return healthy.length ? healthy : rotated;
+}
+function rpcMarkBad(url: string, ms = 30000): void {
+  rpcCooldownUntil.set(url, Date.now() + ms);
+}
 
 // ---------------------------------------------------------------------------
 // Base mainnet JSON-RPC helper — fixed host only (no user-supplied URL),
@@ -171,15 +189,17 @@ const HASH_RE = /^0x[a-fA-F0-9]{64}$/;
 
 async function baseRpc(method: string, params: unknown[]): Promise<any> {
   let lastErr = "no rpc tried";
-  for (const url of BASE_RPCS) {
+  for (const url of rpcOrder()) {
     try {
       const res = await fetch(url, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+        signal: AbortSignal.timeout(5000),
       });
       if (!res.ok) {
         lastErr = `${url} -> HTTP ${res.status}`;
+        rpcMarkBad(url);
         continue; // 429 / 5xx → try the next provider
       }
       const j = (await res.json()) as { result?: unknown; error?: { message?: string } };
@@ -4362,21 +4382,27 @@ interface OwnerInfo {
 // compute-heavy endpoint like this one, so every optional/may-revert call in
 // this file's token-security analysis uses this instead of baseRpc().
 async function baseRpcProbe(method: string, params: unknown[]): Promise<{ result?: string; error?: string; unavailable?: boolean }> {
-  for (const url of BASE_RPCS) {
+  for (const url of rpcOrder()) {
     try {
       const res = await fetch(url, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+        signal: AbortSignal.timeout(5000),
       });
-      if (!res.ok) continue;
+      if (!res.ok) { rpcMarkBad(url); continue; }
       const j = (await res.json()) as { result?: string; error?: { message?: string } };
       if (j.error) {
         if (/rate limit|too many requests|429/i.test(j.error.message ?? "")) continue; // transient — try next provider
-        return { error: j.error.message ?? "execution reverted" }; // a real revert — stop rotating, this is the answer
+        // Only a genuine EVM revert is "the answer". Provider-side refusals ("method not
+        // supported", auth, quota…) are infra failures — rotate, else a bad provider reached
+        // after the good ones rate-limit us turns every token into sim_status "unavailable".
+        if (!/revert|invalid opcode|out of gas|stack|abort/i.test(j.error.message ?? "")) { rpcMarkBad(url); continue; }
+        return { error: j.error.message ?? "execution reverted" };
       }
       return { result: j.result };
     } catch {
+      rpcMarkBad(url);
       continue;
     }
   }
@@ -4772,7 +4798,7 @@ interface WethLiquidity {
 // rotating providers only on transport failure. Per-item failures come back null.
 async function baseRpcBatch(calls: { method: string; params: unknown[] }[]): Promise<(string | null)[] | null> {
   const body = JSON.stringify(calls.map((c, i) => ({ jsonrpc: "2.0", id: i + 1, method: c.method, params: c.params })));
-  for (const url of [...BASE_RPCS, ...BASE_RPCS]) {
+  for (const url of [...rpcOrder(), ...rpcOrder()]) {
     try {
       const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body });
       if (!res.ok) continue;
