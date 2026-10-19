@@ -118,3 +118,6 @@ Inbox clean (0 replies/bounces to 15 pitches). Endpoints 200/402 healthy. Cap us
 - [x] 8. (2026-10-19k) Self-listed on Agent402 router (POST agent402.tools/api/index/register, no PR): both hosts listed, routable, health 1 (21/23 tools). Verify: GET agent402.tools/api/index?seller=<origin>. Queued APIbase/Dexter pitches in outreach/queue/ (send first after UTC reset). 0 inbox replies.
 - 2026-10-19 05:10Z cycle: inbox 0 replies (only our own 15 sends); cap by UTC spent until 2026-10-20 00:00Z; APIbase/Dexter queued first.
 - 2026-10-19 05:2xZ: found Circle Agent Marketplace (manual Google Form, needs login) -> outreach/blockers/circle-agent-marketplace-form.md. Inbox 0 replies.
+
+## Cycle note 2026-10-19T05:15Z
+Inbox: 0 replies/bounces to the 15 pitches. Wallet flat 32.30424 (self-test only). Smithery lacks us (needs login) -> outreach/blockers/smithery-publish.md. Email cap spent until 2026-10-20 00:00Z; queue apibase.md + dexter.md first then.
