@@ -757,6 +757,8 @@ app.get("/.well-known/x402", (c) => {
       mk("/chain/code", "GET", "0.001", "1000", "Contract-code check for a Base mainnet address (is_contract + code size + EIP-7702 delegated-EOA detection).", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/erc20-meta", "GET", "0.005", "5000", "ERC-20 metadata on Base: name, symbol, decimals, totalSupply for any token contract.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
       mk("/chain/nonce", "GET", "0.001", "1000", "Transaction count (nonce) for a Base address, latest and pending.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/allowance", "GET", "0.002", "2000", "ERC-20 allowance(owner, spender) on Base, raw + formatted, flags unlimited approvals.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
+      mk("/chain/block", "GET", "0.001", "1000", "Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/wallet", "GET", "0.003", "3000", "Wallet bundle: ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]),
       mk("/chain/token-report", "GET", "0.02", "20000", "Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "verdict", "trading", "data"]),
       mk("/gate/swap", "GET", "0.008", "8000", "Pre-trade GO / HOLD / BLOCK gate for autonomous Base trading agents: honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your trade size, one decision + reason in one call.", ["security", "base", "onchain", "trading", "gate", "agents", "token", "data"]),
@@ -1149,6 +1151,8 @@ app.get("/openapi.json", (c) => {
       "/chain/receipt": paid("Transaction receipt by hash on Base mainnet: status, gas used, full logs, L1 fee breakdown, l1_fee_usd/total_fee_usd.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }]),
       "/chain/erc20-meta": paid("ERC-20 name/symbol/decimals/totalSupply on Base.", "0.005", [{ name: "token", desc: "0x-prefixed ERC-20 address on Base", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }]),
       "/chain/nonce": paid("Nonce (tx count) of a Base address, latest and pending.", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
+      "/chain/allowance": paid("ERC-20 allowance(owner, spender) on Base.", "0.002", [{ name: "token", desc: "ERC-20 address", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }, { name: "owner", desc: "owner address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "spender", desc: "spender address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
+      "/chain/block": paid("Base block summary by number or latest.", "0.001", [{ name: "number", desc: "decimal block number or 'latest'", required: false, example: "latest" }]),
       "/chain/code": paid("Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware).", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
       "/chain/wallet": paid("Wallet bundle: ETH balance + balance_usd + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call.", "0.003", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
       "/chain/token-report": paid("Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade.", "0.02", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
@@ -1829,6 +1833,28 @@ function makeRoutes(payTo: string) {
         input: { address: "0x4200000000000000000000000000000000000006" },
         inputSchema: { type: "object", properties: { address: { type: "string", description: "0x-prefixed 20-byte Base address" } } },
         output: { example: { address: "0x4200000000000000000000000000000000000006", nonce_latest: 1, nonce_pending: 1, chain: "base" } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /chain/allowance": {
+      accepts: { scheme: "exact" as const, price: "$0.002", network: NETWORK, payTo },
+      description: "ERC-20 allowance(owner, spender) on Base, raw + formatted, flags unlimited approvals.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913", owner: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10", spender: "0x4200000000000000000000000000000000000006" },
+        inputSchema: { type: "object", properties: { token: { type: "string", description: "ERC-20 address" }, owner: { type: "string", description: "owner address" }, spender: { type: "string", description: "spender address" } } },
+        output: { example: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913", owner: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10", spender: "0x4200000000000000000000000000000000000006", allowance_raw: "0", allowance: 0, decimals: 6, is_unlimited: false, chain: "base" } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /chain/block": {
+      accepts: { scheme: "exact" as const, price: "$0.001", network: NETWORK, payTo },
+      description: "Base block summary by number or 'latest': hash, timestamp, tx count, gas used/limit, base fee.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { number: "latest" },
+        inputSchema: { type: "object", properties: { number: { type: "string", description: "block number (decimal) or 'latest'" } } },
+        output: { example: { number: 52800000, hash: "0xabc", timestamp: 1792400000, tx_count: 120, gas_used: 12000000, gas_limit: 300000000, base_fee_gwei: 0.005, chain: "base" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /chain/wallet": {
@@ -4296,6 +4322,50 @@ app.get("/chain/nonce", async (c) => {
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /chain/nonce", rail, makeUsageCounter(c.env)));
     return c.json({ address, nonce_latest: Number(BigInt(l)), nonce_pending: Number(BigInt(p)), chain: "base" });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/allowance", async (c) => {
+  const token = c.req.query("token"), owner = c.req.query("owner"), spender = c.req.query("spender");
+  if (!token || !owner || !spender || ![token, owner, spender].every((x) => ADDR_RE.test(x))) {
+    return c.json({ error: "token, owner and spender query params must be 0x-prefixed 20-byte addresses" }, { status: 400 });
+  }
+  try {
+    const pad = (a: string) => a.slice(2).toLowerCase().padStart(64, "0");
+    const [al, d] = await Promise.all([
+      baseRpc("eth_call", [{ to: token, data: "0xdd62ed3e" + pad(owner) + pad(spender) }, "latest"]) as Promise<string>,
+      baseRpc("eth_call", [{ to: token, data: "0x313ce567" }, "latest"]).catch(() => "0x") as Promise<string>,
+    ]);
+    if (!al || al === "0x") return c.json({ error: "not an ERC-20 contract on Base" }, { status: 422 });
+    const raw = BigInt(al);
+    const decimals = d && d !== "0x" ? Number(BigInt(d)) : null;
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/chain/allowance", token, ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/allowance", rail, makeUsageCounter(c.env)));
+    return c.json({ token, owner, spender, allowance_raw: raw.toString(), allowance: decimals === null ? null : Number(raw) / 10 ** decimals, decimals, is_unlimited: raw >= (1n << 255n), chain: "base" });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/block", async (c) => {
+  const q = c.req.query("number") ?? "latest";
+  if (q !== "latest" && !/^\d{1,12}$/.test(q)) {
+    return c.json({ error: "number must be a decimal block number or 'latest'" }, { status: 400 });
+  }
+  try {
+    const b = (await baseRpc("eth_getBlockByNumber", [q === "latest" ? "latest" : "0x" + Number(q).toString(16), false])) as any;
+    if (!b) return c.json({ error: "block not found" }, { status: 404 });
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/chain/block", ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/block", rail, makeUsageCounter(c.env)));
+    return c.json({
+      number: Number(BigInt(b.number)), hash: b.hash, parent_hash: b.parentHash, timestamp: Number(BigInt(b.timestamp)),
+      tx_count: b.transactions.length, gas_used: Number(BigInt(b.gasUsed)), gas_limit: Number(BigInt(b.gasLimit)),
+      base_fee_gwei: b.baseFeePerGas ? Number(BigInt(b.baseFeePerGas)) / 1e9 : null, chain: "base",
+    });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
