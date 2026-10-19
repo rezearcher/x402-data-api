@@ -346,3 +346,4 @@ Inbox: 0 replies. Issue watch: only x402-pilot#13 (already answered). trace_inbo
 - cycle 62t: 0 replies (inbox only newsletters/recruiters); wallet 32.66124 flat, last +0.008 = known bot; no new payers. Routes live per prior deploy.
 - cycle 62u: shipped /defi/hacks-recent (0.003, version 00714e37, DefiLlama /hacks; /raises & bridges are paywalled/blocked upstream). Seeded (Bazaar processing), x402scan 58/61, IndexNow 200.
 - cycle 62v: Bazaar merchant lookup (limit=100) now lists 43 of our routes incl. /defi/hacks-recent and /brief/market (earlier absence was async processing). Outreach queue empty; all sent.
+- cycle 62w: shipped /crypto/derivatives-exchanges (0.003, version ed249326); seeded, x402scan, IndexNow.
