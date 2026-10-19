@@ -782,6 +782,8 @@ app.get("/.well-known/x402", (c) => {
       mk("/crypto/fear-greed", "GET", "0.002", "2000", "Crypto Fear & Greed Index (alternative.me): current value 0-100, classification, history of last N days. No params. Use when an agent needs a market-sentiment gauge.", ["crypto", "sentiment", "fear-greed", "data"]),
       mk("/crypto/trending", "GET", "0.003", "3000", "Trending coins on CoinGecko right now: name, symbol, market-cap rank, 24h price change. No params. Use when an agent needs what the market is searching for.", ["crypto", "trending", "coingecko", "data"]),
       mk("/defi/fees-top", "GET", "0.003", "3000", "Top DeFi protocols by 24h fees (DefiLlama): name, 24h/7d fees USD, 1d change, plus market total. No params. Use when an agent needs which protocols earn the most.", ["defi", "fees", "revenue", "data"]),
+      mk("/crypto/global", "GET", "0.002", "2000", "Global crypto market stats (CoinGecko): total market cap, 24h volume, BTC/ETH dominance, active coins. No params. Use when an agent needs a one-call market overview.", ["crypto", "market", "global", "data"]),
+      mk("/defi/yields-top", "GET", "0.003", "3000", "Top DeFi yield pools by TVL (DefiLlama): chain, project, symbol, APY, TVL USD; optional ?chain= & ?stable=true. Use when an agent needs where to earn yield.", ["defi", "yield", "apy", "data"]),
       mk("/ai/classify", "GET", "0.003", "3000", "Zero-shot text classification (Llama 3.2 3B): ?text=<up to 1000 chars>&labels=<comma-separated labels, 2-10> returns the single best label. Use when an agent needs to route or tag text (intent, sentiment, topic, spam) in one cheap call.", ["ai", "llm", "classification", "text", "data"]),
       mk("/ai/summarize", "GET", "0.003", "3000", "Text summarization (Llama 3.2 3B): ?text=<up to 1500 chars> returns a 1-3 sentence summary. Use when an agent needs to compress a passage cheaply before reasoning over it.", ["ai", "llm", "summarization", "text", "data"]),
       mk("/ai/translate", "GET", "0.003", "3000", "Text translation (Llama 3.2 3B): ?text=<up to 800 chars>&to=<target language, e.g. es, fr, de, ja> returns the translated text only. Use when an agent needs quick pay-per-call translation with no API key.", ["ai", "llm", "translation", "language", "data"]),
@@ -1008,6 +1010,8 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/crypto/fear-greed — $0.002 — Crypto Fear & Greed Index (alternative.me).
 - GET ${BASE}/crypto/trending — $0.003 — Trending coins on CoinGecko right now.
 - GET ${BASE}/defi/fees-top — $0.003 — Top DeFi protocols by 24h fees (DefiLlama).
+- GET ${BASE}/crypto/global — $0.002 — Global crypto market cap, volume, BTC/ETH dominance.
+- GET ${BASE}/defi/yields-top — $0.003 — Top DeFi yield pools by TVL with APY.
 - GET ${BASE}/ai/classify?text=<…>&labels=a,b,c — $0.003 — Zero-shot classification into one of your labels.
 - GET ${BASE}/ai/summarize?text=<…> — $0.003 — 1-3 sentence summary of a passage.
 - GET ${BASE}/ai/translate?text=<…>&to=es — $0.003 — Translate text into a target language.
@@ -1234,6 +1238,8 @@ app.get("/openapi.json", (c) => {
       "/crypto/fear-greed": paid("Crypto Fear & Greed Index (alternative.me).", "0.002", [{ name: "days", desc: "optional", example: "7" }]),
       "/crypto/trending": paid("Trending coins on CoinGecko right now.", "0.003", []),
       "/defi/fees-top": paid("Top DeFi protocols by 24h fees (DefiLlama).", "0.003", [{ name: "limit", desc: "optional", example: "7" }]),
+      "/crypto/global": paid("Global crypto market stats (CoinGecko).", "0.002", []),
+      "/defi/yields-top": paid("Top DeFi yield pools by TVL (DefiLlama).", "0.003", [{ name: "chain", desc: "optional chain filter", example: "Ethereum" }, { name: "stable", desc: "true = stablecoin pools only", example: "true" }, { name: "limit", desc: "optional", example: "20" }]),
       "/ai/classify": paid("Classify text into one of your labels.", "0.003", [{ name: "text", desc: "text, max 1000 chars", required: true, example: "My card was charged twice" }, { name: "labels", desc: "comma-separated labels, 2-10", required: true, example: "billing,bug,feature_request,other" }]),
       "/ai/summarize": paid("Summarize a passage into 1-3 sentences.", "0.003", [{ name: "text", desc: "passage, max 1500 chars", required: true, example: "x402 is an open HTTP 402 payment protocol letting clients pay per request in USDC on Base without accounts or API keys." }]),
       "/ai/translate": paid("Translate text into a target language.", "0.003", [{ name: "text", desc: "source text, max 800 chars", required: true, example: "Hello, how are you?" }, { name: "to", desc: "target language name or code", required: true, example: "es" }]),
@@ -2157,6 +2163,28 @@ function makeRoutes(payTo: string) {
         input: { limit: "20" },
         inputSchema: { type: "object", properties: { limit: { type: "string" } } },
         output: { example: { total24h_usd: 66595988, protocols: [{ name: "Tether", fees24h_usd: 1000000 }] } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /crypto/global": {
+      accepts: { scheme: "exact" as const, price: "$0.002", network: NETWORK, payTo },
+      description: "Global crypto market stats (CoinGecko): total market cap, 24h volume, BTC/ETH dominance, active coins. No params. Use when an agent needs a one-call market overview.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: {},
+        inputSchema: { type: "object", properties: {  } },
+        output: { example: { total_market_cap_usd: 3900000000000, btc_dominance_pct: 57.1 } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /defi/yields-top": {
+      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      description: "Top DeFi yield pools by TVL (DefiLlama): chain, project, symbol, APY, TVL USD; optional ?chain= & ?stable=true. Use when an agent needs where to earn yield.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { limit: "20" },
+        inputSchema: { type: "object", properties: { chain: { type: "string" }, stable: { type: "string" }, limit: { type: "string" } } },
+        output: { example: { pools: [{ chain: "Ethereum", project: "lido", symbol: "STETH", apy: 2.22, tvl_usd: 23204781540 }] } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /ai/classify": {
@@ -5135,6 +5163,40 @@ app.get("/defi/fees-top", async (c) => {
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /defi/fees-top", rail, makeUsageCounter(c.env)));
     return c.json({ total24h_usd: Math.round(d.total24h ?? 0), count: protocols.length, protocols, source: "defillama", ts: new Date().toISOString() });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/crypto/global", async (c) => {
+  try {
+    const r = await fetch("https://api.coingecko.com/api/v3/global");
+    if (!r.ok) return c.json({ error: "upstream " + r.status }, { status: 502 });
+    const d = ((await r.json()) as { data: { active_cryptocurrencies: number; markets: number; market_cap_change_percentage_24h_usd: number; total_market_cap: Record<string, number>; total_volume: Record<string, number>; market_cap_percentage: Record<string, number> } }).data;
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/crypto/global", ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /crypto/global", rail, makeUsageCounter(c.env)));
+    return c.json({ total_market_cap_usd: Math.round(d.total_market_cap.usd), total_volume_24h_usd: Math.round(d.total_volume.usd), market_cap_change_24h_pct: d.market_cap_change_percentage_24h_usd, btc_dominance_pct: d.market_cap_percentage.btc, eth_dominance_pct: d.market_cap_percentage.eth, active_cryptocurrencies: d.active_cryptocurrencies, markets: d.markets, source: "coingecko", ts: new Date().toISOString() });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/defi/yields-top", async (c) => {
+  const limit = Math.min(Math.max(parseInt(c.req.query("limit") ?? "20", 10) || 20, 1), 100);
+  const chain = (c.req.query("chain") ?? "").toLowerCase();
+  const stable = c.req.query("stable") === "true";
+  try {
+    const r = await fetch("https://yields.llama.fi/pools");
+    if (!r.ok) return c.json({ error: "upstream " + r.status }, { status: 502 });
+    const d = (await r.json()) as { data: Array<{ chain: string; project: string; symbol: string; tvlUsd: number; apy: number | null; stablecoin: boolean }> };
+    const pools = d.data.filter((x) => (!chain || x.chain.toLowerCase() === chain) && (!stable || x.stablecoin) && x.apy != null && x.tvlUsd > 1e6)
+      .sort((a, b) => b.tvlUsd - a.tvlUsd).slice(0, limit)
+      .map((x) => ({ chain: x.chain, project: x.project, symbol: x.symbol, apy: Math.round((x.apy ?? 0) * 100) / 100, tvl_usd: Math.round(x.tvlUsd), stablecoin: x.stablecoin }));
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/defi/yields-top", ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /defi/yields-top", rail, makeUsageCounter(c.env)));
+    return c.json({ count: pools.length, pools, source: "defillama", ts: new Date().toISOString() });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }

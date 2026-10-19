@@ -65,6 +65,22 @@ const ROUTES = {
     inputSchema: { type: 'object', properties: { limit:{type:'string',description:'Max rows (default 20, max 100)'} } },
     example: { name: 'Tether', fees24h_usd: 1000000 },
   },
+  '/crypto/global': {
+    description: 'Global crypto market cap, volume, BTC/ETH dominance in one call. No params. Agent-native, pay-per-call via x402.',
+    serviceName: 'Global Crypto Market Stats (CoinGecko)',
+    tags: ['crypto','market','global','data'],
+    input: {},
+    inputSchema: { type: 'object', properties: {  } },
+    example: { total_market_cap_usd: 3900000000000, btc_dominance_pct: 57.1 },
+  },
+  '/defi/yields-top': {
+    description: 'Top DeFi yield pools by TVL with APY; optional chain/stable filters. No required params. Agent-native, pay-per-call via x402.',
+    serviceName: 'Top DeFi Yields (DefiLlama)',
+    tags: ['defi','yield','apy','data'],
+    input: { limit: '20' },
+    inputSchema: { type: 'object', properties: { limit:{type:'string',description:'Max rows (default 20, max 100)'}, chain:{type:'string',description:'Chain filter'}, stable:{type:'string',description:'true = stablecoin pools only'} } },
+    example: { chain: 'Ethereum', project: 'lido', symbol: 'STETH', apy: 2.22 },
+  },
   '/defi/protocols-top': {
     description: 'Top DeFi protocols ranked by TVL with 1d/7d change. No required params. Agent-native, pay-per-call via x402.',
     serviceName: 'Top DeFi Protocols by TVL (DefiLlama)',

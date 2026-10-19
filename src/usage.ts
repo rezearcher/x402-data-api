@@ -71,6 +71,8 @@ export type Route =
   | "GET /crypto/fear-greed"
   | "GET /crypto/trending"
   | "GET /defi/fees-top"
+  | "GET /crypto/global"
+  | "GET /defi/yields-top"
   | "GET /defi/protocols-top"
   | "GET /defi/dex-volume"
   | "GET /defi/chains-tvl"
