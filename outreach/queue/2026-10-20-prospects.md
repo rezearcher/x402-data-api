@@ -8,3 +8,5 @@ Targets (x402 client/agent builders who need paid-tool examples):
 3. Nethermind x402 team - nethermind.io/x402 - DeFi security audience; protocol-risk fits their positioning.
 4. Cloudflare Agents SDK withX402Client docs - example of paid MCP tool.
 Record each in outreach/sent/ after sending.
+
+Overlap check done: BofAI/x402 appears only in gh/cand.txt (candidate list), never pitched; Fireblocks/Nethermind/CF not in sent or gh issues. All four are fresh.
