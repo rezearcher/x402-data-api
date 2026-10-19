@@ -768,6 +768,8 @@ app.get("/.well-known/x402", (c) => {
       mk("/chain/blob-base-fee", "GET", "0.003", "3000", "Base EIP-4844 blob base fee from the GasPriceOracle (wei/gwei). Use when an agent estimates L1 data-availability cost for Base batches.", ["rpc", "base", "onchain", "gas", "blob", "fees", "data"]),
       mk("/chain/eth-usd", "GET", "0.003", "3000", "Base ETH/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain ETH price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]),
       mk("/chain/btc-usd", "GET", "0.003", "3000", "Base BTC/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain BTC price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]),
+      mk("/chain/sol-usd", "GET", "0.003", "3000", "Base SOL/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain SOL price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]),
+      mk("/chain/link-usd", "GET", "0.003", "3000", "Base LINK/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain LINK price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]),
       mk("/chain/total-supply", "GET", "0.003", "3000", "ERC-20 total supply on Base (raw + formatted, with symbol and decimals).", ["rpc", "base", "onchain", "token", "erc20", "data"]),
       mk("/chain/storage-at", "GET", "0.002", "2000", "Raw storage slot read (eth_getStorageAt) for any Base contract; slot defaults to 0x0. Use when an agent needs proxy implementation/admin slots or raw contract state.", ["rpc", "base", "onchain", "contract", "data"]),
       mk("/chain/proxy-info", "GET", "0.003", "3000", "EIP-1967 proxy resolver for a Base contract: returns implementation, admin and beacon addresses (read from the standard storage slots) plus is_proxy flag. Use when an agent must know what code actually runs behind a proxy before trusting or calling it.", ["rpc", "base", "onchain", "contract", "proxy", "security", "data"]),
@@ -990,6 +992,8 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/chain/blob-base-fee — $0.003 — Base EIP-4844 blob base fee (wei/gwei) from the GasPriceOracle.
 - GET ${BASE}/chain/eth-usd — $0.003 — Chainlink ETH/USD spot price on Base with staleness.
 - GET ${BASE}/chain/btc-usd — $0.003 — Chainlink BTC/USD spot price on Base with staleness.
+- GET ${BASE}/chain/sol-usd — $0.003 — Chainlink SOL/USD spot price on Base with staleness.
+- GET ${BASE}/chain/link-usd — $0.003 — Chainlink LINK/USD spot price on Base with staleness.
 - GET ${BASE}/chain/total-supply?token=<0x…> — $0.003 — ERC-20 total supply (raw + formatted).
 - GET ${BASE}/chain/allowance?token=<0x…>&owner=<0x…>&spender=<0x…> — $0.002 — ERC-20 allowance, flags unlimited approvals.
 - GET ${BASE}/chain/code?address=<0x…> — $0.01 — contract-code check for a Base address (EIP-7702 delegated-EOA aware).
@@ -1192,6 +1196,8 @@ app.get("/openapi.json", (c) => {
       "/chain/blob-base-fee": paid("Base EIP-4844 blob base fee (wei/gwei) from the GasPriceOracle.", "0.003", []),
       "/chain/eth-usd": paid("Chainlink ETH/USD spot price on Base with staleness.", "0.003", []),
       "/chain/btc-usd": paid("Chainlink BTC/USD spot price on Base with staleness.", "0.003", []),
+      "/chain/sol-usd": paid("Chainlink SOL/USD spot price on Base with staleness.", "0.003", []),
+      "/chain/link-usd": paid("Chainlink LINK/USD spot price on Base with staleness.", "0.003", []),
       "/chain/total-supply": paid("ERC-20 total supply on Base, raw + formatted.", "0.003", [{ name: "token", desc: "0x-prefixed ERC-20 address", required: true, example: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" }]),
       "/chain/storage-at": paid("Raw eth_getStorageAt slot read on Base.", "0.002", [{ name: "address", desc: "0x-prefixed contract address", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }, { name: "slot", desc: "storage slot hex (default 0x0)", required: false, example: "0x0" }]),
       "/chain/proxy-info": paid("EIP-1967 proxy resolver on Base: implementation/admin/beacon addresses + is_proxy.", "0.003", [{ name: "address", desc: "0x-prefixed contract address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
@@ -1952,6 +1958,26 @@ function makeRoutes(payTo: string) {
         input: {},
         inputSchema: { type: "object", properties: {} },
         output: { example: { price_usd: 100000.5, chain: "base" } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },    "GET /chain/sol-usd": {
+      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      description: "Base SOL/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain SOL price.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: {},
+        inputSchema: { type: "object", properties: {} },
+        output: { example: { price_usd: 104.2, chain: "base" } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },    "GET /chain/link-usd": {
+      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      description: "Base LINK/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain LINK price.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: {},
+        inputSchema: { type: "object", properties: {} },
+        output: { example: { price_usd: 12.5, chain: "base" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },    "GET /chain/fee-history": {
       accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
@@ -4639,6 +4665,52 @@ app.get("/chain/btc-usd", async (c) => {
       updated_at: new Date(updatedAt * 1000).toISOString(),
       age_seconds: Math.max(0, Math.floor(Date.now() / 1000) - updatedAt),
       source: "chainlink BTC/USD aggregator on Base",
+      chain: "base",
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/sol-usd", async (c) => {
+  try {
+    const r = (await baseRpc("eth_call", [{ to: "0x975043adBb80fc32276CbF9Bbcfd4A601a12462D", data: "0xfeaf968c" }, "latest"])) as string;
+    const h = r.slice(2);
+    const roundId = BigInt("0x" + h.slice(0, 64)).toString();
+    const answer = BigInt("0x" + h.slice(64, 128));
+    const updatedAt = Number(BigInt("0x" + h.slice(192, 256)));
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/chain/sol-usd", ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/sol-usd", rail, makeUsageCounter(c.env)));
+    return c.json({
+      price_usd: Number(answer) / 1e8,
+      round_id: roundId,
+      updated_at: new Date(updatedAt * 1000).toISOString(),
+      age_seconds: Math.max(0, Math.floor(Date.now() / 1000) - updatedAt),
+      source: "chainlink SOL/USD aggregator on Base",
+      chain: "base",
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/link-usd", async (c) => {
+  try {
+    const r = (await baseRpc("eth_call", [{ to: "0x17CAb8FE31E32f08326e5E27412894e49B0f9D65", data: "0xfeaf968c" }, "latest"])) as string;
+    const h = r.slice(2);
+    const roundId = BigInt("0x" + h.slice(0, 64)).toString();
+    const answer = BigInt("0x" + h.slice(64, 128));
+    const updatedAt = Number(BigInt("0x" + h.slice(192, 256)));
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/chain/link-usd", ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/link-usd", rail, makeUsageCounter(c.env)));
+    return c.json({
+      price_usd: Number(answer) / 1e8,
+      round_id: roundId,
+      updated_at: new Date(updatedAt * 1000).toISOString(),
+      age_seconds: Math.max(0, Math.floor(Date.now() / 1000) - updatedAt),
+      source: "chainlink LINK/USD aggregator on Base",
       chain: "base",
     });
   } catch (e) {
