@@ -7481,7 +7481,7 @@ const mcpHandler = createMcpHandler(() => {
     "chain_token_report",
     {
       description:
-        "Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade. Cost: $0.05 USDC per call via x402.",
+        "Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade. Cost: $0.01 USDC per call via x402.",
       inputSchema: {
         token: z.string().describe("0x-prefixed 20-byte ERC-20 contract address on Base mainnet"),
       },
