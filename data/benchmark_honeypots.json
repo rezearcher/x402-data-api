@@ -1,0 +1,170 @@
+{
+ "scanned": 137,
+ "gp_positive": 0,
+ "rows": [
+  {
+   "token": "0x3bcf0465fa6880b9c2c18e6399007918cca53fb1",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "simStatus": "tested"
+  },
+  {
+   "token": "0xb200000000000000000000de72ede7c5621dbfd1",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "simStatus": "tested"
+  },
+  {
+   "token": "0xb200000000000000000000b3d034b1d2df246998",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "simStatus": "tested"
+  },
+  {
+   "token": "0xba12bc7b210e61e5d3110b997a63ea216e0e18f7",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "simStatus": "tested"
+  },
+  {
+   "token": "0xaa6f8948d4a8a1671595f3a2de108f40797f4df8",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "simStatus": "tested"
+  },
+  {
+   "token": "0x1d0558c3d736bbf0d38d1d85cdad0391803207f0",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "simStatus": "tested"
+  },
+  {
+   "token": "0xb200000000000000000000cfaa22b3ff5ab60689",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "simStatus": "tested"
+  },
+  {
+   "token": "0x993a8ecc8b7a047f797dc1f0b3b114de5aef83b9",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "simStatus": "tested"
+  },
+  {
+   "token": "0x14e172312fde1d3c932c3904640f403ae21564bf",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "simStatus": "tested"
+  },
+  {
+   "token": "0x336ad57041badc2120e7f093c2a0c11a79999653",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "simStatus": "tested"
+  },
+  {
+   "token": "0xb2000000000000000000001b61a244efc306ad0e",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "simStatus": "tested"
+  },
+  {
+   "token": "0xf0ff1ed781bb11e5177f40a639514730d0dd9447",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "simStatus": "tested"
+  },
+  {
+   "token": "0x197580c2c0ade29b6fd038f92fdf886ebca71c39",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "simStatus": "tested"
+  },
+  {
+   "token": "0xb200000000000000000000bcc11da1c98a297fed",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "simStatus": "tested"
+  },
+  {
+   "token": "0x4c8f048a50ab9f42c29248229e7df7b34cd66ced",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "simStatus": "tested"
+  },
+  {
+   "token": "0x1bed990e8945d2470cc73d705ed8cdbd3678b906",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "simStatus": "tested"
+  },
+  {
+   "token": "0xb200000000000000000000edb2c45d3111072bde",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "simStatus": "tested"
+  },
+  {
+   "token": "0x67b160416fea81667d7ef045b632126bd4418ec4",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "simStatus": "tested"
+  },
+  {
+   "token": "0xc996288ef527eb8b6cd5dcf579f91501aed2e974",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "simStatus": "tested"
+  },
+  {
+   "token": "0x6510e00e83bae8b4634267bf35d402b5945dee81",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "verdict": "SAFE",
+   "score": 25,
+   "simStatus": "tested"
+  }
+ ],
+ "tp": 0,
+ "fn": 0,
+ "fp": 0,
+ "positives_AVOID": 0
+}
