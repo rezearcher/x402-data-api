@@ -95,3 +95,4 @@ EXCLUDED (off-mission): per-target vulnerability/conviction feeds.
 - [x] 17. README: added /gate/swap + token-report rows + canonical api.greyridgesignals.ai.
 - [x] 18. glama.json refreshed to live tools/list (gate_swap, chain_token_report) + canonical domain.
 - [x] 19. server.json description now leads with gate_swap/token-report.
+- [x] 20. llms-install.md MCP URL -> canonical api.greyridgesignals.ai (verified 200).
