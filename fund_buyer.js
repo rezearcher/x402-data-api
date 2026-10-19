@@ -27,7 +27,7 @@ function _recordFunded(u) {
 const BUYER_PATH = path.join(projectDir, 'buyer-wallet.json');
 
 async function main() {
-  const main = JSON.parse(fs.readFileSync(path.resolve(process.env.HOME, '.hermes/secrets/base-wallet.json'), 'utf-8'));
+  const main = require('/home/rez/projects/x402-data-api/lib/wallet.js').wallet('main');  // vault (degrade-open)
   const funder = privateKeyToAccount(main.privateKey);
 
   let buyer;

@@ -8,7 +8,7 @@ const fs = require('fs');
 
 // Load wallet
 const walletPath = path.resolve(process.env.HOME, '.hermes/secrets/base-wallet.json');
-const wallet = JSON.parse(fs.readFileSync(walletPath, 'utf-8'));
+const wallet = require('/home/rez/projects/x402-data-api/lib/wallet.js').wallet('main');  // vault (degrade-open)
 
 // Load x402/evm + viem from the project
 const projectDir = path.resolve(process.env.HOME, 'projects/x402-data-api');

@@ -14,8 +14,7 @@ const siwx = require(path.join(projectDir, 'node_modules/@x402/extensions/dist/c
 
 // payTo wallet = provider identity (0x5765...). Falls back to buyer wallet.
 let wallet;
-try { wallet = JSON.parse(fs.readFileSync(path.resolve(process.env.HOME, '.hermes/secrets/base-wallet.json'), 'utf8')); }
-catch { wallet = JSON.parse(fs.readFileSync(path.join(projectDir, 'buyer-wallet.json'), 'utf8')); }
+wallet = require('/home/rez/projects/x402-data-api/lib/wallet.js').wallet('main');  // vault (degrade-open to json)
 const account = privateKeyToAccount(wallet.privateKey);
 
 const ORIGIN = 'https://x402-data-api.sigrunner.workers.dev';
