@@ -426,3 +426,6 @@ The goal file (`makemoney.goal`) was amended with an "AIM & CLAIMS LAW" block to
 
 ## 2026-10-19 cycle (late) — preview cap verified
 - /chain/token-report/preview shares trialToken(): 3 real-token checks/IP/UTC day (src/index.ts:6650); demo tokens (incl. WETH) uncapped. Closes the "verify per-IP cap" item. No new buyer replies (Gmail, issue sensor); wallet flat 32.81524.
+
+## STRATEGIC ALTITUDE added (2026-10-19) — loop can now re-aim itself
+makemoney.goal gained a "STRATEGIC ALTITUDE" block: the $1,000 goal stays fixed/permanent, but the loop now OWNS its strategy. On a trigger (~10 cycles, ~5 flat-wallet cycles, or exhausted lever) it runs the pay-per-call-product-review method on its own product, computes archetype economics, and re-aims AUTONOMOUSLY by rewriting STRATEGY.md (loop-owned current aim). No human in the loop. Read STRATEGY.md every cycle.
