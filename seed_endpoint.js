@@ -152,6 +152,14 @@ const ROUTES = {
     inputSchema: { type: 'object', properties: { address: { type: 'string', description: '0x-prefixed 40-hex address' } } },
     example: { address: '0x4200000000000000000000000000000000000006', is_contract: true, code_size_bytes: 12345, chain: 'base' },
   },
+  '/chain/is-contract': {
+    description: 'Is a Base address a smart contract or an EOA? Returns is_contract and bytecode size. Use when an agent must decide whether a recipient is a contract before sending funds or approving it.',
+    serviceName: 'Base Is-Contract Check (RPC)',
+    tags: ['rpc', 'base', 'onchain', 'contract', 'data'],
+    input: { address: '0x4200000000000000000000000000000000000006' },
+    inputSchema: { type: 'object', properties: { address: { type: 'string', description: '0x-prefixed 20-byte Base address' } } },
+    example: { address: '0x4200000000000000000000000000000000000006', is_contract: true, code_bytes: 2000, chain: 'base' },
+  },
   '/chain/wallet': {
     description: 'One-call wallet summary on Base mainnet: ETH balance, tx count, contract flag. Agent-native onchain read, pay-per-call via x402.',
     serviceName: 'Base Wallet Summary (RPC bundle)',
