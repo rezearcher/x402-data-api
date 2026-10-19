@@ -87,6 +87,18 @@ const ROUTES = [
     },
   },
   {
+    route: '/chain/total-supply',
+    desc: 'ERC-20 total supply on Base (raw + formatted, with symbol and decimals). Use when an agent needs a token supply base for market-cap or dilution math.',
+    serviceName: 'Base ERC-20 Total Supply',
+    tags: ['erc20', 'token', 'supply', 'base', 'evm', 'data'],
+    disc: {
+      method: 'GET',
+      input: { token: '0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913' },
+      inputSchema: { type: 'object', properties: { token: { type: 'string', description: '0x-prefixed ERC-20 address on Base' } } },
+      output: { example: { symbol: 'USDC', decimals: 6, total_supply: 3500000000, chain: 'base' } },
+    },
+  },
+  {
     route: '/chain/nonce',
     desc: 'Transaction count (nonce) for a Base address, latest and pending.',
     serviceName: 'Base Address Nonce',

@@ -760,6 +760,7 @@ app.get("/.well-known/x402", (c) => {
       mk("/chain/code", "GET", "0.001", "1000", "Contract-code check for a Base mainnet address (is_contract + code size + EIP-7702 delegated-EOA detection).", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/erc20-meta", "GET", "0.005", "5000", "ERC-20 metadata on Base: name, symbol, decimals, totalSupply for any token contract.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
       mk("/chain/nonce", "GET", "0.001", "1000", "Transaction count (nonce) for a Base address, latest and pending.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/total-supply", "GET", "0.003", "3000", "ERC-20 total supply on Base (raw + formatted, with symbol and decimals).", ["rpc", "base", "onchain", "token", "erc20", "data"]),
       mk("/chain/allowance", "GET", "0.002", "2000", "ERC-20 allowance(owner, spender) on Base, raw + formatted, flags unlimited approvals.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
       mk("/ai/ask", "GET", "0.002", "2000", "Cheap LLM answer (Llama 3.2 3B on Workers AI): ?q=<prompt up to 500 chars>, returns concise text. Pay-per-call, no API key.", ["ai", "llm", "inference", "chat", "data"]),
       mk("/chain/block", "GET", "0.001", "1000", "Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.", ["rpc", "base", "onchain", "blockchain", "data"]),
@@ -971,6 +972,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/chain/block?number=<n|latest> — $0.001 — block summary (hash, timestamp, tx count, gas, base fee).
 - GET ${BASE}/ai/ask?q=<prompt> — $0.002 — cheap LLM answer (Llama 3.2 3B), no API key.
 - GET ${BASE}/chain/erc20-meta?token=<0x…> — $0.005 — ERC-20 name/symbol/decimals/totalSupply.
+- GET ${BASE}/chain/total-supply?token=<0x…> — $0.003 — ERC-20 total supply (raw + formatted).
 - GET ${BASE}/chain/allowance?token=<0x…>&owner=<0x…>&spender=<0x…> — $0.002 — ERC-20 allowance, flags unlimited approvals.
 - GET ${BASE}/chain/code?address=<0x…> — $0.001 — contract-code check for a Base address (EIP-7702 delegated-EOA aware).
 - GET ${BASE}/chain/wallet?address=<0x…> — $0.003 — wallet bundle: balance + balance_usd + tx count + contract check (EIP-7702 delegated-EOA aware), one call.
@@ -1163,6 +1165,7 @@ app.get("/openapi.json", (c) => {
       "/chain/receipt": paid("Transaction receipt by hash on Base mainnet: status, gas used, full logs, L1 fee breakdown, l1_fee_usd/total_fee_usd.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }]),
       "/chain/erc20-meta": paid("ERC-20 name/symbol/decimals/totalSupply on Base.", "0.005", [{ name: "token", desc: "0x-prefixed ERC-20 address on Base", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }]),
       "/chain/nonce": paid("Nonce (tx count) of a Base address, latest and pending.", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
+      "/chain/total-supply": paid("ERC-20 total supply on Base, raw + formatted.", "0.003", [{ name: "token", desc: "0x-prefixed ERC-20 address", required: true, example: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" }]),
       "/chain/allowance": paid("ERC-20 allowance(owner, spender) on Base.", "0.002", [{ name: "token", desc: "ERC-20 address", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }, { name: "owner", desc: "owner address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "spender", desc: "spender address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
       "/ai/ask": paid("Cheap LLM answer (Llama 3.2 3B) for a prompt up to 500 chars.", "0.002", [{ name: "q", desc: "prompt, max 500 chars", required: true, example: "Explain x402 in one sentence" }]),
       "/chain/block": paid("Base block summary by number or latest.", "0.001", [{ name: "number", desc: "decimal block number or 'latest'", required: false, example: "latest" }]),
@@ -1846,6 +1849,17 @@ function makeRoutes(payTo: string) {
         input: { address: "0x4200000000000000000000000000000000000006" },
         inputSchema: { type: "object", properties: { address: { type: "string", description: "0x-prefixed 20-byte Base address" } } },
         output: { example: { address: "0x4200000000000000000000000000000000000006", nonce_latest: 1, nonce_pending: 1, chain: "base" } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /chain/total-supply": {
+      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      description: "ERC-20 total supply on Base, raw + formatted with decimals and symbol. Use when an agent needs a token's circulating-supply base for market-cap or dilution math.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" },
+        inputSchema: { type: "object", properties: { token: { type: "string", description: "0x-prefixed ERC-20 contract address on Base" } } },
+        output: { example: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913", symbol: "USDC", decimals: 6, total_supply_raw: "3500000000000000", total_supply: 3500000000, chain: "base" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /chain/allowance": {
@@ -4369,6 +4383,33 @@ app.get("/chain/nonce", async (c) => {
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /chain/nonce", rail, makeUsageCounter(c.env)));
     return c.json({ address, nonce_latest: Number(BigInt(l)), nonce_pending: Number(BigInt(p)), chain: "base" });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/total-supply", async (c) => {
+  const token = c.req.query("token");
+  if (!token || !ADDR_RE.test(token)) {
+    return c.json({ error: "token query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
+  }
+  try {
+    const call = (data: string) => baseRpc("eth_call", [{ to: token, data }, "latest"]).catch(() => "0x") as Promise<string>;
+    const [sy, d, ts] = await Promise.all([call("0x95d89b41"), call("0x313ce567"), call("0x18160ddd")]);
+    if (ts === "0x") return c.json({ error: "not an ERC-20 contract on Base" }, { status: 422 });
+    const decimals = d && d !== "0x" ? Number(BigInt(d)) : null;
+    const raw = BigInt(ts);
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/chain/total-supply", token, ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/total-supply", rail, makeUsageCounter(c.env)));
+    return c.json({
+      token,
+      symbol: decodeAbiString(sy),
+      decimals,
+      total_supply_raw: raw.toString(),
+      total_supply: decimals === null ? null : Number(raw) / 10 ** decimals,
+      chain: "base",
+    });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
