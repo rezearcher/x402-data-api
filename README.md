@@ -152,3 +152,6 @@ Pre-trade token guard (`/gate/swap`, $0.008 USDC via x402 on Base). Free sample:
 - Node: `docs/examples/swap-gate/gate.mjs`
 - LangChain.js tool: `docs/examples/langchain/swapGuardTool.mjs`
 - ElizaOS action: `docs/examples/elizaos/swapGuardAction.mjs`
+
+## Python / LangChain / CrewAI
+`pip install "git+https://github.com/rezearcher/greyridge-x402-tools"` — `token_report()` and `swap_gate()` helpers (free preview by default, paid x402 mode optional) plus LangChain tools.
