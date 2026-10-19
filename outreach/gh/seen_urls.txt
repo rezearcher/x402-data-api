@@ -11,3 +11,5 @@ https://github.com/fabt31/base-copy-trading-bot/issues/1
 https://github.com/soundsparkaudiolab/tollbooth-examples/issues/1
 https://github.com/WarTech9/clawswap-sdk/issues/4
 https://github.com/deonmenezes/opentradex/issues/23
+https://github.com/Apegurus/web3agent/issues/38
+https://github.com/jiayaoqijia/cryptoskill/issues/67
