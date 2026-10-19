@@ -535,7 +535,7 @@ ${provisionMeta}
     <tbody>
       <tr><td>Base on-chain reads</td><td class="price">$0.001&ndash;$0.003</td><td><code>/chain/block-number</code>, <code>/chain/gas-price</code>, <code>/chain/balance</code>, <code>/chain/token-balance</code>, <code>/chain/tx</code>, <code>/chain/receipt</code>, <code>/chain/code</code>, <code>/chain/nonce</code>, <code>/chain/erc20-meta</code>, <code>/chain/wallet</code></td></tr>
       <tr><td>Crypto / DeFi / prediction markets</td><td class="price">$0.001&ndash;$0.005</td><td><code>/crypto/prices</code> ($0.004), <code>/crypto/funding</code> ($0.004), <code>/defi/yields</code>, <code>/pm/markets</code></td></tr>
-      <tr><td>Security</td><td class="price">$0.01&ndash;$0.05</td><td><code>/chain/token-report</code> ($0.02 verdict), <code>/enrich/domain</code>, <code>/enrich/tech-risk</code>, <code>/scan/mcp</code>, <code>/chain/token-security</code></td></tr>
+      <tr><td>Security</td><td class="price">$0.01&ndash;$0.05</td><td><code>/chain/token-report</code> ($0.01 verdict), <code>/enrich/domain</code>, <code>/enrich/tech-risk</code>, <code>/scan/mcp</code>, <code>/chain/token-security</code></td></tr>
     </tbody>
   </table>
 
@@ -749,7 +749,7 @@ app.get("/.well-known/x402", (c) => {
       mk("/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, pool id, APY breakdown + 1d/7d/30d APY trend, IL risk (incl. il7d), exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL. Filter by project, chain, or stablecoin-only; sort by TVL or risk-adjusted APY.", ["defi", "yield", "lending", "apy", "tvl", "data"]),
       mk("/crypto/prices", "GET", "0.004", "4000", "Spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/change_24h/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "defi", "data"]),
       mk("/scan/mcp", "GET", "0.05", "50000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score + verdict (clear/review/block).", ["security", "mcp", "audit", "prompt-injection"]),
-      mk("/enrich/tech-risk", "GET", "0.02", "20000", "Tech-stack fingerprint -> CVE (NVD) + EPSS + CISA-KEV attack-surface risk + verdict (clear/review/block) for a domain.", ["security", "cve", "risk"]),
+      mk("/enrich/tech-risk", "GET", "0.01", "10000", "Tech-stack fingerprint -> CVE (NVD) + EPSS + CISA-KEV attack-surface risk + verdict (clear/review/block) for a domain.", ["security", "cve", "risk"]),
       mk("/enrich/domain", "GET", "0.01", "10000", "Firmographic + tech-stack enrichment for a domain, incl. full subdomain enumeration via certificate-transparency logs (crt.sh, RDAP, DoH, HTTP fingerprint) + verdict (clear/review/block, based on domain age).", ["data", "domain", "enrichment"]),
       mk("/chain/block-number", "GET", "0.001", "1000", "Current Base mainnet block number.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/gas-price", "GET", "0.001", "1000", "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, and gas_price_usd — no price oracle on ETH-only competitors.", ["rpc", "base", "onchain", "blockchain", "data"]),
@@ -764,7 +764,7 @@ app.get("/.well-known/x402", (c) => {
       mk("/ai/ask", "GET", "0.002", "2000", "Cheap LLM answer (Llama 3.2 3B on Workers AI): ?q=<prompt up to 500 chars>, returns concise text. Pay-per-call, no API key.", ["ai", "llm", "inference", "chat", "data"]),
       mk("/chain/block", "GET", "0.001", "1000", "Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/wallet", "GET", "0.003", "3000", "Wallet bundle: ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]),
-      mk("/chain/token-report", "GET", "0.02", "20000", "Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "verdict", "trading", "data"]),
+      mk("/chain/token-report", "GET", "0.01", "10000", "Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "verdict", "trading", "data"]),
       mk("/gate/swap", "GET", "0.008", "8000", "Pre-trade GO / HOLD / BLOCK gate for autonomous Base trading agents: honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your trade size, one decision + reason in one call.", ["security", "base", "onchain", "trading", "gate", "agents", "token", "data"]),
       mk("/chain/token-security", "GET", "0.009", "9000", "Token security / honeypot detector for a Base mainnet ERC-20: EIP-1967/1822 proxy + upgradeability detection, bytecode dispatcher scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, and a live eth_call state-override simulation testing whether a synthetic wallet can actually transfer() the token. Real compute, not a thin data wrapper. Returns risk_score (0-100) + verdict (clear/review/block) + human-readable flags.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "data"]),
       mk("/dns/{domain}", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", ["dns", "domain", "data", "recon"]),
@@ -880,7 +880,7 @@ app.get("/.well-known/agent-card.json", (c) => {
         id: "token-report",
         name: "Token Trade-Safety Verdict (decision-grade)",
         description:
-          "Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade. Route: GET /chain/token-report. Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. Price: $0.02. Free preview at GET /chain/token-report/preview (Base USDC). MCP tool: chain_token_report.",
+          "Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade. Route: GET /chain/token-report. Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. Price: $0.01. Free preview at GET /chain/token-report/preview (Base USDC). MCP tool: chain_token_report.",
         tags: ["security", "base", "onchain", "token", "honeypot", "verdict", "trading", "data"],
         examples: ["GET /chain/token-report?token=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"],
       },
@@ -959,7 +959,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/defi/yields?limit=20&project=&chain=&stable=&sort=tvl|risk_adjusted — $0.001 — top DeFi lending/LP yields, APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast + TVL (DefiLlama).
 - GET ${BASE}/pm/markets?query=&limit=20 — $0.005 — live Polymarket prediction markets, ranked by volume24hr (bestBid/bestAsk/spread, clobTokenIds, category tags, liquidity).
 - GET ${BASE}/scan/mcp?url=<mcp-server> — $0.05 — security audit of an MCP server (tool-poisoning / prompt-injection, OWASP LLM01/LLM08); findings + risk score + verdict (clear/review/block).
-- GET ${BASE}/enrich/tech-risk?domain=<domain> — $0.02 — tech-stack -> CVE (NVD) + EPSS + CISA-KEV risk + verdict (clear/review/block).
+- GET ${BASE}/enrich/tech-risk?domain=<domain> — $0.01 — tech-stack -> CVE (NVD) + EPSS + CISA-KEV risk + verdict (clear/review/block).
 - GET ${BASE}/enrich/domain?domain=<domain> — $0.01 — firmographic + tech-stack enrichment, incl. subdomain enumeration (crt.sh) + verdict (clear/review/block, domain age).
 - GET ${BASE}/chain/block-number — $0.001 — current Base mainnet block number.
 - GET ${BASE}/chain/gas-price — $0.001 — current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd — no price oracle on ETH-only competitors.
@@ -975,7 +975,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/chain/code?address=<0x…> — $0.001 — contract-code check for a Base address (EIP-7702 delegated-EOA aware).
 - GET ${BASE}/chain/wallet?address=<0x…> — $0.003 — wallet bundle: balance + balance_usd + tx count + contract check (EIP-7702 delegated-EOA aware), one call.
 - GET ${BASE}/gate/swap?token=<0x…>&side=buy&notional_usd=500 — $0.008 — pre-trade GO/HOLD/BLOCK gate for Base trading agents: honeypot/sellability + liquidity-vs-trade-size price impact in one fast call.
-- GET ${BASE}/chain/token-report?token=<0x…> — $0.02 — DECISION-GRADE token trade-safety verdict: one call returns SAFE|CAUTION|AVOID + risk_score 0-100 + reasons, bundling honeypot/sellability simulation, owner-renounced/mint/pause/blacklist/fee-setter/upgradeable checks, symbol/name/decimals and Uniswap v3 WETH-pool liquidity USD. Replaces many RPC calls and prevents a bad trade.
+- GET ${BASE}/chain/token-report?token=<0x…> — $0.01 — DECISION-GRADE token trade-safety verdict: one call returns SAFE|CAUTION|AVOID + risk_score 0-100 + reasons, bundling honeypot/sellability simulation, owner-renounced/mint/pause/blacklist/fee-setter/upgradeable checks, symbol/name/decimals and Uniswap v3 WETH-pool liquidity USD. Replaces many RPC calls and prevents a bad trade.
 - GET ${BASE}/chain/token-security?token=<0x…> — $0.009 — token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, live eth_call state-override transfer simulation — risk_score + verdict (clear/review/block) + flags. Real compute, not a thin data wrapper.
 
 ## Free (previews — taste the data before you pay)
@@ -1130,7 +1130,7 @@ app.get("/openapi.json", (c) => {
       title: "Grey Ridge Signals — x402 Data & Security APIs",
       version: "0.1.0", // mirror root package.json (canonical)
       description: "Agent-native pay-per-call data on Base (USDC via x402). No API keys, no signup. Discovery: /.well-known/x402",
-      "x-guidance": "Pay-per-call Base (USDC, x402) APIs for trading agents: /gate/swap (GO/HOLD/BLOCK pre-trade gate, any Base ERC-20, $0.008), /chain/token-report (SAFE/CAUTION/AVOID, $0.02), /chain/token-security (honeypot sim, $0.009), plus DeFi yields, prices, funding, Polymarket and on-chain reads. Free samples: /gate/swap/preview?token=degen and /chain/token-report/preview?token=aero.",
+      "x-guidance": "Pay-per-call Base (USDC, x402) APIs for trading agents: /gate/swap (GO/HOLD/BLOCK pre-trade gate, any Base ERC-20, $0.008), /chain/token-report (SAFE/CAUTION/AVOID, $0.01), /chain/token-security (honeypot sim, $0.009), plus DeFi yields, prices, funding, Polymarket and on-chain reads. Free samples: /gate/swap/preview?token=degen and /chain/token-report/preview?token=aero.",
       contact: { name: "Grey Ridge Signals", email: "contact@greyridgesignals.ai", url: "https://api.greyridgesignals.ai" },
     },
     // Custom domain FIRST — an importer takes servers[0] as the base URL, and the
@@ -1153,7 +1153,7 @@ app.get("/openapi.json", (c) => {
       "/defi/yields": paid("Top DeFi lending/LP yields — APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast (DefiLlama).", "0.001", [{ name: "limit", desc: "max pools", example: "10" }, { name: "project", desc: "protocol filter", example: "aave-v3" }, { name: "chain", desc: "chain filter", example: "Base" }, { name: "stable", desc: "'true' = stablecoin only", example: "true" }, { name: "sort", desc: "'tvl' (default) or 'risk_adjusted' (apy/sigma)", example: "tvl" }]),
       "/pm/markets": paid("Live Polymarket prediction markets, ranked by volume24hr, with bestBid/bestAsk/spread and category tags.", "0.005", [{ name: "query", desc: "keyword filter", example: "election" }, { name: "limit", desc: "max markets", example: "10" }]),
       "/scan/mcp": paid("Security audit of an MCP server (tool-poisoning / prompt-injection). Findings + risk score + verdict (clear/review/block).", "0.05", [{ name: "url", desc: "target MCP server URL", required: true, example: "https://api.greyridgesignals.ai/mcp" }]),
-      "/enrich/tech-risk": paid("Tech-stack -> CVE + EPSS + CISA-KEV risk + verdict (clear/review/block).", "0.02", [{ name: "domain", desc: "target domain", required: true, example: "stripe.com" }]),
+      "/enrich/tech-risk": paid("Tech-stack -> CVE + EPSS + CISA-KEV risk + verdict (clear/review/block).", "0.01", [{ name: "domain", desc: "target domain", required: true, example: "stripe.com" }]),
       "/enrich/domain": paid("Firmographic + tech-stack enrichment, incl. subdomain enumeration + verdict (clear/review/block, domain age).", "0.01", [{ name: "domain", desc: "target domain", required: true, example: "stripe.com" }]),
       "/chain/block-number": paid("Current Base mainnet block number.", "0.001", []),
       "/chain/gas-price": paid("Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd.", "0.001", []),
@@ -1168,7 +1168,7 @@ app.get("/openapi.json", (c) => {
       "/chain/block": paid("Base block summary by number or latest.", "0.001", [{ name: "number", desc: "decimal block number or 'latest'", required: false, example: "latest" }]),
       "/chain/code": paid("Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware).", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
       "/chain/wallet": paid("Wallet bundle: ETH balance + balance_usd + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call.", "0.003", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
-      "/chain/token-report": paid("Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade.", "0.02", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
+      "/chain/token-report": paid("Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade.", "0.01", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
       "/gate/swap": paid("Pre-trade GO/HOLD/BLOCK gate for Base trading agents: token safety + liquidity-vs-size price-impact check in one call.", "0.008", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }, { name: "side", desc: "buy or sell", required: false, example: "buy" }, { name: "notional_usd", desc: "intended trade size in USD", required: false, example: "500" }]),
       "/gate/swap/preview": { get: { summary: "FREE live sample of /gate/swap (no payment).", description: "Free go/hold/block sample for a demo token (?token=degen) OR any real Base 0x address, 3 free real-token checks per IP per day. Paid /gate/swap accepts ANY Base ERC-20 ($0.01).", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-report/preview": { get: { summary: "FREE live sample of /chain/token-report (no payment).", description: "Free full trade-safety report for a demo token. Try ?token=aero. Paid /chain/token-report accepts ANY Base ERC-20 ($0.05).", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
@@ -1393,7 +1393,7 @@ function makeRoutes(payTo: string) {
     "GET /enrich/tech-risk": {
       accepts: {
         scheme: "exact" as const,
-        price: "$0.02",
+        price: "$0.01",
         network: NETWORK,
         payTo,
       },
@@ -1917,7 +1917,7 @@ function makeRoutes(payTo: string) {
     "GET /chain/token-report": {
       accepts: {
         scheme: "exact" as const,
-        price: "$0.02",
+        price: "$0.01",
         network: NETWORK,
         payTo,
       },
@@ -5338,7 +5338,7 @@ const CHECK_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8"><
 <h1>Base Token Check</h1><p>Paste a Base ERC-20 address. We simulate a sell, scan owner controls and measure liquidity.</p>
 <input id="t" placeholder="0x… token address" autocomplete="off"><button onclick="go()">Check token</button>
 <div id="card"></div>
-<p><small>Free: 3 checks/day. Unlimited for agents via x402 pay-per-call: <a href="/chain/token-report">/chain/token-report</a> ($0.02) · <a href="/chain/token-security">/chain/token-security</a> ($0.009) · <a href="/llms.txt">llms.txt</a>. Heuristic signal, not financial advice.</small></p>
+<p><small>Free: 3 checks/day. Unlimited for agents via x402 pay-per-call: <a href="/chain/token-report">/chain/token-report</a> ($0.01) · <a href="/chain/token-security">/chain/token-security</a> ($0.009) · <a href="/llms.txt">llms.txt</a>. Heuristic signal, not financial advice.</small></p>
 <script>
 const q=new URLSearchParams(location.search).get('token');if(q){document.getElementById('t').value=q;go()}
 async function go(){const t=document.getElementById('t').value.trim(),c=document.getElementById('card');c.style.display='block';
@@ -5369,7 +5369,7 @@ app.get("/chain/token-report/preview", async (c) => {
     return c.json({
       ...result,
       ...(t.left !== null ? { trial: { real_token_checks_left_today: t.left } } : {}),
-      note: "Free live sample (Base USDC) — same depth as the paid route. Full: GET /chain/token-report?token=<0x…> ($0.02) for ANY Base ERC-20.",
+      note: "Free live sample (Base USDC) — same depth as the paid route. Full: GET /chain/token-report?token=<0x…> ($0.01) for ANY Base ERC-20.",
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
