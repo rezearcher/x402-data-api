@@ -105,6 +105,22 @@ const ROUTES = {
     inputSchema: { type: 'object', properties: {  } },
     example: { fear_greed: { value: 59, classification: 'Greed' } },
   },
+  '/crypto/exchanges-top': {
+    description: 'Top crypto exchanges by trust score, country, 24h volume. No params. Agent-native, pay-per-call via x402.',
+    serviceName: 'Top Crypto Exchanges (CoinGecko)',
+    tags: ['crypto','exchanges','trust','data'],
+    input: {},
+    inputSchema: { type: 'object', properties: {  } },
+    example: { name: 'Kraken', trust_score: 10 },
+  },
+  '/crypto/categories': {
+    description: 'Crypto sector market cap and 24h change by category. No params. Agent-native, pay-per-call via x402.',
+    serviceName: 'Crypto Sector Performance (CoinGecko)',
+    tags: ['crypto','sectors','categories','data'],
+    input: {},
+    inputSchema: { type: 'object', properties: {  } },
+    example: { name: 'Smart Contract Platform', market_cap_change_24h_pct: 1.2 },
+  },
   '/defi/protocols-top': {
     description: 'Top DeFi protocols ranked by TVL with 1d/7d change. No required params. Agent-native, pay-per-call via x402.',
     serviceName: 'Top DeFi Protocols by TVL (DefiLlama)',
