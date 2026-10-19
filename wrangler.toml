@@ -32,7 +32,7 @@ NETWORK = "eip155:8453"
 # ONLY for the one-time Bazaar catalog seed via /internal/cdp-settle-raw (which
 # bypasses the @x402 resource server). Setting this to "cdp" would break settle on
 # DECLARED routes (ajv new Function blocked in Workers) — keep it "xpay".
-FACILITATOR_MODE = "xpay"
+FACILITATOR_MODE = "cdp"
 
 # === REQUIRED Worker secrets (set via `wrangler secret put <NAME>`) ===
 # CDP_API_KEY_ID          - CDP API Key ID for JWT auth with CDP x402 facilitator
