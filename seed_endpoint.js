@@ -113,6 +113,14 @@ const ROUTES = {
     inputSchema: { type: 'object', properties: {  } },
     example: { name: 'Kraken', trust_score: 10 },
   },
+  '/defi/hacks-recent': {
+    description: 'Most recent DeFi and crypto hacks/exploits with amount lost, chain and technique (DefiLlama). Optional limit. Agent-native, pay-per-call via x402.',
+    serviceName: 'DeFi Hacks & Exploits Feed (DefiLlama)',
+    tags: ['defi','security','hacks','exploits','data'],
+    input: { limit: '10' },
+    inputSchema: { type: 'object', properties: { limit: { type: 'string', description: 'optional, max 50' } } },
+    example: { name: 'Example Protocol', amount_usd: 1000000, chain: ['Ethereum'] },
+  },
   '/crypto/categories': {
     description: 'Crypto sector market cap and 24h change by category. No params. Agent-native, pay-per-call via x402.',
     serviceName: 'Crypto Sector Performance (CoinGecko)',
