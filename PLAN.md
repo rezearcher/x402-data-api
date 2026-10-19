@@ -215,3 +215,4 @@ branch@dexter.cash (audition support) queued: outreach/queue/dexter-audition-sup
 - 2026-10-19 CDT (cycle 28): inbox 0 outreach replies; APM#1 + PR#416 no maintainer response; paid=1 log empty so far (no settled calls since 6830daca deploy); cap spent till 10-20 05:00Z; queue agent402.md/dexter-audition-support.md pending.
 - 2026-10-19 CDT (cycle 28b): opened Agent402 issue #1673 (token-safety tools) via GH_TOKEN_CLASSIC; not email so cap n/a. Only dexter-audition-support.md remains queued.
 - 2026-10-19 CDT (cycle 28c): GH issues (cap n/a): Dexter-DAO/dexter-mcp#126 (audition settle), sF1nX/x402station-mcp#4 (preflight). Queue now empty. Check replies next cycle.
+- 2026-10-19 CDT (cycle 28d): GH issue pitches to buyer-side swap wallets UltraStarz/tollkit-wallet, lopushok9/Agent-Layer (pre-swap gate PR offer). Competitor sellers abound (true402, wyattpalm2 x402-seller, warden402...): token-safety is crowded.
