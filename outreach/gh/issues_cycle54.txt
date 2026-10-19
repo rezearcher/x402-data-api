@@ -1,0 +1,3 @@
+https://github.com/nirholas/agenti/issues/179
+https://github.com/alsk1992/CloddsBot/issues/154
+https://github.com/Bitterbot-AI/bitterbot-desktop/issues/279
