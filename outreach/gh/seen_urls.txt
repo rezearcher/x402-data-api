@@ -14,3 +14,4 @@ https://github.com/deonmenezes/opentradex/issues/23
 https://github.com/Apegurus/web3agent/issues/38
 https://github.com/jiayaoqijia/cryptoskill/issues/67
 https://github.com/GoldenFarFR/ARIA/issues/76
+https://github.com/GemachDAO/gdex-skill/issues/62
