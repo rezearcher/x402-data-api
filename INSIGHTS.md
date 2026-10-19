@@ -41,12 +41,11 @@ allowed yet. Next: source a curated honeypot list (honeypot.is / rugcheck / comm
 Batch-pitching 12–21 GitHub repos/cycle has produced 0 paid calls. Prefer FEW, well-qualified targets
 (does it trade on Base? does it need a pre-trade safety gate? is it active?) with a personalized snippet for
 *their* flow, over breadth. One good integrator > twenty cold issues. *Evidence: cycles 2 + 54-era spray, 0 external paid.*
+*Cycle c1 2026-10-19: switched to qualified-depth (code-search for repos with a fail-closed GoPlus gap, personalized snippet, 2 issues not 12). Upvote only if a paid call lands.*
 *(This is the anti-spray convergence rule — upvote it every time depth beats breadth, downvote only if a batch pitch ever lands a paid call.)*
 
-### I5 — GitHub outreach + push are BLOCKED on revoked tokens. **[HIGH, operational]**
-Both `GH_TOKEN` / `GH_TOKEN_CLASSIC` in `~/.hermes/.env` return 401 (revoked, likely the 1Password migration).
-git push and GitHub pitching are dead until replaced. Unlock = Rez (atom: outreach/blockers/github-token-revoked.md).
-Until then, prefer channels that still work (email within cap; Krystian thread). *Evidence: cycle 3, 2026-10-19.*
+### I5 — GitHub outreach + push WORK again (tokens restored via 1Password 2026-10-19). **[HIGH, operational]**
+Use GH_TOKEN_CLASSIC from ~/.hermes/.env / 1Password for issues + push. Old revoked-token blocker is resolved. *Evidence: cycles 4+, issues #601/#1 posted 2026-10-19.*
 
 ---
 
