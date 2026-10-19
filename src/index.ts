@@ -785,6 +785,7 @@ app.get("/.well-known/x402", (c) => {
       mk("/crypto/global", "GET", "0.002", "2000", "Global crypto market stats (CoinGecko): total market cap, 24h volume, BTC/ETH dominance, active coins. No params. Use when an agent needs a one-call market overview.", ["crypto", "market", "global", "data"]),
       mk("/crypto/markets-top", "GET", "0.003", "3000", "Top coins by market cap (CoinGecko): price, market cap, 24h volume, 24h change; ?limit= up to 100. No required params. Use when an agent needs a ranked market snapshot.", ["crypto", "markets", "price", "data"]),
       mk("/crypto/movers", "GET", "0.003", "3000", "Top 24h gainers and losers among the top-100 coins (CoinGecko). No params. Use when an agent needs what is moving the market right now.", ["crypto", "movers", "gainers", "losers", "data"]),
+      mk("/brief/market", "GET", "0.01", "10000", "One-call crypto market brief: Fear & Greed, global market cap/dominance, top movers, trending coins and top DeFi fee earners. No params. Use when an agent needs a full market snapshot in a single payment.", ["crypto", "market", "brief", "snapshot", "data"]),
       mk("/defi/yields-top", "GET", "0.003", "3000", "Top DeFi yield pools by TVL (DefiLlama): chain, project, symbol, APY, TVL USD; optional ?chain= & ?stable=true. Use when an agent needs where to earn yield.", ["defi", "yield", "apy", "data"]),
       mk("/ai/classify", "GET", "0.003", "3000", "Zero-shot text classification (Llama 3.2 3B): ?text=<up to 1000 chars>&labels=<comma-separated labels, 2-10> returns the single best label. Use when an agent needs to route or tag text (intent, sentiment, topic, spam) in one cheap call.", ["ai", "llm", "classification", "text", "data"]),
       mk("/ai/summarize", "GET", "0.003", "3000", "Text summarization (Llama 3.2 3B): ?text=<up to 1500 chars> returns a 1-3 sentence summary. Use when an agent needs to compress a passage cheaply before reasoning over it.", ["ai", "llm", "summarization", "text", "data"]),
@@ -1015,6 +1016,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/crypto/global — $0.002 — Global crypto market cap, volume, BTC/ETH dominance.
 - GET ${BASE}/crypto/markets-top — $0.003 — Top coins by market cap with price and 24h change.
 - GET ${BASE}/crypto/movers — $0.003 — Top 24h gainers and losers.
+- GET ${BASE}/brief/market — $0.01 — One-call market brief: sentiment, global stats, movers, trending, DeFi fees.
 - GET ${BASE}/defi/yields-top — $0.003 — Top DeFi yield pools by TVL with APY.
 - GET ${BASE}/ai/classify?text=<…>&labels=a,b,c — $0.003 — Zero-shot classification into one of your labels.
 - GET ${BASE}/ai/summarize?text=<…> — $0.003 — 1-3 sentence summary of a passage.
@@ -1245,6 +1247,7 @@ app.get("/openapi.json", (c) => {
       "/crypto/global": paid("Global crypto market stats (CoinGecko).", "0.002", []),
       "/crypto/markets-top": paid("Top coins by market cap (CoinGecko).", "0.003", [{ name: "limit", desc: "optional, max 100", example: "20" }]),
       "/crypto/movers": paid("Top 24h gainers and losers (CoinGecko).", "0.003", []),
+      "/brief/market": paid("One-call crypto market brief (sentiment, global, movers, trending, DeFi fees).", "0.01", []),
       "/defi/yields-top": paid("Top DeFi yield pools by TVL (DefiLlama).", "0.003", [{ name: "chain", desc: "optional chain filter", example: "Ethereum" }, { name: "stable", desc: "true = stablecoin pools only", example: "true" }, { name: "limit", desc: "optional", example: "20" }]),
       "/ai/classify": paid("Classify text into one of your labels.", "0.003", [{ name: "text", desc: "text, max 1000 chars", required: true, example: "My card was charged twice" }, { name: "labels", desc: "comma-separated labels, 2-10", required: true, example: "billing,bug,feature_request,other" }]),
       "/ai/summarize": paid("Summarize a passage into 1-3 sentences.", "0.003", [{ name: "text", desc: "passage, max 1500 chars", required: true, example: "x402 is an open HTTP 402 payment protocol letting clients pay per request in USDC on Base without accounts or API keys." }]),
@@ -2213,6 +2216,17 @@ function makeRoutes(payTo: string) {
         input: {},
         inputSchema: { type: "object", properties: {  } },
         output: { example: { gainers: [{ symbol: "XYZ", change_24h_pct: 12.3 }], losers: [{ symbol: "ABC", change_24h_pct: -9.1 }] } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /brief/market": {
+      accepts: { scheme: "exact" as const, price: "$0.01", network: NETWORK, payTo },
+      description: "One-call crypto market brief: Fear & Greed, global market cap/dominance, top movers, trending coins and top DeFi fee earners. No params. Use when an agent needs a full market snapshot in a single payment.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: {},
+        inputSchema: { type: "object", properties: {  } },
+        output: { example: { fear_greed: { value: 59, classification: "Greed" }, global: { btc_dominance_pct: 57.1 }, movers: { gainers: [], losers: [] } } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /ai/classify": {
@@ -5258,6 +5272,32 @@ app.get("/crypto/movers", async (c) => {
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /crypto/movers", rail, makeUsageCounter(c.env)));
     return c.json({ gainers: sorted.slice(0, 10), losers: sorted.slice(-10).reverse(), source: "coingecko", ts: new Date().toISOString() });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/brief/market", async (c) => {
+  try {
+    const [fg, gl, mk, tr, fe] = await Promise.all([
+      fetch("https://api.alternative.me/fng/?limit=1").then((r) => r.json() as Promise<{ data: Array<{ value: string; value_classification: string }> }>),
+      fetch("https://api.coingecko.com/api/v3/global").then((r) => r.json() as Promise<{ data: { total_market_cap: Record<string, number>; total_volume: Record<string, number>; market_cap_percentage: Record<string, number>; market_cap_change_percentage_24h_usd: number } }>),
+      cgMarkets(100),
+      fetch("https://api.coingecko.com/api/v3/search/trending").then((r) => r.json() as Promise<{ coins: Array<{ item: { name: string; symbol: string } }> }>),
+      fetch("https://api.llama.fi/overview/fees?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true").then((r) => r.json() as Promise<{ total24h?: number; protocols?: Array<{ name: string; total24h?: number }> }>),
+    ]);
+    const sorted = mk.filter((x) => x.change_24h_pct != null).sort((a, b) => (b.change_24h_pct ?? 0) - (a.change_24h_pct ?? 0));
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/brief/market", ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /brief/market", rail, makeUsageCounter(c.env)));
+    return c.json({
+      fear_greed: { value: parseInt(fg.data[0].value, 10), classification: fg.data[0].value_classification },
+      global: { total_market_cap_usd: Math.round(gl.data.total_market_cap.usd), total_volume_24h_usd: Math.round(gl.data.total_volume.usd), market_cap_change_24h_pct: gl.data.market_cap_change_percentage_24h_usd, btc_dominance_pct: gl.data.market_cap_percentage.btc, eth_dominance_pct: gl.data.market_cap_percentage.eth },
+      movers: { gainers: sorted.slice(0, 5), losers: sorted.slice(-5).reverse() },
+      trending: tr.coins.slice(0, 7).map((x) => ({ name: x.item.name, symbol: x.item.symbol })),
+      defi_fees_top: { total24h_usd: Math.round(fe.total24h ?? 0), protocols: (fe.protocols ?? []).filter((x) => (x.total24h ?? 0) > 0).sort((a, b) => (b.total24h ?? 0) - (a.total24h ?? 0)).slice(0, 5).map((x) => ({ name: x.name, fees24h_usd: Math.round(x.total24h ?? 0) })) },
+      source: "alternative.me,coingecko,defillama", ts: new Date().toISOString(),
+    });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }

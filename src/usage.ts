@@ -74,6 +74,7 @@ export type Route =
   | "GET /crypto/global"
   | "GET /crypto/markets-top"
   | "GET /crypto/movers"
+  | "GET /brief/market"
   | "GET /defi/yields-top"
   | "GET /defi/protocols-top"
   | "GET /defi/dex-volume"

@@ -97,6 +97,14 @@ const ROUTES = {
     inputSchema: { type: 'object', properties: {  } },
     example: { gainers: [{ symbol: 'XYZ', change_24h_pct: 12.3 }] },
   },
+  '/brief/market': {
+    description: 'One-call crypto market brief: sentiment, global stats, movers, trending, top DeFi fees. No params. Agent-native, pay-per-call via x402.',
+    serviceName: 'Crypto Market Brief (one call)',
+    tags: ['crypto','market','brief','snapshot','data'],
+    input: {},
+    inputSchema: { type: 'object', properties: {  } },
+    example: { fear_greed: { value: 59, classification: 'Greed' } },
+  },
   '/defi/protocols-top': {
     description: 'Top DeFi protocols ranked by TVL with 1d/7d change. No required params. Agent-native, pay-per-call via x402.',
     serviceName: 'Top DeFi Protocols by TVL (DefiLlama)',
