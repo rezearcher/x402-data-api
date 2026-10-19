@@ -195,3 +195,4 @@ branch@dexter.cash (audition support) queued: outreach/queue/dexter-audition-sup
 - 2026-10-19 CDT (cycle 21d): added erc20-meta/nonce/allowance/block/ai-ask to refresh_bazaar_catalog ROUTES and seeded all 5 into CDP Bazaar (self canary, excluded from revenue; also proves paid handlers settle). Check Bazaar lists them next cycle.
 - 2026-10-19 CDT (cycle 21e): Bazaar (25,695 items; paginate limit=1000&offset) lists 15 of ours; the 5 just-seeded routes not indexed yet (lag) - recheck next cycle.
 - 2026-10-19 CDT (cycle 21f): trace_inbound: external total 0.032 USDC (0x54e163 0.001, 0xec2abd 0.031); the rest of wallet delta is our own canaries. Only bot micro-payments so far.
+- 2026-10-19 CDT (cycle 22): inbox 0 replies; 4 PRs + APM#1 no response; Bazaar now lists all 5 new routes (20 sigrunner resources). Wallet 32.38524, external still bots only. Cap spent till 10-20 CDT.
