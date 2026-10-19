@@ -4,3 +4,8 @@ open /tmp/body.md: no such file or directory
 https://github.com/JonasFuchss/x402-trust-mcp/issues/1
 https://github.com/nirholas/x402-preflight/issues/1
 https://github.com/withgrokbot/x402-spotcheck/issues/1
+https://github.com/JasonColapietro/agentix/issues/19
+https://github.com/iamonuwa/kanon/issues/45
+https://github.com/Sahveli01/hazine-ajani/issues/1
+https://github.com/presidio-v/presidio-hardened-x402/issues/150
+https://github.com/manavaga/x402-scanner/issues/3
