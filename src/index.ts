@@ -1053,6 +1053,7 @@ app.get("/openapi.json", (c) => {
       title: "Grey Ridge Signals — x402 Data & Security APIs",
       version: "0.1.0", // mirror root package.json (canonical)
       description: "Agent-native pay-per-call data on Base (USDC via x402). No API keys, no signup. Discovery: /.well-known/x402",
+      contact: { name: "Grey Ridge Signals", email: "contact@greyridgesignals.ai", url: "https://api.greyridgesignals.ai" },
     },
     // Custom domain FIRST — an importer takes servers[0] as the base URL, and the
     // marketplace listing should point at the zone we control DNS for. The workers.dev
