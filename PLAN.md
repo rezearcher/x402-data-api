@@ -286,3 +286,4 @@ branch@dexter.cash (audition support) queued: outreach/queue/dexter-audition-sup
 - cycle 53c: 5 more pitch issues (outreach/gh/issues_cycle53b.txt)
 - cycle 53d: scripts/issue_reply_watch.sh writes ~/.hermes/data/x402_issue_replies/latest.json (run each cycle; cron-able).
 - 2026-10-19 CDT (cycle 54): inbox 0 replies; issue watcher only pilot#13 (already answered); trace: only bots 0x54e163/0xec2abd; wallet 32.62724 flat. Cap spent until 10-20 05:00Z.
+- cycle 54b: installed 30-min user crontab for scripts/issue_reply_watch.sh (reply latency now <=30m).
