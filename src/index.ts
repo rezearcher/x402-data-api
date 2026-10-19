@@ -666,7 +666,9 @@ app.get("/internal/traffic-stats", async (c) => {
   if (!configured || !presented || !timingSafeEqual(presented, configured)) return c.json({ error: "unauthorized" }, 401);
   if (!c.env.TRAFFIC_LOG) return c.json({ error: "traffic logging not configured" }, 503);
   const hours = Math.min(Math.max(parseInt(c.req.query("window_hours") ?? "24") || 24, 1), 720);
-  const stats = await c.env.TRAFFIC_LOG.get(c.env.TRAFFIC_LOG.idFromName("default")).getStats(hours * 3600);
+  const stub = c.env.TRAFFIC_LOG.get(c.env.TRAFFIC_LOG.idFromName("default"));
+  if (c.req.query("paid") === "1") return c.json({ ok: true, window_hours: hours, paid: await stub.getPaid(hours * 3600) });
+  const stats = await stub.getStats(hours * 3600);
   return c.json({ ok: true, window_hours: hours, stats, timestamp: Math.floor(Date.now() / 1000) });
 });
 
@@ -2109,9 +2111,15 @@ export class TrafficLog extends DurableObject<Env> {
     await this.ctx.storage.sql.exec("INSERT INTO hits (ts, path, method, ua) VALUES (?, ?, ?, ?)", Math.floor(Date.now() / 1000), path, method, ua);
   }
 
+  async getPaid(windowSeconds: number = 86400): Promise<Array<{ path: string; payer: string; count: number }>> {
+    await this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS hits (ts INTEGER, path TEXT, method TEXT, ua TEXT)");
+    const cursor = await this.ctx.storage.sql.exec("SELECT path, ua, COUNT(*) FROM hits WHERE method = 'PAID' AND ts > ? GROUP BY path, ua ORDER BY 3 DESC", Math.floor(Date.now() / 1000) - windowSeconds);
+    return Array.from(cursor.raw()).map((row) => ({ path: String(row[0]), payer: String(row[1]), count: Number(row[2]) }));
+  }
+
   async getStats(windowSeconds: number = 86400): Promise<Array<{ path: string; count: number }>> {
     await this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS hits (ts INTEGER, path TEXT, method TEXT, ua TEXT)");
-    const cursor = await this.ctx.storage.sql.exec("SELECT path, COUNT(*) FROM hits WHERE ts > ? GROUP BY path ORDER BY 2 DESC", Math.floor(Date.now() / 1000) - windowSeconds);
+    const cursor = await this.ctx.storage.sql.exec("SELECT path, COUNT(*) FROM hits WHERE method != 'PAID' AND ts > ? GROUP BY path ORDER BY 2 DESC", Math.floor(Date.now() / 1000) - windowSeconds);
     return Array.from(cursor.raw()).map((row) => ({ path: String(row[0]), count: Number(row[1]) }));
   }
 }
@@ -2554,6 +2562,22 @@ app.use(async (c, next) => {
   // a paid call in the reconcile ledger.
   c.set("rail", "x402-paid");
   const mwRes = await cachedMiddleware(c, next);
+  // Route-level payer attribution: a payment header + non-402 response means a
+  // settled paid call. Log "PAID" with the payer address so traffic-stats can
+  // show which routes real buyers settle (fail open, never on the response path).
+  try {
+    const payHdr = c.req.header("payment-signature") ?? c.req.header("x-payment");
+    const st = (mwRes ?? c.res)?.status;
+    if (payHdr && st && st < 400 && c.env.TRAFFIC_LOG) {
+      let payer = "unknown";
+      try {
+        const j = JSON.parse(atob(payHdr));
+        payer = String(j?.payload?.authorization?.from ?? "unknown").toLowerCase();
+      } catch { /* undecodable header */ }
+      const stub = c.env.TRAFFIC_LOG.get(c.env.TRAFFIC_LOG.idFromName("default"));
+      fireAndForget(c, stub.logHit(c.req.path, "PAID", payer).catch(() => {}));
+    }
+  } catch { /* telemetry must never break a paid response */ }
   // x402 v2 carries the challenge only in the payment-required header and sends
   // an empty `{}` body. v1-style crawlers/directories (x402-list prober etc.)
   // look for accepts[] in the body, so mirror the decoded header there.
