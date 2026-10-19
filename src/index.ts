@@ -4978,8 +4978,8 @@ app.get("/ai/ask", async (c) => {
 });
 
 app.get("/ai/classify", async (c) => {
-  const text = (c.req.query("text") ?? "").trim();
-  const labels = (c.req.query("labels") ?? "").split(",").map((f) => f.trim()).filter(Boolean);
+  const text = (c.req.query("text") || "My card was charged twice this month").trim();
+  const labels = (c.req.query("labels") || "billing,bug,feature_request,other").split(",").map((f) => f.trim()).filter(Boolean);
   if (!text || text.length > 1000) return c.json({ error: "text required, max 1000 chars" }, { status: 400 });
   if (labels.length < 2 || labels.length > 10 || labels.some((l) => !/^[A-Za-z0-9_ -]{1,40}$/.test(l))) return c.json({ error: "labels required: 2-10 comma-separated labels" }, { status: 400 });
   if (!c.env.AI) return c.json({ error: "ai unavailable" }, { status: 501 });
@@ -5005,7 +5005,7 @@ app.get("/ai/classify", async (c) => {
 });
 
 app.get("/ai/summarize", async (c) => {
-  const text = (c.req.query("text") ?? "").trim();
+  const text = (c.req.query("text") || "x402 is an open HTTP 402 payment protocol letting clients pay per request in USDC on Base without accounts or API keys. Servers answer 402 with price details, clients sign a payment, and the server returns the resource once settled.").trim();
   if (!text || text.length > 1500) return c.json({ error: "text required, max 1500 chars" }, { status: 400 });
   if (!c.env.AI) return c.json({ error: "ai unavailable" }, { status: 501 });
   const day = new Date().toISOString().slice(0, 10);
@@ -5028,8 +5028,8 @@ app.get("/ai/summarize", async (c) => {
 });
 
 app.get("/ai/translate", async (c) => {
-  const text = (c.req.query("text") ?? "").trim();
-  const to = (c.req.query("to") ?? "").trim();
+  const text = (c.req.query("text") || "Hello, how are you today?").trim();
+  const to = (c.req.query("to") || "es").trim();
   if (!text || text.length > 800) return c.json({ error: "text required, max 800 chars" }, { status: 400 });
   if (!/^[A-Za-z][A-Za-z -]{1,30}$/.test(to)) return c.json({ error: "to required: target language name or code" }, { status: 400 });
   if (!c.env.AI) return c.json({ error: "ai unavailable" }, { status: 501 });
@@ -5086,8 +5086,8 @@ app.get("/ai/extract/preview", async (c) => {
 });
 
 app.get("/ai/extract", async (c) => {
-  const text = (c.req.query("text") ?? "").trim();
-  const fields = (c.req.query("fields") ?? "").split(",").map((f) => f.trim()).filter(Boolean);
+  const text = (c.req.query("text") || "Acme Corp paid Bob Lee $40 on May 3 for hosting").trim();
+  const fields = (c.req.query("fields") || "payer,payee,amount,date").split(",").map((f) => f.trim()).filter(Boolean);
   if (!text || text.length > 1500) return c.json({ error: "text required, max 1500 chars" }, { status: 400 });
   if (!fields.length || fields.length > 12 || fields.some((f) => !/^[A-Za-z_][A-Za-z0-9_]{0,40}$/.test(f))) return c.json({ error: "fields required: 1-12 comma-separated identifiers" }, { status: 400 });
   if (!c.env.AI) return c.json({ error: "ai unavailable" }, { status: 501 });
