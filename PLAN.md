@@ -87,3 +87,4 @@ EXCLUDED (off-mission): per-target vulnerability/conviction feeds.
 - [x] 9. (2026-10-19g) Reply check (gmail-me matthewjaybowman@): 0 replies to 15 pitches. contact@ Gmail OAuth still not granted. Already listed in xpaysh/awesome-x402 (line 355). Recall-Kitchen/awesome-x402-mcp-services explicitly excludes token screens/trading tools -> don't pitch. Email budget spent for 10-19; next send window after reset: pitch /gate/swap to execution-agent builders.
 - [x] 10. (2026-10-19h) Re-ran register_x402scan.js: 20/21 registered incl. /gate/swap (1 skipped, unchanged), 0 failed.
 - [x] 11. (2026-10-19i) docs/EXAMPLES.md: /gate/swap + gate_swap MCP example.
+- [x] 12. EXAMPLES.md decision values verified against src (lowercase go/hold/block).
