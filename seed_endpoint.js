@@ -41,6 +41,30 @@ if (!RAPIDAPI_PROXY_SECRET) {
 // Per-route discovery config + searchable metadata. Discovery example MUST be an
 // OBJECT (CDP validator: /output/example must be object) even for array endpoints.
 const ROUTES = {
+  '/crypto/fear-greed': {
+    description: 'Crypto market sentiment index 0-100 with history. No required params. Agent-native, pay-per-call via x402.',
+    serviceName: 'Crypto Fear & Greed Index',
+    tags: ['crypto','sentiment','fear-greed','data'],
+    input: { days: '7' },
+    inputSchema: { type: 'object', properties: { days:{type:'string',description:'Days of history (default 7, max 90)'} } },
+    example: { value: 59, classification: 'Greed' },
+  },
+  '/crypto/trending': {
+    description: 'Coins trending on CoinGecko now with rank and 24h change. No params. Agent-native, pay-per-call via x402.',
+    serviceName: 'Trending Coins (CoinGecko)',
+    tags: ['crypto','trending','coingecko','data'],
+    input: {},
+    inputSchema: { type: 'object', properties: {  } },
+    example: { name: 'Bitcoin', symbol: 'BTC', market_cap_rank: 1 },
+  },
+  '/defi/fees-top': {
+    description: 'Top DeFi protocols by 24h fees with market total. No required params. Agent-native, pay-per-call via x402.',
+    serviceName: 'Top DeFi Protocols by Fees (DefiLlama)',
+    tags: ['defi','fees','revenue','data'],
+    input: { limit: '20' },
+    inputSchema: { type: 'object', properties: { limit:{type:'string',description:'Max rows (default 20, max 100)'} } },
+    example: { name: 'Tether', fees24h_usd: 1000000 },
+  },
   '/defi/protocols-top': {
     description: 'Top DeFi protocols ranked by TVL with 1d/7d change. No required params. Agent-native, pay-per-call via x402.',
     serviceName: 'Top DeFi Protocols by TVL (DefiLlama)',

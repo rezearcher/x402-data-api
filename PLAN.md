@@ -336,3 +336,4 @@ Inbox: 0 replies. Issue watch: only x402-pilot#13 (already answered). trace_inbo
 - cycle 62j: shipped+deployed /defi/chains-tvl and /crypto/stablecoins (0.003, no params, DefiLlama; version b35b3132). IndexNow + x402scan origin re-registered. Not Bazaar-seeded yet (self canary).
 - cycle 62k: Bazaar-seeded chains-tvl + stablecoins (self canary).
 - cycle 62l: shipped+deployed /defi/protocols-top and /defi/dex-volume (0.003, no params, DefiLlama); seeded, IndexNow, x402scan re-registered. Bazaar had not yet listed chains-tvl/stablecoins ~10min after seed.
+- cycle 62m: shipped /crypto/fear-greed (0.002), /crypto/trending (0.003), /defi/fees-top (0.003); no required params; seeded, IndexNow, x402scan. Now 7 new parameterless routes this session.
