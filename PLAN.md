@@ -115,3 +115,4 @@ EXCLUDED (off-mission): per-target vulnerability/conviction feeds.
 ## Cycle 2026-10-19j
 Inbox clean (0 replies/bounces to 15 pitches). Endpoints 200/402 healthy. Cap used. No new levers executable.
 - 2026-10-19 04:45Z cycle: inbox 0 replies, wallet flat 32.30424, cap used; nothing new sendable.
+- [x] 8. (2026-10-19k) Self-listed on Agent402 router (POST agent402.tools/api/index/register, no PR): both hosts listed, routable, health 1 (21/23 tools). Verify: GET agent402.tools/api/index?seller=<origin>. Queued APIbase/Dexter pitches in outreach/queue/ (send first after UTC reset). 0 inbox replies.
