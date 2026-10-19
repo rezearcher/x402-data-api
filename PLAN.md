@@ -166,3 +166,4 @@ branch@dexter.cash (audition support) queued: outreach/queue/dexter-audition-sup
 - 2026-10-19: idea logged (free daily real-token trial). Competitors price 0.003-0.01; no further price change made.
 - 2026-10-19: SHIPPED free real-token trial on /gate/swap/preview (3/IP/day via KV, any 0x Base address). Deployed cd9e4ae4+. Use in pitches: .../gate/swap/preview?token=<their token>.
 - 2026-10-19: same 3/IP/day real-token trial on /chain/token-report/preview (shared counter with gate/swap/preview). Deployed 5499dec2.
+- 2026-10-19 CDT: pushed fork branch rezearcher/awesome-x402-apis:add-grey-ridge-token-security (row in data/external.md); PAT can't open cross-repo PR -> outreach/blockers/payapi-market-pr.md. Inbox 0 replies; wallet flat 32.30524.
