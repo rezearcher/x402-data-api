@@ -1,2 +1,4 @@
 https://github.com/6ixtyy/switchbord/issues/1
 https://github.com/Haustorium12/gold-402/issues/374
+"html_url": "https://github.com/Agorean/claude-plugin/issues/1"
+"html_url": "https://github.com/Fizzl13/x402-doctor/issues/337"
