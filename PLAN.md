@@ -89,3 +89,4 @@ EXCLUDED (off-mission): per-target vulnerability/conviction feeds.
 - [x] 11. (2026-10-19i) docs/EXAMPLES.md: /gate/swap + gate_swap MCP example.
 - [x] 12. EXAMPLES.md decision values verified against src (lowercase go/hold/block).
 - [x] 13. (2026-10-19j) Deployed /gate/swap/preview (free live sample, in llms.txt); reply check again 0 (inbox only noise). Email budget still spent for 10-19.
+- [x] 14. (2026-10-19k) 402index.io POST /api/v1/register for token-report, gate/swap (pending review), funding, yields, pm/markets (live) with descriptions/prices on api.greyridgesignals.ai.
