@@ -52,6 +52,7 @@ export type Env = {
   // Optional KV namespace for API key storage. Needs `wrangler kv namespace create API_KEYS`
   // + binding id in wrangler.toml. If absent, API key auth returns 501.
   API_KEYS?: KVNamespace;
+  AI?: { run(model: string, input: unknown): Promise<unknown> };
   // Per-key atomic credit ledger (Durable Object). KV read-modify-write of the
   // balance is racy under concurrency (double-spend), so each key's balance
   // lives in its own CreditLedger DO (idFromName(apiKey)); KV stays the source
@@ -758,6 +759,7 @@ app.get("/.well-known/x402", (c) => {
       mk("/chain/erc20-meta", "GET", "0.005", "5000", "ERC-20 metadata on Base: name, symbol, decimals, totalSupply for any token contract.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
       mk("/chain/nonce", "GET", "0.001", "1000", "Transaction count (nonce) for a Base address, latest and pending.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/allowance", "GET", "0.002", "2000", "ERC-20 allowance(owner, spender) on Base, raw + formatted, flags unlimited approvals.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
+      mk("/ai/ask", "GET", "0.002", "2000", "Cheap LLM answer (Llama 3.2 3B on Workers AI): ?q=<prompt up to 500 chars>, returns concise text. Pay-per-call, no API key.", ["ai", "llm", "inference", "chat", "data"]),
       mk("/chain/block", "GET", "0.001", "1000", "Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/wallet", "GET", "0.003", "3000", "Wallet bundle: ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]),
       mk("/chain/token-report", "GET", "0.02", "20000", "Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "verdict", "trading", "data"]),
@@ -963,6 +965,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/chain/receipt?hash=<0x…> — $0.001 — transaction receipt by hash on Base: status, gas used, full logs, L1 fee breakdown (l1_fee_wei/l1_gas_price_wei/l1_gas_used/effective_gas_price_wei) + l1_fee_usd/total_fee_usd.
 - GET ${BASE}/chain/nonce?address=<0x…> — $0.001 — tx count (nonce), latest + pending.
 - GET ${BASE}/chain/block?number=<n|latest> — $0.001 — block summary (hash, timestamp, tx count, gas, base fee).
+- GET ${BASE}/ai/ask?q=<prompt> — $0.002 — cheap LLM answer (Llama 3.2 3B), no API key.
 - GET ${BASE}/chain/erc20-meta?token=<0x…> — $0.005 — ERC-20 name/symbol/decimals/totalSupply.
 - GET ${BASE}/chain/allowance?token=<0x…>&owner=<0x…>&spender=<0x…> — $0.002 — ERC-20 allowance, flags unlimited approvals.
 - GET ${BASE}/chain/code?address=<0x…> — $0.001 — contract-code check for a Base address (EIP-7702 delegated-EOA aware).
@@ -1156,6 +1159,7 @@ app.get("/openapi.json", (c) => {
       "/chain/erc20-meta": paid("ERC-20 name/symbol/decimals/totalSupply on Base.", "0.005", [{ name: "token", desc: "0x-prefixed ERC-20 address on Base", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }]),
       "/chain/nonce": paid("Nonce (tx count) of a Base address, latest and pending.", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
       "/chain/allowance": paid("ERC-20 allowance(owner, spender) on Base.", "0.002", [{ name: "token", desc: "ERC-20 address", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }, { name: "owner", desc: "owner address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "spender", desc: "spender address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
+      "/ai/ask": paid("Cheap LLM answer (Llama 3.2 3B) for a prompt up to 500 chars.", "0.002", [{ name: "q", desc: "prompt, max 500 chars", required: true, example: "Explain x402 in one sentence" }]),
       "/chain/block": paid("Base block summary by number or latest.", "0.001", [{ name: "number", desc: "decimal block number or 'latest'", required: false, example: "latest" }]),
       "/chain/code": paid("Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware).", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
       "/chain/wallet": paid("Wallet bundle: ETH balance + balance_usd + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call.", "0.003", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
@@ -1848,6 +1852,17 @@ function makeRoutes(payTo: string) {
         input: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913", owner: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10", spender: "0x4200000000000000000000000000000000000006" },
         inputSchema: { type: "object", properties: { token: { type: "string", description: "ERC-20 address" }, owner: { type: "string", description: "owner address" }, spender: { type: "string", description: "spender address" } } },
         output: { example: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913", owner: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10", spender: "0x4200000000000000000000000000000000000006", allowance_raw: "0", allowance: 0, decimals: 6, is_unlimited: false, chain: "base" } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /ai/ask": {
+      accepts: { scheme: "exact" as const, price: "$0.002", network: NETWORK, payTo },
+      description: "Cheap LLM answer (Llama 3.2 3B on Workers AI) for a prompt up to 500 chars. Pay per call, no API key.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { q: "Explain x402 in one sentence" },
+        inputSchema: { type: "object", properties: { q: { type: "string", description: "prompt, max 500 chars" } }, required: ["q"] },
+        output: { example: { answer: "x402 is an HTTP 402-based micropayment protocol.", model: "llama-3.2-3b-instruct" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /chain/block": {
@@ -4349,6 +4364,30 @@ app.get("/chain/allowance", async (c) => {
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /chain/allowance", rail, makeUsageCounter(c.env)));
     return c.json({ token, owner, spender, allowance_raw: raw.toString(), allowance: decimals === null ? null : Number(raw) / 10 ** decimals, decimals, is_unlimited: raw >= (1n << 255n), chain: "base" });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/ai/ask", async (c) => {
+  const q = (c.req.query("q") ?? "").trim();
+  if (!q || q.length > 500) return c.json({ error: "q required, max 500 chars" }, { status: 400 });
+  if (!c.env.AI) return c.json({ error: "ai unavailable" }, { status: 501 });
+  // Hard daily cap keeps Workers AI inside the free allowance (no capital spend).
+  const day = new Date().toISOString().slice(0, 10);
+  const key = "aicap:" + day;
+  const used = parseInt((await c.env.API_KEYS?.get(key)) ?? "0", 10);
+  if (used >= 400) return c.json({ error: "daily capacity reached, retry after 00:00 UTC" }, { status: 503 });
+  try {
+    const r = (await c.env.AI.run("@cf/meta/llama-3.2-3b-instruct", {
+      messages: [{ role: "system", content: "Answer concisely and accurately in under 120 words." }, { role: "user", content: q }],
+      max_tokens: 200,
+    })) as { response?: string };
+    await c.env.API_KEYS?.put(key, String(used + 1), { expirationTtl: 172800 });
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/ai/ask", ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /ai/ask", rail, makeUsageCounter(c.env)));
+    return c.json({ answer: r.response ?? "", model: "llama-3.2-3b-instruct" });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
