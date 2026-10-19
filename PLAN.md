@@ -247,3 +247,4 @@ branch@dexter.cash (audition support) queued: outreach/queue/dexter-audition-sup
 - 2026-10-19 CDT (cycle 38b): shipped+deployed /chain/is-contract $0.002 (92207575); 402 verified; needs catalog seed.
 - 2026-10-19 CDT (cycle 39): inbox 0 replies (WEX/HEB noise), GH no new replies; ext payers only bots 0xec2abd/0x54e163; wallet 32.61824 flat. Email cap spent; holding for reset.
 - 2026-10-19 CDT (cycle 39b): seeded /chain/is-contract into CDP Bazaar (tx 0x2a5515bd..., self-canary 0.002, not revenue); added route to seed_endpoint.js.
+- 2026-10-19 CDT (cycle 39c): verified /chain/is-contract listed in CDP merchant discovery (20 resources, updated 12:10Z).
