@@ -137,6 +137,14 @@ const ROUTES = {
     inputSchema: { type: 'object', properties: { protocol: { type: 'string', description: 'DefiLlama slug, default aave-v3' } } },
     example: { protocol: 'aave-v3', risk_score: 82, flags: [] },
   },
+  '/defi/safe-yields': {
+    description: 'Vetted stablecoin yields joined with protocol age, audits and hack history, safest first (DefiLlama). Optional chain, limit. Agent-native, pay-per-call via x402.',
+    serviceName: 'Vetted Stablecoin Yields',
+    tags: ['defi','yield','stablecoin','risk','data'],
+    input: { limit: '10' },
+    inputSchema: { type: 'object', properties: { chain: { type: 'string', description: 'optional chain filter' }, limit: { type: 'string', description: 'optional, max 30' } } },
+    example: { project: 'aave-v3', chain: 'Ethereum', symbol: 'USDC', apy: 4.2, safety_score: 85 },
+  },
   '/crypto/categories': {
     description: 'Crypto sector market cap and 24h change by category. No params. Agent-native, pay-per-call via x402.',
     serviceName: 'Crypto Sector Performance (CoinGecko)',
