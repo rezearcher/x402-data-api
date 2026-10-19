@@ -40,3 +40,4 @@ https://github.com/OneZero-Network/fortress-sniper/issues/1
 https://github.com/tuantqse90/chord-agentkit/issues/1
 https://github.com/Jolaolayemi/jolxo-scout/issues/2
 https://github.com/alsk1992/CloddsBot/issues/155
+https://github.com/BofAI/x402/issues/108
