@@ -790,6 +790,7 @@ app.get("/.well-known/x402", (c) => {
       mk("/crypto/categories", "GET", "0.003", "3000", "Crypto sector performance (CoinGecko categories): market cap, 24h change, volume per sector, top by market cap. No params. Use when an agent needs sector rotation signals.", ["crypto", "sectors", "categories", "data"]),
       mk("/defi/hacks-recent", "GET", "0.003", "3000", "Most recent DeFi/crypto hacks and exploits (DefiLlama): date, name, amount lost USD, chain, technique, bridge-hack flag; ?limit= up to 50. No required params. Use when an agent needs live security-incident risk signals.", ["defi", "security", "hacks", "exploits", "data"]),
       mk("/crypto/derivatives-exchanges", "GET", "0.003", "3000", "Top crypto derivatives exchanges (CoinGecko): open interest BTC, 24h volume BTC, perpetual and futures pair counts, year established. No params. Use when an agent needs perp/futures venue liquidity data.", ["crypto", "derivatives", "futures", "open-interest", "data"]),
+      mk("/defi/protocol-risk", "GET", "0.01", "10000", "Protocol risk score from DefiLlama: joins TVL, 1d/7d TVL change, age, audits, chain count and matching hack history into one 0-100 score with flags; ?protocol=<slug> (default aave-v3). Use when an agent needs a due-diligence check before routing funds to a DeFi protocol.", ["defi", "risk", "security", "due-diligence", "data"]),
       mk("/defi/yields-top", "GET", "0.003", "3000", "Top DeFi yield pools by TVL (DefiLlama): chain, project, symbol, APY, TVL USD; optional ?chain= & ?stable=true. Use when an agent needs where to earn yield.", ["defi", "yield", "apy", "data"]),
       mk("/ai/classify", "GET", "0.003", "3000", "Zero-shot text classification (Llama 3.2 3B): ?text=<up to 1000 chars>&labels=<comma-separated labels, 2-10> returns the single best label. Use when an agent needs to route or tag text (intent, sentiment, topic, spam) in one cheap call.", ["ai", "llm", "classification", "text", "data"]),
       mk("/ai/summarize", "GET", "0.003", "3000", "Text summarization (Llama 3.2 3B): ?text=<up to 1500 chars> returns a 1-3 sentence summary. Use when an agent needs to compress a passage cheaply before reasoning over it.", ["ai", "llm", "summarization", "text", "data"]),
@@ -1025,6 +1026,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/crypto/categories — $0.003 — Crypto sector market cap and 24h change.
 - GET ${BASE}/defi/hacks-recent — $0.003 — Most recent DeFi hacks and exploits with amounts.
 - GET ${BASE}/crypto/derivatives-exchanges — $0.003 — Top derivatives exchanges by open interest and volume.
+- GET ${BASE}/defi/protocol-risk?protocol=aave-v3 — $0.01 — Protocol risk score joining TVL, age, audits and hack history.
 - GET ${BASE}/defi/yields-top — $0.003 — Top DeFi yield pools by TVL with APY.
 - GET ${BASE}/ai/classify?text=<…>&labels=a,b,c — $0.003 — Zero-shot classification into one of your labels.
 - GET ${BASE}/ai/summarize?text=<…> — $0.003 — 1-3 sentence summary of a passage.
@@ -1260,6 +1262,7 @@ app.get("/openapi.json", (c) => {
       "/crypto/categories": paid("Crypto sector performance (CoinGecko categories).", "0.003", []),
       "/defi/hacks-recent": paid("Most recent DeFi hacks and exploits (DefiLlama).", "0.003", [{ name: "limit", desc: "optional, max 50", example: "10" }]),
       "/crypto/derivatives-exchanges": paid("Top crypto derivatives exchanges (CoinGecko).", "0.003", []),
+      "/defi/protocol-risk": paid("DeFi protocol risk score (TVL, age, audits, hacks).", "0.01", [{ name: "protocol", desc: "DefiLlama slug, default aave-v3", example: "aave-v3" }]),
       "/defi/yields-top": paid("Top DeFi yield pools by TVL (DefiLlama).", "0.003", [{ name: "chain", desc: "optional chain filter", example: "Ethereum" }, { name: "stable", desc: "true = stablecoin pools only", example: "true" }, { name: "limit", desc: "optional", example: "20" }]),
       "/ai/classify": paid("Classify text into one of your labels.", "0.003", [{ name: "text", desc: "text, max 1000 chars", required: true, example: "My card was charged twice" }, { name: "labels", desc: "comma-separated labels, 2-10", required: true, example: "billing,bug,feature_request,other" }]),
       "/ai/summarize": paid("Summarize a passage into 1-3 sentences.", "0.003", [{ name: "text", desc: "passage, max 1500 chars", required: true, example: "x402 is an open HTTP 402 payment protocol letting clients pay per request in USDC on Base without accounts or API keys." }]),
@@ -2283,6 +2286,17 @@ function makeRoutes(payTo: string) {
         input: {},
         inputSchema: { type: "object", properties: {  } },
         output: { example: { exchanges: [{ name: "Binance (Futures)", open_interest_btc: 403937 }] } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /defi/protocol-risk": {
+      accepts: { scheme: "exact" as const, price: "$0.01", network: NETWORK, payTo },
+      description: "Protocol risk score from DefiLlama: joins TVL, 1d/7d TVL change, age, audits, chain count and matching hack history into one 0-100 score with flags; ?protocol=<slug> (default aave-v3). Use when an agent needs a due-diligence check before routing funds to a DeFi protocol.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { protocol: "aave-v3" },
+        inputSchema: { type: "object", properties: { protocol: { type: "string", description: "DefiLlama slug, default aave-v3" } } },
+        output: { example: { protocol: "aave-v3", risk_score: 82, flags: [] } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /ai/classify": {
@@ -5417,6 +5431,38 @@ app.get("/crypto/derivatives-exchanges", async (c) => {
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /crypto/derivatives-exchanges", rail, makeUsageCounter(c.env)));
     return c.json({ count: exchanges.length, exchanges, source: "coingecko", ts: new Date().toISOString() });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/defi/protocol-risk", async (c) => {
+  try {
+    const slug = (c.req.query("protocol") ?? "aave-v3").trim().toLowerCase().slice(0, 80);
+    const [pr, hr] = await Promise.all([fetch("https://api.llama.fi/protocols"), fetch("https://api.llama.fi/hacks")]);
+    if (!pr.ok) return c.json({ error: "upstream " + pr.status }, { status: 502 });
+    const protos = (await pr.json()) as Array<{ name: string; slug: string; tvl: number | null; change_1d: number | null; change_7d: number | null; category: string | null; chains: string[]; audits: string | null; listedAt: number | null }>;
+    const p = protos.find((x) => x.slug === slug);
+    if (!p) return c.json({ error: "unknown protocol slug", hint: "use a DefiLlama slug e.g. aave-v3, uniswap-v3, lido" }, { status: 404 });
+    const hacks = hr.ok ? ((await hr.json()) as Array<{ date: number; name: string; amount: number | null }>) : [];
+    const base = p.name.toLowerCase().split(/[\s-]+/)[0];
+    const mine = hacks.filter((h) => base.length >= 4 && h.name.toLowerCase().includes(base)).sort((a, b) => b.date - a.date);
+    const tvl = p.tvl ?? 0;
+    const ageDays = p.listedAt ? Math.floor((Date.now() / 1000 - p.listedAt) / 86400) : null;
+    const flags: string[] = [];
+    let score = 50;
+    if (tvl >= 1e9) score += 20; else if (tvl >= 1e8) score += 12; else if (tvl >= 1e7) score += 5; else if (tvl < 1e6) { score -= 15; flags.push("tvl_under_1m"); }
+    if (ageDays != null) { if (ageDays >= 730) score += 12; else if (ageDays >= 365) score += 6; else if (ageDays < 90) { score -= 15; flags.push("younger_than_90d"); } }
+    const audits = Number(p.audits ?? 0);
+    if (audits >= 2) score += 10; else if (audits === 0) { score -= 10; flags.push("no_audits_listed"); }
+    if ((p.chains ?? []).length >= 3) score += 3;
+    if ((p.change_7d ?? 0) <= -30) { score -= 15; flags.push("tvl_down_30pct_7d"); }
+    if (mine.length) { score -= 20; flags.push("hack_history_match"); }
+    score = Math.max(0, Math.min(100, score));
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/defi/protocol-risk", ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /defi/protocol-risk", rail, makeUsageCounter(c.env)));
+    return c.json({ protocol: p.slug, name: p.name, category: p.category, risk_score: score, tvl_usd: Math.round(tvl), change_1d_pct: p.change_1d == null ? null : Math.round(p.change_1d * 100) / 100, change_7d_pct: p.change_7d == null ? null : Math.round(p.change_7d * 100) / 100, age_days: ageDays, audits, chain_count: (p.chains ?? []).length, hacks_matched: mine.slice(0, 3).map((h) => ({ date: new Date(h.date * 1000).toISOString().slice(0, 10), name: h.name, amount_usd: h.amount })), flags, note: "heuristic score (higher = lower risk); hack match is by name", source: "defillama", ts: new Date().toISOString() });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }

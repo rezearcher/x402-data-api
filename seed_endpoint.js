@@ -129,6 +129,14 @@ const ROUTES = {
     inputSchema: { type: 'object', properties: {  } },
     example: { name: 'Binance (Futures)', open_interest_btc: 403937 },
   },
+  '/defi/protocol-risk': {
+    description: 'DeFi protocol due-diligence risk score joining TVL, age, audits and hack history (DefiLlama). ?protocol=<slug>, default aave-v3. Agent-native, pay-per-call via x402.',
+    serviceName: 'DeFi Protocol Risk Score',
+    tags: ['defi','risk','security','due-diligence','data'],
+    input: { protocol: 'aave-v3' },
+    inputSchema: { type: 'object', properties: { protocol: { type: 'string', description: 'DefiLlama slug, default aave-v3' } } },
+    example: { protocol: 'aave-v3', risk_score: 82, flags: [] },
+  },
   '/crypto/categories': {
     description: 'Crypto sector market cap and 24h change by category. No params. Agent-native, pay-per-call via x402.',
     serviceName: 'Crypto Sector Performance (CoinGecko)',
