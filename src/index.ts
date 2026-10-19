@@ -4369,6 +4369,32 @@ app.get("/chain/allowance", async (c) => {
   }
 });
 
+app.get("/ai/ask/preview", async (c) => {
+  const q = (c.req.query("q") ?? "").trim();
+  if (!q || q.length > 200) return c.json({ error: "q required, max 200 chars (free preview)" }, { status: 400 });
+  if (!c.env.AI || !c.env.API_KEYS) return c.json({ error: "ai unavailable" }, { status: 501 });
+  const ip = c.req.header("cf-connecting-ip") ?? "unknown";
+  const day = new Date().toISOString().slice(0, 10);
+  const ipKey = `aiprev:${day}:${ip}`;
+  const capKey = "aicap:" + day;
+  const [ipUsed, used] = await Promise.all([c.env.API_KEYS.get(ipKey), c.env.API_KEYS.get(capKey)]);
+  if (parseInt(ipUsed ?? "0", 10) >= 3) return c.json({ error: "free preview limit: 3/day/IP. Paid: GET /ai/ask?q= ($0.002, x402)" }, { status: 429 });
+  if (parseInt(used ?? "0", 10) >= 300) return c.json({ error: "preview capacity reached today" }, { status: 503 });
+  try {
+    const r = (await c.env.AI.run("@cf/meta/llama-3.2-3b-instruct", {
+      messages: [{ role: "system", content: "Answer concisely in under 60 words." }, { role: "user", content: q }],
+      max_tokens: 100,
+    })) as { response?: string };
+    await Promise.all([
+      c.env.API_KEYS.put(ipKey, String(parseInt(ipUsed ?? "0", 10) + 1), { expirationTtl: 172800 }),
+      c.env.API_KEYS.put(capKey, String(parseInt(used ?? "0", 10) + 1), { expirationTtl: 172800 }),
+    ]);
+    return c.json({ answer: r.response ?? "", model: "llama-3.2-3b-instruct", preview: true, paid_endpoint: "/ai/ask" });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
 app.get("/ai/ask", async (c) => {
   const q = (c.req.query("q") ?? "").trim();
   if (!q || q.length > 500) return c.json({ error: "q required, max 500 chars" }, { status: 400 });
