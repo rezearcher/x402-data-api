@@ -324,3 +324,4 @@ Inbox: 0 replies. Issue watch: only x402-pilot#13 (already answered). trace_inbo
 - cycle 61e: /ai/extract/preview free (3/day/IP, shared with ask preview) deployed.
 
 - cycle 61f: shipped /ai/classify (0.003).
+- cycle 62: no replies; wallet flat 32.62724; /ai/* routes 402 live; IndexNow pinged for ai routes. Cap resets 10-20 05:00Z -> send queue/apibase.md + dexter.md.
