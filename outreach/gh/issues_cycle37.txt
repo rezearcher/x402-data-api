@@ -1,0 +1,6 @@
+open /tmp/body.md: no such file or directory
+open /tmp/body.md: no such file or directory
+open /tmp/body.md: no such file or directory
+https://github.com/JonasFuchss/x402-trust-mcp/issues/1
+https://github.com/nirholas/x402-preflight/issues/1
+https://github.com/withgrokbot/x402-spotcheck/issues/1
