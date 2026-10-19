@@ -151,9 +151,14 @@ const POLYMARKET_EVENTS_URL = "https://gamma-api.polymarket.com/events";
 // limit never fails a paid call (reliability = repeat callers).
 const BASE_RPCS = [
   "https://mainnet.base.org",
-  "https://base.llamarpc.com",
   "https://base-rpc.publicnode.com",
   "https://base.drpc.org",
+  "https://base.llamarpc.com",
+  "https://base.meowrpc.com",
+  "https://1rpc.io/base",
+  "https://base.blockpi.network/v1/rpc/public",
+  "https://base-mainnet.public.blastapi.io",
+  "https://base.gateway.tenderly.co",
 ];
 
 // ---------------------------------------------------------------------------
