@@ -99,6 +99,18 @@ const ROUTES = [
     },
   },
   {
+    route: '/chain/proxy-info',
+    desc: 'EIP-1967 proxy resolver for a Base contract: implementation, admin, beacon addresses + is_proxy. Use when an agent must know what code actually runs behind a proxy before trusting or calling it.',
+    serviceName: 'Base Proxy Implementation Resolver',
+    tags: ['proxy', 'contract', 'base', 'evm', 'security', 'data'],
+    disc: {
+      method: 'GET',
+      input: { address: '0x4200000000000000000000000000000000000006' },
+      inputSchema: { type: 'object', properties: { address: { type: 'string' } } },
+      output: { example: { is_proxy: false, implementation: null, chain: 'base' } },
+    },
+  },
+  {
     route: '/chain/storage-at',
     desc: 'Raw storage slot (eth_getStorageAt) of a Base contract. Use when an agent needs proxy implementation/admin slots or raw contract state.',
     serviceName: 'Base Contract Storage Slot',

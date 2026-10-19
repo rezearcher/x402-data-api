@@ -49,6 +49,7 @@ export type Route =
   | "GET /chain/nonce"
   | "GET /chain/total-supply"
   | "GET /chain/storage-at"
+  | "GET /chain/proxy-info"
   | "GET /chain/allowance"
   | "GET /chain/block"
   | "GET /ai/ask"
@@ -144,6 +145,7 @@ const ALL_ROUTES: Route[] = [
   "GET /chain/nonce",
   "GET /chain/total-supply",
   "GET /chain/storage-at",
+  "GET /chain/proxy-info",
   "GET /chain/allowance",
   "GET /chain/block",
   "GET /ai/ask",
