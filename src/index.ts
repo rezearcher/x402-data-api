@@ -8,7 +8,7 @@ import { generateJwt } from "@coinbase/cdp-sdk/auth";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod/v4";
-import { keccak256 } from "viem";
+import { keccak256, stringToHex } from "viem";
 import { DurableObject } from "cloudflare:workers";
 import { createCdpFacilitator } from "./facilitator";
 import { trackPaidRequest, getMetrics, type Rail } from "./usage.ts";
@@ -4269,18 +4269,43 @@ const PROBE_HOLDER = "0x1111111111111111111111111111111111111111";
 const PROBE_RECIPIENT = "0x2222222222222222222222222222222222222222";
 const PROBE_VALUE = 31337n * 10n ** 18n; // distinctive "leet" test balance — collision-negligible vs a real balance
 const PROBE_VALUE_HEX = "0x" + PROBE_VALUE.toString(16).padStart(64, "0");
-// Slots 0..3, tried sequentially with an early exit on match — covers slot 0
-// (the common case for a bare OZ ERC20 with no state before it) through slot 3
-// (canonical WETH9's balance-mapping slot) while keeping subrequests low.
+// Candidate balance-mapping slots. The old probe tried only integer slots 0..3
+// as a bare mapping(address=>uint256) — which silently fails on the entire class
+// of OpenZeppelin v5 UPGRADEABLE tokens, where storage is ERC-7201 "namespaced":
+// the _balances mapping lives at a keccak-derived base slot, nowhere near 0..3.
+// Since that is the fastest-growing layout for new Base tokens (and exactly where
+// a free simple-layout probe also gives up), we now cover integer slots 0..15
+// PLUS the ERC-7201 base slot for "openzeppelin.storage.ERC20". Range 0..63 also
+// covers the Coinbase bridged-token layout (balances at slot 51 — cbETH, USDbC,
+// cbBTC and friends), which the old 0..3 scan missed entirely on Base.
+//
 // Cloudflare Workers caps subrequests at 50/invocation, shared with the x402
-// payment middleware's own verify+settle facilitator calls (empirically
-// confirmed during implementation: a wider range plus a proxy token's extra
-// implementation-code fetch tripped that cap and caused settlement to fail on
-// an otherwise-successful analysis — this range was tuned back down to fit).
-const PROBE_SLOT_RANGE = 4;
+// payment middleware's verify+settle calls. We stay well under it by NOT probing
+// each candidate with its own RPC call: discovery overrides the WHOLE candidate
+// set in one stateDiff and reads balanceOf once (1 call), then binary-narrows to
+// the exact slot (~ceil(log2(N)) calls), then runs ONE clean single-slot transfer
+// sim. Worst case ≈ 7 subrequests to cover 17 candidate layouts — fewer than the
+// old sequential scan needed to cover 4.
+
+// ERC-7201 (EIP-7201) namespaced storage base slot:
+//   keccak256(abi.encode(uint256(keccak256(id)) - 1)) & ~bytes32(uint256(0xff))
+// For OZ v5 ERC20Upgradeable the _balances mapping is field 0 of ERC20Storage,
+// so its slot IS this base slot.
+function erc7201BaseSlot(namespace: string): bigint {
+  const inner = BigInt(keccak256(stringToHex(namespace))) - 1n;
+  const encoded = ("0x" + inner.toString(16).padStart(64, "0")) as `0x${string}`;
+  const mask = ((1n << 256n) - 1n) ^ 0xffn; // ~bytes32(uint256(0xff)): clear the low byte
+  return BigInt(keccak256(encoded)) & mask;
+}
+const ERC20_7201_BALANCES_SLOT = erc7201BaseSlot("openzeppelin.storage.ERC20");
+const CANDIDATE_SLOTS: bigint[] = [
+  ...Array.from({ length: 64 }, (_, i) => BigInt(i)),
+  ERC20_7201_BALANCES_SLOT,
+];
 
 // Solidity's mapping(address => X) slot derivation: keccak256(pad32(key) . pad32(slot)).
-function mappingSlotKey(holder: string, slot: number): string {
+// Slot is a full 256-bit value (ERC-7201 base slots are large), so take a bigint.
+function mappingSlotKey(holder: string, slot: bigint): string {
   const holderWord = holder.slice(2).toLowerCase().padStart(64, "0");
   const slotWord = slot.toString(16).padStart(64, "0");
   return keccak256(`0x${holderWord}${slotWord}` as `0x${string}`);
@@ -4290,6 +4315,7 @@ interface HoneypotSim {
   sim_status: "tested" | "unavailable";
   method: string;
   balance_slot_index: number | null;
+  slot_layout: string | null;
   transferable: boolean | null;
   revert_reason: string | null;
   note: string;
@@ -4303,27 +4329,38 @@ async function simulateTransferProbe(token: string): Promise<HoneypotSim> {
   const transferData = (to: string, amount: bigint) =>
     `0xa9059cbb${to.slice(2).toLowerCase().padStart(64, "0")}${amount.toString(16).padStart(64, "0")}`;
 
-  // Sequential with early exit (not Promise.all-parallel): most simple ERC-20
-  // layouts match within the first slot or two, so this keeps the common case
-  // cheap on Workers' per-invocation subrequest budget; only a non-matching
-  // token pays for the full PROBE_SLOT_RANGE attempts.
-  let foundSlot: number | null = null;
+  // Discovery: find which candidate slot holds _balances[holder]. Override the
+  // WHOLE candidate set in one stateDiff and read balanceOf once — overriding
+  // non-balance slots is harmless to a balanceOf read, so the call returns our
+  // planted value iff the real slot is somewhere in the set. Then binary-narrow
+  // to the exact slot. This covers 17 candidate layouts in ~7 subrequests.
   let sawAnySuccess = false;
-  for (let slot = 0; slot < PROBE_SLOT_RANGE; slot++) {
-    const key = mappingSlotKey(PROBE_HOLDER, slot);
-    const override = { [token]: { stateDiff: { [key]: PROBE_VALUE_HEX } } };
-    const r = await baseRpcProbe("eth_call", [{ to: token, data: balanceOfData(PROBE_HOLDER) }, "latest", override]);
-    if (r.result !== undefined) {
-      sawAnySuccess = true;
-      try {
-        if (BigInt(r.result) === PROBE_VALUE) {
-          foundSlot = slot;
-          break;
-        }
-      } catch {
-        /* non-numeric result — ignore */
-      }
+  const subsetHoldsSlot = async (subset: bigint[]): Promise<boolean> => {
+    const stateDiff: Record<string, string> = {};
+    for (const s of subset) stateDiff[mappingSlotKey(PROBE_HOLDER, s)] = PROBE_VALUE_HEX;
+    const r = await baseRpcProbe("eth_call", [
+      { to: token, data: balanceOfData(PROBE_HOLDER) },
+      "latest",
+      { [token]: { stateDiff } },
+    ]);
+    if (r.result === undefined) return false;
+    sawAnySuccess = true;
+    try {
+      return BigInt(r.result) === PROBE_VALUE;
+    } catch {
+      return false; // non-numeric result — ignore
     }
+  };
+
+  let foundSlot: bigint | null = null;
+  if (await subsetHoldsSlot(CANDIDATE_SLOTS)) {
+    let pool = CANDIDATE_SLOTS.slice();
+    while (pool.length > 1) {
+      const mid = Math.ceil(pool.length / 2);
+      const left = pool.slice(0, mid);
+      pool = (await subsetHoldsSlot(left)) ? left : pool.slice(mid);
+    }
+    foundSlot = pool[0];
   }
 
   if (foundSlot === null) {
@@ -4331,14 +4368,18 @@ async function simulateTransferProbe(token: string): Promise<HoneypotSim> {
       sim_status: "unavailable",
       method: HONEYPOT_SIM_METHOD,
       balance_slot_index: null,
+      slot_layout: null,
       transferable: null,
       revert_reason: null,
       note: sawAnySuccess
-        ? `Could not locate this token's balance storage slot by probing simple mapping(address=>uint256) layouts (slots 0-${PROBE_SLOT_RANGE - 1}). Likely a non-standard storage layout (packed struct, diamond storage, or an offset beyond the probed range) — no tradeability signal available. This does NOT imply the token is safe or unsafe.`
+        ? `Could not locate this token's balance storage slot — probed integer slots 0-63 and the ERC-7201 "openzeppelin.storage.ERC20" namespace. Likely a non-standard layout (reflection/rebasing math, packed struct, or a custom namespace) — no tradeability signal available. This does NOT imply the token is safe or unsafe.`
         : "RPC state-override calls failed or were rate-limited on every attempt — simulation infra unavailable right now. This does NOT imply the token is safe or unsafe.",
     };
   }
 
+  const slotLayout =
+    foundSlot === ERC20_7201_BALANCES_SLOT ? "erc7201:openzeppelin.storage.ERC20" : `mapping@slot${foundSlot}`;
+  const slotIndexNum = foundSlot < 64n ? Number(foundSlot) : null;
   const key = mappingSlotKey(PROBE_HOLDER, foundSlot);
   const override = { [token]: { stateDiff: { [key]: PROBE_VALUE_HEX } } };
   const sendAmount = PROBE_VALUE / 2n;
@@ -4352,7 +4393,8 @@ async function simulateTransferProbe(token: string): Promise<HoneypotSim> {
     return {
       sim_status: "unavailable",
       method: HONEYPOT_SIM_METHOD,
-      balance_slot_index: foundSlot,
+      balance_slot_index: slotIndexNum,
+      slot_layout: slotLayout,
       transferable: null,
       revert_reason: null,
       note: "Balance slot located but the transfer-probe eth_call failed or was rate-limited on every RPC attempt.",
@@ -4362,7 +4404,8 @@ async function simulateTransferProbe(token: string): Promise<HoneypotSim> {
     return {
       sim_status: "tested",
       method: HONEYPOT_SIM_METHOD,
-      balance_slot_index: foundSlot,
+      balance_slot_index: slotIndexNum,
+      slot_layout: slotLayout,
       transferable: false,
       revert_reason: simResult.error.slice(0, 300),
       note: "A synthetic wallet holding this token could NOT complete a plain transfer() — it reverted. Strong honeypot / transfer-restriction signal.",
@@ -4371,7 +4414,8 @@ async function simulateTransferProbe(token: string): Promise<HoneypotSim> {
   return {
     sim_status: "tested",
     method: HONEYPOT_SIM_METHOD,
-    balance_slot_index: foundSlot,
+    balance_slot_index: slotIndexNum,
+    slot_layout: slotLayout,
     transferable: true,
     revert_reason: null,
     note: "A synthetic wallet holding this token successfully completed a plain transfer() with no revert. No basic transfer-block detected (does not rule out DEX-pair-specific sell restrictions).",
