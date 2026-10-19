@@ -1651,7 +1651,7 @@ function makeRoutes(payTo: string) {
         network: NETWORK,
         payTo,
       },
-      description: "Current Base mainnet block number.",
+      description: "Current Base mainnet block number. Use when an agent needs the latest Base block to time or sanity-check a transaction.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -1669,7 +1669,7 @@ function makeRoutes(payTo: string) {
         network: NETWORK,
         payTo,
       },
-      description: "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, and gas_price_usd.",
+      description: "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, and gas_price_usd. Use when an agent must estimate gas cost in USD before sending a Base transaction.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -1694,7 +1694,7 @@ function makeRoutes(payTo: string) {
         network: NETWORK,
         payTo,
       },
-      description: "ETH balance of a Base mainnet address, incl. balance_usd.",
+      description: "ETH balance of a Base mainnet address, incl. balance_usd. Use when an agent needs an address's ETH balance in ETH and USD on Base.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -1723,7 +1723,7 @@ function makeRoutes(payTo: string) {
         network: NETWORK,
         payTo,
       },
-      description: "ERC-20 token balance of a Base mainnet address, incl. symbol, decimals, balance_formatted.",
+      description: "ERC-20 token balance of a Base mainnet address, incl. symbol, decimals, balance_formatted. Use when an agent needs an ERC-20 balance for a Base address before a swap or transfer.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -1810,7 +1810,7 @@ function makeRoutes(payTo: string) {
         network: NETWORK,
         payTo,
       },
-      description: "Contract-code check for a Base mainnet address (is_contract + code size + EIP-7702 delegated-EOA detection).",
+      description: "Contract-code check for a Base mainnet address (is_contract + code size + EIP-7702 delegated-EOA detection). Use when an agent must check whether a Base address is a contract or an EOA before interacting.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -1839,7 +1839,7 @@ function makeRoutes(payTo: string) {
     },
     "GET /chain/nonce": {
       accepts: { scheme: "exact" as const, price: "$0.001", network: NETWORK, payTo },
-      description: "Transaction count (nonce) for a Base address, latest and pending.",
+      description: "Transaction count (nonce) for a Base address, latest and pending. Use when an agent needs the next nonce for a Base address before signing a transaction.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -1922,7 +1922,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade.",
+        "Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade. Use when an agent is about to buy or swap a Base token and needs a SAFE/CAUTION/AVOID decision.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -1955,7 +1955,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Pre-trade GO / HOLD / BLOCK gate for an autonomous Base trading agent: pass token, side (buy|sell) and notional_usd; get a one-word decision plus reason in one fast call. Combines honeypot/sellability simulation, admin-control checks and Uniswap v3 WETH-pool liquidity vs. your trade size (price-impact guard).",
+        "Pre-trade GO / HOLD / BLOCK gate for an autonomous Base trading agent: pass token, side (buy|sell) and notional_usd; get a one-word decision plus reason in one fast call. Combines honeypot/sellability simulation, admin-control checks and Uniswap v3 WETH-pool liquidity vs. your trade size (price-impact guard). Use when an autonomous trading agent needs a GO/HOLD/BLOCK check right before a Base swap.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -1981,7 +1981,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Token security / honeypot detector for a Base mainnet ERC-20: EIP-1967/1822 proxy + upgradeability detection, bytecode dispatcher scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, and a live eth_call state-override simulation testing whether a synthetic wallet can actually transfer() the token. Returns risk_score (0-100) + verdict (clear/review/block) + human-readable flags.",
+        "Token security / honeypot detector for a Base mainnet ERC-20: EIP-1967/1822 proxy + upgradeability detection, bytecode dispatcher scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, and a live eth_call state-override simulation testing whether a synthetic wallet can actually transfer() the token. Returns risk_score (0-100) + verdict (clear/review/block) + human-readable flags. Use when an agent needs detailed honeypot, mint, pause and proxy checks for a Base ERC-20.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
