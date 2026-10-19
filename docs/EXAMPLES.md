@@ -15,6 +15,13 @@ console.log(await r.json());
 ## Pre-trade gate pattern
 Call `/chain/token-report` ($0.05) before swapping into an unknown Base token; refuse on `AVOID`.
 
+Cheaper single-call version — `/gate/swap` ($0.01) returns GO / HOLD / BLOCK for a specific trade size:
+```js
+const r = await f("https://x402-data-api.sigrunner.workers.dev/gate/swap?token=0x4200000000000000000000000000000000000006&side=buy&notional_usd=500");
+const { decision } = await r.json(); // act only on GO
+```
+Also available as the `gate_swap` MCP tool at `/mcp`.
+
 ## Cheap reads ($0.001)
 `/chain/balance`, `/chain/token-balance`, `/chain/gas-price`, `/chain/tx`, `/crypto/funding`.
 
