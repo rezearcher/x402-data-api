@@ -396,3 +396,24 @@ Inbox: 0 replies. Issue watch: only x402-pilot#13 (already answered). trace_inbo
 - 2026-10-19 (cycle 18): Polygon agent-discovery = 77 routes, single owner 0xfd13b3, proxy-wrapped, no open seller listing -> dead lever. 0 replies, wallet flat 32.81524.
 - 2026-10-19 (cycle 18): bot 0xec2abd = 22 transfers/$0.091 per ~9000 blocks (~5h) => ~$0.44/day; $1000 needs a new buyer class, not more cheap routes.
 - 2026-10-19 cycle 19d: live /openapi.json verified accurate (64 paths, prices match /.well-known/x402); refreshed stale static x402-data-api-openapi.json (31->64 paths).
+
+---
+## PRODUCT RE-AIM + CLAIMS LAW (2026-10-19, Rez+Claude interactive — loop was paused for this)
+Independent product review done out-of-band. Two new docs are authoritative going forward:
+- `docs/PRODUCT_REVIEW_2026-10-19.md` — the client's-eye review.
+- `docs/PRODUCT_CORRECTION_PLAN_2026-10-19.md` — correction plan + **Claims-Truth Ledger** (L1-L5).
+
+**Re-aim (binding):** stop optimizing for shopper bots — they cap at ~$1.36/day (~2 yr to $1,000).
+Aim at INTEGRATORS (one at ~2k calls/day = $1,000 in ~50 days). Krystian/agenticpay is the archetype.
+Do NOT: cut prices for bots, add commodity `/chain/*` routes. DO: convert integrators + build the trust layer.
+
+**Claims Law (No Vaporware):** never publish uptime/latency/accuracy/SLA/chain claims that aren't
+backed by a measurement artifact on disk/in code. Build the measurement first or don't claim. Per-claim
+work + gate is the ledger in the correction plan. Verified today: uptime/latency NOT measured
+(index.ts:320 = "no uptime commitment"); free real-token trial ALREADY EXISTS but buried
+(/gate/swap/preview?token=<0x> 3/day/IP, /chain/token-report/preview full-depth); accuracy NOT benchmarked;
+multi-chain = 44-callsite refactor, demand-gated (additive /chain/eth/* only on a named buyer).
+
+**Build sequence (awaits Rez "go"):** L3 (surface+cap trial, publishable now) → L1+L2 (uptime/latency
+sensor + /status) → L4 (accuracy benchmark) → L5 (multi-chain, demand-gated). All zero-capital.
+The goal file (`makemoney.goal`) was amended with an "AIM & CLAIMS LAW" block to carry this into every cycle.
