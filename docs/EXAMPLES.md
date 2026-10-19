@@ -1,0 +1,21 @@
+# Copy-paste examples
+
+Base URL: https://x402-data-api.sigrunner.workers.dev — Base mainnet, USDC, no API key.
+Free discovery: `/.well-known/x402`, `/openapi.json`, MCP at `/mcp`.
+
+## Node (x402-fetch)
+```js
+import { wrapFetchWithPayment } from "x402-fetch";
+import { privateKeyToAccount } from "viem/accounts";
+const f = wrapFetchWithPayment(fetch, privateKeyToAccount(process.env.PK));
+const r = await f("https://x402-data-api.sigrunner.workers.dev/chain/token-report?token=0x4200000000000000000000000000000000000006");
+console.log(await r.json());
+```
+
+## Pre-trade gate pattern
+Call `/chain/token-report` ($0.05) before swapping into an unknown Base token; refuse on `AVOID`.
+
+## Cheap reads ($0.001)
+`/chain/balance`, `/chain/token-balance`, `/chain/gas-price`, `/chain/tx`, `/crypto/funding`.
+
+Contact: contact@greyridgesignals.ai
