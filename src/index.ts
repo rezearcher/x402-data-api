@@ -5011,6 +5011,39 @@ app.get("/ai/translate", async (c) => {
   }
 });
 
+app.get("/ai/extract/preview", async (c) => {
+  const text = (c.req.query("text") ?? "").trim();
+  const fields = (c.req.query("fields") ?? "").split(",").map((f) => f.trim()).filter(Boolean);
+  if (!text || text.length > 300) return c.json({ error: "text required, max 300 chars (free preview)" }, { status: 400 });
+  if (!fields.length || fields.length > 6 || fields.some((f) => !/^[A-Za-z_][A-Za-z0-9_]{0,40}$/.test(f))) return c.json({ error: "fields required: 1-6 comma-separated identifiers" }, { status: 400 });
+  if (!c.env.AI || !c.env.API_KEYS) return c.json({ error: "ai unavailable" }, { status: 501 });
+  const ip = c.req.header("cf-connecting-ip") ?? "unknown";
+  const day = new Date().toISOString().slice(0, 10);
+  const ipKey = `aiprev:${day}:${ip}`;
+  const capKey = "aicap:" + day;
+  const [ipUsed, used] = await Promise.all([c.env.API_KEYS.get(ipKey), c.env.API_KEYS.get(capKey)]);
+  if (parseInt(ipUsed ?? "0", 10) >= 3) return c.json({ error: "free preview limit: 3/day/IP. Paid: GET /ai/extract ($0.005, x402)" }, { status: 429 });
+  if (parseInt(used ?? "0", 10) >= 300) return c.json({ error: "preview capacity reached today" }, { status: 503 });
+  try {
+    const r = (await c.env.AI.run("@cf/meta/llama-3.2-3b-instruct", {
+      messages: [{ role: "system", content: "Extract data from the user's text. Reply with ONLY a JSON object with exactly these keys: " + fields.join(", ") + ". Use null for any value not present in the text. No prose, no code fences." }, { role: "user", content: text }],
+      max_tokens: 200,
+    })) as { response?: string };
+    const m = (r.response ?? "").match(/\{[\s\S]*\}/);
+    let parsed: Record<string, unknown> = {};
+    try { parsed = m ? JSON.parse(m[0]) : {}; } catch { return c.json({ error: "model returned unparseable output, retry" }, { status: 502 }); }
+    const data: Record<string, unknown> = {};
+    for (const f of fields) data[f] = parsed[f] ?? null;
+    await Promise.all([
+      c.env.API_KEYS.put(ipKey, String(parseInt(ipUsed ?? "0", 10) + 1), { expirationTtl: 172800 }),
+      c.env.API_KEYS.put(capKey, String(parseInt(used ?? "0", 10) + 1), { expirationTtl: 172800 }),
+    ]);
+    return c.json({ data, model: "llama-3.2-3b-instruct", preview: true, paid_endpoint: "/ai/extract" });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
 app.get("/ai/extract", async (c) => {
   const text = (c.req.query("text") ?? "").trim();
   const fields = (c.req.query("fields") ?? "").split(",").map((f) => f.trim()).filter(Boolean);
