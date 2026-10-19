@@ -350,3 +350,4 @@ Inbox: 0 replies. Issue watch: only x402-pilot#13 (already answered). trace_inbo
 - cycle 62w fix: derivatives-exchanges 404'd after 2 deploys (stale version served); a THIRD deploy (82f42497) made it stick; 402 x3, seeded, x402scan 59/62. Always curl-verify 402 repeatedly before seeding.
 - cycle 62x: traced wallet 32.698: recent window = 0.077 OURS (seeds), 0 external. The +0.037 is our own canaries; external flat.
 - cycle 62y: research: CoinGecko/Nansen sell natively on x402; our CoinGecko proxy routes are commodity. Idea logged: cross-source composite (/defi/protocol-risk).
+- cycle 62z: shipped /defi/protocol-risk composite (0.01, TVL+age+audits+hacks score; version 8ece6257 after 3 deploys, 402 x4); seeded, x402scan 60/63, IndexNow.
