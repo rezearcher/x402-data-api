@@ -27,6 +27,7 @@ export type Route =
   | "GET /enrich/tech-risk"
   | "GET /scan/mcp"
   | "GET /chain/token-security"
+  | "GET /chain/token-report"
   // Freemium long tail — also x402-gated and chain-settled, so undercounting
   // them would trip the reconcile delta. Every site that logs paid_request is
   // counted.
@@ -116,6 +117,7 @@ const ALL_ROUTES: Route[] = [
   "GET /enrich/tech-risk",
   "GET /scan/mcp",
   "GET /chain/token-security",
+  "GET /chain/token-report",
   "GET /dns/:domain",
   "GET /whois/:domain",
   "GET /pm/markets",

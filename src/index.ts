@@ -488,7 +488,7 @@ ${provisionMeta}
     <tbody>
       <tr><td>Base on-chain reads</td><td class="price">$0.001&ndash;$0.003</td><td><code>/chain/block-number</code>, <code>/chain/gas-price</code>, <code>/chain/balance</code>, <code>/chain/token-balance</code>, <code>/chain/tx</code>, <code>/chain/receipt</code>, <code>/chain/code</code>, <code>/chain/wallet</code></td></tr>
       <tr><td>Crypto / DeFi / prediction markets</td><td class="price">$0.001&ndash;$0.005</td><td><code>/crypto/prices</code> ($0.004), <code>/crypto/funding</code> ($0.004), <code>/defi/yields</code>, <code>/pm/markets</code></td></tr>
-      <tr><td>Security</td><td class="price">$0.01&ndash;$0.10</td><td><code>/enrich/domain</code>, <code>/enrich/tech-risk</code>, <code>/scan/mcp</code>, <code>/chain/token-security</code></td></tr>
+      <tr><td>Security</td><td class="price">$0.01&ndash;$0.10</td><td><code>/chain/token-report</code> ($0.05 verdict), <code>/enrich/domain</code>, <code>/enrich/tech-risk</code>, <code>/scan/mcp</code>, <code>/chain/token-security</code></td></tr>
     </tbody>
   </table>
 
@@ -710,6 +710,7 @@ app.get("/.well-known/x402", (c) => {
       mk("/chain/receipt", "GET", "0.001", "1000", "Transaction receipt by hash on Base mainnet — status, gas used, full logs, and the L1 fee breakdown (l1_fee_wei, l1_gas_price_wei, l1_gas_used, effective_gas_price_wei) + l1_fee_usd/total_fee_usd an ETH-only competitor can't offer.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/code", "GET", "0.001", "1000", "Contract-code check for a Base mainnet address (is_contract + code size + EIP-7702 delegated-EOA detection).", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/wallet", "GET", "0.003", "3000", "Wallet bundle: ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]),
+      mk("/chain/token-report", "GET", "0.05", "50000", "Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "verdict", "trading", "data"]),
       mk("/chain/token-security", "GET", "0.02", "20000", "Token security / honeypot detector for a Base mainnet ERC-20: EIP-1967/1822 proxy + upgradeability detection, bytecode dispatcher scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, and a live eth_call state-override simulation testing whether a synthetic wallet can actually transfer() the token. Real compute, not a thin data wrapper. Returns risk_score (0-100) + verdict (clear/review/block) + human-readable flags.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "data"]),
       mk("/dns/{domain}", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", ["dns", "domain", "data", "recon"]),
       mk("/whois/{domain}", "GET", "0.02", "20000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", ["whois", "rdap", "domain", "data", "recon"]),
@@ -821,6 +822,14 @@ app.get("/.well-known/agent-card.json", (c) => {
         ],
       },
       {
+        id: "token-report",
+        name: "Token Trade-Safety Verdict (decision-grade)",
+        description:
+          "Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade. Route: GET /chain/token-report. Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. Price: $0.05. Free preview at GET /chain/token-report/preview (Base USDC). MCP tool: chain_token_report.",
+        tags: ["security", "base", "onchain", "token", "honeypot", "verdict", "trading", "data"],
+        examples: ["GET /chain/token-report?token=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"],
+      },
+      {
         id: "token-security",
         name: "Token Security / Honeypot Detector",
         description:
@@ -903,6 +912,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/chain/receipt?hash=<0x…> — $0.001 — transaction receipt by hash on Base: status, gas used, full logs, L1 fee breakdown (l1_fee_wei/l1_gas_price_wei/l1_gas_used/effective_gas_price_wei) + l1_fee_usd/total_fee_usd.
 - GET ${BASE}/chain/code?address=<0x…> — $0.001 — contract-code check for a Base address (EIP-7702 delegated-EOA aware).
 - GET ${BASE}/chain/wallet?address=<0x…> — $0.003 — wallet bundle: balance + balance_usd + tx count + contract check (EIP-7702 delegated-EOA aware), one call.
+- GET ${BASE}/chain/token-report?token=<0x…> — $0.05 — DECISION-GRADE token trade-safety verdict: one call returns SAFE|CAUTION|AVOID + risk_score 0-100 + reasons, bundling honeypot/sellability simulation, owner-renounced/mint/pause/blacklist/fee-setter/upgradeable checks, symbol/name/decimals and Uniswap v3 WETH-pool liquidity USD. Replaces many RPC calls and prevents a bad trade.
 - GET ${BASE}/chain/token-security?token=<0x…> — $0.02 — token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, live eth_call state-override transfer simulation — risk_score + verdict (clear/review/block) + flags. Real compute, not a thin data wrapper.
 
 ## Free (previews — taste the data before you pay)
@@ -912,6 +922,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/pm/markets/preview — free top-1 sample of /pm/markets.
 - GET ${BASE}/chain/block-number/preview — free, full live data (identical to the paid route).
 - GET ${BASE}/chain/gas-price/preview — free, full live data (identical to the paid route).
+- GET ${BASE}/chain/token-report/preview — free, full real trade-safety report for Base USDC, same depth as the paid route.
 - GET ${BASE}/chain/token-security/preview — free, full real analysis of a fixed well-known token (Base WETH), same depth as the paid route.
 - GET ${BASE}/scan/mcp/preview?url=<mcp-server> — free preview (counts + risk score; withholds detail).
 - GET ${BASE}/.well-known/x402 — machine-readable discovery manifest.
@@ -1083,6 +1094,7 @@ app.get("/openapi.json", (c) => {
       "/chain/receipt": paid("Transaction receipt by hash on Base mainnet: status, gas used, full logs, L1 fee breakdown, l1_fee_usd/total_fee_usd.", "0.001", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }]),
       "/chain/code": paid("Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware).", "0.001", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
       "/chain/wallet": paid("Wallet bundle: ETH balance + balance_usd + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call.", "0.003", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
+      "/chain/token-report": paid("Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade.", "0.05", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
       "/chain/token-security": paid("Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.", "0.02", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
       "/dns/{domain}": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "path", example: "stripe.com" }]),
       "/whois/{domain}": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.02", [{ name: "domain", desc: "domain name to look up", in: "path", example: "cloudflare.com" }]),
@@ -1210,7 +1222,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "MCP tools/call: crypto_prices, crypto_funding, defi_yields, pm_markets (Base/crypto/prediction-market data), chain_block_number, chain_gas_price, chain_balance, chain_token_balance, chain_tx, chain_wallet (Base mainnet on-chain reads, EIP-7702 delegated-EOA aware), chain_token_security (token security / honeypot detector: proxy + bytecode risk-selector scan + live transfer simulation), enrich_tech_risk (security: tech-stack + CVE/EPSS/CISA-KEV), enrich_domain (firmographic), or scan_mcp_server (tool-poisoning/prompt-injection audit of a target MCP server)",
+        "MCP tools/call: crypto_prices, crypto_funding, defi_yields, pm_markets (Base/crypto/prediction-market data), chain_block_number, chain_gas_price, chain_balance, chain_token_balance, chain_tx, chain_wallet (Base mainnet on-chain reads, EIP-7702 delegated-EOA aware), chain_token_report (decision-grade SAFE/CAUTION/AVOID token trade-safety verdict), chain_token_security (token security / honeypot detector: proxy + bytecode risk-selector scan + live transfer simulation), enrich_tech_risk (security: tech-stack + CVE/EPSS/CISA-KEV), enrich_domain (firmographic), or scan_mcp_server (tool-poisoning/prompt-injection audit of a target MCP server)",
       mimeType: "application/json",
     },
     "GET /scan/mcp": {
@@ -1770,6 +1782,39 @@ function makeRoutes(payTo: string) {
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
+    "GET /chain/token-report": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.05",
+        network: NETWORK,
+        payTo,
+      },
+      description:
+        "Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
+        inputSchema: {
+          type: "object",
+          properties: {
+            token: { type: "string", description: "0x-prefixed 20-byte ERC-20 contract address on Base mainnet" },
+          },
+        },
+        output: {
+          example: {
+            token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+            chain: "base",
+            token_meta: { symbol: "USDC", name: "USD Coin", decimals: 6 },
+            security: { isHoneypot: false, sellable: true, buyTaxBps: null, sellTaxBps: null, ownerRenounced: false },
+            liquidity: { wethPoolUsd: 5000000, dex: "uniswap-v3" },
+            verdict: "SAFE",
+            risk_score: 25,
+            reasons: ["upgradeable proxy; logic can change after purchase"],
+          },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
     "GET /chain/token-security": {
       accepts: {
         scheme: "exact" as const,
@@ -2324,6 +2369,7 @@ app.use(async (c, next) => {
       "chain_block_number_preview",
       "chain_gas_price_preview",
       "chain_token_security_preview",
+      "chain_token_report_preview",
     ]);
     if (rpcMethod !== "tools/call" || (toolName && FREE_TOOLS.has(toolName))) {
       return next();
@@ -4650,6 +4696,241 @@ app.get("/chain/token-security/preview", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// TOKEN TRADE-SAFETY REPORT — decision-grade bundle for trading agents/vaults.
+// One call composes analyzeTokenSecurity (honeypot sim + capability scan) +
+// getTokenMeta + Uniswap v3 WETH-pool liquidity into a SAFE|CAUTION|AVOID
+// verdict. Every sub-fetch degrades to null; the paid call never fails on one.
+// ---------------------------------------------------------------------------
+const BASE_WETH = "0x4200000000000000000000000000000000000006";
+const UNIV3_FACTORY_BASE = "0x33128a8fC17869897dcE68Ed026d694621f6FDfD";
+const UNIV3_FEE_TIERS = [100, 500, 3000, 10000];
+const MIN_SAFE_LIQUIDITY_USD = 100_000;
+const THIN_LIQUIDITY_USD = 10_000;
+
+interface WethLiquidity {
+  checked: boolean;
+  pools: { fee_tier: number; pool: string; weth_raw: string; weth_side_usd: number | null }[];
+  weth_pool_usd: number | null; // 2x WETH-side value of the deepest pool (v3 TVL proxy)
+  note: string | null;
+}
+
+// One JSON-RPC batch = one subrequest (Workers cap subrequests per invocation),
+// rotating providers only on transport failure. Per-item failures come back null.
+async function baseRpcBatch(calls: { method: string; params: unknown[] }[]): Promise<(string | null)[] | null> {
+  const body = JSON.stringify(calls.map((c, i) => ({ jsonrpc: "2.0", id: i + 1, method: c.method, params: c.params })));
+  for (const url of [...BASE_RPCS, ...BASE_RPCS]) {
+    try {
+      const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body });
+      if (!res.ok) continue;
+      const j = (await res.json()) as unknown;
+      if (!Array.isArray(j)) continue;
+      const byId = new Map<number, { result?: string; error?: unknown }>();
+      for (const item of j as { id: number; result?: string; error?: unknown }[]) byId.set(item.id, item);
+      const out = calls.map((_, i) => {
+        const it = byId.get(i + 1);
+        return it && typeof it.result === "string" && !it.error ? it.result : null;
+      });
+      if (out.every((r) => r === null)) continue;
+      return out;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+async function getWethLiquidity(token: string): Promise<WethLiquidity> {
+  if (token.toLowerCase() === BASE_WETH) {
+    return { checked: false, pools: [], weth_pool_usd: null, note: "token is WETH itself; no WETH pair applies" };
+  }
+  const pad = (a: string) => a.slice(2).toLowerCase().padStart(64, "0");
+  const lookups = await baseRpcBatch(
+    UNIV3_FEE_TIERS.map((fee) => ({
+      method: "eth_call",
+      params: [{ to: UNIV3_FACTORY_BASE, data: `0x1698ee82${pad(token)}${pad(BASE_WETH)}${fee.toString(16).padStart(64, "0")}` }, "latest"],
+    })),
+  );
+  if (!lookups) return { checked: false, pools: [], weth_pool_usd: null, note: "pool lookup unavailable" };
+  const found = UNIV3_FEE_TIERS.map((fee, i) => {
+    const r = lookups[i];
+    const addr = r && r.length >= 66 ? `0x${r.slice(-40)}` : null;
+    return { fee, addr: addr && BigInt(addr) !== 0n ? addr : null };
+  }).filter((p): p is { fee: number; addr: string } => p.addr !== null);
+  if (found.length === 0) {
+    const anyAnswered = lookups.some((r) => r !== null);
+    return {
+      checked: anyAnswered,
+      pools: [],
+      weth_pool_usd: null,
+      note: anyAnswered ? "no Uniswap v3 WETH pool found (token may trade only on other pairs/DEXes)" : "pool lookup unavailable",
+    };
+  }
+  const [balances, ethUsd] = await Promise.all([
+    baseRpcBatch(found.map((p) => ({ method: "eth_call", params: [{ to: BASE_WETH, data: `0x70a08231${pad(p.addr)}` }, "latest"] }))),
+    getEthUsd().catch(() => null),
+  ]);
+  if (!balances) {
+    return { checked: false, pools: [], weth_pool_usd: null, note: "pool liquidity read unavailable" };
+  }
+  const pools = found.flatMap((p, i) => {
+    const r = balances[i];
+    if (!r || r === "0x") return [];
+    const raw = BigInt(r);
+    return [{ fee_tier: p.fee, pool: p.addr, weth_raw: raw.toString(), weth_side_usd: ethUsd !== null ? (Number(raw) / 1e18) * ethUsd : null }];
+  });
+  const best = pools.reduce<number | null>(
+    (m, p) => (p.weth_side_usd !== null && (m === null || p.weth_side_usd > m) ? p.weth_side_usd : m),
+    null,
+  );
+  return {
+    checked: true,
+    pools,
+    weth_pool_usd: best !== null ? Math.round(best * 2) : null,
+    note: pools.length === 0 ? "WETH pool balance read unavailable" : ethUsd === null ? "ETH/USD price unavailable; see weth_raw" : null,
+  };
+}
+
+async function buildTokenReport(token: string) {
+  // Liquidity first (2 batched subrequests) so the heavier security analysis can't
+  // starve it of the per-invocation subrequest budget.
+  const liqR = await Promise.allSettled([getWethLiquidity(token)]).then((r) => r[0]);
+  const [secR, metaR] = await Promise.allSettled([analyzeTokenSecurity(token), getTokenMeta(token)]);
+  const sec = secR.status === "fulfilled" ? secR.value : null;
+  const meta = metaR.status === "fulfilled" ? metaR.value : null;
+  const liq = liqR.status === "fulfilled" ? liqR.value : null;
+
+  const sim = sec?.honeypot_sim ?? null;
+  const simTested = sim?.sim_status === "tested";
+  const isHoneypot = simTested ? sim!.transferable === false : null;
+  const sellable = simTested ? sim!.transferable === true : null;
+  const caps = sec?.capabilities ?? null;
+  const ownerRenounced = sec ? sec.ownership.ownership_renounced : null;
+  const liqUsd = liq?.weth_pool_usd ?? null;
+
+  const reasons: string[] = [];
+  let avoid = false;
+  let score = sec ? sec.risk_score : 50;
+
+  if (!sec) reasons.push("security analysis unavailable");
+  if (sec && !sec.is_contract) {
+    avoid = true;
+    reasons.push("address is not a contract / not an ERC-20");
+  }
+  if (isHoneypot) {
+    avoid = true;
+    reasons.push("honeypot: simulated transfer reverted, token cannot be sold/moved");
+  }
+  if (sec?.verdict === "block") {
+    avoid = true;
+    reasons.push("static analysis verdict is block");
+  }
+  if (caps?.has_fee_setter) reasons.push("owner can change transfer tax/fee; buy/sell tax not fixed");
+  if (caps?.can_mint && !ownerRenounced) reasons.push("owner can mint new supply");
+  if (caps?.has_blacklist) reasons.push("contract can blacklist addresses");
+  if (caps?.can_pause) reasons.push("transfers can be paused");
+  if (sec?.proxy.is_upgradeable) reasons.push("upgradeable proxy; logic can change after purchase");
+
+  if (liq?.checked) {
+    if (liqUsd === null && liq.pools.length === 0) {
+      reasons.push("no Uniswap v3 WETH pool found");
+      score += 10;
+    } else if (liqUsd !== null && liqUsd < THIN_LIQUIDITY_USD) {
+      reasons.push(`very thin WETH-pool liquidity (~$${liqUsd.toLocaleString("en-US")})`);
+      score += 20;
+    } else if (liqUsd !== null && liqUsd < MIN_SAFE_LIQUIDITY_USD) {
+      reasons.push(`modest WETH-pool liquidity (~$${liqUsd.toLocaleString("en-US")}); slippage risk on size`);
+      score += 10;
+    }
+  } else if (liq === null || /unavailable/.test(liq.note ?? "")) {
+    reasons.push("liquidity check unavailable");
+  }
+
+  // Deep liquidity from a verified-transferable or long-established token offsets
+  // admin-capability risk that static analysis alone over-weights (e.g. USDC).
+  const deepLiquidity = liqUsd !== null && liqUsd >= MIN_SAFE_LIQUIDITY_USD * 10;
+  const sellabilityUnverified = !!sec && !simTested && !avoid;
+  if (sellabilityUnverified) {
+    reasons.push(
+      deepLiquidity
+        ? "transfer simulation unavailable (non-standard storage layout); deep live WETH-pool liquidity indicates the token trades"
+        : "transfer simulation unavailable (non-standard storage layout); sellability unverified",
+    );
+  }
+  if (!avoid && deepLiquidity && (sellable || !simTested)) score = Math.min(score, 25);
+  if (avoid) score = Math.max(score, 85);
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  const risky = (sellabilityUnverified && !deepLiquidity) || reasons.some((r) => /thin|no Uniswap|liquidity check unavailable|unavailable$/.test(r));
+  const verdict: "SAFE" | "CAUTION" | "AVOID" = avoid ? "AVOID" : score >= 70 ? "AVOID" : score >= 30 || risky ? "CAUTION" : "SAFE";
+  if (verdict === "SAFE" && reasons.length === 0) reasons.push("no honeypot, deep liquidity, no high-risk admin controls detected");
+
+  return {
+    token,
+    chain: "base",
+    token_meta: {
+      symbol: meta?.symbol ?? sec?.meta.symbol ?? null,
+      name: meta?.name ?? sec?.meta.name ?? null,
+      decimals: meta?.decimals ?? sec?.meta.decimals ?? null,
+    },
+    security: {
+      isHoneypot,
+      sellable,
+      buyTaxBps: null as number | null,
+      sellTaxBps: null as number | null,
+      taxNote: "buy/sell tax not measured by the transfer simulation; taxMutable reflects whether the owner can change fees",
+      taxMutable: caps ? caps.has_fee_setter : null,
+      ownerRenounced,
+      upgradeableProxy: sec ? sec.proxy.is_upgradeable : null,
+      canMint: caps ? caps.can_mint : null,
+      canPause: caps ? caps.can_pause : null,
+      hasBlacklist: caps ? caps.has_blacklist : null,
+      simStatus: sim?.sim_status ?? null,
+    },
+    liquidity: liq
+      ? { wethPoolUsd: liq.weth_pool_usd, basis: "approx: 2x WETH-side balance of the deepest Uniswap v3 WETH pool", pools: liq.pools, dex: "uniswap-v3", note: liq.note }
+      : { wethPoolUsd: null, pools: [], dex: "uniswap-v3", note: "liquidity check unavailable" },
+    verdict,
+    risk_score: score,
+    reasons,
+    analyzed_at: new Date().toISOString(),
+    disclaimer: "Heuristic risk signal, not financial advice or a guarantee.",
+  };
+}
+
+app.get("/chain/token-report", async (c) => {
+  const token = c.req.query("token");
+  if (!token || !ADDR_RE.test(token)) {
+    return c.json({ error: "token query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
+  }
+  try {
+    const result = await buildTokenReport(token);
+    console.log(
+      JSON.stringify({ event: "paid_request", endpoint: "/chain/token-report", token, verdict: result.verdict, risk_score: result.risk_score, ts: result.analyzed_at }),
+    );
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/token-report", rail, makeUsageCounter(c.env)));
+    return c.json(result);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+// Free preview — full real report for Base USDC (same depth as paid). ?token= is
+// honored only for the fixed demo set so the preview can't substitute the paid route.
+const TOKEN_REPORT_PREVIEW_TOKEN = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // USDC on Base
+app.get("/chain/token-report/preview", async (c) => {
+  try {
+    const result = await buildTokenReport(TOKEN_REPORT_PREVIEW_TOKEN);
+    return c.json({
+      ...result,
+      note: "Free live sample (Base USDC) — same depth as the paid route. Full: GET /chain/token-report?token=<0x…> ($0.05) for ANY Base ERC-20.",
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // MCP SECURITY SCAN — the moat product. Fetch a target MCP server's tool list
 // and statically analyze each tool for prompt-injection / tool-poisoning (OWASP
 // LLM01/LLM08 + the MCP-specific tool-poisoning class). Edge-runnable, keyless:
@@ -5451,6 +5732,45 @@ const mcpHandler = createMcpHandler(() => {
           chain: "base",
           note: "Free live sample — identical to the paid tool. Full: the paid chain_gas_price tool or GET /chain/gas-price ($0.001).",
         };
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "chain_token_report",
+    {
+      description:
+        "Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade. Cost: $0.05 USDC per call via x402.",
+      inputSchema: {
+        token: z.string().describe("0x-prefixed 20-byte ERC-20 contract address on Base mainnet"),
+      },
+    },
+    async ({ token }) => {
+      if (!ADDR_RE.test(token)) {
+        return { content: [{ type: "text" as const, text: "Error: token must be a 0x-prefixed 20-byte address" }] };
+      }
+      try {
+        const result = await buildTokenReport(token);
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "chain_token_report_preview",
+    {
+      description:
+        "FREE full real trade-safety report (SAFE/CAUTION/AVOID verdict) for Base USDC, same depth as the paid chain_token_report tool. No payment required.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const result = await buildTokenReport(TOKEN_REPORT_PREVIEW_TOKEN);
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
