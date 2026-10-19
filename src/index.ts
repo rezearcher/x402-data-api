@@ -1230,7 +1230,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "MCP tools/call: crypto_prices, crypto_funding, defi_yields, pm_markets (Base/crypto/prediction-market data), chain_block_number, chain_gas_price, chain_balance, chain_token_balance, chain_tx, chain_wallet (Base mainnet on-chain reads, EIP-7702 delegated-EOA aware), chain_token_report (decision-grade SAFE/CAUTION/AVOID token trade-safety verdict), chain_token_security (token security / honeypot detector: proxy + bytecode risk-selector scan + live transfer simulation), enrich_tech_risk (security: tech-stack + CVE/EPSS/CISA-KEV), enrich_domain (firmographic), or scan_mcp_server (tool-poisoning/prompt-injection audit of a target MCP server)",
+        "MCP tools/call: crypto_prices, crypto_funding, defi_yields, pm_markets (Base/crypto/prediction-market data), chain_block_number, chain_gas_price, chain_balance, chain_token_balance, chain_tx, chain_wallet (Base mainnet on-chain reads, EIP-7702 delegated-EOA aware), gate_swap (pre-trade go/hold/block gate), chain_token_report (decision-grade SAFE/CAUTION/AVOID token trade-safety verdict), chain_token_security (token security / honeypot detector: proxy + bytecode risk-selector scan + live transfer simulation), enrich_tech_risk (security: tech-stack + CVE/EPSS/CISA-KEV), enrich_domain (firmographic), or scan_mcp_server (tool-poisoning/prompt-injection audit of a target MCP server)",
       mimeType: "application/json",
     },
     "GET /scan/mcp": {
@@ -4949,6 +4949,36 @@ app.get("/chain/token-report", async (c) => {
   }
 });
 
+async function buildSwapGate(token: string, side: "buy" | "sell", notional: number) {
+  const r = await buildTokenReport(token);
+  const liq = r.liquidity.wethPoolUsd;
+  const impact = liq && liq > 0 ? (notional / liq) * 100 : null;
+  let decision: "go" | "hold" | "block" = "go";
+  let reason = "token passes safety checks";
+  if (r.verdict === "AVOID") {
+    decision = side === "sell" && r.security.isHoneypot !== true ? "hold" : "block";
+    reason = r.reasons[0] ?? "token flagged AVOID";
+  } else if (impact !== null && impact > 10) {
+    decision = "block";
+    reason = `trade is ${impact.toFixed(1)}% of pool liquidity; severe price impact`;
+  } else if (impact !== null && impact > 2) {
+    decision = "hold";
+    reason = `trade is ${impact.toFixed(1)}% of pool liquidity; split the order`;
+  } else if (r.verdict === "CAUTION") {
+    decision = side === "buy" && r.risk_score >= 50 ? "hold" : "go";
+    reason = r.reasons[0] ?? "caution flags present";
+  } else if (impact !== null) {
+    reason = `token passes safety checks; trade is ${impact.toFixed(2)}% of pool liquidity`;
+  }
+  return {
+    token, side, notional_usd: notional, decision, reason,
+    verdict: r.verdict, risk_score: r.risk_score, liquidity_usd: liq,
+    impact_pct_of_pool: impact === null ? null : Math.round(impact * 100) / 100,
+    flags: r.reasons, token_meta: r.token_meta, analyzed_at: r.analyzed_at,
+    disclaimer: r.disclaimer,
+  };
+}
+
 // Pre-trade gate: compact go/hold/block built on the token-report engine.
 app.get("/gate/swap", async (c) => {
   const token = c.req.query("token");
@@ -4960,35 +4990,10 @@ app.get("/gate/swap", async (c) => {
   const notional = Number(c.req.query("notional_usd") ?? c.req.query("notional") ?? "100");
   if (!Number.isFinite(notional) || notional <= 0) return c.json({ error: "notional_usd must be a positive number" }, { status: 400 });
   try {
-    const r = await buildTokenReport(token);
-    const liq = r.liquidity.wethPoolUsd;
-    const impact = liq && liq > 0 ? (notional / liq) * 100 : null;
-    let decision: "go" | "hold" | "block" = "go";
-    let reason = "token passes safety checks";
-    if (r.verdict === "AVOID") {
-      decision = side === "sell" && r.security.isHoneypot !== true ? "hold" : "block";
-      reason = r.reasons[0] ?? "token flagged AVOID";
-    } else if (impact !== null && impact > 10) {
-      decision = "block";
-      reason = `trade is ${impact.toFixed(1)}% of pool liquidity; severe price impact`;
-    } else if (impact !== null && impact > 2) {
-      decision = "hold";
-      reason = `trade is ${impact.toFixed(1)}% of pool liquidity; split the order`;
-    } else if (r.verdict === "CAUTION") {
-      decision = side === "buy" && r.risk_score >= 50 ? "hold" : "go";
-      reason = r.reasons[0] ?? "caution flags present";
-    } else if (impact !== null) {
-      reason = `token passes safety checks; trade is ${impact.toFixed(2)}% of pool liquidity`;
-    }
+    const out = await buildSwapGate(token, side as "buy" | "sell", notional);
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /gate/swap", rail, makeUsageCounter(c.env)));
-    return c.json({
-      token, side, notional_usd: notional, decision, reason,
-      verdict: r.verdict, risk_score: r.risk_score, liquidity_usd: liq,
-      impact_pct_of_pool: impact === null ? null : Math.round(impact * 100) / 100,
-      flags: r.reasons, token_meta: r.token_meta, analyzed_at: r.analyzed_at,
-      disclaimer: r.disclaimer,
-    });
+    return c.json(out);
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
@@ -5833,6 +5838,30 @@ const mcpHandler = createMcpHandler(() => {
       }
       try {
         const result = await buildTokenReport(token);
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "gate_swap",
+    {
+      description:
+        "Pre-trade GO / HOLD / BLOCK gate for a Base ERC-20 swap: honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your trade size. One decision + reason. Cost: $0.01 USDC per call via x402.",
+      inputSchema: {
+        token: z.string().describe("0x-prefixed ERC-20 contract on Base mainnet"),
+        side: z.enum(["buy", "sell"]).optional().describe("default buy"),
+        notional_usd: z.number().positive().optional().describe("intended trade size in USD (default 100)"),
+      },
+    },
+    async ({ token, side, notional_usd }) => {
+      if (!ADDR_RE.test(token)) {
+        return { content: [{ type: "text" as const, text: "Error: token must be a 0x-prefixed 20-byte address" }] };
+      }
+      try {
+        const result = await buildSwapGate(token, side ?? "buy", notional_usd ?? 100);
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
