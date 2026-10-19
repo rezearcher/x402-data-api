@@ -74,3 +74,8 @@ EXCLUDED (off-mission): per-target vulnerability/conviction feeds.
 - `~/.hermes/scripts/dollar_tripwire.py` is **non-functional** (DO_TOKEN empty → always reports $0).
 - The `Br0ski777/x402-agent-tools` bundle chased as "the bullseye" is a dead channel (16★, solo, 0 external merges) — do not rely on it.
 - Base-mainnet settlement uses a **non-custodial facilitator (xpay)** — no Coinbase/CDP key needed (the old README's CDP checklist was wrong).
+
+## Cycle 2026-10-19 tasks
+- [x] 1. Prepare coinbase/x402 ecosystem listing: branch `add-grey-ridge-signals` pushed to fork rezearcher/x402 (gh token cannot create upstream PRs: 403).
+- [ ] 2. Open PR: https://github.com/rezearcher/x402/pull/new/add-grey-ridge-signals (needs Rez's browser login — one click)
+- [ ] 3. Re-crawl Bazaar after 2026-10-20; diff settle payload vs a listed endpoint.
