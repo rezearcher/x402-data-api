@@ -775,6 +775,7 @@ app.get("/.well-known/x402", (c) => {
       mk("/chain/storage-at", "GET", "0.002", "2000", "Raw storage slot read (eth_getStorageAt) for any Base contract; slot defaults to 0x0. Use when an agent needs proxy implementation/admin slots or raw contract state.", ["rpc", "base", "onchain", "contract", "data"]),
       mk("/chain/proxy-info", "GET", "0.003", "3000", "EIP-1967 proxy resolver for a Base contract: returns implementation, admin and beacon addresses (read from the standard storage slots) plus is_proxy flag. Use when an agent must know what code actually runs behind a proxy before trusting or calling it.", ["rpc", "base", "onchain", "contract", "proxy", "security", "data"]),
       mk("/chain/allowance", "GET", "0.002", "2000", "ERC-20 allowance(owner, spender) on Base, raw + formatted, flags unlimited approvals.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
+      mk("/ai/extract", "GET", "0.005", "5000", "Text-to-JSON extraction (Llama 3.2 3B): ?text=<up to 1500 chars>&fields=<comma-separated field names> returns a strict JSON object with exactly those keys (null when absent). Use when an agent needs messy text turned into typed structured data.", ["ai", "llm", "extraction", "json", "structured", "data"]),
       mk("/ai/ask", "GET", "0.002", "2000", "Cheap LLM answer (Llama 3.2 3B on Workers AI): ?q=<prompt up to 500 chars>, returns concise text. Pay-per-call, no API key.", ["ai", "llm", "inference", "chat", "data"]),
       mk("/chain/block", "GET", "0.005", "5000", "Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/wallet", "GET", "0.003", "3000", "Wallet bundle: ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]),
@@ -990,6 +991,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/chain/network-status — $0.003 — Base chain id, latest block, block age, gas utilisation.
 - GET ${BASE}/chain/l1-base-fee — $0.003 — Ethereum L1 base fee seen by Base's GasPriceOracle + L1 data-fee estimate.
 - GET ${BASE}/chain/fee-history — $0.003 — Base base-fee history over the last 10 blocks with gas-used ratios.
+- GET ${BASE}/ai/extract?text=<…>&fields=a,b,c — $0.005 — Text-to-JSON extraction into exactly the fields you name.
 - GET ${BASE}/chain/blob-base-fee — $0.003 — Base EIP-4844 blob base fee (wei/gwei) from the GasPriceOracle.
 - GET ${BASE}/chain/eth-usd — $0.003 — Chainlink ETH/USD spot price on Base with staleness.
 - GET ${BASE}/chain/btc-usd — $0.003 — Chainlink BTC/USD spot price on Base with staleness.
@@ -1205,6 +1207,7 @@ app.get("/openapi.json", (c) => {
       "/chain/storage-at": paid("Raw eth_getStorageAt slot read on Base.", "0.002", [{ name: "address", desc: "0x-prefixed contract address", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }, { name: "slot", desc: "storage slot hex (default 0x0)", required: false, example: "0x0" }]),
       "/chain/proxy-info": paid("EIP-1967 proxy resolver on Base: implementation/admin/beacon addresses + is_proxy.", "0.003", [{ name: "address", desc: "0x-prefixed contract address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
       "/chain/allowance": paid("ERC-20 allowance(owner, spender) on Base.", "0.002", [{ name: "token", desc: "ERC-20 address", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }, { name: "owner", desc: "owner address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "spender", desc: "spender address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
+      "/ai/extract": paid("Text-to-JSON extraction: text + comma-separated fields returns a strict JSON object.", "0.005", [{ name: "text", desc: "source text, max 1500 chars", required: true, example: "Invoice 4417 from Acme Corp, due 2026-11-02, total $1,250.00" }, { name: "fields", desc: "comma-separated field names, max 12", required: true, example: "invoice_number,vendor,due_date,total" }]),
       "/ai/ask": paid("Cheap LLM answer (Llama 3.2 3B) for a prompt up to 500 chars.", "0.002", [{ name: "q", desc: "prompt, max 500 chars", required: true, example: "Explain x402 in one sentence" }]),
       "/chain/block": paid("Base block summary by number or latest.", "0.005", [{ name: "number", desc: "decimal block number or 'latest'", required: false, example: "latest" }]),
       "/chain/code": paid("Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware).", "0.01", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
@@ -2047,6 +2050,17 @@ function makeRoutes(payTo: string) {
         input: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913", owner: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10", spender: "0x4200000000000000000000000000000000000006" },
         inputSchema: { type: "object", properties: { token: { type: "string", description: "ERC-20 address" }, owner: { type: "string", description: "owner address" }, spender: { type: "string", description: "spender address" } } },
         output: { example: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913", owner: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10", spender: "0x4200000000000000000000000000000000000006", allowance_raw: "0", allowance: 0, decimals: 6, is_unlimited: false, chain: "base" } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /ai/extract": {
+      accepts: { scheme: "exact" as const, price: "$0.005", network: NETWORK, payTo },
+      description: "Text-to-JSON extraction (Llama 3.2 3B): ?text=<up to 1500 chars>&fields=<comma-separated field names> returns a strict JSON object with exactly those keys (null when absent). Use when an agent needs messy text turned into typed structured data.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { text: "Invoice 4417 from Acme Corp, due 2026-11-02, total $1,250.00", fields: "invoice_number,vendor,due_date,total" },
+        inputSchema: { type: "object", properties: { text: { type: "string" }, fields: { type: "string" } }, required: ["text", "fields"] },
+        output: { example: { data: { invoice_number: "4417", vendor: "Acme Corp", due_date: "2026-11-02", total: "1250.00" } } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /ai/ask": {
@@ -4916,6 +4930,37 @@ app.get("/ai/ask", async (c) => {
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /ai/ask", rail, makeUsageCounter(c.env)));
     return c.json({ answer: r.response ?? "", model: "llama-3.2-3b-instruct" });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/ai/extract", async (c) => {
+  const text = (c.req.query("text") ?? "").trim();
+  const fields = (c.req.query("fields") ?? "").split(",").map((f) => f.trim()).filter(Boolean);
+  if (!text || text.length > 1500) return c.json({ error: "text required, max 1500 chars" }, { status: 400 });
+  if (!fields.length || fields.length > 12 || fields.some((f) => !/^[A-Za-z_][A-Za-z0-9_]{0,40}$/.test(f))) return c.json({ error: "fields required: 1-12 comma-separated identifiers" }, { status: 400 });
+  if (!c.env.AI) return c.json({ error: "ai unavailable" }, { status: 501 });
+  const day = new Date().toISOString().slice(0, 10);
+  const key = "aicap:" + day;
+  const used = parseInt((await c.env.API_KEYS?.get(key)) ?? "0", 10);
+  if (used >= 400) return c.json({ error: "daily capacity reached, retry after 00:00 UTC" }, { status: 503 });
+  try {
+    const r = (await c.env.AI.run("@cf/meta/llama-3.2-3b-instruct", {
+      messages: [{ role: "system", content: "Extract data from the user's text. Reply with ONLY a JSON object with exactly these keys: " + fields.join(", ") + ". Use null for any value not present in the text. No prose, no code fences." }, { role: "user", content: text }],
+      max_tokens: 300,
+    })) as { response?: string };
+    const raw = r.response ?? "";
+    const m = raw.match(/\{[\s\S]*\}/);
+    let parsed: Record<string, unknown> = {};
+    try { parsed = m ? JSON.parse(m[0]) : {}; } catch { return c.json({ error: "model returned unparseable output, retry" }, { status: 502 }); }
+    const data: Record<string, unknown> = {};
+    for (const f of fields) data[f] = parsed[f] ?? null;
+    await c.env.API_KEYS?.put(key, String(used + 1), { expirationTtl: 172800 });
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/ai/extract", ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /ai/extract", rail, makeUsageCounter(c.env)));
+    return c.json({ data, model: "llama-3.2-3b-instruct" });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
