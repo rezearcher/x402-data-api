@@ -2456,7 +2456,9 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 app.use(async (c, next) => {
   // Fire-and-forget traffic logging (t_9e3fec95): waitUntil + catch, fail open.
-  if (c.env.TRAFFIC_LOG) {
+  // Sampled 1-in-10 and /mcp skipped: unsampled logging exhausted the free-plan DO daily
+  // request limit (CF alert 2026-10-19). PAID rows below stay unsampled.
+  if (c.env.TRAFFIC_LOG && c.req.path !== "/mcp" && Math.random() < 0.1) {
     const stub = c.env.TRAFFIC_LOG.get(c.env.TRAFFIC_LOG.idFromName("default"));
     c.executionCtx.waitUntil(stub.logHit(c.req.path, c.req.method, c.req.header("User-Agent") ?? "unknown").catch(() => {}));
   }
