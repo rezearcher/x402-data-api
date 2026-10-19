@@ -388,3 +388,4 @@ Inbox: 0 replies. Issue watch: only x402-pilot#13 (already answered). trace_inbo
 - cycle 63f: polled inbox+issue sensor: 0 new replies; trace_inbound shows only bot 0xec2abd (cents); wallet 32.80624.
 - cycle 63g: pitched plexa-xyz/mcp#1 (aggregator, second source for pretrade check). Watch via issue_reply_watch (add to its list if not auto).
 - cycle 63h: CORRECTION — Plexa is a SELLER (own api.getplexa.com, pretrade check $0.05, quote $0.02), thin MCP client; plexa-xyz/mcp#1 pitch is low-EV. Our token-report $0.01 is 5x cheaper: position vs Plexa.
+- 2026-10-19 CDT (cycle 14): 0 new replies; Krystian answered 11:45 PDT, silent. Web search re-found true402/x402-bazaar-mcp (competing sellers) and x402station (already pitched #4). gh CLI absent -> curl+GH_TOKEN_CLASSIC. Cap resets 00:00 CDT; send queue then.
