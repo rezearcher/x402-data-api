@@ -3,7 +3,7 @@
   "name": "x402-data-api",
   "type": "streamable-http",
   "description": "Pay-per-call crypto, DeFi, prediction-market, and on-chain data for AI agents — HTTP 402 payment-enabled MCP server on Base mainnet. Companion stdio MCP client (mcp-client/, x402-data-api-mcp) included for stdio-only agents.",
-  "url": "https://x402-data-api.sigrunner.workers.dev/mcp",
+  "url": "https://api.greyridgesignals.ai/mcp",
   "repository": "https://github.com/rezearcher/x402-data-api",
   "authors": [
     {
@@ -19,7 +19,7 @@
   ],
   "logoUrl": "https://img.shields.io/badge/x402-data--api-blue",
   "homepage": "https://github.com/rezearcher/x402-data-api",
-  "documentation": "https://x402-data-api.sigrunner.workers.dev/llms.txt",
+  "documentation": "https://api.greyridgesignals.ai/llms.txt",
   "privacy": "https://github.com/rezearcher/x402-data-api#privacy",
   "license": "MIT",
   "capabilities": [
@@ -27,7 +27,7 @@
     "data-access",
     "payment-aware"
   ],
-  "tools": 22,
+  "tools": 25,
   "toolList": [
     "chain_balance",
     "chain_block_number",
@@ -35,6 +35,8 @@
     "chain_gas_price",
     "chain_gas_price_preview",
     "chain_token_balance",
+    "chain_token_report",
+    "chain_token_report_preview",
     "chain_token_security",
     "chain_token_security_preview",
     "chain_tx",
@@ -47,14 +49,16 @@
     "defi_yields_preview",
     "enrich_domain",
     "enrich_tech_risk",
+    "gate_swap",
     "pm_markets",
     "pm_markets_preview",
     "scan_mcp_preview",
     "scan_mcp_server"
   ],
-  "pricing": "HTTP 402 pay-per-call (USDC, $0.001–$0.005 per call)",
+  "pricing": "HTTP 402 pay-per-call (USDC, $0.001–$0.10 per call)",
   "network": "Base mainnet (eip155:8453)",
   "features": [
+    "Pre-trade go/hold/block gate (gate_swap) and SAFE/CAUTION/AVOID token reports for any Base ERC-20",
     "Crypto prices & funding rates",
     "DeFi yields & APY trends",
     "Polymarket prediction markets",
@@ -74,6 +78,9 @@
     "payment",
     "x402",
     "data",
-    "rpc"
+    "rpc",
+    "trading",
+    "token-security",
+    "agents"
   ]
 }

@@ -93,3 +93,4 @@ EXCLUDED (off-mission): per-target vulnerability/conviction feeds.
 - [x] 15. (2026-10-18/19l) Reply check (gmail-me, newer_than:3d): 0. 402index: our Bazaar-sourced entries mirror there (8 /chain/* still "uncategorized/no description" — inherits Bazaar metadata; no update API except POST /register). 402index opportunities feed is dominated by 130+ lhr.life spam tunnels — directory-crowding, not a gap we can fill. Email budget spent for 10-19; next window: /gate/swap pitches to execution-agent builders.
 - [x] 16. (2026-10-19m) GitHub repo rezearcher/x402-data-api: set homepage + 10 topics (x402, mcp, mcp-server, base, usdc, ai-agents, defi, polymarket, cloudflare-workers, pay-per-call) for GitHub/Glama topic discovery (was none).
 - [x] 17. README: added /gate/swap + token-report rows + canonical api.greyridgesignals.ai.
+- [x] 18. glama.json refreshed to live tools/list (gate_swap, chain_token_report) + canonical domain.
