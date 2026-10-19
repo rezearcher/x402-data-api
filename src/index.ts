@@ -5048,9 +5048,22 @@ app.get("/gate/swap", async (c) => {
 // Free preview — full real report for Base USDC (same depth as paid). ?token= is
 // honored only for the fixed demo set so the preview can't substitute the paid route.
 const TOKEN_REPORT_PREVIEW_TOKEN = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // USDC on Base
+const PREVIEW_DEMO_TOKENS: Record<string, string> = {
+  usdc: TOKEN_REPORT_PREVIEW_TOKEN,
+  weth: "0x4200000000000000000000000000000000000006",
+  cbbtc: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+  aero: "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+  degen: "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
+};
+function previewToken(q: string | undefined): string {
+  const k = (q ?? "").trim().toLowerCase();
+  if (PREVIEW_DEMO_TOKENS[k]) return PREVIEW_DEMO_TOKENS[k];
+  const hit = Object.values(PREVIEW_DEMO_TOKENS).find((a) => a.toLowerCase() === k);
+  return hit ?? TOKEN_REPORT_PREVIEW_TOKEN;
+}
 app.get("/chain/token-report/preview", async (c) => {
   try {
-    const result = await buildTokenReport(TOKEN_REPORT_PREVIEW_TOKEN);
+    const result = await buildTokenReport(previewToken(c.req.query("token")));
     return c.json({
       ...result,
       note: "Free live sample (Base USDC) — same depth as the paid route. Full: GET /chain/token-report?token=<0x…> ($0.05) for ANY Base ERC-20.",
@@ -5062,8 +5075,8 @@ app.get("/chain/token-report/preview", async (c) => {
 
 app.get("/gate/swap/preview", async (c) => {
   try {
-    const out = await buildSwapGate(TOKEN_REPORT_PREVIEW_TOKEN, "buy", 100);
-    return c.json({ ...out, note: "Free live sample (Base USDC, buy, $100) — full: GET /gate/swap?token=<0x…>&side=buy|sell&notional_usd=<n> ($0.01) for ANY Base ERC-20." });
+    const out = await buildSwapGate(previewToken(c.req.query("token")), "buy", 100);
+    return c.json({ ...out, note: "Free live sample (demo tokens via ?token=usdc|weth|cbbtc|aero|degen; default Base USDC, buy, $100) — full: GET /gate/swap?token=<0x…>&side=buy|sell&notional_usd=<n> ($0.01) for ANY Base ERC-20." });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
