@@ -295,3 +295,4 @@ branch@dexter.cash (audition support) queued: outreach/queue/dexter-audition-sup
 - cycle 55c: shipped /chain/network-status (0.003, no params); IndexNow pinged for it + fee-estimate.
 - cycle 55d: shipped /chain/l1-base-fee (0.003, no params).
 - 2026-10-19 CDT (cycle 56): inbox 0 replies (Fronesis already answered); pilot#13 last ours; ext only bots (0xec2abd +0.005 at 52811898); l1-base-fee/fee-estimate/network-status live (402); IndexNow pinged. Wallet 32.62724 flat. Cap resets 10-20 05:00Z.
+- cycle 56b: shipped+deployed /chain/blob-base-fee and /chain/fee-history (0.003, no params; version 29588391). IndexNow pinged. Not seeded (self-funded canary).

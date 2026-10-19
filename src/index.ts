@@ -764,6 +764,8 @@ app.get("/.well-known/x402", (c) => {
       mk("/chain/fee-estimate", "GET", "0.003", "3000", "Base EIP-1559 fee estimate: base fee, suggested priority fee, max-fee tiers (slow/standard/fast) in gwei and a 21k-gas transfer cost.", ["rpc", "base", "onchain", "gas", "fees", "data"]),
       mk("/chain/network-status", "GET", "0.003", "3000", "Base network status snapshot: chain id, latest block, block age, gas used ratio and tx count.", ["rpc", "base", "onchain", "status", "health", "data"]),
       mk("/chain/l1-base-fee", "GET", "0.003", "3000", "Ethereum L1 base fee as seen by Base's GasPriceOracle (wei/gwei) plus estimated L1 data fee for a simple transfer.", ["rpc", "base", "onchain", "gas", "l1", "fees", "data"]),
+      mk("/chain/fee-history", "GET", "0.003", "3000", "Base fee history for the last 10 blocks: base fee per block (gwei), gas-used ratios and a min/max/avg summary. Use when an agent times transactions around cheap blocks.", ["rpc", "base", "onchain", "gas", "fees", "history", "data"]),
+      mk("/chain/blob-base-fee", "GET", "0.003", "3000", "Base EIP-4844 blob base fee from the GasPriceOracle (wei/gwei). Use when an agent estimates L1 data-availability cost for Base batches.", ["rpc", "base", "onchain", "gas", "blob", "fees", "data"]),
       mk("/chain/total-supply", "GET", "0.003", "3000", "ERC-20 total supply on Base (raw + formatted, with symbol and decimals).", ["rpc", "base", "onchain", "token", "erc20", "data"]),
       mk("/chain/storage-at", "GET", "0.002", "2000", "Raw storage slot read (eth_getStorageAt) for any Base contract; slot defaults to 0x0. Use when an agent needs proxy implementation/admin slots or raw contract state.", ["rpc", "base", "onchain", "contract", "data"]),
       mk("/chain/proxy-info", "GET", "0.003", "3000", "EIP-1967 proxy resolver for a Base contract: returns implementation, admin and beacon addresses (read from the standard storage slots) plus is_proxy flag. Use when an agent must know what code actually runs behind a proxy before trusting or calling it.", ["rpc", "base", "onchain", "contract", "proxy", "security", "data"]),
@@ -982,6 +984,8 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/chain/fee-estimate — $0.003 — Base EIP-1559 fee tiers (slow/standard/fast) + transfer cost.
 - GET ${BASE}/chain/network-status — $0.003 — Base chain id, latest block, block age, gas utilisation.
 - GET ${BASE}/chain/l1-base-fee — $0.003 — Ethereum L1 base fee seen by Base's GasPriceOracle + L1 data-fee estimate.
+- GET ${BASE}/chain/fee-history — $0.003 — Base base-fee history over the last 10 blocks with gas-used ratios.
+- GET ${BASE}/chain/blob-base-fee — $0.003 — Base EIP-4844 blob base fee (wei/gwei) from the GasPriceOracle.
 - GET ${BASE}/chain/total-supply?token=<0x…> — $0.003 — ERC-20 total supply (raw + formatted).
 - GET ${BASE}/chain/allowance?token=<0x…>&owner=<0x…>&spender=<0x…> — $0.002 — ERC-20 allowance, flags unlimited approvals.
 - GET ${BASE}/chain/code?address=<0x…> — $0.01 — contract-code check for a Base address (EIP-7702 delegated-EOA aware).
@@ -1180,6 +1184,8 @@ app.get("/openapi.json", (c) => {
       "/chain/fee-estimate": paid("Base EIP-1559 fee estimate: base fee, priority fee, slow/standard/fast max-fee tiers (gwei).", "0.003", []),
       "/chain/network-status": paid("Base network status: chain id, latest block, block age seconds, gas utilisation, tx count.", "0.003", []),
       "/chain/l1-base-fee": paid("Ethereum L1 base fee via Base GasPriceOracle (wei/gwei) + estimated L1 data fee for a transfer.", "0.003", []),
+      "/chain/fee-history": paid("Base base-fee history over the last 10 blocks with gas-used ratios.", "0.003", []),
+      "/chain/blob-base-fee": paid("Base EIP-4844 blob base fee (wei/gwei) from the GasPriceOracle.", "0.003", []),
       "/chain/total-supply": paid("ERC-20 total supply on Base, raw + formatted.", "0.003", [{ name: "token", desc: "0x-prefixed ERC-20 address", required: true, example: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" }]),
       "/chain/storage-at": paid("Raw eth_getStorageAt slot read on Base.", "0.002", [{ name: "address", desc: "0x-prefixed contract address", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }, { name: "slot", desc: "storage slot hex (default 0x0)", required: false, example: "0x0" }]),
       "/chain/proxy-info": paid("EIP-1967 proxy resolver on Base: implementation/admin/beacon addresses + is_proxy.", "0.003", [{ name: "address", desc: "0x-prefixed contract address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
@@ -1911,7 +1917,29 @@ function makeRoutes(payTo: string) {
         inputSchema: { type: "object", properties: {} },
         output: { example: { l1_base_fee_wei: "210000000", l1_base_fee_gwei: 0.21, est_l1_data_fee_eth_simple_transfer: 2.0e-8, chain: "base" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },    "GET /chain/blob-base-fee": {
+      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      description: "Base EIP-4844 blob base fee from the GasPriceOracle (wei/gwei). Use when an agent estimates L1 data-availability cost for Base batches.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: {},
+        inputSchema: { type: "object", properties: {} },
+        output: { example: { chain: "base" } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },    "GET /chain/fee-history": {
+      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      description: "Base fee history for the last 10 blocks: base fee per block (gwei), gas-used ratios and a min/max/avg summary. Use when an agent times transactions around cheap blocks.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: {},
+        inputSchema: { type: "object", properties: {} },
+        output: { example: { chain: "base" } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
+
+
     "GET /chain/total-supply": {
       accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
       description: "ERC-20 total supply on Base, raw + formatted with decimals and symbol. Use when an agent needs a token's circulating-supply base for market-cap or dilution math.",
@@ -4528,6 +4556,39 @@ app.get("/chain/l1-base-fee", async (c) => {
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /chain/l1-base-fee", rail, makeUsageCounter(c.env)));
     return c.json({ l1_base_fee_wei: wei.toString(), l1_base_fee_gwei: Number(wei) / 1e9, est_l1_data_fee_eth_simple_transfer: (Number(wei) * 16 * 200) / 1e18, assumed_tx_bytes: 200, chain: "base" });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/blob-base-fee", async (c) => {
+  try {
+    const r = (await baseRpc("eth_call", [{ to: "0x420000000000000000000000000000000000000F", data: "0xf8206140" }, "latest"])) as string;
+    const wei = BigInt(r);
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/chain/blob-base-fee", ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/blob-base-fee", rail, makeUsageCounter(c.env)));
+    return c.json({ blob_base_fee_wei: wei.toString(), blob_base_fee_gwei: Number(wei) / 1e9, chain: "base" });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/fee-history", async (c) => {
+  try {
+    const r = (await baseRpc("eth_feeHistory", ["0xa", "latest", []])) as { oldestBlock: string; baseFeePerGas: string[]; gasUsedRatio: number[] };
+    const fees = r.baseFeePerGas.map((x) => Number(BigInt(x)) / 1e9);
+    const oldest = parseInt(r.oldestBlock, 16);
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/chain/fee-history", ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/fee-history", rail, makeUsageCounter(c.env)));
+    return c.json({
+      oldest_block: oldest,
+      blocks: r.gasUsedRatio.map((g, i) => ({ block: oldest + i, base_fee_gwei: fees[i], gas_used_ratio: g })),
+      next_base_fee_gwei: fees[fees.length - 1],
+      summary: { min_gwei: Math.min(...fees), max_gwei: Math.max(...fees), avg_gwei: fees.reduce((a, b) => a + b, 0) / fees.length },
+      chain: "base",
+    });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
