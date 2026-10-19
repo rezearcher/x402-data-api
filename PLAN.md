@@ -244,3 +244,4 @@ branch@dexter.cash (audition support) queued: outreach/queue/dexter-audition-sup
 - 2026-10-19 CDT (cycle 37c): 5 more pitch issues, see outreach/gh/issues_cycle37.txt
 - 2026-10-19 CDT (cycle 37d): 6 more pitch issues (incl. Recall-Kitchen/awesome-x402-mcp-services list), see issues_cycle37.txt
 - 2026-10-19 CDT (cycle 38): inbox 0 replies; swarm-x402-mcp#2 owner declined (scoped) but is measuring Bazaar Base sellers' repeat payers, will post results there (check next cycles); ext only bots 0xec2abd 0.01, 0x54e163 0.008; wallet 32.61824.
+- 2026-10-19 CDT (cycle 38b): shipped+deployed /chain/is-contract $0.002 (92207575); 402 verified; needs catalog seed.
