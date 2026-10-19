@@ -1,0 +1,253 @@
+{
+ "n": 30,
+ "agreement_pct": 100.0,
+ "tp": 0,
+ "fp": 0,
+ "fn": 0,
+ "goplus_positive": 0,
+ "verdicts": {
+  "SAFE": 30
+ },
+ "rows": [
+  {
+   "token": "0xb200000000000000000000de72ede7c5621dbfd1",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0xaa6f8948d4a8a1671595f3a2de108f40797f4df8",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x1d0558c3d736bbf0d38d1d85cdad0391803207f0",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0xb200000000000000000000cfaa22b3ff5ab60689",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x993a8ecc8b7a047f797dc1f0b3b114de5aef83b9",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x14e172312fde1d3c932c3904640f403ae21564bf",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x336ad57041badc2120e7f093c2a0c11a79999653",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x7dd23e3a990f7131096c5bd0357a0a0a94ee12cd",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x117e2adf8b86b9ac7c6f2b1e13726185ee519477",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x97febbd56b06c50fe9488612f567707a5f6e878e",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x67b160416fea81667d7ef045b632126bd4418ec4",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0xc996288ef527eb8b6cd5dcf579f91501aed2e974",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x4123c05d14b7763aa72911cff05db2168377772f",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x5e9096b49496c7c33fae780cbbed5ae269aecba3",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x305d56033779aa51f747ccc5532c288af812cfa8",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x1fe5f32d7afab619bc5ec1a2dfe2f774e06a35aa",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0xead2e050241ed289641e69839f9a15fb06bd181c",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x4b0feecbbdb7e5e98774ce3ddb6ba1e7f731f5e3",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0xe0862846afb787aef3083403bbcc1b3dd8abf668",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x1f8ad15b32fdaf49ac6ae156e1fa92069dc23b65",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x6985884c4392d348587b19cb9eaaf157f13271cd",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x3c5cd672b204ba0fc48e93b98c0922920a87912d",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x311935cd80b76769bf2ecc9d8ab7635b2139cf82",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x1256cfaef9bab0c24196e2d1d8c6df582f87e461",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0xd037cd16b1c6ac2d656a2d358df4fcd309bd1e22",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x11dc28d01984079b7efe7763b533e6ed9e3722b9",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x87a84a3e5a07666ec467c5b0a5c54a21599c3e7c",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0xf4d97f2da56e8c3098f3a8d538db630a2606a024",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0xf1e9baa65d418a9025e1851dd2d37f1ad208bba3",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  },
+  {
+   "token": "0x9e00fc92493451eba1c63dd3880d68b622037ba3",
+   "goplus_honeypot": false,
+   "ours_honeypot": false,
+   "ours_sellable": true,
+   "verdict": "SAFE",
+   "score": 25
+  }
+ ]
+}

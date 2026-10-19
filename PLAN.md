@@ -417,3 +417,7 @@ multi-chain = 44-callsite refactor, demand-gated (additive /chain/eth/* only on 
 **Build sequence (awaits Rez "go"):** L3 (surface+cap trial, publishable now) → L1+L2 (uptime/latency
 sensor + /status) → L4 (accuracy benchmark) → L5 (multi-chain, demand-gated). All zero-capital.
 The goal file (`makemoney.goal`) was amended with an "AIM & CLAIMS LAW" block to carry this into every cycle.
+
+## L1/L2/L4 measurement (2026-10-19 cycle)
+- scripts/uptime_probe.py on 5-min cron -> data/uptime_samples.jsonl + ~/.hermes/data/x402-data-api-uptime/latest.json. Publish uptime/latency ONLY after >=14d samples (first sample 2026-10-19T22:06Z), measured numbers only.
+- scripts/benchmark_token_report.py: GeckoTerminal base pools vs GoPlus honeypot flag. First run n=30, 0 GoPlus positives => agreement 100% is NOT a publishable claim (no positives; recall unmeasured). Need a known-honeypot set before any accuracy claim.

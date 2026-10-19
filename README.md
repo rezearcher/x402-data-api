@@ -155,3 +155,6 @@ Pre-trade token guard (`/gate/swap`, $0.008 USDC via x402 on Base). Free sample:
 
 ## Python / LangChain / CrewAI
 `pip install "git+https://github.com/rezearcher/greyridge-x402-tools"` — `token_report()` and `swap_gate()` helpers (free preview by default, paid x402 mode optional) plus LangChain tools.
+
+## Try it on YOUR token, free
+`curl "https://api.greyridgesignals.ai/chain/token-report/preview?token=0xYourBaseToken"` returns the same full-depth report as the paid route ($0.01). `/gate/swap/preview?token=0x…` gives 3 free real-token GO/HOLD/BLOCK checks/day/IP.
