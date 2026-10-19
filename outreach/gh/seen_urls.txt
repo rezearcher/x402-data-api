@@ -3,3 +3,6 @@ https://github.com/tianzizhiming-svg/agentbridge/issues/8
 https://github.com/uerax/all-in-one-bot/issues/118
 https://github.com/Tamas22-cell/AIPoweredMemecoinRadar/issues/1
 https://github.com/rdin777/base_bot/issues/2
+https://github.com/orkid-labs/plugin-orkid/issues/3
+https://github.com/JudeOlowu/broker-bot-acp/issues/2
+https://github.com/devclone20/vegeta/issues/1
