@@ -2,3 +2,7 @@ https://github.com/6ixtyy/switchbord/issues/1
 https://github.com/Haustorium12/gold-402/issues/374
 "html_url": "https://github.com/Agorean/claude-plugin/issues/1"
 "html_url": "https://github.com/Fizzl13/x402-doctor/issues/337"
+"html_url": "https://github.com/X402blockchains/x402-registry/issues/16"
+"html_url": "https://github.com/402MCP/402mcp/issues/2"
+"html_url": "https://github.com/LumenRoute/lumenbazaar-backend/issues/67"
+"html_url": "https://github.com/Pranavms09/decentralization_DI05_/issues/16"
