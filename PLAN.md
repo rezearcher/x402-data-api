@@ -433,3 +433,4 @@ makemoney.goal gained a "STRATEGIC ALTITUDE" block: the $1,000 goal stays fixed/
 
 ## ExpeL voted-insight ledger BUILT (2026-10-19) — advisory #1
 INSIGHTS.md = loop-owned voted RULE ledger (ADD/UPVOTE/DOWNVOTE/PRUNE). Goal strategy body gains one pointer line: read INSIGHTS before choosing a lever, apply one vote op after. Anti-spray / convergence fix for the 12-21-repo batch pitching. Gate-core untouched. See docs/AGENT_TECHNIQUE_ADVISORY_2026-10-19.md.
+- 2026-10-19 cron audit: only scripts/issue_reply_watch.sh reads the GH token, and it already reads 1Password first.
