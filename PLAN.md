@@ -98,3 +98,8 @@ EXCLUDED (off-mission): per-target vulnerability/conviction feeds.
 - [x] 20. llms-install.md MCP URL -> canonical api.greyridgesignals.ai (verified 200).
 - [ ] 21. (2026-10-19n) Public gist of /gate/swap examples: gh PAT lacks gist scope (403) — dead end via gh; docs/EXAMPLES.md is the canonical copy. (Note: /tmp files do not persist between Bash calls; use repo-local paths.)
 - [x] 22. docs/EXAMPLES.md base URL -> canonical api.greyridgesignals.ai.
+
+## 2026-10-19 cycle (makemoney)
+- 0 replies (gmail-me, 3d). Daily 15-email budget already spent 10-19. Wallet 32.30424 (only self-test gain).
+- 402index lists 13 of our /chain,/defi,/crypto,/pm endpoints as 'uncategorized', no price/desc (self-registered probe); enrich/* have desc+price. POST /api/v1/register is L402-only; 402 body/header format is identical for both, so no worker fix found. Dead end.
+- Added outreach/blockers/*.md for the two atoms.
