@@ -1135,7 +1135,7 @@ app.get("/openapi.json", (c) => {
       version: "0.1.0", // mirror root package.json (canonical)
       description: "Agent-native pay-per-call data on Base (USDC via x402). No API keys, no signup. Discovery: /.well-known/x402",
       "x-guidance": "Pay-per-call Base (USDC, x402) APIs for trading agents: /gate/swap (GO/HOLD/BLOCK pre-trade gate, any Base ERC-20, $0.008), /chain/token-report (SAFE/CAUTION/AVOID, $0.01), /chain/token-security (honeypot sim, $0.009), plus DeFi yields, prices, funding, Polymarket and on-chain reads. Free samples: /gate/swap/preview?token=degen and /chain/token-report/preview?token=aero.",
-      contact: { name: "Grey Ridge Signals", email: "contact@greyridgesignals.ai", url: "https://api.greyridgesignals.ai" },
+      contact: { name: "Grey Ridge Signals", email: "contact@greyridgesignals.ai", url: "https://x402-data-api.sigrunner.workers.dev" },
     },
     // Custom domain FIRST — an importer takes servers[0] as the base URL, and the
     // marketplace listing should point at the zone we control DNS for. The workers.dev
@@ -1156,7 +1156,7 @@ app.get("/openapi.json", (c) => {
       "/crypto/funding": paid("Cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread + premium/annualized/signal/next_funding_ts.", "0.004", [{ name: "limit", desc: "max coins (default 20, max 100)", example: "10" }]),
       "/defi/yields": paid("Top DeFi lending/LP yields — APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast (DefiLlama).", "0.001", [{ name: "limit", desc: "max pools", example: "10" }, { name: "project", desc: "protocol filter", example: "aave-v3" }, { name: "chain", desc: "chain filter", example: "Base" }, { name: "stable", desc: "'true' = stablecoin only", example: "true" }, { name: "sort", desc: "'tvl' (default) or 'risk_adjusted' (apy/sigma)", example: "tvl" }]),
       "/pm/markets": paid("Live Polymarket prediction markets, ranked by volume24hr, with bestBid/bestAsk/spread and category tags.", "0.005", [{ name: "query", desc: "keyword filter", example: "election" }, { name: "limit", desc: "max markets", example: "10" }]),
-      "/scan/mcp": paid("Security audit of an MCP server (tool-poisoning / prompt-injection). Findings + risk score + verdict (clear/review/block).", "0.05", [{ name: "url", desc: "target MCP server URL", required: true, example: "https://api.greyridgesignals.ai/mcp" }]),
+      "/scan/mcp": paid("Security audit of an MCP server (tool-poisoning / prompt-injection). Findings + risk score + verdict (clear/review/block).", "0.05", [{ name: "url", desc: "target MCP server URL", required: true, example: "https://x402-data-api.sigrunner.workers.dev/mcp" }]),
       "/enrich/tech-risk": paid("Tech-stack -> CVE + EPSS + CISA-KEV risk + verdict (clear/review/block).", "0.01", [{ name: "domain", desc: "target domain", required: true, example: "stripe.com" }]),
       "/enrich/domain": paid("Firmographic + tech-stack enrichment, incl. subdomain enumeration + verdict (clear/review/block, domain age).", "0.01", [{ name: "domain", desc: "target domain", required: true, example: "stripe.com" }]),
       "/chain/block-number": paid("Current Base mainnet block number.", "0.005", []),
