@@ -775,6 +775,8 @@ app.get("/.well-known/x402", (c) => {
       mk("/chain/storage-at", "GET", "0.002", "2000", "Raw storage slot read (eth_getStorageAt) for any Base contract; slot defaults to 0x0. Use when an agent needs proxy implementation/admin slots or raw contract state.", ["rpc", "base", "onchain", "contract", "data"]),
       mk("/chain/proxy-info", "GET", "0.003", "3000", "EIP-1967 proxy resolver for a Base contract: returns implementation, admin and beacon addresses (read from the standard storage slots) plus is_proxy flag. Use when an agent must know what code actually runs behind a proxy before trusting or calling it.", ["rpc", "base", "onchain", "contract", "proxy", "security", "data"]),
       mk("/chain/allowance", "GET", "0.002", "2000", "ERC-20 allowance(owner, spender) on Base, raw + formatted, flags unlimited approvals.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
+      mk("/defi/chains-tvl", "GET", "0.003", "3000", "Top blockchains ranked by total DeFi TVL (DefiLlama): name, TVL USD, gas token. No params. Use when an agent needs a quick map of where DeFi capital sits.", ["defi", "tvl", "chains", "data"]),
+      mk("/crypto/stablecoins", "GET", "0.003", "3000", "Top stablecoins by circulating supply (DefiLlama): name, symbol, price, peg type, circulating USD. No params. Use when an agent needs stablecoin supply and depeg checks.", ["crypto", "stablecoins", "depeg", "supply", "data"]),
       mk("/ai/classify", "GET", "0.003", "3000", "Zero-shot text classification (Llama 3.2 3B): ?text=<up to 1000 chars>&labels=<comma-separated labels, 2-10> returns the single best label. Use when an agent needs to route or tag text (intent, sentiment, topic, spam) in one cheap call.", ["ai", "llm", "classification", "text", "data"]),
       mk("/ai/summarize", "GET", "0.003", "3000", "Text summarization (Llama 3.2 3B): ?text=<up to 1500 chars> returns a 1-3 sentence summary. Use when an agent needs to compress a passage cheaply before reasoning over it.", ["ai", "llm", "summarization", "text", "data"]),
       mk("/ai/translate", "GET", "0.003", "3000", "Text translation (Llama 3.2 3B): ?text=<up to 800 chars>&to=<target language, e.g. es, fr, de, ja> returns the translated text only. Use when an agent needs quick pay-per-call translation with no API key.", ["ai", "llm", "translation", "language", "data"]),
@@ -994,6 +996,8 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/chain/network-status — $0.003 — Base chain id, latest block, block age, gas utilisation.
 - GET ${BASE}/chain/l1-base-fee — $0.003 — Ethereum L1 base fee seen by Base's GasPriceOracle + L1 data-fee estimate.
 - GET ${BASE}/chain/fee-history — $0.003 — Base base-fee history over the last 10 blocks with gas-used ratios.
+- GET ${BASE}/defi/chains-tvl — $0.003 — Top chains by DeFi TVL.
+- GET ${BASE}/crypto/stablecoins — $0.003 — Top stablecoins by supply + peg price.
 - GET ${BASE}/ai/classify?text=<…>&labels=a,b,c — $0.003 — Zero-shot classification into one of your labels.
 - GET ${BASE}/ai/summarize?text=<…> — $0.003 — 1-3 sentence summary of a passage.
 - GET ${BASE}/ai/translate?text=<…>&to=es — $0.003 — Translate text into a target language.
@@ -1213,6 +1217,8 @@ app.get("/openapi.json", (c) => {
       "/chain/storage-at": paid("Raw eth_getStorageAt slot read on Base.", "0.002", [{ name: "address", desc: "0x-prefixed contract address", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }, { name: "slot", desc: "storage slot hex (default 0x0)", required: false, example: "0x0" }]),
       "/chain/proxy-info": paid("EIP-1967 proxy resolver on Base: implementation/admin/beacon addresses + is_proxy.", "0.003", [{ name: "address", desc: "0x-prefixed contract address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
       "/chain/allowance": paid("ERC-20 allowance(owner, spender) on Base.", "0.002", [{ name: "token", desc: "ERC-20 address", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }, { name: "owner", desc: "owner address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "spender", desc: "spender address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
+      "/defi/chains-tvl": paid("Top chains by DeFi TVL (DefiLlama).", "0.003", [{ name: "limit", desc: "max chains (default 20, max 100)", example: "20" }]),
+      "/crypto/stablecoins": paid("Top stablecoins by supply with peg price (DefiLlama).", "0.003", [{ name: "limit", desc: "max coins (default 20, max 100)", example: "20" }]),
       "/ai/classify": paid("Classify text into one of your labels.", "0.003", [{ name: "text", desc: "text, max 1000 chars", required: true, example: "My card was charged twice" }, { name: "labels", desc: "comma-separated labels, 2-10", required: true, example: "billing,bug,feature_request,other" }]),
       "/ai/summarize": paid("Summarize a passage into 1-3 sentences.", "0.003", [{ name: "text", desc: "passage, max 1500 chars", required: true, example: "x402 is an open HTTP 402 payment protocol letting clients pay per request in USDC on Base without accounts or API keys." }]),
       "/ai/translate": paid("Translate text into a target language.", "0.003", [{ name: "text", desc: "source text, max 800 chars", required: true, example: "Hello, how are you?" }, { name: "to", desc: "target language name or code", required: true, example: "es" }]),
@@ -2059,6 +2065,28 @@ function makeRoutes(payTo: string) {
         input: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913", owner: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10", spender: "0x4200000000000000000000000000000000000006" },
         inputSchema: { type: "object", properties: { token: { type: "string", description: "ERC-20 address" }, owner: { type: "string", description: "owner address" }, spender: { type: "string", description: "spender address" } } },
         output: { example: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913", owner: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10", spender: "0x4200000000000000000000000000000000000006", allowance_raw: "0", allowance: 0, decimals: 6, is_unlimited: false, chain: "base" } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /defi/chains-tvl": {
+      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      description: "Top blockchains ranked by total DeFi TVL (DefiLlama): name, TVL USD, gas token. No params. Use when an agent needs a quick map of where DeFi capital sits.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { limit: "20" },
+        inputSchema: { type: "object", properties: { limit: { type: "string" } } },
+        output: { example: { chains: [{ name: "Ethereum", tvl_usd: 90000000000, token: "ETH" }] } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /crypto/stablecoins": {
+      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      description: "Top stablecoins by circulating supply (DefiLlama): name, symbol, price, peg type, circulating USD. No params. Use when an agent needs stablecoin supply and depeg checks.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { limit: "20" },
+        inputSchema: { type: "object", properties: { limit: { type: "string" } } },
+        output: { example: { stablecoins: [{ symbol: "USDT", price: 0.9994, circulating_usd: 183456438967 }] } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /ai/classify": {
@@ -4922,6 +4950,39 @@ app.get("/chain/allowance", async (c) => {
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /chain/allowance", rail, makeUsageCounter(c.env)));
     return c.json({ token, owner, spender, allowance_raw: raw.toString(), allowance: decimals === null ? null : Number(raw) / 10 ** decimals, decimals, is_unlimited: raw >= (1n << 255n), chain: "base" });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/defi/chains-tvl", async (c) => {
+  const limit = Math.min(Math.max(parseInt(c.req.query("limit") ?? "20", 10) || 20, 1), 100);
+  try {
+    const r = await fetch("https://api.llama.fi/v2/chains");
+    if (!r.ok) return c.json({ error: "upstream " + r.status }, { status: 502 });
+    const d = (await r.json()) as Array<{ name: string; tvl: number; tokenSymbol?: string }>;
+    const chains = d.filter((x) => x.tvl > 0).sort((a, b) => b.tvl - a.tvl).slice(0, limit).map((x) => ({ name: x.name, tvl_usd: Math.round(x.tvl), token: x.tokenSymbol ?? null }));
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/defi/chains-tvl", ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /defi/chains-tvl", rail, makeUsageCounter(c.env)));
+    return c.json({ count: chains.length, chains, source: "defillama", ts: new Date().toISOString() });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/crypto/stablecoins", async (c) => {
+  const limit = Math.min(Math.max(parseInt(c.req.query("limit") ?? "20", 10) || 20, 1), 100);
+  try {
+    const r = await fetch("https://stablecoins.llama.fi/stablecoins?includePrices=true");
+    if (!r.ok) return c.json({ error: "upstream " + r.status }, { status: 502 });
+    const d = ((await r.json()) as { peggedAssets: Array<{ name: string; symbol: string; pegType: string; price: number | null; circulating?: Record<string, number> }> }).peggedAssets;
+    const stablecoins = d.map((x) => ({ name: x.name, symbol: x.symbol, peg_type: x.pegType, price: x.price, circulating_usd: Math.round(Object.values(x.circulating ?? {})[0] ?? 0) }))
+      .sort((a, b) => b.circulating_usd - a.circulating_usd).slice(0, limit);
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/crypto/stablecoins", ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /crypto/stablecoins", rail, makeUsageCounter(c.env)));
+    return c.json({ count: stablecoins.length, stablecoins, source: "defillama", ts: new Date().toISOString() });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
