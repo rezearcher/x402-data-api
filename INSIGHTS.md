@@ -47,6 +47,9 @@ Batch-pitching 12–21 GitHub repos/cycle has produced 0 paid calls. Prefer FEW,
 ### I5 — GitHub outreach + push WORK again (tokens restored via 1Password 2026-10-19). **[HIGH, operational]**
 Use GH_TOKEN_CLASSIC from ~/.hermes/.env / 1Password for issues + push. Old revoked-token blocker is resolved. *Evidence: cycles 4+, issues #601/#1 posted 2026-10-19.*
 
+### I6 — For a silent issue on an ACTIVE well-starred agent, escalate to a working-code PR in their conventions. **[LOW, unproven]**
+Franklin#213 (issue) got no reply; shipped PR #214 (BaseTokenGate tool, tests 918/918, walletMayPay-gated). Upvote only if a maintainer engages or a paid call lands; downvote if ignored ~7d. *Evidence: cycle c3 2026-10-19.*
+
 ---
 
 ## GRAVEYARD (pruned — do NOT re-run)
