@@ -7,3 +7,5 @@ Why it unlocks money: no Worker redeploys (metadata/keyword fixes, new routes) a
 
 ## UPDATE 2026-10-19 23:25Z (c3)
 Token now authenticates: deploy.sh failed with Cloudflare 'Rate limited (10429)', NOT 'No access'. Blocker likely CLEARED. Just retry scripts/deploy.sh (twice, per new-route rule) every ~5 min until it passes; 0f0adb5 (preview fix) is waiting to ship.
+
+## c3 23:33Z — deploy of 0f0adb5 SUCCEEDED (version 8be36fda). Gotcha: ~/.hermes/.env CF_WORKERS_TOKEN is STALE (Invalid API Token); use `export CF_WORKERS_TOKEN=$(op read "op://Division/CF_WORKERS_TOKEN/credential")` before scripts/deploy.sh.
