@@ -760,6 +760,7 @@ app.get("/.well-known/x402", (c) => {
       mk("/chain/code", "GET", "0.005", "5000", "Contract-code check for a Base mainnet address (is_contract + code size + EIP-7702 delegated-EOA detection).", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/erc20-meta", "GET", "0.005", "5000", "ERC-20 metadata on Base: name, symbol, decimals, totalSupply for any token contract.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
       mk("/chain/nonce", "GET", "0.005", "5000", "Transaction count (nonce) for a Base address, latest and pending.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/is-contract", "GET", "0.002", "2000", "Is a Base address a smart contract or an EOA (is_contract + bytecode size).", ["rpc", "base", "onchain", "contract", "data"]),
       mk("/chain/total-supply", "GET", "0.003", "3000", "ERC-20 total supply on Base (raw + formatted, with symbol and decimals).", ["rpc", "base", "onchain", "token", "erc20", "data"]),
       mk("/chain/storage-at", "GET", "0.002", "2000", "Raw storage slot read (eth_getStorageAt) for any Base contract; slot defaults to 0x0. Use when an agent needs proxy implementation/admin slots or raw contract state.", ["rpc", "base", "onchain", "contract", "data"]),
       mk("/chain/proxy-info", "GET", "0.003", "3000", "EIP-1967 proxy resolver for a Base contract: returns implementation, admin and beacon addresses (read from the standard storage slots) plus is_proxy flag. Use when an agent must know what code actually runs behind a proxy before trusting or calling it.", ["rpc", "base", "onchain", "contract", "proxy", "security", "data"]),
@@ -1853,6 +1854,17 @@ function makeRoutes(payTo: string) {
         input: { address: "0x4200000000000000000000000000000000000006" },
         inputSchema: { type: "object", properties: { address: { type: "string", description: "0x-prefixed 20-byte Base address" } } },
         output: { example: { address: "0x4200000000000000000000000000000000000006", nonce_latest: 1, nonce_pending: 1, chain: "base" } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /chain/is-contract": {
+      accepts: { scheme: "exact" as const, price: "$0.002", network: NETWORK, payTo },
+      description: "Is a Base address a smart contract or an EOA? Returns is_contract and bytecode size. Use when an agent must decide whether a recipient is a contract before sending funds or approving it.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { address: "0x4200000000000000000000000000000000000006" },
+        inputSchema: { type: "object", properties: { address: { type: "string", description: "0x-prefixed 20-byte Base address" } } },
+        output: { example: { address: "0x4200000000000000000000000000000000000006", is_contract: true, code_bytes: 2000, chain: "base" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /chain/total-supply": {
@@ -4411,6 +4423,23 @@ app.get("/chain/nonce", async (c) => {
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /chain/nonce", rail, makeUsageCounter(c.env)));
     return c.json({ address, nonce_latest: Number(BigInt(l)), nonce_pending: Number(BigInt(p)), chain: "base" });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/chain/is-contract", async (c) => {
+  const address = c.req.query("address");
+  if (!address || !ADDR_RE.test(address)) {
+    return c.json({ error: "address query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
+  }
+  try {
+    const code = (await baseRpc("eth_getCode", [address, "latest"])) as string;
+    const bytes = Math.max(0, (code.length - 2) / 2);
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/chain/is-contract", address, ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/is-contract", rail, makeUsageCounter(c.env)));
+    return c.json({ address, is_contract: bytes > 0, code_bytes: bytes, chain: "base" });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
