@@ -8,12 +8,12 @@
         "contact": {
             "name": "Grey Ridge Signals",
             "email": "contact@greyridgesignals.ai",
-            "url": "https://api.greyridgesignals.ai"
+            "url": "https://x402-data-api.sigrunner.workers.dev"
         }
     },
     "servers": [
         {
-            "url": "https://api.greyridgesignals.ai"
+            "url": "https://x402-data-api.sigrunner.workers.dev"
         }
     ],
     "paths": {
@@ -472,9 +472,9 @@
                         "required": true,
                         "schema": {
                             "type": "string",
-                            "example": "https://api.greyridgesignals.ai/mcp"
+                            "example": "https://x402-data-api.sigrunner.workers.dev/mcp"
                         },
-                        "example": "https://api.greyridgesignals.ai/mcp",
+                        "example": "https://x402-data-api.sigrunner.workers.dev/mcp",
                         "description": "target MCP server URL"
                     }
                 ],
@@ -678,7 +678,7 @@
         "/chain/block-number": {
             "get": {
                 "summary": "Current Base mainnet block number.",
-                "description": "Current Base mainnet block number. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.005.",
+                "description": "Current Base mainnet block number. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.01.",
                 "parameters": [],
                 "x-payment-info": {
                     "protocols": [
@@ -687,7 +687,7 @@
                     "price": {
                         "mode": "fixed",
                         "currency": "USD",
-                        "amount": "0.005"
+                        "amount": "0.01"
                     }
                 },
                 "responses": {
@@ -706,7 +706,7 @@
                         }
                     },
                     "402": {
-                        "description": "Payment required ($0.005 USDC via x402)"
+                        "description": "Payment required ($0.01 USDC via x402)"
                     }
                 },
                 "tags": [
@@ -718,7 +718,7 @@
         "/chain/gas-price": {
             "get": {
                 "summary": "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd.",
-                "description": "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.005.",
+                "description": "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.01.",
                 "parameters": [],
                 "x-payment-info": {
                     "protocols": [
@@ -727,7 +727,7 @@
                     "price": {
                         "mode": "fixed",
                         "currency": "USD",
-                        "amount": "0.005"
+                        "amount": "0.01"
                     }
                 },
                 "responses": {
@@ -750,7 +750,7 @@
                         }
                     },
                     "402": {
-                        "description": "Payment required ($0.005 USDC via x402)"
+                        "description": "Payment required ($0.01 USDC via x402)"
                     }
                 },
                 "tags": [
@@ -762,7 +762,7 @@
         "/chain/balance": {
             "get": {
                 "summary": "ETH balance of a Base mainnet address, incl. balance_usd.",
-                "description": "ETH balance of a Base mainnet address, incl. balance_usd. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.005.",
+                "description": "ETH balance of a Base mainnet address, incl. balance_usd. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.01.",
                 "parameters": [
                     {
                         "name": "address",
@@ -783,7 +783,7 @@
                     "price": {
                         "mode": "fixed",
                         "currency": "USD",
-                        "amount": "0.005"
+                        "amount": "0.01"
                     }
                 },
                 "responses": {
@@ -805,7 +805,7 @@
                         }
                     },
                     "402": {
-                        "description": "Payment required ($0.005 USDC via x402)"
+                        "description": "Payment required ($0.01 USDC via x402)"
                     }
                 },
                 "tags": [
@@ -817,7 +817,7 @@
         "/chain/token-balance": {
             "get": {
                 "summary": "ERC-20 token balance of a Base mainnet address, incl. symbol/decimals/balance_formatted.",
-                "description": "ERC-20 token balance of a Base mainnet address, incl. symbol/decimals/balance_formatted. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.005.",
+                "description": "ERC-20 token balance of a Base mainnet address, incl. symbol/decimals/balance_formatted. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.01.",
                 "parameters": [
                     {
                         "name": "address",
@@ -849,7 +849,7 @@
                     "price": {
                         "mode": "fixed",
                         "currency": "USD",
-                        "amount": "0.005"
+                        "amount": "0.01"
                     }
                 },
                 "responses": {
@@ -873,7 +873,7 @@
                         }
                     },
                     "402": {
-                        "description": "Payment required ($0.005 USDC via x402)"
+                        "description": "Payment required ($0.01 USDC via x402)"
                     }
                 },
                 "tags": [
@@ -1021,7 +1021,7 @@
         "/chain/erc20-meta": {
             "get": {
                 "summary": "ERC-20 name/symbol/decimals/totalSupply on Base.",
-                "description": "ERC-20 name/symbol/decimals/totalSupply on Base. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.005.",
+                "description": "ERC-20 name/symbol/decimals/totalSupply on Base. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.01.",
                 "parameters": [
                     {
                         "name": "token",
@@ -1042,7 +1042,7 @@
                     "price": {
                         "mode": "fixed",
                         "currency": "USD",
-                        "amount": "0.005"
+                        "amount": "0.01"
                     }
                 },
                 "responses": {
@@ -1050,7 +1050,7 @@
                         "description": "Success \u2014 JSON data"
                     },
                     "402": {
-                        "description": "Payment required ($0.005 USDC via x402)"
+                        "description": "Payment required ($0.01 USDC via x402)"
                     }
                 },
                 "tags": [
@@ -1062,7 +1062,7 @@
         "/chain/nonce": {
             "get": {
                 "summary": "Nonce (tx count) of a Base address, latest and pending.",
-                "description": "Nonce (tx count) of a Base address, latest and pending. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.005.",
+                "description": "Nonce (tx count) of a Base address, latest and pending. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.01.",
                 "parameters": [
                     {
                         "name": "address",
@@ -1076,6 +1076,279 @@
                         "description": "0x-prefixed Base address"
                     }
                 ],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.01"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.01 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainNonce"
+            }
+        },
+        "/chain/is-contract": {
+            "get": {
+                "summary": "Is a Base address a smart contract or an EOA (is_contract + bytecode size).",
+                "description": "Is a Base address a smart contract or an EOA (is_contract + bytecode size). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.002.",
+                "parameters": [
+                    {
+                        "name": "address",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "0x4200000000000000000000000000000000000006"
+                        },
+                        "example": "0x4200000000000000000000000000000000000006",
+                        "description": "0x-prefixed Base address"
+                    }
+                ],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.002"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.002 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainIsContract"
+            }
+        },
+        "/chain/fee-estimate": {
+            "get": {
+                "summary": "Base EIP-1559 fee estimate: base fee, priority fee, slow/standard/fast max-fee tiers (gwei).",
+                "description": "Base EIP-1559 fee estimate: base fee, priority fee, slow/standard/fast max-fee tiers (gwei). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainFeeEstimate"
+            }
+        },
+        "/chain/network-status": {
+            "get": {
+                "summary": "Base network status: chain id, latest block, block age seconds, gas utilisation, tx count.",
+                "description": "Base network status: chain id, latest block, block age seconds, gas utilisation, tx count. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainNetworkStatus"
+            }
+        },
+        "/chain/l1-base-fee": {
+            "get": {
+                "summary": "Ethereum L1 base fee via Base GasPriceOracle (wei/gwei) + estimated L1 data fee for a transfer.",
+                "description": "Ethereum L1 base fee via Base GasPriceOracle (wei/gwei) + estimated L1 data fee for a transfer. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainL1BaseFee"
+            }
+        },
+        "/chain/fee-history": {
+            "get": {
+                "summary": "Base base-fee history over the last 10 blocks with gas-used ratios.",
+                "description": "Base base-fee history over the last 10 blocks with gas-used ratios. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainFeeHistory"
+            }
+        },
+        "/chain/blob-base-fee": {
+            "get": {
+                "summary": "Base EIP-4844 blob base fee (wei/gwei) from the GasPriceOracle.",
+                "description": "Base EIP-4844 blob base fee (wei/gwei) from the GasPriceOracle. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainBlobBaseFee"
+            }
+        },
+        "/chain/eth-usd": {
+            "get": {
+                "summary": "Chainlink ETH/USD spot price on Base with staleness.",
+                "description": "Chainlink ETH/USD spot price on Base with staleness. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainEthUsd"
+            }
+        },
+        "/chain/btc-usd": {
+            "get": {
+                "summary": "Chainlink BTC/USD spot price on Base with staleness.",
+                "description": "Chainlink BTC/USD spot price on Base with staleness. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainBtcUsd"
+            }
+        },
+        "/chain/prices": {
+            "get": {
+                "summary": "BTC/ETH/LINK/SOL Chainlink USD prices on Base in one call.",
+                "description": "BTC/ETH/LINK/SOL Chainlink USD prices on Base in one call. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.005.",
+                "parameters": [],
                 "x-payment-info": {
                     "protocols": [
                         "x402"
@@ -1097,7 +1370,65 @@
                 "tags": [
                     "Base Chain"
                 ],
-                "operationId": "getChainNonce"
+                "operationId": "getChainPrices"
+            }
+        },
+        "/chain/sol-usd": {
+            "get": {
+                "summary": "Chainlink SOL/USD spot price on Base with staleness.",
+                "description": "Chainlink SOL/USD spot price on Base with staleness. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainSolUsd"
+            }
+        },
+        "/chain/link-usd": {
+            "get": {
+                "summary": "Chainlink LINK/USD spot price on Base with staleness.",
+                "description": "Chainlink LINK/USD spot price on Base with staleness. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Base Chain"
+                ],
+                "operationId": "getChainLinkUsd"
             }
         },
         "/chain/total-supply": {
@@ -1297,6 +1628,890 @@
                 "operationId": "getChainAllowance"
             }
         },
+        "/defi/chains-tvl": {
+            "get": {
+                "summary": "Top chains by DeFi TVL (DefiLlama).",
+                "description": "Top chains by DeFi TVL (DefiLlama). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "20"
+                        },
+                        "example": "20",
+                        "description": "max chains (default 20, max 100)"
+                    }
+                ],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getDefiChainsTvl"
+            }
+        },
+        "/crypto/stablecoins": {
+            "get": {
+                "summary": "Top stablecoins by supply with peg price (DefiLlama).",
+                "description": "Top stablecoins by supply with peg price (DefiLlama). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "20"
+                        },
+                        "example": "20",
+                        "description": "max coins (default 20, max 100)"
+                    }
+                ],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getCryptoStablecoins"
+            }
+        },
+        "/defi/protocols-top": {
+            "get": {
+                "summary": "Top DeFi protocols by TVL (DefiLlama).",
+                "description": "Top DeFi protocols by TVL (DefiLlama). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "20"
+                        },
+                        "example": "20",
+                        "description": "max rows (default 20, max 100)"
+                    }
+                ],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getDefiProtocolsTop"
+            }
+        },
+        "/defi/dex-volume": {
+            "get": {
+                "summary": "Top DEXs by 24h volume (DefiLlama).",
+                "description": "Top DEXs by 24h volume (DefiLlama). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "20"
+                        },
+                        "example": "20",
+                        "description": "max rows (default 20, max 100)"
+                    }
+                ],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getDefiDexVolume"
+            }
+        },
+        "/crypto/fear-greed": {
+            "get": {
+                "summary": "Crypto Fear & Greed Index (alternative.me).",
+                "description": "Crypto Fear & Greed Index (alternative.me). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.002.",
+                "parameters": [
+                    {
+                        "name": "days",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "7"
+                        },
+                        "example": "7",
+                        "description": "optional"
+                    }
+                ],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.002"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.002 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getCryptoFearGreed"
+            }
+        },
+        "/crypto/trending": {
+            "get": {
+                "summary": "Trending coins on CoinGecko right now.",
+                "description": "Trending coins on CoinGecko right now. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getCryptoTrending"
+            }
+        },
+        "/defi/fees-top": {
+            "get": {
+                "summary": "Top DeFi protocols by 24h fees (DefiLlama).",
+                "description": "Top DeFi protocols by 24h fees (DefiLlama). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "7"
+                        },
+                        "example": "7",
+                        "description": "optional"
+                    }
+                ],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getDefiFeesTop"
+            }
+        },
+        "/crypto/global": {
+            "get": {
+                "summary": "Global crypto market stats (CoinGecko).",
+                "description": "Global crypto market stats (CoinGecko). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.002.",
+                "parameters": [],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.002"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.002 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getCryptoGlobal"
+            }
+        },
+        "/crypto/markets-top": {
+            "get": {
+                "summary": "Top coins by market cap (CoinGecko).",
+                "description": "Top coins by market cap (CoinGecko). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "20"
+                        },
+                        "example": "20",
+                        "description": "optional, max 100"
+                    }
+                ],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getCryptoMarketsTop"
+            }
+        },
+        "/crypto/movers": {
+            "get": {
+                "summary": "Top 24h gainers and losers (CoinGecko).",
+                "description": "Top 24h gainers and losers (CoinGecko). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getCryptoMovers"
+            }
+        },
+        "/brief/market": {
+            "get": {
+                "summary": "One-call crypto market brief (sentiment, global, movers, trending, DeFi fees).",
+                "description": "One-call crypto market brief (sentiment, global, movers, trending, DeFi fees). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.01.",
+                "parameters": [],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.01"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.01 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "General"
+                ],
+                "operationId": "getBriefMarket"
+            }
+        },
+        "/crypto/exchanges-top": {
+            "get": {
+                "summary": "Top crypto exchanges by trust score (CoinGecko).",
+                "description": "Top crypto exchanges by trust score (CoinGecko). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getCryptoExchangesTop"
+            }
+        },
+        "/crypto/categories": {
+            "get": {
+                "summary": "Crypto sector performance (CoinGecko categories).",
+                "description": "Crypto sector performance (CoinGecko categories). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getCryptoCategories"
+            }
+        },
+        "/defi/hacks-recent": {
+            "get": {
+                "summary": "Most recent DeFi hacks and exploits (DefiLlama).",
+                "description": "Most recent DeFi hacks and exploits (DefiLlama). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "10"
+                        },
+                        "example": "10",
+                        "description": "optional, max 50"
+                    }
+                ],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getDefiHacksRecent"
+            }
+        },
+        "/crypto/derivatives-exchanges": {
+            "get": {
+                "summary": "Top crypto derivatives exchanges (CoinGecko).",
+                "description": "Top crypto derivatives exchanges (CoinGecko). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getCryptoDerivativesExchanges"
+            }
+        },
+        "/defi/protocol-risk": {
+            "get": {
+                "summary": "DeFi protocol risk score (TVL, age, audits, hacks).",
+                "description": "DeFi protocol risk score (TVL, age, audits, hacks). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.01.",
+                "parameters": [
+                    {
+                        "name": "protocol",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "aave-v3"
+                        },
+                        "example": "aave-v3",
+                        "description": "DefiLlama slug, default aave-v3"
+                    }
+                ],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.01"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.01 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getDefiProtocolRisk"
+            }
+        },
+        "/defi/safe-yields": {
+            "get": {
+                "summary": "Vetted stablecoin yields with protocol age and hack flags (DefiLlama).",
+                "description": "Vetted stablecoin yields with protocol age and hack flags (DefiLlama). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.01.",
+                "parameters": [
+                    {
+                        "name": "chain",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "Ethereum"
+                        },
+                        "example": "Ethereum",
+                        "description": "optional chain filter"
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "10"
+                        },
+                        "example": "10",
+                        "description": "optional, max 30"
+                    }
+                ],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.01"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.01 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getDefiSafeYields"
+            }
+        },
+        "/defi/yields-top": {
+            "get": {
+                "summary": "Top DeFi yield pools by TVL (DefiLlama).",
+                "description": "Top DeFi yield pools by TVL (DefiLlama). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [
+                    {
+                        "name": "chain",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "Ethereum"
+                        },
+                        "example": "Ethereum",
+                        "description": "optional chain filter"
+                    },
+                    {
+                        "name": "stable",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "true"
+                        },
+                        "example": "true",
+                        "description": "true = stablecoin pools only"
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "20"
+                        },
+                        "example": "20",
+                        "description": "optional"
+                    }
+                ],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "Markets"
+                ],
+                "operationId": "getDefiYieldsTop"
+            }
+        },
+        "/ai/classify": {
+            "get": {
+                "summary": "Classify text into one of your labels.",
+                "description": "Classify text into one of your labels. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [
+                    {
+                        "name": "text",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "My card was charged twice"
+                        },
+                        "example": "My card was charged twice",
+                        "description": "text, max 1000 chars"
+                    },
+                    {
+                        "name": "labels",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "billing,bug,feature_request,other"
+                        },
+                        "example": "billing,bug,feature_request,other",
+                        "description": "comma-separated labels, 2-10"
+                    }
+                ],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "General"
+                ],
+                "operationId": "getAiClassify"
+            }
+        },
+        "/ai/summarize": {
+            "get": {
+                "summary": "Summarize a passage into 1-3 sentences.",
+                "description": "Summarize a passage into 1-3 sentences. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [
+                    {
+                        "name": "text",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "x402 is an open HTTP 402 payment protocol letting clients pay per request in USDC on Base without accounts or API keys."
+                        },
+                        "example": "x402 is an open HTTP 402 payment protocol letting clients pay per request in USDC on Base without accounts or API keys.",
+                        "description": "passage, max 1500 chars"
+                    }
+                ],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "General"
+                ],
+                "operationId": "getAiSummarize"
+            }
+        },
+        "/ai/translate": {
+            "get": {
+                "summary": "Translate text into a target language.",
+                "description": "Translate text into a target language. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "parameters": [
+                    {
+                        "name": "text",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "Hello, how are you?"
+                        },
+                        "example": "Hello, how are you?",
+                        "description": "source text, max 800 chars"
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "es"
+                        },
+                        "example": "es",
+                        "description": "target language name or code"
+                    }
+                ],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.003"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.003 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "General"
+                ],
+                "operationId": "getAiTranslate"
+            }
+        },
+        "/ai/extract": {
+            "get": {
+                "summary": "Text-to-JSON extraction: text + comma-separated fields returns a strict JSON object.",
+                "description": "Text-to-JSON extraction: text + comma-separated fields returns a strict JSON object. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.005.",
+                "parameters": [
+                    {
+                        "name": "text",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "Invoice 4417 from Acme Corp, due 2026-11-02, total $1,250.00"
+                        },
+                        "example": "Invoice 4417 from Acme Corp, due 2026-11-02, total $1,250.00",
+                        "description": "source text, max 1500 chars"
+                    },
+                    {
+                        "name": "fields",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "invoice_number,vendor,due_date,total"
+                        },
+                        "example": "invoice_number,vendor,due_date,total",
+                        "description": "comma-separated field names, max 12"
+                    }
+                ],
+                "x-payment-info": {
+                    "protocols": [
+                        "x402"
+                    ],
+                    "price": {
+                        "mode": "fixed",
+                        "currency": "USD",
+                        "amount": "0.005"
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success \u2014 JSON data"
+                    },
+                    "402": {
+                        "description": "Payment required ($0.005 USDC via x402)"
+                    }
+                },
+                "tags": [
+                    "General"
+                ],
+                "operationId": "getAiExtract"
+            }
+        },
         "/ai/ask": {
             "get": {
                 "summary": "Cheap LLM answer (Llama 3.2 3B) for a prompt up to 500 chars.",
@@ -1382,7 +2597,7 @@
         "/chain/code": {
             "get": {
                 "summary": "Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware).",
-                "description": "Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.005.",
+                "description": "Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware). Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.01.",
                 "parameters": [
                     {
                         "name": "address",
@@ -1403,7 +2618,7 @@
                     "price": {
                         "mode": "fixed",
                         "currency": "USD",
-                        "amount": "0.005"
+                        "amount": "0.01"
                     }
                 },
                 "responses": {
@@ -1426,7 +2641,7 @@
                         }
                     },
                     "402": {
-                        "description": "Payment required ($0.005 USDC via x402)"
+                        "description": "Payment required ($0.01 USDC via x402)"
                     }
                 },
                 "tags": [
@@ -1437,8 +2652,8 @@
         },
         "/chain/wallet": {
             "get": {
-                "summary": "Wallet bundle: ETH balance + balance_usd + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call.",
-                "description": "Wallet bundle: ETH balance + balance_usd + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
+                "summary": "Wallet screening bundle (balance, activity, contract vs EOA check): ETH balance + balance_usd + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call.",
+                "description": "Wallet screening bundle (balance, activity, contract vs EOA check): ETH balance + balance_usd + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.003.",
                 "parameters": [
                     {
                         "name": "address",
@@ -1496,8 +2711,8 @@
         },
         "/chain/token-report": {
             "get": {
-                "summary": "Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade.",
-                "description": "Decision-grade token trade-safety verdict for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.01.",
+                "summary": "Token security check (honeypot detector + rug-pull risk score) for a Base ERC-20 in one call, decision-grade trade-safety verdict: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade.",
+                "description": "Token security check (honeypot detector + rug-pull risk score) for a Base ERC-20 in one call, decision-grade trade-safety verdict: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.01.",
                 "parameters": [
                     {
                         "name": "token",
@@ -1634,7 +2849,7 @@
         "/chain/token-report/preview": {
             "get": {
                 "summary": "FREE live sample of /chain/token-report (no payment).",
-                "description": "Free full trade-safety report for a demo token. Try ?token=aero. Paid /chain/token-report accepts ANY Base ERC-20 ($0.05).",
+                "description": "Free full trade-safety report for a demo token. Try ?token=aero. Paid /chain/token-report accepts ANY Base ERC-20 ($0.01).",
                 "parameters": [
                     {
                         "name": "token",
