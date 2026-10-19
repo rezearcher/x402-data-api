@@ -329,3 +329,4 @@ Inbox: 0 replies. Issue watch: only x402-pilot#13 (already answered). trace_inbo
 - cycle 62c: Bazaar merchant listing now shows /ai/{ask,classify,extract,summarize,translate}. x402scan register-origin re-run: 43 registered/46 total (single-URL mode 404s no_discovery; use origin mode). Wallet flat 32.62724.
 - cycle 62d: /ai/{classify,summarize,translate,extract} now have valid default params so shopper-bot no-param paid calls succeed (previously 400 -> unsettled). Deployed 8a44e23c, 402 live.
 - cycle 62e: defaults added for /ai/ask (q) and /enrich/domain (domain=coinbase.com); deployed 5f7fe8ff, 402 live. Remaining required-param paid routes: /scan/mcp (url) only.
+- cycle 62f: 2 listing-ask issues: switchbord#1 (x402 router), gold-402#374 (curated list). outreach/gh/issues_cycle62.txt. trace: no external payers.
