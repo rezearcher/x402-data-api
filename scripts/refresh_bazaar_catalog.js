@@ -72,6 +72,66 @@ const ONLY_ROUTE = process.argv.includes('--route') ? process.argv[process.argv.
 // in the Bazaar and are out of scope for freshness refresh.
 const ROUTES = [
   {
+    route: '/chain/erc20-meta',
+    desc: 'ERC-20 metadata on Base: name, symbol, decimals, totalSupply for any token contract.',
+    serviceName: 'Base ERC-20 Metadata',
+    tags: ['erc20', 'token', 'metadata', 'base', 'evm', 'data'],
+    disc: {
+      method: 'GET',
+      input: { token: '0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913' },
+      inputSchema: { type: 'object', properties: { token: { type: 'string', description: '0x-prefixed ERC-20 address on Base' } } },
+      output: { example: { name: 'USD Coin', symbol: 'USDC', decimals: 6 } },
+    },
+  },
+  {
+    route: '/chain/nonce',
+    desc: 'Transaction count (nonce) for a Base address, latest and pending.',
+    serviceName: 'Base Address Nonce',
+    tags: ['nonce', 'tx-count', 'base', 'evm', 'data'],
+    disc: {
+      method: 'GET',
+      input: { address: '0x4200000000000000000000000000000000000006' },
+      inputSchema: { type: 'object', properties: { address: { type: 'string', description: '0x-prefixed Base address' } } },
+      output: { example: { address: '0x4200000000000000000000000000000000000006', nonce_latest: 0, nonce_pending: 0, chain: 'base' } },
+    },
+  },
+  {
+    route: '/chain/allowance',
+    desc: 'ERC-20 allowance(owner, spender) on Base, raw + formatted, flags unlimited approvals.',
+    serviceName: 'Base ERC-20 Allowance Checker',
+    tags: ['allowance', 'approval', 'erc20', 'base', 'evm', 'data'],
+    disc: {
+      method: 'GET',
+      input: { token: '0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913', owner: '0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10', spender: '0x4200000000000000000000000000000000000006' },
+      inputSchema: { type: 'object', properties: { token: { type: 'string', description: 'ERC-20 address' }, owner: { type: 'string', description: 'owner address' }, spender: { type: 'string', description: 'spender address' } } },
+      output: { example: { allowance_raw: '0', unlimited: false, chain: 'base' } },
+    },
+  },
+  {
+    route: '/chain/block',
+    desc: 'Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.',
+    serviceName: 'Base Block Summary',
+    tags: ['block', 'base', 'evm', 'blockchain', 'data'],
+    disc: {
+      method: 'GET',
+      input: { number: 'latest' },
+      inputSchema: { type: 'object', properties: { number: { type: 'string', description: "decimal block number or 'latest'" } } },
+      output: { example: { number: 27738421, tx_count: 120, chain: 'base' } },
+    },
+  },
+  {
+    route: '/ai/ask',
+    desc: 'Cheap LLM answer (Llama 3.2 3B on Workers AI): ?q=<prompt up to 500 chars>, returns concise text. Pay-per-call, no API key.',
+    serviceName: 'Cheap LLM Ask',
+    tags: ['ai', 'llm', 'inference', 'chat', 'data'],
+    disc: {
+      method: 'GET',
+      input: { q: 'Explain x402 in one sentence' },
+      inputSchema: { type: 'object', properties: { q: { type: 'string', description: 'prompt, max 500 chars' } } },
+      output: { example: { answer: 'x402 is an HTTP 402-based micropayment protocol.' } },
+    },
+  },
+  {
     route: '/pm/markets',
     desc: 'Live Polymarket prediction-market data — question, outcomes, live prices, volume, liquidity, end date. Filter by keyword. Agent-native, pay-per-call via x402.',
     serviceName: 'Polymarket Prediction Market Data',
