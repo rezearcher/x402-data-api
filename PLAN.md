@@ -339,3 +339,4 @@ Inbox: 0 replies. Issue watch: only x402-pilot#13 (already answered). trace_inbo
 - cycle 62m: shipped /crypto/fear-greed (0.002), /crypto/trending (0.003), /defi/fees-top (0.003); no required params; seeded, IndexNow, x402scan. Now 7 new parameterless routes this session.
 - cycle 62n: 0 new replies (Fronesis already answered); fear-greed/trending/fees-top 402 live; wallet 32.66124 (+0.008 bot, external); DO log read-limit still exceeded (paid_log dark). Cap resets 10-20 05:00Z -> send queue/apibase.md + dexter.md.
 - cycle 62o: shipped+deployed /crypto/global (0.002) and /defi/yields-top (0.003) (version 86a83bde); seeded both (self canary), x402scan re-registered 50/55.
+- cycle 62p: IndexNow pinged (200) for all 9 parameterless data routes + llms.txt + openapi.
