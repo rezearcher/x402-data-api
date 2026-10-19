@@ -1,0 +1,2 @@
+https://github.com/fireblocks/x402-agent/issues/6
+https://github.com/BofAI/x402-catalog/issues/30
