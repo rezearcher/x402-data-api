@@ -108,3 +108,6 @@ EXCLUDED (off-mission): per-target vulnerability/conviction feeds.
 - 0 replies/bounces (gmail-me, 3d). Wallet 32.30424 (self-test only).
 - gh issue comment on crewAI #7227 -> 403 (PAT lacks Issues write). Target list for when fixed: crewAI#7227, chainstacklabs/polyclaw#15, alsk1992/CloddsBot#149, SpartanLabsXyz/simmer-sdk#402, leventilo/boltzpay#165. Blocker file added.
 - Product gap noted: token-report security.simStatus "unavailable" / isHoneypot null -> weak vs honeypot-check competitors; candidate improvement.
+
+## 2026-10-19 cycle (makemoney, 3rd)
+- 0 replies (gmail-me, 3d; only marketing noise). Republished official MCP Registry listing ai.greyridgesignals/tech-risk v0.1.1 (description now leads with gate_swap; desc must be <=100 chars). Auth: `mcp-publisher login dns --domain greyridgesignals.ai --private-key <hex of ~/.config/mcp-publisher/greyridgesignals_dns_key.pem>` works headless.

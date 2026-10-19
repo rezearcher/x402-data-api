@@ -1,8 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "ai.greyridgesignals/tech-risk",
-  "description": "x402 MCP: pre-trade swap gate + token safety reports, Base RPC, crypto/DeFi/Polymarket data, MCP security scans; pay-per-call USDC.",
-  "version": "0.1.0",
+  "description": "x402 pay-per-call: pre-trade swap gate, token safety, Base RPC, DeFi/Polymarket data (USDC)",
+  "version": "0.1.1",
   "$comment": "Version mirrors root package.json (canonical).",
   "websiteUrl": "https://api.greyridgesignals.ai",
   "remotes": [
