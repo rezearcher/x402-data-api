@@ -318,3 +318,5 @@ Inbox: 0 replies. Issue watch: only x402-pilot#13 (already answered). trace_inbo
 - cycle 61b: shipped /ai/extract (0.005) text->JSON; basis: dev.to study, transformation endpoints = top earners.
 
 - cycle 61c: shipped /ai/translate (0.003), deployed, 402 live.
+
+- cycle 61d: shipped /ai/summarize (0.003).
