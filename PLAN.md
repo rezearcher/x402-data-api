@@ -225,3 +225,4 @@ branch@dexter.cash (audition support) queued: outreach/queue/dexter-audition-sup
 - 2026-10-19 CDT (cycle 31b): GH issues (cap n/a) to buyer gateways sarmadahsan/pay-guard#107 and naxytra/naxytra-mcp#1 offering optional pre-pay token/swap check provider. Next: check comments.
 - 2026-10-19 CDT (cycle 31c): GH issues: Bdysj/agentbrake#2, floflo777/undo#1, twzrd-sol/twzrd-trust#207, swarm-agent-operator/swarm-x402-mcp#2 (pre-pay token check provider offer). Check comments next cycle.
 - 2026-10-19 CDT (cycle 31d): shipped GET /chain/storage-at $0.002 (deploy 1beadf53, 402 verified both hosts; first deploy 0bc5afa0 was overwritten by a concurrent stale deploy -> redeploy). Added to bazaar seed list; daily cron seeds it.
+- 2026-10-19 CDT (cycle 31e): GH issues selimaytac/hashspan, whiteknightonhorse/mcp-protocol-tester (test-target offer).
