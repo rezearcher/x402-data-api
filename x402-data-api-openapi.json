@@ -983,7 +983,7 @@
         "/chain/token-security": {
             "get": {
                 "summary": "Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.",
-                "description": "Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.02.",
+                "description": "Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.009.",
                 "parameters": [
                     {
                         "name": "token",
@@ -1072,7 +1072,7 @@
                         }
                     },
                     "402": {
-                        "description": "Payment required ($0.02 USDC via x402)"
+                        "description": "Payment required ($0.009 USDC via x402)"
                     }
                 },
                 "tags": [
@@ -1142,7 +1142,7 @@
         "/whois/{domain}": {
             "get": {
                 "summary": "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.",
-                "description": "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.02.",
+                "description": "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain. Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $0.01.",
                 "parameters": [
                     {
                         "name": "domain",
@@ -1179,7 +1179,7 @@
                         }
                     },
                     "402": {
-                        "description": "Payment required ($0.02 USDC via x402)"
+                        "description": "Payment required ($0.01 USDC via x402)"
                     }
                 },
                 "tags": [
