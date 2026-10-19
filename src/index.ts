@@ -975,6 +975,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/chain/block?number=<n|latest> — $0.005 — block summary (hash, timestamp, tx count, gas, base fee).
 - GET ${BASE}/ai/ask?q=<prompt> — $0.002 — cheap LLM answer (Llama 3.2 3B), no API key.
 - GET ${BASE}/chain/erc20-meta?token=<0x…> — $0.005 — ERC-20 name/symbol/decimals/totalSupply.
+- GET ${BASE}/chain/is-contract?address=<0x…> — $0.002 — contract vs EOA + bytecode size.
 - GET ${BASE}/chain/total-supply?token=<0x…> — $0.003 — ERC-20 total supply (raw + formatted).
 - GET ${BASE}/chain/allowance?token=<0x…>&owner=<0x…>&spender=<0x…> — $0.002 — ERC-20 allowance, flags unlimited approvals.
 - GET ${BASE}/chain/code?address=<0x…> — $0.005 — contract-code check for a Base address (EIP-7702 delegated-EOA aware).
@@ -1168,6 +1169,7 @@ app.get("/openapi.json", (c) => {
       "/chain/receipt": paid("Transaction receipt by hash on Base mainnet: status, gas used, full logs, L1 fee breakdown, l1_fee_usd/total_fee_usd.", "0.005", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }]),
       "/chain/erc20-meta": paid("ERC-20 name/symbol/decimals/totalSupply on Base.", "0.005", [{ name: "token", desc: "0x-prefixed ERC-20 address on Base", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }]),
       "/chain/nonce": paid("Nonce (tx count) of a Base address, latest and pending.", "0.005", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
+      "/chain/is-contract": paid("Is a Base address a smart contract or an EOA (is_contract + bytecode size).", "0.002", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
       "/chain/total-supply": paid("ERC-20 total supply on Base, raw + formatted.", "0.003", [{ name: "token", desc: "0x-prefixed ERC-20 address", required: true, example: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" }]),
       "/chain/storage-at": paid("Raw eth_getStorageAt slot read on Base.", "0.002", [{ name: "address", desc: "0x-prefixed contract address", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }, { name: "slot", desc: "storage slot hex (default 0x0)", required: false, example: "0x0" }]),
       "/chain/proxy-info": paid("EIP-1967 proxy resolver on Base: implementation/admin/beacon addresses + is_proxy.", "0.003", [{ name: "address", desc: "0x-prefixed contract address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
