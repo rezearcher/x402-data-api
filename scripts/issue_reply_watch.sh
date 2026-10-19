@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
 # Poll pitch issues for non-owner comments; write shared sensor JSON.
 cd "$(dirname "$0")/.."
-T=$(grep -rh ^GH_TOKEN_CLASSIC .env ~/.env ~/.hermes/.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')
+# Secret source (migration cutover 2026-10-19): prefer 1Password vault, fall back
+# to plaintext .env so this NEVER breaks if op/the service account is unavailable.
+T="${GH_TOKEN_CLASSIC:-}"
+if [ -z "$T" ]; then
+  [ -f "$HOME/.config/greyridge/op.env" ] && . "$HOME/.config/greyridge/op.env" 2>/dev/null
+  OP="$(command -v op || echo "$HOME/bin/op")"
+  if [ -n "${OP_SERVICE_ACCOUNT_TOKEN:-}" ] && [ -x "$OP" ]; then
+    T=$("$OP" read "op://Division/GH_TOKEN_CLASSIC/credential" 2>/dev/null)
+  fi
+fi
+[ -z "$T" ] && T=$(grep -rh ^GH_TOKEN_CLASSIC .env ~/.env ~/.hermes/.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')
 OUT=~/.hermes/data/x402_issue_replies; mkdir -p "$OUT"
 cat outreach/gh/issues*.txt | grep -o 'https://github.com/[^ ]*/issues/[0-9]*' | sort -u | while read u; do
   curl -s -H "Authorization: token $T" "https://api.github.com/repos/${u#https://github.com/}/comments" | U="$u" python3 -c "
