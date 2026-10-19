@@ -41,6 +41,22 @@ if (!RAPIDAPI_PROXY_SECRET) {
 // Per-route discovery config + searchable metadata. Discovery example MUST be an
 // OBJECT (CDP validator: /output/example must be object) even for array endpoints.
 const ROUTES = {
+  '/defi/protocols-top': {
+    description: 'Top DeFi protocols ranked by TVL with 1d/7d change. No required params. Agent-native, pay-per-call via x402.',
+    serviceName: 'Top DeFi Protocols by TVL (DefiLlama)',
+    tags: ['defi','protocols','tvl','data'],
+    input: { limit: '20' },
+    inputSchema: { type: 'object', properties: { limit:{type:'string',description:'Max rows (default 20, max 100)'} } },
+    example: { name: 'Aave', category: 'Lending', tvl_usd: 30000000000, change_1d: 0.4 },
+  },
+  '/defi/dex-volume': {
+    description: 'Top DEXs by 24h trading volume with market total. No required params. Agent-native, pay-per-call via x402.',
+    serviceName: 'Top DEXs by 24h Volume (DefiLlama)',
+    tags: ['defi','dex','volume','data'],
+    input: { limit: '20' },
+    inputSchema: { type: 'object', properties: { limit:{type:'string',description:'Max rows (default 20, max 100)'} } },
+    example: { name: 'Curve DEX', volume24h_usd: 42754326 },
+  },
   '/defi/chains-tvl': {
     description: 'Top blockchains ranked by total DeFi TVL. No required params. Agent-native, pay-per-call via x402.',
     serviceName: 'DeFi TVL by Chain (DefiLlama)',

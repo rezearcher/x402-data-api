@@ -777,6 +777,8 @@ app.get("/.well-known/x402", (c) => {
       mk("/chain/allowance", "GET", "0.002", "2000", "ERC-20 allowance(owner, spender) on Base, raw + formatted, flags unlimited approvals.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
       mk("/defi/chains-tvl", "GET", "0.003", "3000", "Top blockchains ranked by total DeFi TVL (DefiLlama): name, TVL USD, gas token. No params. Use when an agent needs a quick map of where DeFi capital sits.", ["defi", "tvl", "chains", "data"]),
       mk("/crypto/stablecoins", "GET", "0.003", "3000", "Top stablecoins by circulating supply (DefiLlama): name, symbol, price, peg type, circulating USD. No params. Use when an agent needs stablecoin supply and depeg checks.", ["crypto", "stablecoins", "depeg", "supply", "data"]),
+      mk("/defi/protocols-top", "GET", "0.003", "3000", "Top DeFi protocols by TVL (DefiLlama): name, category, TVL USD, 1d/7d change, chain. No params. Use when an agent needs a ranked protocol league table.", ["defi", "protocols", "tvl", "data"]),
+      mk("/defi/dex-volume", "GET", "0.003", "3000", "Top DEXs by 24h trading volume (DefiLlama): name, 24h/7d volume USD, 1d change, plus market total. No params. Use when an agent needs where on-chain swap volume is flowing.", ["defi", "dex", "volume", "data"]),
       mk("/ai/classify", "GET", "0.003", "3000", "Zero-shot text classification (Llama 3.2 3B): ?text=<up to 1000 chars>&labels=<comma-separated labels, 2-10> returns the single best label. Use when an agent needs to route or tag text (intent, sentiment, topic, spam) in one cheap call.", ["ai", "llm", "classification", "text", "data"]),
       mk("/ai/summarize", "GET", "0.003", "3000", "Text summarization (Llama 3.2 3B): ?text=<up to 1500 chars> returns a 1-3 sentence summary. Use when an agent needs to compress a passage cheaply before reasoning over it.", ["ai", "llm", "summarization", "text", "data"]),
       mk("/ai/translate", "GET", "0.003", "3000", "Text translation (Llama 3.2 3B): ?text=<up to 800 chars>&to=<target language, e.g. es, fr, de, ja> returns the translated text only. Use when an agent needs quick pay-per-call translation with no API key.", ["ai", "llm", "translation", "language", "data"]),
@@ -998,6 +1000,8 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/chain/fee-history — $0.003 — Base base-fee history over the last 10 blocks with gas-used ratios.
 - GET ${BASE}/defi/chains-tvl — $0.003 — Top chains by DeFi TVL.
 - GET ${BASE}/crypto/stablecoins — $0.003 — Top stablecoins by supply + peg price.
+- GET ${BASE}/defi/protocols-top — $0.003 — Top DeFi protocols by TVL.
+- GET ${BASE}/defi/dex-volume — $0.003 — Top DEXs by 24h volume.
 - GET ${BASE}/ai/classify?text=<…>&labels=a,b,c — $0.003 — Zero-shot classification into one of your labels.
 - GET ${BASE}/ai/summarize?text=<…> — $0.003 — 1-3 sentence summary of a passage.
 - GET ${BASE}/ai/translate?text=<…>&to=es — $0.003 — Translate text into a target language.
@@ -1219,6 +1223,8 @@ app.get("/openapi.json", (c) => {
       "/chain/allowance": paid("ERC-20 allowance(owner, spender) on Base.", "0.002", [{ name: "token", desc: "ERC-20 address", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }, { name: "owner", desc: "owner address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "spender", desc: "spender address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
       "/defi/chains-tvl": paid("Top chains by DeFi TVL (DefiLlama).", "0.003", [{ name: "limit", desc: "max chains (default 20, max 100)", example: "20" }]),
       "/crypto/stablecoins": paid("Top stablecoins by supply with peg price (DefiLlama).", "0.003", [{ name: "limit", desc: "max coins (default 20, max 100)", example: "20" }]),
+      "/defi/protocols-top": paid("Top DeFi protocols by TVL (DefiLlama).", "0.003", [{ name: "limit", desc: "max rows (default 20, max 100)", example: "20" }]),
+      "/defi/dex-volume": paid("Top DEXs by 24h volume (DefiLlama).", "0.003", [{ name: "limit", desc: "max rows (default 20, max 100)", example: "20" }]),
       "/ai/classify": paid("Classify text into one of your labels.", "0.003", [{ name: "text", desc: "text, max 1000 chars", required: true, example: "My card was charged twice" }, { name: "labels", desc: "comma-separated labels, 2-10", required: true, example: "billing,bug,feature_request,other" }]),
       "/ai/summarize": paid("Summarize a passage into 1-3 sentences.", "0.003", [{ name: "text", desc: "passage, max 1500 chars", required: true, example: "x402 is an open HTTP 402 payment protocol letting clients pay per request in USDC on Base without accounts or API keys." }]),
       "/ai/translate": paid("Translate text into a target language.", "0.003", [{ name: "text", desc: "source text, max 800 chars", required: true, example: "Hello, how are you?" }, { name: "to", desc: "target language name or code", required: true, example: "es" }]),
@@ -2087,6 +2093,28 @@ function makeRoutes(payTo: string) {
         input: { limit: "20" },
         inputSchema: { type: "object", properties: { limit: { type: "string" } } },
         output: { example: { stablecoins: [{ symbol: "USDT", price: 0.9994, circulating_usd: 183456438967 }] } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /defi/protocols-top": {
+      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      description: "Top DeFi protocols by TVL (DefiLlama): name, category, TVL USD, 1d/7d change, chain. No params. Use when an agent needs a ranked protocol league table.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { limit: "20" },
+        inputSchema: { type: "object", properties: { limit: { type: "string" } } },
+        output: { example: { protocols: [{ name: "Aave", category: "Lending", tvl_usd: 30000000000, change_1d: 0.4, change_7d: -1.2 }] } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /defi/dex-volume": {
+      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      description: "Top DEXs by 24h trading volume (DefiLlama): name, 24h/7d volume USD, 1d change, plus market total. No params. Use when an agent needs where on-chain swap volume is flowing.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { limit: "20" },
+        inputSchema: { type: "object", properties: { limit: { type: "string" } } },
+        output: { example: { total24h_usd: 7102132850, dexs: [{ name: "Curve DEX", volume24h_usd: 42754326 }] } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /ai/classify": {
@@ -4983,6 +5011,40 @@ app.get("/crypto/stablecoins", async (c) => {
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /crypto/stablecoins", rail, makeUsageCounter(c.env)));
     return c.json({ count: stablecoins.length, stablecoins, source: "defillama", ts: new Date().toISOString() });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/defi/protocols-top", async (c) => {
+  const limit = Math.min(Math.max(parseInt(c.req.query("limit") ?? "20", 10) || 20, 1), 100);
+  try {
+    const r = await fetch("https://api.llama.fi/protocols");
+    if (!r.ok) return c.json({ error: "upstream " + r.status }, { status: 502 });
+    const d = (await r.json()) as Array<{ name: string; category?: string; tvl?: number; change_1d?: number; change_7d?: number; chain?: string }>;
+    const protocols = d.filter((x) => (x.tvl ?? 0) > 0 && x.category !== "CEX").sort((a, b) => (b.tvl ?? 0) - (a.tvl ?? 0)).slice(0, limit)
+      .map((x) => ({ name: x.name, category: x.category ?? null, tvl_usd: Math.round(x.tvl ?? 0), change_1d: x.change_1d ?? null, change_7d: x.change_7d ?? null, chain: x.chain ?? null }));
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/defi/protocols-top", ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /defi/protocols-top", rail, makeUsageCounter(c.env)));
+    return c.json({ count: protocols.length, protocols, source: "defillama", ts: new Date().toISOString() });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+app.get("/defi/dex-volume", async (c) => {
+  const limit = Math.min(Math.max(parseInt(c.req.query("limit") ?? "20", 10) || 20, 1), 100);
+  try {
+    const r = await fetch("https://api.llama.fi/overview/dexs?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true");
+    if (!r.ok) return c.json({ error: "upstream " + r.status }, { status: 502 });
+    const d = (await r.json()) as { total24h?: number; total7d?: number; change_1d?: number; protocols?: Array<{ name: string; total24h?: number; total7d?: number; change_1d?: number }> };
+    const dexs = (d.protocols ?? []).filter((x) => (x.total24h ?? 0) > 0).sort((a, b) => (b.total24h ?? 0) - (a.total24h ?? 0)).slice(0, limit)
+      .map((x) => ({ name: x.name, volume24h_usd: Math.round(x.total24h ?? 0), volume7d_usd: Math.round(x.total7d ?? 0), change_1d: x.change_1d ?? null }));
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/defi/dex-volume", ts: new Date().toISOString() }));
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /defi/dex-volume", rail, makeUsageCounter(c.env)));
+    return c.json({ total24h_usd: Math.round(d.total24h ?? 0), total7d_usd: Math.round(d.total7d ?? 0), change_1d: d.change_1d ?? null, count: dexs.length, dexs, source: "defillama", ts: new Date().toISOString() });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }

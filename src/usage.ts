@@ -68,6 +68,8 @@ export type Route =
   | "GET /ai/translate"
   | "GET /ai/summarize"
   | "GET /ai/classify"
+  | "GET /defi/protocols-top"
+  | "GET /defi/dex-volume"
   | "GET /defi/chains-tvl"
   | "GET /crypto/stablecoins"
   | "GET /chain/wallet"
@@ -183,6 +185,8 @@ const ALL_ROUTES: Route[] = [
   "GET /ai/translate",
   "GET /ai/summarize",
   "GET /ai/classify",
+  "GET /defi/protocols-top",
+  "GET /defi/dex-volume",
   "GET /defi/chains-tvl",
   "GET /crypto/stablecoins",
   "GET /chain/wallet",
