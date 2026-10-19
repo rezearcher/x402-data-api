@@ -48,6 +48,7 @@ export type Route =
   | "GET /chain/erc20-meta"
   | "GET /chain/nonce"
   | "GET /chain/fee-estimate"
+  | "GET /chain/network-status"
   | "GET /chain/total-supply"
   | "GET /chain/is-contract"
   | "GET /chain/storage-at"
@@ -148,6 +149,7 @@ const ALL_ROUTES: Route[] = [
   "GET /chain/erc20-meta",
   "GET /chain/nonce",
   "GET /chain/fee-estimate",
+  "GET /chain/network-status",
   "GET /chain/total-supply",
   "GET /chain/is-contract",
   "GET /chain/storage-at",

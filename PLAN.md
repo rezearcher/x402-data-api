@@ -292,3 +292,4 @@ branch@dexter.cash (audition support) queued: outreach/queue/dexter-audition-sup
 - cycle 54e: 3 supplier-listing issues (fiatdock, voidly pay-marketplace-agentkit, tanod integrations)
 - 2026-10-19 CDT (cycle 55): trace: only bots 0x54e163 (0.008) / 0xec2abd (0.005) external; DO row-read limit still exceeded so paid_log is dark until 00:00Z reset; no new replies (pilot#13 already answered). Wallet 32.62724 flat.
 - cycle 55b: shipped+deployed /chain/fee-estimate (0.003, no params; bots sweep new cheap routes). version 76dea916. Not seeded to Bazaar/PayAI yet (seeding = self-funded canary).
+- cycle 55c: shipped /chain/network-status (0.003, no params); IndexNow pinged for it + fee-estimate.
