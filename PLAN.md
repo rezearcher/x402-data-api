@@ -263,3 +263,4 @@ branch@dexter.cash (audition support) queued: outreach/queue/dexter-audition-sup
 - 2026-10-19 CDT (cycle 44c): 8 new gate/swap pitch issues on x402 guard/agent repos (outreach/gh/issues_cycle44.txt). Check replies next cycle.
 - 2026-10-19 CDT (cycle 45): inbox 0 replies; all ~50 pitch issues checked, only pilot#13 has comments (ours last, awaiting their paid call); ext only bots; wallet 32.62724 (+0.005 = bot). Cap spent until 10-20 05:00Z. No new lever.
 - 2026-10-19 CDT (cycle 45b): re-put TRAFFIC_STATS_SECRET from ~/.hermes/.env (needs CLOUDFLARE_API_TOKEN=CF_WORKERS_TOKEN); stats endpoint now authorized but 500s (DO daily limit exceeded until 00:00Z). Retry after reset for per-route bot attribution.
+- 2026-10-19 CDT (cycle 45c): added console.log PAID line (route+payer) + [observability] enabled in wrangler.toml; deployed 8c75a268. Workers Logs now attribute bot payments per route even when TrafficLog DO is over limit; query via CF logs API next cycles.

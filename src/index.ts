@@ -2630,6 +2630,8 @@ app.use(async (c, next) => {
         const j = JSON.parse(atob(payHdr));
         payer = String(j?.payload?.authorization?.from ?? "unknown").toLowerCase();
       } catch { /* undecodable header */ }
+      // Workers Logs line survives the TrafficLog DO daily-limit outage.
+      console.log(JSON.stringify({ evt: "PAID", path: c.req.path, payer }));
       const stub = c.env.TRAFFIC_LOG.get(c.env.TRAFFIC_LOG.idFromName("default"));
       fireAndForget(c, stub.logHit(c.req.path, "PAID", payer).catch(() => {}));
     }
