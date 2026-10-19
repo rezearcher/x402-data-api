@@ -146,3 +146,9 @@ targets except the explicitly-scoped `/scan/mcp` and enrichment endpoints).
 ## License
 
 MIT — see [LICENSE](./LICENSE).
+
+## Agent-framework examples
+Pre-trade token guard (`/gate/swap`, $0.008 USDC via x402 on Base). Free sample: `curl "https://api.greyridgesignals.ai/gate/swap/preview?token=degen"`
+- Node: `docs/examples/swap-gate/gate.mjs`
+- LangChain.js tool: `docs/examples/langchain/swapGuardTool.mjs`
+- ElizaOS action: `docs/examples/elizaos/swapGuardAction.mjs`
