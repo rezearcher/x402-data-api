@@ -196,3 +196,4 @@ branch@dexter.cash (audition support) queued: outreach/queue/dexter-audition-sup
 - 2026-10-19 CDT (cycle 21e): Bazaar (25,695 items; paginate limit=1000&offset) lists 15 of ours; the 5 just-seeded routes not indexed yet (lag) - recheck next cycle.
 - 2026-10-19 CDT (cycle 21f): trace_inbound: external total 0.032 USDC (0x54e163 0.001, 0xec2abd 0.031); the rest of wallet delta is our own canaries. Only bot micro-payments so far.
 - 2026-10-19 CDT (cycle 22): inbox 0 replies; 4 PRs + APM#1 no response; Bazaar now lists all 5 new routes (20 sigrunner resources). Wallet 32.38524, external still bots only. Cap spent till 10-20 CDT.
+- 2026-10-19 CDT (cycle 22b): IndexNow key route deployed (b863207a), pinged api.indexnow.org with /check + / (202). Key in outreach/indexnow.key. Human-SEO lever for /check verdict page.

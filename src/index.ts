@@ -938,6 +938,7 @@ app.get("/.well-known/agent-card.json", (c) => {
 
 // llms.txt — the plain-text catalog AI-agent crawlers read to discover paid
 // services (an emerging convention many x402 sellers expose). Free, ungated.
+app.get("/aa3ee6fa313780532656391c0c73664f.txt", (c) => c.text("aa3ee6fa313780532656391c0c73664f"));
 app.get("/llms.txt", (c) => {
   const BASE = "https://x402-data-api.sigrunner.workers.dev";
   return c.text(`# Grey Ridge Signals — x402 Data & Security APIs
