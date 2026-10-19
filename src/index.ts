@@ -4382,7 +4382,7 @@ app.get("/ai/ask/preview", async (c) => {
   if (parseInt(used ?? "0", 10) >= 300) return c.json({ error: "preview capacity reached today" }, { status: 503 });
   try {
     const r = (await c.env.AI.run("@cf/meta/llama-3.2-3b-instruct", {
-      messages: [{ role: "system", content: "Answer concisely in under 60 words." }, { role: "user", content: q }],
+      messages: [{ role: "system", content: "Context: x402 is Coinbase's open HTTP 402 micropayment protocol where API callers pay per request in USDC on Base. Base is Coinbase's Ethereum L2. Answer concisely in under 60 words." }, { role: "user", content: q }],
       max_tokens: 100,
     })) as { response?: string };
     await Promise.all([
@@ -4406,7 +4406,7 @@ app.get("/ai/ask", async (c) => {
   if (used >= 400) return c.json({ error: "daily capacity reached, retry after 00:00 UTC" }, { status: 503 });
   try {
     const r = (await c.env.AI.run("@cf/meta/llama-3.2-3b-instruct", {
-      messages: [{ role: "system", content: "Answer concisely and accurately in under 120 words." }, { role: "user", content: q }],
+      messages: [{ role: "system", content: "Context: x402 is Coinbase's open HTTP 402 micropayment protocol where API callers pay per request in USDC on Base. Base is Coinbase's Ethereum L2. Answer concisely and accurately in under 120 words." }, { role: "user", content: q }],
       max_tokens: 200,
     })) as { response?: string };
     await c.env.API_KEYS?.put(key, String(used + 1), { expirationTtl: 172800 });
