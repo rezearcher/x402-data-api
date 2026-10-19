@@ -1,0 +1,8 @@
+BlockRunAI/ClawRouter
+https://github.com/BlockRunAI/ClawRouter/issues/477
+Libertai/libertai-agents
+https://github.com/Libertai/libertai-agents/issues/154
+nirholas/universal-crypto-mcp
+https://github.com/nirholas/universal-crypto-mcp/issues/39
+desplega-ai/agent-swarm
+https://github.com/desplega-ai/agent-swarm/issues/2269
