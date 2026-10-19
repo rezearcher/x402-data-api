@@ -341,3 +341,4 @@ Inbox: 0 replies. Issue watch: only x402-pilot#13 (already answered). trace_inbo
 - cycle 62o: shipped+deployed /crypto/global (0.002) and /defi/yields-top (0.003) (version 86a83bde); seeded both (self canary), x402scan re-registered 50/55.
 - cycle 62p: IndexNow pinged (200) for all 9 parameterless data routes + llms.txt + openapi.
 - cycle 62q: shipped /crypto/markets-top + /crypto/movers (0.003, version 1d89eb8e); seeded, x402scan 54/57, IndexNow. Note: deploy BEFORE commit once served a stale/404 version - commit+push then redeploy.
+- cycle 62r: shipped /brief/market composite (0.01, bot price point; version cb5ebda9). CONFIRMED: new routes need a SECOND deploy.sh run to go live (first = 404). Seeded, x402scan, IndexNow.
