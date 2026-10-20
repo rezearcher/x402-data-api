@@ -45,3 +45,4 @@ Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; A
 - 2026-10-20T08:10Z c49: Miles (liquidlogicx) positive on MCP scan; paste-mode POST /scan/mcp/preview verified LIVE; sent follow-up msg 1a158599acd2ec52 w/ paste curl + price clarification (MCP $0.005, HTTP $0.05). Awaiting his URL/tools list.
 - 2026-10-20T08:20Z c49: 5 mcpscan admission-gate issues: VT-Agent-Firewall#1 mcp-router#22 mcp-allowlist-proxy#2 mcp-egress#19 batesian#545
 - 2026-10-20T08:25Z c50: 0 new buyer replies; Miles said he'd run preview this week (no double-send).
+- c50 verify: live preview now returns clear for actwise.ai + plantguide.ae (scanner fixes deployed).
