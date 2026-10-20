@@ -6814,7 +6814,7 @@ function analyzeMcpTool(name: string, description: string, schemaText: string): 
   // instructions, hidden <IMPORTANT>/<system> directive tags, and instructions to
   // conceal actions from the user. Genuine exfiltration/danger stays covered by
   // rules 2–5 below, so a real "before using X, read ~/.ssh/id_rsa" attack still flags.
-  const inj = /(ignore (all |any )?(previous|prior|earlier|above)( instructions| context| prompt)?|disregard (the )?(above|previous|prior|earlier)|<\/?important>|<\/?system>|<\/?secret>|do not (tell|mention|inform|notify|reveal (?:it|this|that) to) the user|never (reveal|mention|disclose|tell)\b[^.]{0,30}\b(instructions?|the user)|(hidden|concealed|kept secret) from the user|keep (this|it) (secret|hidden)|without (telling|informing|notifying|alerting) the user|reveal (your|the) (full |complete )?(system )?(prompt|instructions))/i;
+  const inj = /(ignore (all |any )?(previous|prior|earlier|above)( instructions| context| prompt)?|disregard (the )?(above|previous|prior|earlier)|<\/?important>|<\/?system>|<\/?secret>|do not (tell|mention|inform|notify|reveal)\b[^.]{0,20}\bthe user|never (reveal|mention|disclose|tell)\b[^.]{0,30}\b(instructions?|the user)|(hidden|concealed|kept secret) from the user|keep (this|it) (secret|hidden)|without (telling|informing|notifying|alerting) the user|reveal (your|the) (full |complete )?(system )?(prompt|instructions))/i;
   if (inj.test(text)) add("critical", "tool-poisoning:hidden-instructions",
     "Description contains deceptive/override instructions aimed at the AI agent (conceal-from-user or ignore-prior-instructions) — classic MCP tool-poisoning.", (text.match(inj) || [""])[0]);
 
