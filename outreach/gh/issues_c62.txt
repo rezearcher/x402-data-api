@@ -2,3 +2,9 @@ https://github.com/rogerchappel/mcpchangefeed/issues/28
 https://github.com/YugantM/hvtracker/issues/373
 https://github.com/ggange/mcp-review/issues/512
 https://github.com/dhe-cruzer69/ariexcore-skill-registry/issues/1
+https://github.com/Dr-Deep-Learning/mcp-guard/issues/1
+https://github.com/giantswarm/muster/issues/1607
+https://github.com/joshrotenberg/mcp-proxy/issues/332
+https://github.com/api-evangelist/meta-agent-tools/issues/1
+https://github.com/api-evangelist/cracked/issues/1
+https://github.com/eddyflores100-lang/marketnow/issues/23
