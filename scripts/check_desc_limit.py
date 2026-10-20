@@ -19,14 +19,25 @@ SRC = pathlib.Path(__file__).resolve().parent.parent / "src" / "index.ts"
 
 
 def main() -> int:
-    lines = SRC.read_text().split("\n")
+    text = SRC.read_text()
+    lines = text.split("\n")
     sites = [i for i, ln in enumerate(lines) if "declareDiscoveryExtension" in ln]
     over = []
+    # 1. x402 v2 resource.description (what the Facilitator reads on verify+settle)
     for idx in sites:
         block = "\n".join(lines[max(0, idx - 15):idx])
         m = re.search(r'description:\s*\n?\s*"((?:[^"\\]|\\.)*)"', block)
         if m and len(m.group(1)) > LIMIT:
             over.append((idx + 1, len(m.group(1)), m.group(1)[:60]))
+    # 2. mk() route descriptions (feed openapi.json; x402scan indexes from openapi).
+    #    mk("/path","METHOD","price","amount","<description>",[tags])
+    for i, ln in enumerate(lines):
+        if "mk(" not in ln:
+            continue
+        args = re.findall(r'"((?:[^"\\]|\\.)*)"', ln)
+        # 5th string arg is the description (path, method, price, amount, desc)
+        if len(args) >= 5 and len(args[4]) > LIMIT:
+            over.append((i + 1, len(args[4]), "mk: " + args[4][:56]))
     if over:
         print(f"FAIL: {len(over)} x402 resource.description(s) over {LIMIT} chars "
               f"(CDP Facilitator will reject verify+settle):")
