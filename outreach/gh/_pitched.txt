@@ -264,3 +264,4 @@ https://github.com/EkoTerminal/eko/issues/4
 https://github.com/Starchild-ai-agent/official-skills/issues/192
 https://github.com/sheldonivish/degen-desk/issues/1
 https://github.com/true402/hermes-skills/issues/1
+gigsoul-org/gigsoul-x402#3
