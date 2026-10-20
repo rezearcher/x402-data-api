@@ -19,3 +19,4 @@ seed_cdp_pm.js
 # untracked means `git status` on the live repo is always dirty and a
 # blind `git clean -fdx` elsewhere could reap in-flight worktrees)
 /.worktrees/
+data/bazaar_full_*.json
