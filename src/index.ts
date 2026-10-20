@@ -3046,6 +3046,7 @@ app.use(async (c, next) => {
       "chain_gas_price_preview",
       "chain_token_security_preview",
       "chain_token_report_preview",
+      "gate_swap_preview",
     ]);
     // Batch bodies: evaluate EVERY element; any non-free tools/call requires payment.
     const requiresPayment = items.some((it) => {
@@ -7588,6 +7589,27 @@ const mcpHandler = createMcpHandler(() => {
       }
       try {
         const result = await buildSwapGate(token, side ?? "buy", notional_usd ?? 100);
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "gate_swap_preview",
+    {
+      description:
+        "FREE live sample of the gate_swap pre-trade GO/HOLD/BLOCK decision for a demo Base token (usdc|weth|cbbtc|aero|degen), same shape as the paid gate_swap tool. No payment required.",
+      inputSchema: {
+        token: z.enum(["usdc", "weth", "cbbtc", "aero", "degen"]).optional().describe("demo token, default usdc"),
+        side: z.enum(["buy", "sell"]).optional().describe("default buy"),
+        notional_usd: z.number().positive().optional().describe("trade size in USD (default 100)"),
+      },
+    },
+    async ({ token, side, notional_usd }) => {
+      try {
+        const result = await buildSwapGate(PREVIEW_DEMO_TOKENS[token ?? "usdc"], side ?? "buy", notional_usd ?? 100);
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
