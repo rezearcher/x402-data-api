@@ -23,3 +23,4 @@ Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; A
 - 2026-10-20T02:35Z c27: Gmail 0 buyer replies; issue sensor only Sluzen seller-pitch bot (switchbord#1, ignored); health 200 0.14s, preview 200 0.78s, paid route 402. Wallet 32.81524 flat. Krystian not double-sent.
 - 2026-10-20T02:45Z c28: Gmail 0 buyer replies; issue sensor noise only (Sluzen). pitched skillware#445, aser#9.
 - 2026-10-20T03:36Z c33: 0 buyer replies; opened toolsdk-mcp-registry#941
+- c33b: opened mcpsvr#85, AIAnytime/Awesome-MCP-Servers#274
