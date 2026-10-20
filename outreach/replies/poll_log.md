@@ -85,3 +85,6 @@ Gmail: no new buyer replies (Miles 10-19 23:47 = will run free MCP-scan preview 
 
 ## c96 2026-10-20 ~16:45Z
 Gmail: no new buyer replies (Miles thread last msg ours 12:04Z; he said he'll test MCP scan this week; do NOT double-send). GH sensor: 47 replies, newest = guidoalejo/Sluzen (zero buyers, vendor pitch), all declines otherwise. Deploy: bg_deploy try 25 fail; ~/.hermes/.env missing so no CF token source; op still rate-limited. Wallet flat 32.87524.
+
+## c97 2026-10-20 ~16:50Z
+Gmail: 0 buyer replies (CARFAX/LinkedIn/WEX/CF DO alert/recruiters). GH sensor unchanged (47, declines/vendor pitches). op read CF_WORKERS_TOKEN still "Too many requests"; ~/.hermes/.env absent; bg_deploy try 26 fail. Wallet flat 32.87524. Cap spent; 15 queued emails fire 10-21.
