@@ -68,3 +68,4 @@ Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; A
 - c83b pitched mcpcost, asale-ai/agent-firewall, shivanagendrakore/agent-firewall, JanusGate, Blackwall (mcp-scan body)
 - c85 (2026-10-20 10:13 CDT): 0 buyer replies (inbox: bounce, Miles already answered, CF alert, spam). New GH replies all declines (mcp-gateway, guardana, mcphub, agentbridge, agent-swarm). op still rate-limited; bg deploy try19 fail.
 - c85b: pitched pulsefeed-x402#41 (host sigrunner.workers.dev is the live one; rezearcher.workers.dev fails)
+- c85c: scoreboard listing_refresh rc=1 = register_x402scan.js needs lib/wallet.js vault (1Password, rate-limited) and fallback ~/.hermes/secrets/base-wallet.json is missing. Same root blocker as CF token: 1Password rate-limit. Listing refresh resumes when op recovers.
