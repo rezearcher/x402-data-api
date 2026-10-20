@@ -32,3 +32,4 @@ Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; A
 - 2026-10-20T06:20Z c40: emailed hello@liquidlogicx.com (1a157c9da1e86694). Check reply next cycle; do not double-send.
 - 2026-10-20T06:35Z c40: pitched x402-treasury#25, x402-payer-skill#1, coinbase-agentkit-x402#1, agent-payment-guard#1 (from 'gh search repos x402 treasury/payer'; multiword query must be UNQUOTED to work, use fullName/hasIssues json fields).
 - 2026-10-20T06:45Z c40: pitched invinoveritas + payerproof issues. 9 prior issues 0 comments.
+- 2026-10-20T05:50Z c41: 0 buyer replies (Gmail noise; sensor: Sluzen/old). punkpeye#2350 auth-check bot flagged 🔓 vs 🔑 (stale probe pre-/mcp fix); workers.dev /mcp returns 200 for json/sse/*/* Accept; closed+reopened to re-run check.
