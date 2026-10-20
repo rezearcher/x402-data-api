@@ -961,7 +961,8 @@ app.get("/.well-known/agent-card.json", (c) => {
           "Machine-readable payment manifest: /.well-known/x402. MCP tool interface: /mcp (tool: scan_mcp_server).",
         tags: ["security", "mcp", "audit", "prompt-injection"],
         examples: [
-          "GET /scan/mcp?url=https://example.com/mcp",
+          "GET /scan/mcp/preview?url=https://mcp.deepwiki.com/mcp  (free; a real public streamable-HTTP MCP server — returns counts + risk score)",
+          "GET /scan/mcp?url=https://your-mcp-server.example/mcp  ($0.05; full itemized findings for your own server)",
         ],
       },
       {
