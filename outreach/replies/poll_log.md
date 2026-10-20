@@ -78,3 +78,6 @@ Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; A
 - c89 2026-10-20T15:50Z: 0 buyer replies (Miles last msg 23:47 PDT 10-19 already answered; inbox = spam/recruiters). op whoami ok but op read CF_WORKERS_TOKEN still rate-limited (bg_deploy2 try 21 fail). Haven-AI no release. Fresh code/repo search: 0 unpitched targets; true402/hermes-skills is a COMPETITOR (free Base rug/honeypot checks via x402) — not pitched.
 - c89b: tried CF_WORKERS_TOKEN from ~/.hermes/secrets/env-predelete-bak (Invalid API Token, revoked) and wrangler OAuth session (account 9b5a...: 'No access to the specified service') — both dead; only a fresh token from the sigrunner account works.
 c90: fresh-repo search (pushed>10-15) -> no Base embedders left; apexfaucet-hub/apex-x1-mcp = competitor (exit checks 7 chains, x402, 160 tools); others Arc-chain, not fits. CF_API_TOKEN cannot read/create tokens (9109).
+
+## c91 2026-10-20T16:05Z
+Gmail: no new buyer replies (Miles 10-19 23:47 = will run free MCP-scan preview this week; Krystian 10-19 20:39 waiting). GH sensor: only declines/bots. CF DO daily-limit alert again 15:55Z (TrafficLog fix committed, not deployed: wrangler token lacks Workers perms). Repo search (pre-trade/guard/guardrail) saturated: only own repos + true402/hermes-skills (free competitor).

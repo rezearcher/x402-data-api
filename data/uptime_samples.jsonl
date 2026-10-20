@@ -1068,3 +1068,8 @@
 {"t": "2026-10-20T15:50:01.501010Z", "ep": "/chain/token-security/preview", "ok": true, "code": 200, "ms": 1289}
 {"t": "2026-10-20T15:50:01.501010Z", "ep": "/chain/gas-price/preview", "ok": true, "code": 200, "ms": 1139}
 {"t": "2026-10-20T15:50:01.501010Z", "ep": "/crypto/prices/preview", "ok": true, "code": 200, "ms": 752}
+{"t": "2026-10-20T15:55:01.111819Z", "ep": "/gate/swap/preview", "ok": true, "code": 200, "ms": 3658}
+{"t": "2026-10-20T15:55:01.111819Z", "ep": "/chain/token-report/preview", "ok": true, "code": 200, "ms": 2820}
+{"t": "2026-10-20T15:55:01.111819Z", "ep": "/chain/token-security/preview", "ok": true, "code": 200, "ms": 1557}
+{"t": "2026-10-20T15:55:01.111819Z", "ep": "/chain/gas-price/preview", "ok": true, "code": 200, "ms": 1278}
+{"t": "2026-10-20T15:55:01.111819Z", "ep": "/crypto/prices/preview", "ok": true, "code": 200, "ms": 1127}
