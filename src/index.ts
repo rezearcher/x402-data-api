@@ -7036,6 +7036,31 @@ app.get("/scan/mcp/preview", async (c) => {
   }
 });
 
+// Paste-mode preview for servers we can't reach (OAuth-gated / private): POST the
+// JSON of your own tools/list response ({"tools":[...]} or {"result":{"tools":[...]}}).
+// Same static analysis, no outbound fetch, no SSRF surface. Counts only (like GET preview).
+app.post("/scan/mcp/preview", async (c) => {
+  let body: any;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'POST JSON body: {"tools":[{name,description,inputSchema}]} (your tools/list result)' }, { status: 400 });
+  }
+  const tools: { name?: string; description?: string; inputSchema?: unknown }[] = body?.tools ?? body?.result?.tools;
+  if (!Array.isArray(tools) || tools.length === 0 || tools.length > 200 || JSON.stringify(tools).length > 262144) {
+    return c.json({ error: "body.tools must be a non-empty array (<=200 tools, <=256KB)" }, { status: 400 });
+  }
+  const findings: ScanFinding[] = [];
+  for (const t of tools) findings.push(...analyzeMcpTool(t?.name ?? "(unnamed)", t?.description ?? "", JSON.stringify(t?.inputSchema ?? {})));
+  const weight = { critical: 40, high: 20, medium: 8, low: 3 } as const;
+  const risk_score = Math.min(100, findings.reduce((s, x) => s + weight[x.severity], 0));
+  const crit = findings.filter((x) => x.severity === "critical").length;
+  const risk_summary = findings.length === 0
+    ? `No tool-poisoning/injection patterns detected across ${tools.length} tool(s). Clean on static checks.`
+    : `${findings.length} issue(s) across ${tools.length} tool(s)${crit ? `, ${crit} CRITICAL (tool-poisoning)` : ""}. Risk ${risk_score}/100.`;
+  return c.json(previewOf({ target: "(pasted tools/list)", tools_scanned: tools.length, findings, risk_score, verdict: verdictFromScore(risk_score), risk_summary, scanned_at: new Date().toISOString() }));
+});
+
 // ---------------------------------------------------------------------------
 // MCP endpoint — expose the full x402-paid tool surface (22 tools) via MCP ($0.005 per tools/call via x402)
 // ---------------------------------------------------------------------------
