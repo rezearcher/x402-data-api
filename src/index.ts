@@ -798,7 +798,7 @@ app.get("/.well-known/x402", (c) => {
       mk("/ai/summarize", "GET", "0.003", "3000", "Text summarization (Llama 3.2 3B): ?text=<up to 1500 chars> returns a 1-3 sentence summary. Use when an agent needs to compress a passage cheaply before reasoning over it.", ["ai", "llm", "summarization", "text", "data"]),
       mk("/ai/translate", "GET", "0.003", "3000", "Text translation (Llama 3.2 3B): ?text=<up to 800 chars>&to=<target language, e.g. es, fr, de, ja> returns the translated text only. Use when an agent needs quick pay-per-call translation with no API key.", ["ai", "llm", "translation", "language", "data"]),
       mk("/ai/extract", "GET", "0.005", "5000", "Text-to-JSON extraction (Llama 3.2 3B): ?text=<up to 1500 chars>&fields=<comma-separated field names> returns a strict JSON object with exactly those keys (null when absent). Use when an agent needs messy text turned into typed structured data.", ["ai", "llm", "extraction", "json", "structured", "data"]),
-      mk("/v1/chat/completions", "POST", "0.002", "2000", "OpenAI-compatible chat completions (Llama 3.2 3B on Workers AI): POST {messages:[{role,content}]} returns choices[0].message. Drop-in for chat-completions clients, pay-per-call, no API key.", ["ai", "llm", "chat", "completions", "openai", "inference"]),
+      mk("/v1/chat/completions", "POST", "0.002", "2000", "OpenAI-compatible chat completions (Llama 3.3 70B fp8 on Workers AI; set model=llama-3.2-3b-instruct for the small model): POST {messages:[{role,content}]} returns choices[0].message. Drop-in for chat-completions clients, pay-per-call, no API key.", ["ai", "llm", "chat", "completions", "openai", "inference"]),
       mk("/ai/ask", "GET", "0.002", "2000", "Cheap LLM answer (Llama 3.2 3B on Workers AI): ?q=<prompt up to 500 chars>, returns concise text. Pay-per-call, no API key.", ["ai", "llm", "inference", "chat", "data"]),
       mk("/chain/block", "GET", "0.005", "5000", "Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/wallet", "GET", "0.003", "3000", "Wallet screening bundle (balance, activity, contract vs EOA check): ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]),
@@ -2385,14 +2385,14 @@ function makeRoutes(payTo: string) {
     },
     "POST /v1/chat/completions": {
       accepts: { scheme: "exact" as const, price: "$0.002", network: NETWORK, payTo },
-      description: "OpenAI-compatible chat completions (Llama 3.2 3B on Workers AI). POST {messages:[{role,content}]}, returns choices[0].message. Pay per call, no API key.",
+      description: "OpenAI-compatible chat completions (Llama 3.3 70B fp8 on Workers AI; set model=llama-3.2-3b-instruct for the small model). POST {messages:[{role,content}]}, returns choices[0].message. Pay per call, no API key.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "POST",
         bodyType: "json",
-        input: { model: "llama-3.2-3b-instruct", messages: [{ role: "user", content: "Explain x402 in one sentence" }] },
+        input: { model: "llama-3.3-70b-instruct-fp8-fast", messages: [{ role: "user", content: "Explain x402 in one sentence" }] },
         inputSchema: { type: "object", properties: { messages: { type: "array", description: "OpenAI-style messages, total <= 4000 chars" } }, required: ["messages"] },
-        output: { example: { object: "chat.completion", model: "llama-3.2-3b-instruct", choices: [{ index: 0, message: { role: "assistant", content: "x402 is an HTTP 402-based micropayment protocol." }, finish_reason: "stop" }] } },
+        output: { example: { object: "chat.completion", model: "llama-3.3-70b-instruct-fp8-fast", choices: [{ index: 0, message: { role: "assistant", content: "x402 is an HTTP 402-based micropayment protocol." }, finish_reason: "stop" }] } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /ai/ask": {
@@ -5665,16 +5665,27 @@ app.post("/v1/chat/completions", async (c) => {
   const used = parseInt((await c.env.API_KEYS?.get(key)) ?? "0", 10);
   if (used >= 400) return c.json({ error: "daily capacity reached, retry after 00:00 UTC" }, { status: 503 });
   try {
-    const r = (await c.env.AI.run("@cf/meta/llama-3.2-3b-instruct", {
-      messages: msgs,
-      max_tokens: Math.min(Math.max(Number(body.max_tokens) || 256, 1), 400),
-    })) as { response?: string };
+    // Default 70B (cost ~$0.0007-0.0012/call vs $0.002 price); body.model "llama-3.2-3b-instruct" opts into the small model.
+    const want3b = String((body as { model?: string }).model ?? "").includes("3b");
+    const params = { messages: msgs, max_tokens: Math.min(Math.max(Number(body.max_tokens) || 256, 1), 400) };
+    let modelUsed = want3b ? "llama-3.2-3b-instruct" : "llama-3.3-70b-instruct-fp8-fast";
+    let r: { response?: string };
+    if (want3b) {
+      r = (await c.env.AI.run("@cf/meta/llama-3.2-3b-instruct", params)) as { response?: string };
+    } else {
+      try {
+        r = (await c.env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", params)) as { response?: string };
+      } catch {
+        modelUsed = "llama-3.2-3b-instruct";
+        r = (await c.env.AI.run("@cf/meta/llama-3.2-3b-instruct", params)) as { response?: string };
+      }
+    }
     await c.env.API_KEYS?.put(key, String(used + 1), { expirationTtl: 172800 });
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("POST /v1/chat/completions", rail, makeUsageCounter(c.env)));
     const text = r.response ?? "";
     return c.json({
-      id: "chatcmpl-" + crypto.randomUUID(), object: "chat.completion", created: Math.floor(Date.now() / 1000), model: "llama-3.2-3b-instruct",
+      id: "chatcmpl-" + crypto.randomUUID(), object: "chat.completion", created: Math.floor(Date.now() / 1000), model: modelUsed,
       choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop" }],
       usage: { prompt_tokens: Math.ceil(total / 4), completion_tokens: Math.ceil(text.length / 4), total_tokens: Math.ceil((total + text.length) / 4) },
     });
