@@ -1151,8 +1151,8 @@ function tagFor(path: string): string {
 }
 
 const FLAGSHIP_OPERATION_IDS: Record<string, string> = {
-  "/chain/token-report": "token_honeypot_check_risk_report",
-  "/chain/token-security": "token_security_honeypot_scan",
+  "/chain/token-report": "token_honeypot_check",
+  "/chain/token-security": "honeypot_check",
   "/gate/swap": "pre_trade_token_safety_gate_swap",
 };
 
