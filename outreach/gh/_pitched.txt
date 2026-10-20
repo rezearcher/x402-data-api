@@ -187,3 +187,7 @@ https://github.com/NimbleBrainInc/mpak
 https://github.com/yunseo-kim/agent-toolbox
 https://github.com/manikhere79/mcp-gateway-and-registry
 https://github.com/opena2a-org/ai-trust
+TheLunarCompany/lunar
+speakeasy-api/gram
+antropos17/Aegis
+Muvon/octomind
