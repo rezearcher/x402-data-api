@@ -64,3 +64,5 @@ Krystian/agenticpay asked latency + uptime + free-tier; we DID answer uptime but
 ## GRAVEYARD (pruned — do NOT re-run)
 - coinbase/x402 ecosystem "add us" PR: 0 ever merged; EV ~$0. (pre-existing dead lever)
 - Self-paying our own API to move the wallet: FAKE revenue, violates no-self-dealing; never counts.
+
+- I9 (c15, 2026-10-20): CF_WORKERS_TOKEN from `op read op://Division/CF_WORKERS_TOKEN/credential` DOES deploy (v665bb283 then bd94ffb6, gate/swap preview side+notional and "token security" descriptions now live). The cf-workers-token-no-access blocker was stale; removed. Bazaar re-seed is a self-payment canary -> not done (I7).
