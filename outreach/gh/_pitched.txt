@@ -269,3 +269,11 @@ Alejdro83/stockgap-seller#1
 edtool79-collab/hirepulse-lead-agent#1
 greencore-solutions/gsc-marketplace#1
 truefixr/atlascast-truefixr#1
+8dp6brm9hp-svg/lion-mcp-public#3
+k-agentpay/kaia-x402#1
+neuronto/x402-starters#3
+ACJLabs/x402-listing-monitor#1
+fablerlabs/x402-tools#7
+tsharpe2282-web/twelve-permissions#1
+mcccsm/x402-list-mcp#8
+bkrigmo1/robinhood-chain-x402#4
