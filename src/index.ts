@@ -5848,7 +5848,7 @@ app.get("/v1/models", (c) =>
       { id: "llama-3.2-3b-instruct", object: "model", created: 1730000000, owned_by: "greyridge" },
     ],
     pay: { endpoint: "POST /v1/chat/completions", price_usdc: "0.002", network: "base", protocol: "x402" },
-    free_trial: { endpoint: "POST /v1/chat/completions/preview", real_model: true, limit: "3/day/IP" },
+    free_trial: { endpoint: "POST /v1/chat/completions/preview", real_model: true, limit: "3 70B calls/day/IP, then a real 3B sample (10/day/IP); paid route is full 70B" },
   }));
 
 app.post("/v1/chat/completions/preview", async (c) => {
@@ -5860,6 +5860,22 @@ app.post("/v1/chat/completions/preview", async (c) => {
       usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
     });
   const note = "[preview] Free trial limit reached or unavailable. Same response shape as paid POST /v1/chat/completions ($0.002 USDC via x402 on Base).";
+  // A successful preview carries the paid-upgrade CTA inline (OpenAI clients
+  // ignore unknown top-level fields) so an impressed evaluator sees exactly how
+  // to pay without leaving the response.
+  const UPGRADE = {
+    paid_url: "https://x402-data-api.sigrunner.workers.dev/v1/chat/completions",
+    price_usdc: "0.002",
+    adds: "Full Llama 3.3 70B, up to 400 output tokens, unmetered (this free preview is a small-model sample capped per IP/day).",
+    pay_with: 'x402 (USDC on Base): point any OpenAI SDK base_url here with an x402 fetch wrapper — npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f("https://x402-data-api.sigrunner.workers.dev/v1/chat/completions",{method:"POST",body:JSON.stringify({model:"llama-3.3-70b",messages})}). Docs: https://api.greyridgesignals.ai/llms.txt',
+  };
+  const previewOut = (txt: string, model: string) =>
+    wantStream ? chatSse(txt, model) : c.json({
+      id: "chatcmpl-preview", object: "chat.completion", created: Math.floor(Date.now() / 1000), model,
+      choices: [{ index: 0, message: { role: "assistant", content: txt }, finish_reason: "stop" }],
+      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+      x402_upgrade: UPGRADE,
+    });
   let body: { messages?: { role?: string; content?: unknown }[]; max_tokens?: number; stream?: boolean } = {};
   try { body = await c.req.json(); } catch { return canned(note); }
   wantStream = body.stream === true;
@@ -5871,15 +5887,34 @@ app.post("/v1/chat/completions/preview", async (c) => {
   const day = new Date().toISOString().slice(0, 10);
   const ipKey = `chatprev:${day}:${ip}`;
   const capKey = "aicap:" + day;
+  const maxTok = Math.min(Math.max(Number(body.max_tokens) || 64, 1), 80);
   const [ipUsed, used] = await Promise.all([c.env.API_KEYS.get(ipKey), c.env.API_KEYS.get(capKey)]);
-  if (parseInt(ipUsed ?? "0", 10) >= 3 || parseInt(used ?? "0", 10) >= 300) return canned(note);
+  const ip70 = parseInt(ipUsed ?? "0", 10), g70 = parseInt(used ?? "0", 10);
   try {
-    const r = (await c.env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", { messages: msgs, max_tokens: Math.min(Math.max(Number(body.max_tokens) || 64, 1), 80) })) as { response?: string };
+    // Premium taste: serve 70B while its (small) budget lasts.
+    if (ip70 < 3 && g70 < 300) {
+      const r = (await c.env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", { messages: msgs, max_tokens: maxTok })) as { response?: string };
+      await Promise.all([
+        c.env.API_KEYS.put(ipKey, String(ip70 + 1), { expirationTtl: 172800 }),
+        c.env.API_KEYS.put(capKey, String(g70 + 1), { expirationTtl: 172800 }),
+      ]);
+      return previewOut(r.response ?? "", "llama-3.3-70b-instruct-fp8-fast");
+    }
+    // 70B budget spent → fall back to the cheap 3B model (its own, far higher
+    // cap) so an evaluator ALWAYS sees real model output, never a dead
+    // "limit reached" first impression. 3B still proves the endpoint is a
+    // real OpenAI-compatible x402 route; the paid tier is the full 70B.
+    const ipKey3 = `chatprev3b:${day}:${ip}`;
+    const capKey3 = "aicap3b:" + day;
+    const [ip3s, g3s] = await Promise.all([c.env.API_KEYS.get(ipKey3), c.env.API_KEYS.get(capKey3)]);
+    const ip3 = parseInt(ip3s ?? "0", 10), g3 = parseInt(g3s ?? "0", 10);
+    if (ip3 >= 10 || g3 >= 3000) return canned(note);
+    const r = (await c.env.AI.run("@cf/meta/llama-3.2-3b-instruct", { messages: msgs, max_tokens: maxTok })) as { response?: string };
     await Promise.all([
-      c.env.API_KEYS.put(ipKey, String(parseInt(ipUsed ?? "0", 10) + 1), { expirationTtl: 172800 }),
-      c.env.API_KEYS.put(capKey, String(parseInt(used ?? "0", 10) + 1), { expirationTtl: 172800 }),
+      c.env.API_KEYS.put(ipKey3, String(ip3 + 1), { expirationTtl: 172800 }),
+      c.env.API_KEYS.put(capKey3, String(g3 + 1), { expirationTtl: 172800 }),
     ]);
-    return canned(r.response ?? "");
+    return previewOut(r.response ?? "", "llama-3.2-3b-instruct");
   } catch {
     return canned(note);
   }
