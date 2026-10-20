@@ -14,3 +14,5 @@ Record each in outreach/sent/ after sending.
 Overlap check done: BofAI/x402 appears only in gh/cand.txt (candidate list), never pitched; Fireblocks/Nethermind/CF not in sent or gh issues. All four are fresh.
 
 Positioning note (cycle 63i): for any token-safety/pretrade pitch, cite price: ours $0.01 (token-report) / $0.008 (gate/swap) vs Plexa pretrade_check $0.05 (5x) and klymax402 token-safety $0.003 (cheaper but GoPlus passthrough, no live sell simulation).
+
+> c25 note: all four targets here are exhausted (BofAI/Fireblocks pitched, Nethermind no contact route, Cloudflare agents tracker flooded with x402 PRs = spam). Do NOT send from this file; find fresh named integrators or just nudge Krystian after 05:00Z.
