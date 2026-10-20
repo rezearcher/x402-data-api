@@ -294,3 +294,4 @@ plagtech/spraay-x402-gateway#3
 ivcained/surp-router#4
 BlockRunAI/ClawRouter-Hermes#60
 devlab-group/agent-commerce#26
+BlockRunAI/Franklin-Trading#31
