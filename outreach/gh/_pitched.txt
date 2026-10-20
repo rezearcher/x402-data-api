@@ -265,3 +265,7 @@ https://github.com/Starchild-ai-agent/official-skills/issues/192
 https://github.com/sheldonivish/degen-desk/issues/1
 https://github.com/true402/hermes-skills/issues/1
 gigsoul-org/gigsoul-x402#3
+Alejdro83/stockgap-seller#1
+edtool79-collab/hirepulse-lead-agent#1
+greencore-solutions/gsc-marketplace#1
+truefixr/atlascast-truefixr#1
