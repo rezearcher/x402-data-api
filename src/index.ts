@@ -1460,8 +1460,58 @@ function ensureInitialized(env: Env): Promise<void> {
 type MiddlewareHandler = ReturnType<typeof paymentMiddleware>;
 let cachedMiddleware: MiddlewareHandler | null = null;
 
+// --- Bazaar discovery metadata (serviceName + tags) ----------------------
+// The CDP x402 discovery Bazaar catalogs each route from its live 402 body and
+// indexes/ranks it by top-level `serviceName` and `tags` (@x402/core copies
+// routeConfig.serviceName / routeConfig.tags into the resourceInfo it hands the
+// facilitator; schema caps: serviceName <=32 chars, up to 5 tags, each <=32
+// printable-ASCII chars). Without them our 46 cataloged routes showed
+// serviceName:null / tags:null — present in the 27.8k-item pool but invisible to
+// the tag/name search real buyers (and routers like agentpay) use to pick a
+// service. Competitors (OnchainPulse, token-risk, HumanMirror) all set both.
+const BAZAAR_SERVICE_NAME = "Grey Ridge Signals";
+// Curated keyword tags for the differentiated / revenue routes buyers search for.
+const BAZAAR_TAG_OVERRIDES: Record<string, string[]> = {
+  "/gate/swap": ["token-safety", "honeypot", "pre-trade", "base", "swap-gate"],
+  "/chain/token-report": ["token-safety", "honeypot", "rug-check", "base", "erc20"],
+  "/chain/token-security": ["honeypot", "token-safety", "rug-check", "base", "security"],
+  "/scan/mcp": ["mcp", "security", "prompt-injection", "audit", "tool-poisoning"],
+  "/enrich/tech-risk": ["security", "cve", "risk", "epss", "attack-surface"],
+  "/enrich/domain": ["domain", "enrichment", "security", "dns", "risk"],
+  "/crypto/funding": ["funding", "perps", "arbitrage", "crypto", "defi"],
+  "/defi/yields": ["defi", "yield", "apy", "tvl", "lending"],
+  "/pm/markets": ["prediction-markets", "polymarket", "markets", "crypto", "data"],
+  "/v1/chat/completions": ["llm", "chat", "inference", "openai-compat", "ai"],
+  "/mcp": ["mcp", "base", "token-safety", "crypto", "data"],
+};
+const BAZAAR_CATEGORY: Record<string, string> = {
+  chain: "onchain", crypto: "crypto", defi: "defi", ai: "ai", gate: "token-safety",
+  enrich: "security", scan: "security", pm: "prediction-markets", dns: "dns",
+  whois: "whois", v1: "ai", brief: "crypto",
+};
+// Derive up to 5 valid tags for a route key like "GET /chain/gas-price".
+function bazaarTagsFor(routeKey: string): string[] {
+  const path = routeKey.replace(/^\w+\s+/, "").replace(/:\w+/g, "").replace(/\/+$/, "");
+  const override = BAZAAR_TAG_OVERRIDES[path];
+  if (override) return override.slice(0, 5);
+  const segs = path.replace(/^\//, "").split("/").filter(Boolean);
+  const head = segs[0] ?? "data";
+  const cat = BAZAAR_CATEGORY[head] ?? head;
+  const leaf = (segs[segs.length - 1] ?? "").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 32);
+  const out: string[] = [];
+  const push = (t: string) => {
+    if (t && !out.includes(t) && out.length < 5 && /^[\x20-\x7e]{1,32}$/.test(t)) out.push(t);
+  };
+  push(cat);
+  if (head === "chain") { push("base"); push("onchain"); push("rpc"); }
+  else { push("crypto"); }
+  push(leaf);
+  push("data");
+  return out;
+}
+
 function makeRoutes(payTo: string) {
-  return {
+  const routes: Record<string, any> = {
     "POST /mcp": {
       accepts: {
         scheme: "exact" as const,
@@ -2635,6 +2685,16 @@ function makeRoutes(payTo: string) {
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
   };
+  // Stamp every route with the service brand + searchable tags so the CDP Bazaar
+  // catalogs us with discoverable metadata (was serviceName:null / tags:null).
+  for (const key of Object.keys(routes)) {
+    const rc = routes[key];
+    if (rc && typeof rc === "object") {
+      if (rc.serviceName === undefined) rc.serviceName = BAZAAR_SERVICE_NAME;
+      if (rc.tags === undefined) rc.tags = bazaarTagsFor(key);
+    }
+  }
+  return routes;
 }
 
 // ---------------------------------------------------------------------------
