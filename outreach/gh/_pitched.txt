@@ -277,3 +277,6 @@ fablerlabs/x402-tools#7
 tsharpe2282-web/twelve-permissions#1
 mcccsm/x402-list-mcp#8
 bkrigmo1/robinhood-chain-x402#4
+fomosdeimos-gif/orum-ora-x402#96
+bluetieroperations-create/blackwall-x402-mcp#3
+OgenaLabs/gate402-mcp#2
