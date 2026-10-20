@@ -2811,14 +2811,32 @@ export class TrafficLog extends DurableObject<Env> {
     await this.ctx.storage.sql.exec("INSERT INTO hits (ts, path, method, ua) VALUES (?, ?, ?, ?)", Math.floor(Date.now() / 1000), path, method, ua);
   }
 
+  // NOTE: no GROUP BY/ORDER BY in these reads. On the DO SQLite free tier an
+  // aggregate/sort materialises a temp b-tree which counts as *rows written*,
+  // and the daily write budget is routinely exhausted by logHit — so a
+  // GROUP BY read threw "Exceeded allowed rows written". A plain indexed
+  // SELECT on hits_ts only consumes the (far larger) rows-read budget; we
+  // aggregate in JS. Capped scan keeps rows-read bounded.
+  private static readonly SCAN_CAP = 50000;
+
   async getPaid(windowSeconds: number = 86400): Promise<Array<{ path: string; payer: string; count: number }>> {
-    const cursor = await this.ctx.storage.sql.exec("SELECT path, ua, COUNT(*) FROM hits WHERE method = 'PAID' AND ts > ? GROUP BY path, ua ORDER BY 3 DESC LIMIT 500", Math.floor(Date.now() / 1000) - windowSeconds);
-    return Array.from(cursor.raw()).map((row) => ({ path: String(row[0]), payer: String(row[1]), count: Number(row[2]) }));
+    const cursor = await this.ctx.storage.sql.exec("SELECT path, ua FROM hits WHERE method = 'PAID' AND ts > ? ORDER BY ts DESC LIMIT ?", Math.floor(Date.now() / 1000) - windowSeconds, TrafficLog.SCAN_CAP);
+    const agg = new Map<string, { path: string; payer: string; count: number }>();
+    for (const row of cursor.raw()) {
+      const path = String(row[0]), payer = String(row[1]), key = path + "\u0000" + payer;
+      const e = agg.get(key); if (e) e.count++; else agg.set(key, { path, payer, count: 1 });
+    }
+    return Array.from(agg.values()).sort((a, b) => b.count - a.count).slice(0, 500);
   }
 
   async getStats(windowSeconds: number = 86400): Promise<Array<{ path: string; count: number }>> {
-    const cursor = await this.ctx.storage.sql.exec("SELECT path, COUNT(*) FROM hits WHERE method != 'PAID' AND ts > ? GROUP BY path ORDER BY 2 DESC LIMIT 500", Math.floor(Date.now() / 1000) - windowSeconds);
-    return Array.from(cursor.raw()).map((row) => ({ path: String(row[0]), count: Number(row[1]) }));
+    const cursor = await this.ctx.storage.sql.exec("SELECT path FROM hits WHERE method != 'PAID' AND ts > ? ORDER BY ts DESC LIMIT ?", Math.floor(Date.now() / 1000) - windowSeconds, TrafficLog.SCAN_CAP);
+    const agg = new Map<string, number>();
+    for (const row of cursor.raw()) {
+      const path = String(row[0]);
+      agg.set(path, (agg.get(path) ?? 0) + 1);
+    }
+    return Array.from(agg.entries()).map(([path, count]) => ({ path, count })).sort((a, b) => b.count - a.count).slice(0, 500);
   }
 }
 
