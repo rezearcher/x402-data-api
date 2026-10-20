@@ -1,3 +1,4 @@
+https://github.com/gelu22/x402-gateway-omarchy/issues/3
 https://github.com/HelpCode-ai/anythingmcp/issues/1174
 https://github.com/Agorean/claude-plugin/issues/1
 https://github.com/ValentinTorassa/VT-Agent-Firewall/issues/1
@@ -46,3 +47,4 @@ https://github.com/swarm-agent-operator/swarm-x402-mcp/issues/2
 https://github.com/coinbase/agentkit/issues/1091
 https://github.com/crewAIInc/crewAI/issues/7227
 https://github.com/punkpeye/awesome-mcp-servers/issues/10353
+https://github.com/nirholas/crypto-vision/issues/18

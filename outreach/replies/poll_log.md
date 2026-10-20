@@ -110,3 +110,4 @@ DEPLOY UNBLOCKED via GH Actions (secret-name fix 35709da); scanner FP fix + Traf
 - c103d: competitor-URL code search; vet402-delivery (buys 5.3k x402 sellers w/ own money, 10k attempts, no record of us) -> inclusion request vet402-delivery#1. Unpitched, low-fit: AllowanceKit, Izanagi, x402-measure, scvd-general-store.
 - c103e: x402-measure/scvd/cortx take no seller submissions; CORTX needs sign-in (free one-time check). Idea logged.
 - c103f: code-search 'x402 honeypot' => pitched Agent402#1694 (500-tool marketplace), alphapipeline#4 (agent risk guard).
+- c104 (13:05 CDT): 0 buyer replies (inbox noise only; 6 pitch issues from c103 have 0 comments; wallet +0.141 = our canaries per trace_inbound, all OURS). Code-search 'api.honeypot.is'/goplus found active embedders; most stale (>6mo) or already pitched; pitched nirholas/crypto-vision#18 (96 stars, active today). Stale-skipped: SwapPilot, honeypot-detector-mcp, analytics-bot.
