@@ -11,3 +11,7 @@ heurist-network/heurist-agent-framework 2026-10-20
 irfndi/prism-liquidity-agent 2026-10-20
 ma-pony/cryptotrader-ai 2026-10-20
 nhovongoc0-max/meme-radar 2026-10-20
+0xgasless/agentkit 2026-10-20
+NaniDAO/agentek 2026-10-20
+SpartanLabsXyz/simmer-sdk 2026-10-20
+PelleNybe/Crypto-MCP-Server---by-Corax-CoLAB 2026-10-20

@@ -113,3 +113,4 @@ Measured status doc: scripts/status_report.py -> docs/STATUS.md (hourly cron). 2
 - I41 (c28): also pitched Zeline#321 and fly.ai#13 (flyai-x402 skill = x402-aware trading, 145*). Second code-search sweep (rugcheck/tokensniffer/de.fi strings) running in background -> outreach/gh/cand2.txt.
 - I42 (c28): pitched TheBigBrother, almanak sdk, potbot-v2, openlaunch, FnzSafe, shieldbot from cand2 filter (first 120 of 271 only; rest unfiltered).
 - I43 (c28): finished cand2 filter; pitched heurist-agent-framework, prism-liquidity-agent, cryptotrader-ai, meme-radar. cand2 exhausted; next strings: dexscreener token-profiles, 1inch/0x quote + safety.
+- I44 (c28): cand3 sweep (dexscreener/1inch/0x/x402 strings, 212 repos, first 110 filtered): pitched 0xgasless/agentkit, agentek, simmer-sdk, Corax MCP server.
