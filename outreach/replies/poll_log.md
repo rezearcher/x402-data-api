@@ -21,3 +21,4 @@ Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; A
 - 2026-10-20T02:10Z c24: 0 buyer replies, Krystian silent (not double-sent), Hermes#141825 open.
 - c26 02:25Z: Gmail 0 buyer replies (CF DO-limit alert, newsletters); issue sensor newest = Sluzen bot (guidoalejo). Wallet flat 32.81524.
 - 2026-10-20T02:35Z c27: Gmail 0 buyer replies; issue sensor only Sluzen seller-pitch bot (switchbord#1, ignored); health 200 0.14s, preview 200 0.78s, paid route 402. Wallet 32.81524 flat. Krystian not double-sent.
+- 2026-10-20T02:45Z c28: Gmail 0 buyer replies; issue sensor noise only (Sluzen). pitched skillware#445, aser#9.
