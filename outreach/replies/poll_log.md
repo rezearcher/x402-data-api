@@ -106,3 +106,4 @@ DEPLOY UNBLOCKED via GH Actions (secret-name fix 35709da); scanner FP fix + Traf
 - c102c: 3 more router pitches (surp-router, ClawRouter-Hermes, agent-commerce).
 - c103 (12:55 CDT): 0 buyer replies (inbox = CARFAX/WEX/CF DO-limit alerts/Miles already answered; sensor 47 replies, all declines). Haven-AI release watch: none after 10-14 (live=false). Wallet 33.016 (+0.141 = bot calls, no new ext payer in payer_bar). CDP discovery ignores query= param (returns same top-50); our chat route not in top 50. 429 trial fix confirmed in code (index.ts:6798) and deployed 17:38Z. Emails resume 10-21.
 - c103b: pitched Franklin-Trading#31 (pre-fill gate). Candidate scan (pushed>10-01) otherwise noraz-agent spam/low-fit.
+- c103c: code-search 'blockrun.ai/api/v1/chat/completions' => pitched opencrowd#37, life-manager#8425 (active, LLM-via-x402 users). Others stale (pushed <Aug).

@@ -295,3 +295,5 @@ ivcained/surp-router#4
 BlockRunAI/ClawRouter-Hermes#60
 devlab-group/agent-commerce#26
 BlockRunAI/Franklin-Trading#31
+sr33j/opencrowd#37
+Daisuke134/life-manager#8425
