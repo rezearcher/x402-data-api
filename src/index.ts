@@ -6678,6 +6678,8 @@ const CHECK_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8"><
 <p><small>Free: 3 checks/day. Unlimited for agents via x402 pay-per-call: <a href="/chain/token-report">/chain/token-report</a> ($0.01) · <a href="/chain/token-security">/chain/token-security</a> ($0.009) · <a href="/llms.txt">llms.txt</a>. Heuristic signal, not financial advice.</small></p>
 <script>
 const q=new URLSearchParams(location.search).get('token');if(q){document.getElementById('t').value=q;go()}
+function share(t,j,m){const u=location.origin+'/check?token='+t,tx=encodeURIComponent((m.symbol||'Token')+' on Base: '+j.verdict+' (risk '+j.risk_score+'/100) via Base Token Check'),eu=encodeURIComponent(u);
+return '<p>Share: <a href="https://twitter.com/intent/tweet?text='+tx+'&url='+eu+'" target="_blank" rel="noopener">X</a> · <a href="https://warpcast.com/~/compose?text='+tx+'&embeds[]='+eu+'" target="_blank" rel="noopener">Farcaster</a> · <a href="https://t.me/share/url?url='+eu+'&text='+tx+'" target="_blank" rel="noopener">Telegram</a></p>'}
 async function go(){const t=document.getElementById('t').value.trim(),c=document.getElementById('card');c.style.display='block';
 if(!/^0x[0-9a-fA-F]{40}$/.test(t)){c.textContent='Enter a valid 0x… address (40 hex chars).';return}
 c.textContent='Checking…';history.replaceState(null,'','?token='+t);
@@ -6685,7 +6687,7 @@ try{const r=await fetch('/chain/token-report/preview?token='+t);const j=await r.
 if(!r.ok){c.innerHTML='<b>'+(j.error||'Limit reached')+'</b><br>Daily free limit may be used up — use the paid x402 route for more.';return}
 const m=j.token_meta||{},s=j.security||{},l=j.liquidity||{};const esc=x=>String(x).replace(/[<>&]/g,'');
 c.innerHTML='<div class="v '+esc(j.verdict)+'">'+esc(j.verdict)+'</div><div>'+esc(m.symbol||'?')+' · '+esc(m.name||'')+' · risk '+esc(j.risk_score)+'/100</div><ul>'
-+'<li>Honeypot: '+(s.isHoneypot?'YES':'no')+' (sim: '+esc(s.simStatus)+')</li><li>Can mint: '+(s.canMint?'yes':'no')+' · Can pause: '+(s.canPause?'yes':'no')+' · Blacklist: '+(s.hasBlacklist?'yes':'no')+'</li><li>Upgradeable proxy: '+(s.upgradeableProxy?'yes':'no')+' · Owner renounced: '+(s.ownerRenounced?'yes':'no')+'</li><li>Liquidity (WETH pool): '+(l.wethPoolUsd==null?'n/a':'$'+Math.round(l.wethPoolUsd))+'</li></ul><div>'+(j.reasons||[]).map(esc).join('; ')+'</div>'}catch(e){c.textContent='Error: '+e}}
++'<li>Honeypot: '+(s.isHoneypot?'YES':'no')+' (sim: '+esc(s.simStatus)+')</li><li>Can mint: '+(s.canMint?'yes':'no')+' · Can pause: '+(s.canPause?'yes':'no')+' · Blacklist: '+(s.hasBlacklist?'yes':'no')+'</li><li>Upgradeable proxy: '+(s.upgradeableProxy?'yes':'no')+' · Owner renounced: '+(s.ownerRenounced?'yes':'no')+'</li><li>Liquidity (WETH pool): '+(l.wethPoolUsd==null?'n/a':'$'+Math.round(l.wethPoolUsd))+'</li></ul><div>'+(j.reasons||[]).map(esc).join('; ')+'</div>'+share(t,j,m)}catch(e){c.textContent='Error: '+e}}
 </script></body></html>`;
 app.get("/check", (c) => {
   const t = c.req.query("token") ?? "";
