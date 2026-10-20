@@ -75,3 +75,4 @@ Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; A
 - c87c: pitched shieldbot#35, crawl-hive#3, meme-radar#6 (code-search for GoPlus/honeypot consumers). Poll next cycle.
 - c87d: pitched eko#4, starchild official-skills#192, degen-desk#1. Poll next cycle.
 - c88 2026-10-20T15:50Z: 0 new buyer replies (Miles/liquidlogicx + Krystian already answered). Service /health 200. Shipped TrafficLog index+DDL-once+7d prune (src/index.ts) — rides bg_deploy2.sh deploy when CF_WORKERS_TOKEN reads. Wallet flat 32.87524.
+- c89 2026-10-20T15:50Z: 0 buyer replies (Miles last msg 23:47 PDT 10-19 already answered; inbox = spam/recruiters). op whoami ok but op read CF_WORKERS_TOKEN still rate-limited (bg_deploy2 try 21 fail). Haven-AI no release. Fresh code/repo search: 0 unpitched targets; true402/hermes-skills is a COMPETITOR (free Base rug/honeypot checks via x402) — not pitched.
