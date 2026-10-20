@@ -5667,12 +5667,37 @@ app.get("/v1/models", (c) =>
     pay: { endpoint: "POST /v1/chat/completions", price_usdc: "0.002", network: "base", protocol: "x402" },
   }));
 
-app.post("/v1/chat/completions/preview", (c) =>
-  c.json({
-    id: "chatcmpl-preview", object: "chat.completion", created: Math.floor(Date.now() / 1000), model: "llama-3.2-3b-instruct",
-    choices: [{ index: 0, message: { role: "assistant", content: "[preview] Same response shape as the paid POST /v1/chat/completions ($0.002 USDC via x402 on Base). No model is run on this free path." }, finish_reason: "stop" }],
-    usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
-  }));
+app.post("/v1/chat/completions/preview", async (c) => {
+  const canned = (txt: string, model = "llama-3.3-70b-instruct-fp8-fast") =>
+    c.json({
+      id: "chatcmpl-preview", object: "chat.completion", created: Math.floor(Date.now() / 1000), model,
+      choices: [{ index: 0, message: { role: "assistant", content: txt }, finish_reason: "stop" }],
+      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+    });
+  const note = "[preview] Free trial limit reached or unavailable. Same response shape as paid POST /v1/chat/completions ($0.002 USDC via x402 on Base).";
+  let body: { messages?: { role?: string; content?: unknown }[]; max_tokens?: number } = {};
+  try { body = await c.req.json(); } catch { return canned(note); }
+  const msgs = (body.messages ?? []).filter((m) => m && typeof m.content === "string" && ["system", "user", "assistant"].includes(String(m.role)))
+    .map((m) => ({ role: String(m.role), content: String(m.content) }));
+  const total = msgs.reduce((n, m) => n + m.content.length, 0);
+  if (!msgs.length || total > 1000 || !c.env.AI || !c.env.API_KEYS) return canned(note);
+  const ip = c.req.header("cf-connecting-ip") ?? "unknown";
+  const day = new Date().toISOString().slice(0, 10);
+  const ipKey = `chatprev:${day}:${ip}`;
+  const capKey = "aicap:" + day;
+  const [ipUsed, used] = await Promise.all([c.env.API_KEYS.get(ipKey), c.env.API_KEYS.get(capKey)]);
+  if (parseInt(ipUsed ?? "0", 10) >= 3 || parseInt(used ?? "0", 10) >= 300) return canned(note);
+  try {
+    const r = (await c.env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", { messages: msgs, max_tokens: Math.min(Math.max(Number(body.max_tokens) || 64, 1), 80) })) as { response?: string };
+    await Promise.all([
+      c.env.API_KEYS.put(ipKey, String(parseInt(ipUsed ?? "0", 10) + 1), { expirationTtl: 172800 }),
+      c.env.API_KEYS.put(capKey, String(parseInt(used ?? "0", 10) + 1), { expirationTtl: 172800 }),
+    ]);
+    return canned(r.response ?? "");
+  } catch {
+    return canned(note);
+  }
+});
 
 app.post("/v1/chat/completions", async (c) => {
   if (!c.env.AI) return c.json({ error: "ai unavailable" }, { status: 501 });
