@@ -97,3 +97,4 @@ DEPLOY UNBLOCKED via GH Actions (secret-name fix 35709da); scanner FP fix + Traf
 ## c99c bazaar_rank post-reseed: only 'pre-trade safety gate' surfaces us (rank 12/15, gate/swap); token-report/honeypot queries still absent — settle-indexed ranking, not metadata.
 ## c99d: /scan/mcp/badge LIVE (shields endpoint, verified: deepwiki -> clear/3 tools/0 issues, brightgreen). First push-deploy raced; dispatch redeploy fixed. Killed stale bg_deploy2.sh. Badge URL: https://img.shields.io/endpoint?url=<urlencoded BASE/scan/mcp/badge?url=SERVER>. Use in scan pitches after 10-21.
 - c100: documented scan badge in greyridge-x402-tools README (pushed). 0 buyer replies; inbox noise only; DO-limit alert was 15:55Z pre-deploy.
+- c100c: /scan/badge-gen LIVE (200 on workers.dev). Use https://x402-data-api.sigrunner.workers.dev/scan/badge-gen in scan pitches.
