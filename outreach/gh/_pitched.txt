@@ -280,3 +280,5 @@ bkrigmo1/robinhood-chain-x402#4
 fomosdeimos-gif/orum-ora-x402#96
 bluetieroperations-create/blackwall-x402-mcp#3
 OgenaLabs/gate402-mcp#2
+HeyElsa/elsa-x402-skills#1
+prithwish122/Aegis#1
