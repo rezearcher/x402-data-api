@@ -1470,7 +1470,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "MCP tools/call: crypto_prices, crypto_funding, defi_yields, pm_markets (Base/crypto/prediction-market data), chain_block_number, chain_gas_price, chain_balance, chain_token_balance, chain_tx, chain_wallet (Base mainnet on-chain reads, EIP-7702 delegated-EOA aware), gate_swap (pre-trade go/hold/block gate), chain_token_report (decision-grade SAFE/CAUTION/AVOID token trade-safety verdict), chain_token_security (token security / honeypot detector: proxy + bytecode risk-selector scan + live transfer simulation), enrich_tech_risk (security: tech-stack + CVE/EPSS/CISA-KEV), enrich_domain (firmographic), or scan_mcp_server (tool-poisoning/prompt-injection audit of a target MCP server)",
+        "MCP tools/call over x402 for Base/crypto data + token safety: crypto_prices, crypto_funding, defi_yields, pm_markets, chain_block_number, chain_gas_price, chain_balance, chain_token_balance, chain_tx, chain_wallet, gate_swap (go/hold/block pre-trade gate), chain_token_report (SAFE/CAUTION/AVOID verdict), chain_token_security (honeypot detector), enrich_tech_risk (CVE/EPSS/KEV), enrich_domain, scan_mcp_server (MCP tool-poisoning audit). Use when an agent needs Base data or token-safety over MCP.",
       mimeType: "application/json",
     },
     "GET /scan/mcp": {
@@ -2496,7 +2496,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Is this Base token safe to buy? Can you sell it, or is it a honeypot or rug pull? One call returns a decision-grade trade-safety verdict — SAFE | CAUTION | AVOID — plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Honeypot + rug-pull check for any Base ERC-20 that replaces many RPC calls and prevents a bad trade. Use when an agent is about to buy or swap a Base token and needs a SAFE/CAUTION/AVOID decision.",
+        "Is this Base token safe to buy? One call returns a decision-grade trade-safety verdict — SAFE | CAUTION | AVOID — with risk_score (0-100) and reasons: honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade. Use when an agent is about to buy or swap a Base ERC-20 and needs a SAFE/CAUTION/AVOID decision.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -2553,7 +2553,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Is this Base token safe to swap right now? GO / HOLD / BLOCK pre-trade safety gate for an autonomous trading agent: is it a honeypot, can you sell it, and is your trade too big for the pool? Pass token, side (buy|sell) and notional_usd; get a one-word decision plus reason in one fast call. Combines honeypot/sellability simulation, admin-control checks and Uniswap v3 WETH-pool liquidity vs. your trade size (price-impact guard). Use when an autonomous trading agent needs a GO/HOLD/BLOCK honeypot + safety check right before a Base swap.",
+        "Is this Base token safe to swap right now? GO / HOLD / BLOCK pre-trade safety gate for an autonomous trading agent: is it a honeypot, can you sell it, is your trade too big for the pool? Pass token, side (buy|sell), notional_usd; get a one-word decision + reason in one fast call. Combines honeypot/sellability simulation, admin-control checks and Uniswap v3 WETH-pool liquidity vs. trade size (price-impact guard). Use when a trading agent needs a GO/HOLD/BLOCK check right before a Base swap.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -2595,7 +2595,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Is this Base token a honeypot — can a real wallet actually sell it? Token security / honeypot detector for a Base mainnet ERC-20: EIP-1967/1822 proxy + upgradeability detection, bytecode dispatcher scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, and a live eth_call state-override simulation testing whether a synthetic wallet can actually transfer() the token. Returns risk_score (0-100) + verdict (clear/review/block) + human-readable flags. Use when an agent needs detailed honeypot, mint, pause and proxy checks for a Base ERC-20.",
+        "Is this Base token a honeypot — can a real wallet actually sell it? Token-security / honeypot detector for a Base ERC-20: EIP-1967 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement, and a live eth_call state-override sim testing whether a synthetic wallet can transfer() it. Returns risk_score (0-100) + verdict (clear/review/block) + flags. Use when an agent needs honeypot/mint/pause/proxy checks for a Base ERC-20.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
