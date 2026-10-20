@@ -7,3 +7,12 @@ forgemeshlabs/utility-grid-mcp nirholas/x402-payments-mcp whiteknightonhorse/API
 https://github.com/Nutshell2000/agent-data-tools/issues/195
 https://github.com/aronaplana-os/arona-gateway-skill/issues/1
 https://github.com/bridgenode-ai/bridgenode-mcp/issues/34
+https://github.com/dylsteck/surplus-ai-sdk-provider/issues/1
+https://github.com/integrate-your-mind/spendos/issues/1
+https://github.com/taggaverse/ai-trading-agent/issues/1
+https://github.com/PinataCloud/trendbot/issues/1
+https://github.com/cascade-protocol/agentbox/issues/6
+https://github.com/codexvritra/signa/issues/92
+https://github.com/charlesms1246/Frost/issues/9
+https://github.com/0xcuy/adexto/issues/4
+https://github.com/gkgoat1/pi-surplus-intelligence/issues/3
