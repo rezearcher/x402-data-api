@@ -732,9 +732,9 @@ app.get("/.well-known/x402", (c) => {
   return c.json({
     service_overview: {
       name: "Grey Ridge Signals — x402 Data & Security",
-      tagline: "Agent-native prediction-market & crypto data, plus MCP security audits, pay-per-call over x402.",
+      tagline: "Pre-trade token-safety gate for Base trading agents, plus on-chain, DeFi and prediction-market data, pay-per-call over x402.",
       description:
-        "Pay-per-call x402 services on Base: live Polymarket prediction-market data, and MCP security scans (tool-poisoning / prompt-injection / exfiltration, OWASP LLM01/LLM08). No account, no key — agents pay inline in USDC.",
+        "Pay-per-call x402 services on Base: /gate/swap (GO/HOLD/BLOCK pre-trade gate for any Base ERC-20), /chain/token-report (SAFE/CAUTION/AVOID with measured transfer tax), /chain/token-security (honeypot simulation), plus DeFi yields, prices, funding, Polymarket data and MCP security scans. Free /preview paths for every gate route. No account, no key — agents pay inline in USDC.",
       website: BASE,
       categories: ["prediction-markets", "crypto", "data", "security", "mcp", "funding", "yield", "token-price", "rpc", "base", "onchain", "blockchain"],
     },
