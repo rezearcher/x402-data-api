@@ -1,4 +1,4 @@
-Your swap flow checks tokens for honeypots before trading. If you want a second, simulation-based signal in the same call (honeypot sell-simulation via on-chain eth_call, transfer-tax measured with eth_simulateV1, liquidity depth, admin-control flags, and one go/hold/block decision), Grey Ridge has a pay-per-call endpoint on Base:
+Your agents trade through swaps, so pre-trade token safety is a natural fit. If you want a second, simulation-based signal in the same call (honeypot sell-simulation via on-chain eth_call, transfer-tax measured with eth_simulateV1, liquidity depth, admin-control flags, and one go/hold/block decision), Grey Ridge has a pay-per-call endpoint on Base:
 
 ```bash
 B=https://x402-data-api.sigrunner.workers.dev
