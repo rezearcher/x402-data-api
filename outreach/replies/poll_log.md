@@ -43,3 +43,4 @@ Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; A
 - c47b: pitched archestra, akto, pipelock, node9-proxy (mcpscan).
 - 2026-10-20T07:50Z c48: Miles (Liquid Logic X, thread 1a157c9da1e86694) REPLIED 23:47 PT: MCP scan interests them; will run free /scan/mcp/preview against own MCP endpoints this week, then allowlist + pay per call if useful. Do NOT double-send. Live preview ?url= works; paste-mode POST /scan/mcp/preview committed (71e80a2) but undeployed (1Password rate-limited; /tmp/retry_deploy.sh bg loop 40x90s retries deploy). Wallet flat 32.81524.
 - 2026-10-20T08:10Z c49: Miles (liquidlogicx) positive on MCP scan; paste-mode POST /scan/mcp/preview verified LIVE; sent follow-up msg 1a158599acd2ec52 w/ paste curl + price clarification (MCP $0.005, HTTP $0.05). Awaiting his URL/tools list.
+- 2026-10-20T08:20Z c49: 5 mcpscan admission-gate issues: VT-Agent-Firewall#1 mcp-router#22 mcp-allowlist-proxy#2 mcp-egress#19 batesian#545
