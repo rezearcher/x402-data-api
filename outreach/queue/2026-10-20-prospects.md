@@ -1,6 +1,6 @@
 # Prospects queued 2026-10-19 (send after cap reset 2026-10-20 05:00Z)
 
-> STALE: BofAI/x402 already pitched (#108). Check outreach/sent before sending anything here.
+> STALE: BofAI (#108) and Fireblocks (x402-agent#6) already pitched. Remaining fresh: Nethermind (no contact route found), Cloudflare Agents docs. Check outreach/sent first.
 Pitch angle: composite DeFi due-diligence routes (not raw CoinGecko, which sells natively on x402). Lead with free previews:
 - https://x402-data-api.sigrunner.workers.dev/defi/protocol-risk/preview
 - https://x402-data-api.sigrunner.workers.dev/defi/safe-yields/preview
