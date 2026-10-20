@@ -101,3 +101,4 @@ Measured status doc: scripts/status_report.py -> docs/STATUS.md (hourly cron). 2
 - I29 (c24, 2026-10-20): replies re-polled 02:10Z: Gmail only noise; issue sensor only Sluzen seller spam + closed agentpay#11/Insight#245 (answered). Web search for token-safety integrators returns only rivals (true402, x402-bazaar-mcp, klymax402, tollboothswap). Hermes PR #141825 still open, no comments. DOWNVOTE web/repo prospect sweeps again; wait for 05:00Z cap reset.
 - I30 (c24): ERC-8004 registry absent for us, rival true402 is listed; logged idea + blocker (gas tx = capital gate).
 - I31 (c24): /.well-known/x402 service_overview still led with Polymarket/MCP audits; rewrote tagline+description to lead with gate/swap + token-report (deployed 46e2bf0e, live verified).
+- I32 (c24): agent-card.json had no gate-swap skill (our flagship); added as first skill, deployed 863c2e0a, live verified.

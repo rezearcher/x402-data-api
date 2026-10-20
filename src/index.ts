@@ -840,6 +840,17 @@ app.get("/.well-known/agent-card.json", (c) => {
     defaultOutputModes: ["application/json"],
     skills: [
       {
+        id: "gate-swap",
+        name: "Pre-Trade Swap Gate (GO/HOLD/BLOCK)",
+        description:
+          "One-call pre-trade gate for trading agents: pass a Base ERC-20, side and notional, get decision go|hold|block, reason, SAFE/CAUTION/AVOID verdict, risk_score, pool liquidity and price impact as % of pool. " +
+          "Route: GET /gate/swap?token=0x...&side=buy|sell&notional_usd=100. Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. " +
+          "Price: $0.008. Free preview at GET /gate/swap/preview (demo tokens usdc|weth|cbbtc|aero|degen). " +
+          "Machine-readable payment manifest: /.well-known/x402.",
+        tags: ["security", "base", "trading", "gate", "pre-trade", "token", "swap"],
+        examples: ["GET /gate/swap?token=0x940181a94A35A4569E4529A3CDfB74e38FD98631&side=buy&notional_usd=100"],
+      },
+      {
         id: "crypto-prices",
         name: "Spot Token Prices",
         description:
