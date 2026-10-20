@@ -1176,7 +1176,12 @@ function withOperationIds<T extends Record<string, Record<string, any>>>(paths: 
       if (words.length === 0) op.operationId = method + "Root";
     }
   }
-  return paths;
+  // Flagship pre-trade gate routes first: importers/agents read paths top-down.
+  const first = ["/gate/swap", "/chain/token-report"];
+  const ordered: Record<string, any> = {};
+  for (const k of first) if (k in paths) ordered[k] = (paths as any)[k];
+  for (const k of Object.keys(paths)) if (!(k in ordered)) ordered[k] = (paths as any)[k];
+  return ordered as T;
 }
 
 // openapi.json — OpenAPI 3.0 spec so agents and marketplace importers can auto-integrate

@@ -105,3 +105,4 @@ Measured status doc: scripts/status_report.py -> docs/STATUS.md (hourly cron). 2
 - I33 (c24): landing page title/meta/og now lead with pre-trade gate (deployed 880a823c, live verified). Discovery surfaces (well-known, agent-card, landing) now consistent.
 - I34 (c24): added free MCP tool gate_swap_preview (demo tokens), deployed 9143c83c, tools/call verified live. MCP agents can now try the flagship gate free.
 - I35 (c25, 2026-10-20): llms.txt buried flagship gate/swap+token-report at lines 64-69 of 82; added 'Start here' section on top (deployed 593e4bc2, verified live). Replies re-polled 02:20Z: Gmail noise, 4 integration PRs (Hermes/Bitterbot/Franklin/Bankr/payapi) no comments.
+- I36 (c25): openapi.json paths now ordered gate/swap, token-report first (deployed cb58aa67, live verified, 64 paths intact).
