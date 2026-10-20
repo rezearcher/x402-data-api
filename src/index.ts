@@ -5656,6 +5656,15 @@ app.get("/ai/ask", async (c) => {
   }
 });
 
+// OpenAI-SDK clients often send stream:true; emulate with a single-chunk SSE so they do not break.
+function chatSse(text: string, model: string): Response {
+  const id = "chatcmpl-" + crypto.randomUUID(), created = Math.floor(Date.now() / 1000);
+  const chunk = (delta: object, finish: string | null) =>
+    "data: " + JSON.stringify({ id, object: "chat.completion.chunk", created, model, choices: [{ index: 0, delta, finish_reason: finish }] }) + "\n\n";
+  return new Response(chunk({ role: "assistant", content: text }, null) + chunk({}, "stop") + "data: [DONE]\n\n",
+    { headers: { "content-type": "text/event-stream", "cache-control": "no-cache" } });
+}
+
 // Free OpenAI-client compatibility: SDKs/gateways probe GET /v1/models before calling chat.
 app.get("/v1/models", (c) =>
   c.json({
@@ -5669,15 +5678,17 @@ app.get("/v1/models", (c) =>
   }));
 
 app.post("/v1/chat/completions/preview", async (c) => {
+  let wantStream = false;
   const canned = (txt: string, model = "llama-3.3-70b-instruct-fp8-fast") =>
-    c.json({
+    wantStream ? chatSse(txt, model) : c.json({
       id: "chatcmpl-preview", object: "chat.completion", created: Math.floor(Date.now() / 1000), model,
       choices: [{ index: 0, message: { role: "assistant", content: txt }, finish_reason: "stop" }],
       usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
     });
   const note = "[preview] Free trial limit reached or unavailable. Same response shape as paid POST /v1/chat/completions ($0.002 USDC via x402 on Base).";
-  let body: { messages?: { role?: string; content?: unknown }[]; max_tokens?: number } = {};
+  let body: { messages?: { role?: string; content?: unknown }[]; max_tokens?: number; stream?: boolean } = {};
   try { body = await c.req.json(); } catch { return canned(note); }
+  wantStream = body.stream === true;
   const msgs = (body.messages ?? []).filter((m) => m && typeof m.content === "string" && ["system", "user", "assistant"].includes(String(m.role)))
     .map((m) => ({ role: String(m.role), content: String(m.content) }));
   const total = msgs.reduce((n, m) => n + m.content.length, 0);
@@ -5702,7 +5713,7 @@ app.post("/v1/chat/completions/preview", async (c) => {
 
 app.post("/v1/chat/completions", async (c) => {
   if (!c.env.AI) return c.json({ error: "ai unavailable" }, { status: 501 });
-  let body: { messages?: { role?: string; content?: unknown }[]; max_tokens?: number } = {};
+  let body: { messages?: { role?: string; content?: unknown }[]; max_tokens?: number; stream?: boolean } = {};
   try { body = await c.req.json(); } catch { return c.json({ error: "invalid JSON body" }, { status: 400 }); }
   const msgs = (body.messages ?? []).filter((m) => m && typeof m.content === "string" && ["system", "user", "assistant"].includes(String(m.role)))
     .map((m) => ({ role: String(m.role), content: String(m.content) }));
@@ -5732,6 +5743,7 @@ app.post("/v1/chat/completions", async (c) => {
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("POST /v1/chat/completions", rail, makeUsageCounter(c.env)));
     const text = r.response ?? "";
+    if (body.stream === true) return chatSse(text, modelUsed);
     return c.json({
       id: "chatcmpl-" + crypto.randomUUID(), object: "chat.completion", created: Math.floor(Date.now() / 1000), model: modelUsed,
       choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop" }],
