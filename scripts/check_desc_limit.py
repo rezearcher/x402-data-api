@@ -29,7 +29,7 @@ def main() -> int:
         m = re.search(r'description:\s*\n?\s*"((?:[^"\\]|\\.)*)"', block)
         if m and len(m.group(1)) > LIMIT:
             over.append((idx + 1, len(m.group(1)), m.group(1)[:60]))
-    # 2. mk() route descriptions (feed openapi.json; x402scan indexes from openapi).
+    # 2. mk() route descriptions (feed the paid-route registry).
     #    mk("/path","METHOD","price","amount","<description>",[tags])
     for i, ln in enumerate(lines):
         if "mk(" not in ln:
@@ -38,6 +38,20 @@ def main() -> int:
         # 5th string arg is the description (path, method, price, amount, desc)
         if len(args) >= 5 and len(args[4]) > LIMIT:
             over.append((i + 1, len(args[4]), "mk: " + args[4][:56]))
+    # 3. openapi paid()/free() summaries. The openapi `description` is built as
+    #    `${summary} Paid via x402 (...). Price: $X.` (~120-char suffix), and
+    #    x402scan ingests openapi.json. Flag any summary whose resulting openapi
+    #    description would exceed the limit (summary + suffix).
+    OPENAPI_SUFFIX = 120  # length of the paid() boilerplate appended after summary
+    for i, ln in enumerate(lines):
+        m = re.search(r'\b(paid|free)\(\s*"((?:[^"\\]|\\.)*)"', ln)
+        if not m:
+            continue
+        summary = m.group(2)
+        effective = len(summary) + (OPENAPI_SUFFIX if m.group(1) == "paid" else 0)
+        if effective > LIMIT:
+            over.append((i + 1, effective,
+                         f"{m.group(1)}()->openapi: " + summary[:44]))
     if over:
         print(f"FAIL: {len(over)} x402 resource.description(s) over {LIMIT} chars "
               f"(CDP Facilitator will reject verify+settle):")
