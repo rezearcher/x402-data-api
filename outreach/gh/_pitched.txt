@@ -208,3 +208,8 @@ github.com/ConnorDev1337/mcp-security-scanner
 https://github.com/microsoft/mcp-gateway/issues/112
 https://github.com/github/gh-aw-mcpg/issues/15262
 https://github.com/supercorp-ai/supergateway/issues/358
+https://github.com/maximhq/bifrost/issues/8758
+https://github.com/octelium/octelium/issues/86
+https://github.com/docker/mcp-gateway/issues/607
+https://github.com/ThinkWatchProject/ThinkWatch/issues/113
+https://github.com/HelpCode-ai/anythingmcp/issues/1174
