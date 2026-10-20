@@ -1,11 +1,11 @@
-# Measured status (auto-generated 2026-10-20T10:05Z)
+# Measured status (auto-generated 2026-10-20T11:05Z)
 
-Source: `data/uptime_samples.jsonl`, 720 samples from 2026-10-19T22:06:27.945628Z to 2026-10-20T10:00:01.809810Z, produced by `scripts/uptime_probe.py` hitting each free `/preview` path. Window is short; treat as a measurement, not an SLA.
+Source: `data/uptime_samples.jsonl`, 780 samples from 2026-10-19T22:06:27.945628Z to 2026-10-20T11:00:01.551936Z, produced by `scripts/uptime_probe.py` hitting each free `/preview` path. Window is short; treat as a measurement, not an SLA.
 
 | endpoint | samples | success | p50 ms | p95 ms |
 |---|---|---|---|---|
-| /chain/gas-price/preview | 144 | 100.0% | 246 | 1240 |
-| /chain/token-report/preview | 144 | 100.0% | 1483 | 3370 |
-| /chain/token-security/preview | 144 | 100.0% | 975 | 2519 |
-| /crypto/prices/preview | 144 | 100.0% | 735 | 1100 |
-| /gate/swap/preview | 144 | 99.3% | 1951 | 3408 |
+| /chain/gas-price/preview | 156 | 100.0% | 266 | 1231 |
+| /chain/token-report/preview | 156 | 100.0% | 1548 | 3368 |
+| /chain/token-security/preview | 156 | 100.0% | 1007 | 2385 |
+| /crypto/prices/preview | 156 | 100.0% | 546 | 1060 |
+| /gate/swap/preview | 156 | 99.4% | 2011 | 3406 |
