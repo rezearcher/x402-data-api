@@ -227,3 +227,12 @@ https://github.com/apappascs/mcp-servers-hub/issues/41
 https://github.com/Observal/Observal/issues/1950
 https://github.com/aklivity/zilla/issues/2751
 https://github.com/gebruder/wirken/issues/290
+https://github.com/TheLunarCompany/lunar/issues/88
+https://github.com/peg/rampart/issues/465
+https://github.com/enkryptai/secure-mcp-gateway/issues/60
+https://github.com/ravitemer/mcp-registry/issues/82
+https://github.com/stacklok/toolhive-catalog/issues/1743
+https://github.com/lourencomaciel/sift-gateway/issues/166
+https://github.com/ressl/mcp-firewall/issues/10
+https://github.com/mcp-security-project/awesome-agentic-mcp-security/issues/39
+https://github.com/systempromptio/awesome-ai-agent-governance/issues/150
