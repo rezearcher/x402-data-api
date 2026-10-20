@@ -22,3 +22,4 @@ https://github.com/selimaytac/hashspan/issues/494
 https://github.com/Ikalus1988/MisakaNet/issues/3595
 https://github.com/cogni-dao/cogni/issues/2823
 https://github.com/nirholas/universal-crypto-mcp/issues/42
+https://monid.ai (provider form submitted 2026-10-20)
