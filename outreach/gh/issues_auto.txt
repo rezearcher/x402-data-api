@@ -1,3 +1,4 @@
+https://github.com/tianzizhiming-svg/agentbridge/issues/8
 https://github.com/api-evangelist/meta-agent-tools/issues/1
 https://github.com/api-evangelist/cracked/issues/1
 https://github.com/samanhappy/mcphub/issues/1357

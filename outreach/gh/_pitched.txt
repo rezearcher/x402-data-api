@@ -236,3 +236,5 @@ https://github.com/lourencomaciel/sift-gateway/issues/166
 https://github.com/ressl/mcp-firewall/issues/10
 https://github.com/mcp-security-project/awesome-agentic-mcp-security/issues/39
 https://github.com/systempromptio/awesome-ai-agent-governance/issues/150
+github.com/PolicyLayer/mcp-precheck
+github.com/m9labs-railscope/verantis-mcp
