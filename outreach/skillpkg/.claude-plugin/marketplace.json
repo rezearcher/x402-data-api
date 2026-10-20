@@ -1,0 +1,1 @@
+{"name":"greyridge-tools","owner":{"name":"Grey Ridge Signals Group LLC","email":"contact@greyridgesignals.ai"},"plugins":[{"name":"greyridge-mcp-scan","source":"./","description":"Vet an MCP server for tool poisoning / prompt injection before connecting an agent to it.","version":"0.1.0"}]}
