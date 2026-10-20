@@ -19,6 +19,12 @@ import sys,json
 try:
   for i in json.load(sys.stdin)['items']: print(i['html_url'].replace('/pull/','/issues/'))
 except Exception: pass" > outreach/gh/issues_auto.txt
+# Also issues we only commented on (pitches posted as comments on others' threads).
+curl -s -G -H "Authorization: token $T" --data-urlencode "q=commenter:rezearcher is:open comments:>1 -user:rezearcher" -d per_page=100 -d sort=updated https://api.github.com/search/issues | python3 -c "
+import sys,json
+try:
+  for i in json.load(sys.stdin)['items']: print(i['html_url'].replace('/pull/','/issues/'))
+except Exception: pass" >> outreach/gh/issues_auto.txt
 OUT=~/.hermes/data/x402_issue_replies; mkdir -p "$OUT"
 cat outreach/gh/issues*.txt | grep -o 'https://github.com/[^ ]*/issues/[0-9]*' | sort -u | while read u; do
   curl -s -H "Authorization: token $T" "https://api.github.com/repos/${u#https://github.com/}/comments" | U="$u" python3 -c "

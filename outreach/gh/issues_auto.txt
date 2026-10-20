@@ -8,3 +8,8 @@ https://github.com/desplega-ai/agent-swarm/issues/2269
 https://github.com/DrVelvetFog/x402-pilot/issues/13
 https://github.com/swarm-agent-operator/swarm-x402-mcp/issues/2
 https://github.com/OWASP/www-project-top-10-for-large-language-model-applications/issues/843
+https://github.com/Agorean/claude-plugin/issues/1
+https://github.com/DrVelvetFog/x402-pilot/issues/13
+https://github.com/swarm-agent-operator/swarm-x402-mcp/issues/2
+https://github.com/coinbase/agentkit/issues/1091
+https://github.com/crewAIInc/crewAI/issues/7227
