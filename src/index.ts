@@ -7043,6 +7043,21 @@ app.get("/scan/mcp/preview", async (c) => {
   }
 });
 
+// shields.io endpoint badge: img.shields.io/endpoint?url=<BASE>/scan/mcp/badge?url=<mcp-server>
+// Lets any MCP directory/README show a live scan verdict that links back to the paid full audit.
+app.get("/scan/mcp/badge", async (c) => {
+  const target = c.req.query("url");
+  const base = { schemaVersion: 1, label: "mcp-scan", cacheSeconds: 21600 };
+  if (!target || !/^https?:\/\//i.test(target)) return c.json({ ...base, message: "url required", color: "lightgrey" });
+  try {
+    const r = await scanMcpServer(target);
+    const color = ({ clear: "brightgreen", review: "yellow", block: "red" } as Record<string, string>)[r.verdict] ?? "lightgrey";
+    return c.json({ ...base, message: `${r.verdict} (${r.tools_scanned} tools, ${r.findings.length} issues)`, color });
+  } catch {
+    return c.json({ ...base, message: "unreachable", color: "lightgrey" });
+  }
+});
+
 // Paste-mode preview for servers we can't reach (OAuth-gated / private): POST the
 // JSON of your own tools/list response ({"tools":[...]} or {"result":{"tools":[...]}}).
 // Same static analysis, no outbound fetch, no SSRF surface. Counts only (like GET preview).
