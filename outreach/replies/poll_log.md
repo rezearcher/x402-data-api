@@ -9,3 +9,4 @@
 ## c16 2026-10-20T00:5xZ
 Polled Gmail+sensor: 0 buyer replies. verify402 = competitor (skip). Use gh api search/repositories for repo search.
 - c16b: pitched LPSignals/lpsignal-mcp#1 (LP pool ranker, Base; AERO preview JSON). Watch for reply.
+- c16c: web search for Show HN/Farcaster Base agent builders: only competitors (true402, rgx-mcp $0.005, AgentRisk $0.15, x402-bazaar-mcp). Liquid (Farcaster trading agents) has no public repo. Don't repeat.
