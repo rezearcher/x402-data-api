@@ -1,0 +1,3 @@
+https://github.com/microsoft/mcp-gateway/issues/112
+https://github.com/github/gh-aw-mcpg/issues/15262
+https://github.com/supercorp-ai/supergateway/issues/358

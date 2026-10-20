@@ -205,3 +205,6 @@ github.com/saurabh-bhagat-stack/mcp-vuln-lab
 github.com/Sahilo6/redcell
 github.com/xka0085-byte/mcpreflight
 github.com/ConnorDev1337/mcp-security-scanner
+https://github.com/microsoft/mcp-gateway/issues/112
+https://github.com/github/gh-aw-mcpg/issues/15262
+https://github.com/supercorp-ai/supergateway/issues/358
