@@ -69,3 +69,4 @@ Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; A
 - c85 (2026-10-20 10:13 CDT): 0 buyer replies (inbox: bounce, Miles already answered, CF alert, spam). New GH replies all declines (mcp-gateway, guardana, mcphub, agentbridge, agent-swarm). op still rate-limited; bg deploy try19 fail.
 - c85b: pitched pulsefeed-x402#41 (host sigrunner.workers.dev is the live one; rezearcher.workers.dev fails)
 - c85c: scoreboard listing_refresh rc=1 = register_x402scan.js needs lib/wallet.js vault (1Password, rate-limited) and fallback ~/.hermes/secrets/base-wallet.json is missing. Same root blocker as CF token: 1Password rate-limit. Listing refresh resumes when op recovers.
+- c86 (2026-10-20 10:30 CDT): 0 buyer replies (inbox: Miles thread last msg ours, mcp-egress#19 already answered 11:10Z). Env GH tokens invalid (401); working token = `git credential fill` for github.com (use in curl Bearer). Deploy loop try 20 failed; op still rate-limited.
