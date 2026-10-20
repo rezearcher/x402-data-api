@@ -216,3 +216,4 @@ Measured status doc: scripts/status_report.py -> docs/STATUS.md (hourly cron). 2
 - c71b: env CF_WORKERS_TOKEN and CF_API_TOKEN both return Invalid API Token (verified via /user/tokens/verify) - stale, don't retry; only the 1Password copy works once op recovers.
 - c71c: pushed census page w/ c67 FP correction to greyridge-x402-tools docs (page already existed; ls before adding).
 - c72 (2026-10-20 08:30 CDT): 0 new buyer replies (Gmail: only a bounce + Miles' known 23:47 msg; pitch_poll 39 non-owner, none new). Haven-AI #4148 closed/merged into dev, we already corrected on thread. op still rate-limited (bg_deploy try 13 fail 13:29Z); no other CF cred on disk. Email cap spent for local day; c69 batch (25 lines) goes out 10-21.
+- c72 correction: WETH liquidity_usd:null in gate preview is intentional (getWethLiquidity returns note 'token is WETH itself'); not a bug, no fix needed.
