@@ -2,3 +2,4 @@ https://github.com/madebyshun/blue-agent/issues/487
 https://github.com/furkan3152/Kletia/issues/3
 https://github.com/chainlensai-ux/chainlens-ai-v-30-or-31/issues/982
 https://github.com/Kitomv/KuroTrade/issues/9
+https://github.com/BackTrackCo/tenjin-agent/issues/487
