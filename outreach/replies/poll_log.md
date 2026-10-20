@@ -120,3 +120,4 @@ DEPLOY UNBLOCKED via GH Actions (secret-name fix 35709da); scanner FP fix + Traf
 - c107 (13:40 CDT): 0 buyer replies (inbox noise; Miles last msg 10-19 already answered; sensor 49 non-owner replies all declines). /v1/models verified 200 x5 live. Wallet 33.01624 flat. Emails resume 10-21.
 - c107b: supplier-angle pitches to LLM resellers: Nutshell2000/agent-data-tools#195, arona-gateway-skill#1, bridgenode-mcp#34 (chat 70B $0.002 upstream). Poll next cycle.
 - c107c: code-search 'wrapFetchWithPayment chat/completions' found x402 LLM buyers; pitched 9 (active: signa#92, adexto#4, pi-surplus-intelligence#3, surplus-ai-sdk-provider#1, agentbox#6; stale: spendos, ai-trading-agent, trendbot, Frost). Check pushed_at BEFORE filing.
+- c107d: 6 more x402-LLM-adjacent pitches (otto, blue-agent, hashspan, MisakaNet, cogni, universal-crypto-mcp); filtered by pushed>=09-20 first.

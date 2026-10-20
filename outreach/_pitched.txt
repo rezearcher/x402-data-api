@@ -16,3 +16,9 @@ https://github.com/codexvritra/signa/issues/92
 https://github.com/charlesms1246/Frost/issues/9
 https://github.com/0xcuy/adexto/issues/4
 https://github.com/gkgoat1/pi-surplus-intelligence/issues/3
+https://github.com/nitishxyz/otto/issues/5
+https://github.com/madebyshun/blue-agent/issues/489
+https://github.com/selimaytac/hashspan/issues/494
+https://github.com/Ikalus1988/MisakaNet/issues/3595
+https://github.com/cogni-dao/cogni/issues/2823
+https://github.com/nirholas/universal-crypto-mcp/issues/42
