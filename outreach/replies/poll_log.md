@@ -140,3 +140,4 @@ DEPLOY UNBLOCKED via GH Actions (secret-name fix 35709da); scanner FP fix + Traf
 - c113b: pitched Agent-Layer#36, the-penniless-agent#6, keryx#617 (found via REST search pushed:>2026-10-17, unpitched). Poll next cycle.
 - c113c: pitched FX-Factor/autonomous-ict-trading-bot, UltraStarz/tollkit-wallet. Poll next cycle.
 - c113d (15:10 CDT): Agent402 register succeeded (listed, 67 tools, routable). Router: honeypot query top5 incl. token_honeypot_check 67 (ours? verify seller); chat query top = chatCompletions 52 (competitor slugs) - do not know ours rank; register done, don't repeat today.
+- c114 (15:20 CDT): 0 buyer replies (Gmail noise, sensor all declines). Agent402 router VERIFIED: honeypot query #1 = OUR token_honeypot_check (score 67, $0.01). Chat query #1 = true402.dev chat-completions $0.0001 (score 47); ours not top-1; we price 0.002 (20x). Router route API: POST agent402.tools/api/route {task,include:external}. No double-send.
