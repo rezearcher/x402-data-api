@@ -48,3 +48,4 @@ https://github.com/LPSignals/lpsignal-mcp/issues/1
 https://github.com/Akixama/intent-firewall/issues/1
 https://github.com/JustaLab-co/x402-near-intents-demo/issues/1 2026-10-20
 https://github.com/kzmttkc/vet402/issues/67 2026-10-20
+https://github.com/SurgeCode/intents-cli/issues/1
