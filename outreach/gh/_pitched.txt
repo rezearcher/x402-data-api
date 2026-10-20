@@ -182,3 +182,4 @@ github.com/wyattpalm2-eng/x402-seller
 github.com/yonixnetwork/Yonix-Alpha
 https://github.com/FX-Factor/autonomous-ict-trading-bot
 https://github.com/agentwallet-sdk/agentwallet-langchain
+https://github.com/BlockRunAI/blockrun-mcp
