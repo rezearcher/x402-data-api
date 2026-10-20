@@ -250,3 +250,7 @@ asale-ai/agent-firewall
 shivanagendrakore/agent-firewall
 hamsavartn/JanusGate
 JAaron93/Blackwall
+github.com/Ducarv/mcpmoat 2026-10-20
+github.com/Noooblien/mcpgate 2026-10-20
+github.com/preloop/preloop 2026-10-20
+github.com/dbalchunas2-pixel/forculus 2026-10-20
