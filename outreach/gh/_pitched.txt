@@ -242,3 +242,6 @@ github.com/kaditang/402sentinel-mcp
 mioku50/miorail
 ophis-fi/awesome-ophis
 naxytra/naxytra-mcp
+TsvetanG2/mcpward
+kVadrum/mcpwatchman
+Amineddine/mcphantom
