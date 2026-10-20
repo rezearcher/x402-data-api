@@ -130,3 +130,4 @@ DEPLOY UNBLOCKED via GH Actions (secret-name fix 35709da); scanner FP fix + Traf
 - c110: adexto#4 (0xcuy) replied "interesting fallback/cheap lane, will evaluate"; answered with drop-in fetchWithPayment snippet + preview/models URLs. Waiting; no double-send. No other new buyer replies (others = declines).
 - c110b: Gmail poll 19:30Z: no buyer replies (Venmo/LinkedIn/CF DO-limit alert only).
 - c110c: CDP discovery query 'chat completions' top50: we are absent (blockrun #7 @2000). Bazaar listing requires a settled payment (self-paid canary) -> skipped by policy.
+- c111 (14:55 CDT): 0 buyer replies (Gmail = noise). On-chain last 9000 blocks: only OUR canary transfers, 0 external. Lever=chat-latency-measure-claims: measured preview latency into data/chat_latency_bench.jsonl (Claims Law artifact; publish only the measured number).
