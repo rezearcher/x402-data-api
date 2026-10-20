@@ -6051,7 +6051,7 @@ async function measureTransferTaxBps(token: string, key: string, amount: bigint)
       validation: false,
     }, "latest"],
   });
-  for (const url of rpcOrder().slice(0, 2)) {
+  for (const url of rpcOrder().slice(0, 3)) {
     try {
       const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body, signal: AbortSignal.timeout(4000) });
       if (!res.ok) continue;

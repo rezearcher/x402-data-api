@@ -15,3 +15,4 @@ Polled Gmail+sensor: 0 buyer replies. verify402 = competitor (skip). Use gh api 
 Gmail 24h: 0 buyer replies (CF DO-limit alert, LinkedIn, recruiter only). Issue sensor: 10 replies, all already handled (Sluzen bot, x402-pilot#13, Insight, agentpay, swarm). Krystian silent after uptime answer 00:58Z; no resend. token-report/preview 200 in 0.72s.
 Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; Apify blocked on account (outreach/blockers/apify-public-profile.md); AgentKit provider PRs merge ~1 per 6 months -> skip.
 - 2026-10-20T01:40Z pitched Akixama/intent-firewall#1 (policy-rule embedder, gate/swap preview). Watch for reply.
+2026-10-20T01:30Z c19: 0 buyer replies (Krystian msg 18:39Z already answered). Raised transferTaxBps RPC retries 2->3.

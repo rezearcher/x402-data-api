@@ -82,3 +82,4 @@ On 2026-10-19 the loop (c14c) and the interactive monitor both answered Krystian
 - I16 (cycle 18, DOWNVOTE of "more GitHub repo sweeps"): 7 repo queries + 2 web searches again returned only pitched repos, rivals (agentrisk-*, picklecheck, quvr-pulse) or Solana. Stop sweeping; next new prospects only via named replies, the 05:00Z queued sends, or B2B-embedder outreach.
 
 - I17 (cycle 18): token-report now reports MEASURED `security.transferTaxBps` (eth_simulateV1 balance-delta on a plain transfer; deployed 48c7c425, AERO=0). Covers fee-on-transfer tokens, NOT DEX buy/sell tax (still null). Positive case (a real taxed token) NOT yet verified — don't claim detection accuracy (Claims Law) until tested on a known taxed Base token.
+- I18 (cycle 19): transferTaxBps was null in 2/3 AERO previews (only 2 RPCs tried); now tries 3 -> 9/10 measured (deployed d6ff1e0b). Taxed-token positive case still unverified; no accuracy claim.
