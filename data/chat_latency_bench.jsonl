@@ -1,2 +1,3 @@
 {"ts": "2026-10-20T19:49:08Z", "route": "/v1/chat/completions/preview", "n": 10, "ok": 10, "p50_s": 0.21, "p95_s": 0.91, "max_tokens": 16}
 {"note":"INVALID for paid-route latency: measured against canned preview (no model run). Ignore p50.","ts":"2026-10-20T19:49:40Z"}
+{"ts":"2026-10-20T19:58:33Z","route":"/v1/chat/completions/preview","model":"llama-3.3-70b-instruct-fp8-fast","real_model":true,"n":2,"total_s":[1.76,0.80],"max_tokens":8,"note":"n=2 only (3/day/IP cap); not a p50/p95 claim; preview usage fields are zeros"}
