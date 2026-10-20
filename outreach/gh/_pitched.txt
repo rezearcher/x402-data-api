@@ -183,3 +183,7 @@ github.com/yonixnetwork/Yonix-Alpha
 https://github.com/FX-Factor/autonomous-ict-trading-bot
 https://github.com/agentwallet-sdk/agentwallet-langchain
 https://github.com/BlockRunAI/blockrun-mcp
+https://github.com/NimbleBrainInc/mpak
+https://github.com/yunseo-kim/agent-toolbox
+https://github.com/manikhere79/mcp-gateway-and-registry
+https://github.com/opena2a-org/ai-trust
