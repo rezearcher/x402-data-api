@@ -291,3 +291,6 @@ daedalusdevelopmentgroup/ddg-agent-payable-services#18
 OnchainRouter/onchain-router-hermes#7
 laurenthalbrun/x402-agent-gateway#3
 plagtech/spraay-x402-gateway#3
+ivcained/surp-router#4
+BlockRunAI/ClawRouter-Hermes#60
+devlab-group/agent-commerce#26
