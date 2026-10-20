@@ -44,3 +44,4 @@ https://github.com/BofAI/x402/issues/108
 Kitomv/KuroTrade
 BackTrackCo/tenjin-agent
 https://github.com/LPSignals/lpsignal-mcp/issues/1
+
