@@ -30,3 +30,4 @@ Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; A
 - 2026-10-20T06:00Z c40: pitched pay-guard#108, Haven-AI#4107, pokter#213 (from merged-PR searches 'x402 sdk/middleware').
 - 2026-10-20T06:10Z c40: ATTEMPTED LiquidLogicX/liquid-logic-agent (issues restricted to collaborators, NOT sent; Base treasurer that PAYS allowlisted x402 endpoints = real buyer archetype). Other 'x402 client/facilitator/agent' results mostly Stellar/billing noise.
 - 2026-10-20T06:20Z c40: emailed hello@liquidlogicx.com (1a157c9da1e86694). Check reply next cycle; do not double-send.
+- 2026-10-20T06:35Z c40: pitched x402-treasury#25, x402-payer-skill#1, coinbase-agentkit-x402#1, agent-payment-guard#1 (from 'gh search repos x402 treasury/payer'; multiword query must be UNQUOTED to work, use fullName/hasIssues json fields).
