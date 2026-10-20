@@ -257,3 +257,6 @@ github.com/dbalchunas2-pixel/forculus 2026-10-20
 https://github.com/Nikolife2016/pulsefeed-x402/issues/41
 https://github.com/alextitonis/fly.ai/issues/14
 https://github.com/audifyx/og-scan/issues/258
+https://github.com/Ridwannurudeen/shieldbot/issues/35
+https://github.com/h100envy/crawl-hive/issues/3
+https://github.com/nhovongoc0-max/meme-radar/issues/6
