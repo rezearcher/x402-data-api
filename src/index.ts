@@ -7058,6 +7058,19 @@ app.get("/scan/mcp/badge", async (c) => {
   }
 });
 
+// Self-serve badge generator page: paste an MCP URL, see the live verdict, copy README markdown.
+app.get("/scan/badge-gen", (c) => {
+  const html = `<!doctype html><meta charset=utf-8><title>MCP scan badge</title><meta name=viewport content="width=device-width,initial-scale=1">
+<body style="font-family:system-ui;max-width:640px;margin:2rem auto;padding:0 1rem"><h1>MCP scan badge</h1>
+<p>Paste your MCP server URL. We statically scan its advertised tool metadata (never call tools) and give you a live README badge.</p>
+<input id=u placeholder="https://your-server.example/mcp" style="width:100%;padding:.5rem"><p><button id=b>Generate</button></p>
+<p id=img></p><pre id=md style="white-space:pre-wrap;word-break:break-all"></pre>
+<p>Itemized findings + OWASP mapping: paid <code>GET /scan/mcp</code> ($0.05 USDC via x402).</p>
+<script>b.onclick=()=>{const u=encodeURIComponent(location.origin+"/scan/mcp/badge?url="+encodeURIComponent(document.getElementById("u").value));
+const src="https://img.shields.io/endpoint?url="+u;img.innerHTML='<img src="'+src+'">';md.textContent="![mcp-scan]("+src+")"}</script>`;
+  return c.html(html);
+});
+
 // Paste-mode preview for servers we can't reach (OAuth-gated / private): POST the
 // JSON of your own tools/list response ({"tools":[...]} or {"result":{"tools":[...]}}).
 // Same static analysis, no outbound fetch, no SSRF surface. Counts only (like GET preview).
