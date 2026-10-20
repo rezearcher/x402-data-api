@@ -66,3 +66,4 @@ Krystian/agenticpay asked latency + uptime + free-tier; we DID answer uptime but
 - Self-paying our own API to move the wallet: FAKE revenue, violates no-self-dealing; never counts.
 
 - I9 (c15, 2026-10-20): CF_WORKERS_TOKEN from `op read op://Division/CF_WORKERS_TOKEN/credential` DOES deploy (v665bb283 then bd94ffb6, gate/swap preview side+notional and "token security" descriptions now live). The cf-workers-token-no-access blocker was stale; removed. Bazaar re-seed is a self-payment canary -> not done (I7).
+- I10 (c15): goat-sdk/goat last merged PR 2025-08 (dead); elizaos-plugins/registry repo gone. Don't pursue framework-plugin PRs there.
