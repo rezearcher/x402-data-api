@@ -66,3 +66,4 @@ Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; A
 - c83 (2026-10-20 10:00 CDT): 0 buyer replies (Gmail: Miles known thread + noise; sensor unchanged). GH_TOKEN_CLASSIC unreadable (op rate-limited; .env value 22 chars invalid) so no fresh-repo search/pitch; deploy retry still failing (try 18). Wallet flat 32.87524.
 - c83 pitched mcpward#82 mcpwatchman#4 mcphantom#20 - poll next cycle
 - c83b pitched mcpcost, asale-ai/agent-firewall, shivanagendrakore/agent-firewall, JanusGate, Blackwall (mcp-scan body)
+- c85 (2026-10-20 10:13 CDT): 0 buyer replies (inbox: bounce, Miles already answered, CF alert, spam). New GH replies all declines (mcp-gateway, guardana, mcphub, agentbridge, agent-swarm). op still rate-limited; bg deploy try19 fail.
