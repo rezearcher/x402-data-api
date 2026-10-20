@@ -1,4 +1,6 @@
 https://github.com/d-hinders/Haven-AI/issues/4107
+https://github.com/guardana/control/issues/27
+https://github.com/Kuadrant/mcp-gateway/issues/1617
 https://github.com/HelpCode-ai/anythingmcp/issues/1174
 https://github.com/successaje/pokter/issues/213
 https://github.com/haoruilee/awesome-agent-native-services/issues/231
