@@ -1,0 +1,1 @@
+Governors/oracle are CANONICAL + integrity-protected at /home/rez/greyridge-gates/. Run via: /home/rez/greyridge-gates/run <tool>.py

@@ -1,0 +1,21 @@
+{
+  "artifact": "quality_gate.py",
+  "reviewer": "independent-adversarial",
+  "reviewed_at": "2026-10-20T13:47:29-05:00",
+  "adversarial_analysis": "The docstring sells this as INDEPENDENT and Python-ENFORCED; both are partly theater. (1) Independence is OFF BY DEFAULT: MODEL=os.environ.get('QUALITY_JUDGE_MODEL',ENGINEER_MODEL) defaults the judge to the engineer model claude-opus-4-8 and only WARNs, so out-of-the-box it is same-model self-review. (2) decide_pass refuses the judge's 'pass' flag but still gates on r.get('overall'), a free-form integer the judge invents and Python never recomputes from the axes; no 0-100 range check either (999 passes). (3) BILLING_ENV_VARS is a hardcoded denylist used as the sole billing-leak guard; fails open on any new Anthropic env var. (4) MAX_ARTIFACT_CHARS=14000 truncation plus 'judge completeness ONLY on what is shown' structurally cripples the complete axis on real modules. (5) Advertised test_quality_gate.py is not shown and the only meaningful path (subprocess claude call) is exactly what a unit test mocks. (6) ENGINEER_MODEL is re-read AFTER the self-judge check, dead logic.",
+  "effective": 66,
+  "more_than_basic": 64,
+  "complete": 65,
+  "overall": 65,
+  "pass": false,
+  "deficiencies": [
+    "MODEL default to ENGINEER_MODEL with WARN-only branch: independent judge defaults to engineer's own model -> hard-fail or default to a different model family when equal, don't merely warn.",
+    "decide_pass gates on judge-supplied r.get('overall') and never recomputes it: 'enforced, never trusted' is false for the gating number -> compute overall in Python (min/weighted) from axes and ignore the judge's overall.",
+    "_num accepts any int/float with no bound: axis of 999 or -5 passes >= PASS_AXIS_MIN -> add 0<=v<=100 validation, fail closed on out-of-range.",
+    "BILLING_ENV_VARS hardcoded denylist is the sole billing guard: fails open on new/renamed Anthropic billing vars -> use an env allowlist or prefix-strip (ANTHROPIC_/CLAUDE_).",
+    "txt=full[:14000] with 'judge completeness ONLY on what is shown': any module >14k gets an incomplete 'complete' axis -> chunk/segment the artifact or append a structural map of the unseen tail.",
+    "Advertised test_quality_gate.py not shown and decisive subprocess path is mock-prone: no evidence a test exercises the real judge path -> add an end-to-end test against known-good/known-bad fixtures.",
+    "ENGINEER_MODEL=os.environ.get('ENGINEER_MODEL',...) placed after the self-judge check: dead reassignment -> move above the check or delete."
+  ],
+  "what_good_looks_like": "Independent BY DEFAULT (different model or hard-fail, never warn); pass decision computed ENTIRELY in Python from range-validated 0-100 axis scores with overall derived locally; billing protected by an env allowlist/prefix-strip; full artifact reviewed (chunked if large); a test exercising the real judge invocation against fixtures."
+}

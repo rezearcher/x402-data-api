@@ -1,0 +1,2 @@
+The quality judge is now CANONICAL + integrity-protected at /home/rez/greyridge-gates/ .
+Run it ONLY via: /home/rez/greyridge-gates/gate <artifact> [--rubric generic|discovery|note|edge] [--context ...]
