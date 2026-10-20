@@ -89,3 +89,6 @@ On 2026-10-19 the loop (c14c) and the interactive monitor both answered Krystian
 - I22 (c21): GitHub Discussions 'Show and tell' is a new self-serve channel (coinbase/x402 & x402-foundation have Discussions disabled). Posted a2a-x402#196 and eliza discussion; listed in issues_cycle_c21.txt. Check for replies; do not repost.
 - I23 (c21): posted same Show-and-tell body to nofx#1551, intentkit#1005, ClawRouter#483 (was previously pitched via issue), WAIaaS#421, gmgn-skills#252, lyra-tool-discovery#92. 18 repos have Discussions+Show-and-tell among topic searches; remaining unposted: tradememory-protocol, agorio, perp-cli, bitterbot (PR pending). Watch replies; do not repost.
 - I24 (c21): second discussion sweep (11 topics, 65 repos) -> only kuberna-labs relevant (posted). Rest are Solana/stock/secret tools; do not sweep Discussions again.
+
+### I25 — 2026-10-20 (loop)
+Measured status doc: scripts/status_report.py -> docs/STATUS.md (hourly cron). 230 samples/3.7h, 100% success on 5 preview routes; token-report p50 1062ms p95 1744ms, gate/swap p50 1322 p95 1982. Short window: cite as measurement with window, not SLA. Next nudge to Krystian can link docs/STATUS.md.
