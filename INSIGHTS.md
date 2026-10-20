@@ -228,3 +228,4 @@ Measured status doc: scripts/status_report.py -> docs/STATUS.md (hourly cron). 2
 - c80b: pitched PolicyLayer/mcp-precheck#4 (scan) + verantis-mcp#3 (gate/swap); found via web search of spend-policy layers. Poll next cycle.
 - c80c: pitched 402sentinel-mcp (web search 'x402 guardrail/preflight'); ActionGate/x402station/Fireblocks have no usable repo or are signers.
 - c81 (2026-10-20 09:42 CDT): 0 new buyer replies (Miles: will run preview on own MCP, ball his; Krystian silent). op still rate-limited; bg_deploy2 loop alive (try 17). Fresh-repo search for token-safety/honeypot: only competitors (agentsvc, true402). Cap spent; c69 batch for 10-21.
+- c81b: verified Miles paste-mode path live (POST /scan/mcp/preview detects injected tool: critical, verdict review, 1 tool-poisoning); gate/swap preview 200 in 1.46s. Only CF cred candidates: secrets.env CF_API_TOKEN is a commented placeholder (dead).
