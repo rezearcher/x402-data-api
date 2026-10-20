@@ -245,3 +245,8 @@ naxytra/naxytra-mcp
 TsvetanG2/mcpward
 kVadrum/mcpwatchman
 Amineddine/mcphantom
+ondraulehla/mcpcost
+asale-ai/agent-firewall
+shivanagendrakore/agent-firewall
+hamsavartn/JanusGate
+JAaron93/Blackwall
