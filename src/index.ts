@@ -1150,6 +1150,12 @@ function tagFor(path: string): string {
   return "General";
 }
 
+const FLAGSHIP_OPERATION_IDS: Record<string, string> = {
+  "/chain/token-report": "token_honeypot_check_risk_report",
+  "/chain/token-security": "token_security_honeypot_scan",
+  "/gate/swap": "pre_trade_token_safety_gate_swap",
+};
+
 function withOperationIds<T extends Record<string, Record<string, any>>>(paths: T): T {
   for (const [path, item] of Object.entries(paths)) {
     for (const [method, op] of Object.entries(item)) {
@@ -1164,6 +1170,10 @@ function withOperationIds<T extends Record<string, Record<string, any>>>(paths: 
         };
       }
       if (op.operationId) continue;
+      // Search-friendly names for the flagship safety routes: x402 routers (Agent402 /api/route)
+      // rank mainly on slug-word match, and camelCase slugs never match "honeypot check".
+      const flagship = FLAGSHIP_OPERATION_IDS[path];
+      if (flagship && method === "get") { op.operationId = flagship; continue; }
       const words = path
         .split("/")
         .filter(Boolean)
