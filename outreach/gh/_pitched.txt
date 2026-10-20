@@ -260,3 +260,6 @@ https://github.com/audifyx/og-scan/issues/258
 https://github.com/Ridwannurudeen/shieldbot/issues/35
 https://github.com/h100envy/crawl-hive/issues/3
 https://github.com/nhovongoc0-max/meme-radar/issues/6
+https://github.com/EkoTerminal/eko/issues/4
+https://github.com/Starchild-ai-agent/official-skills/issues/192
+https://github.com/sheldonivish/degen-desk/issues/1

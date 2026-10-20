@@ -1,3 +1,4 @@
+https://github.com/desplega-ai/agent-swarm/issues/2269
 https://github.com/tianzizhiming-svg/agentbridge/issues/8
 https://github.com/api-evangelist/meta-agent-tools/issues/1
 https://github.com/api-evangelist/cracked/issues/1
@@ -25,7 +26,6 @@ https://github.com/imokokok/Insight/issues/245
 https://github.com/Bitterbot-AI/bitterbot-desktop/issues/279
 https://github.com/alsk1992/CloddsBot/issues/154
 https://github.com/nirholas/agenti/issues/179
-https://github.com/desplega-ai/agent-swarm/issues/2269
 https://github.com/DrVelvetFog/x402-pilot/issues/13
 https://github.com/swarm-agent-operator/swarm-x402-mcp/issues/2
 https://github.com/punkpeye/awesome-mcp-servers/issues/10277

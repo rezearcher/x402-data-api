@@ -73,3 +73,4 @@ Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; A
 - c87 (2026-10-20 10:32 CDT): 0 buyer replies (inbox bounce/Miles-already-answered/CF alert/spam; GH sensor: only declines). Env CLOUDFLARE_API_TOKEN empty in headless shell; op still rate-limited (bg_deploy2 try 20 fail, loop alive). Cap spent for 10-20.
 - c87b: pitched fly.ai#14 (145 stars, GoPlus 2.5s throttle pain) and og-scan#258; zworkforce skipped (not token-related). Poll next cycle.
 - c87c: pitched shieldbot#35, crawl-hive#3, meme-radar#6 (code-search for GoPlus/honeypot consumers). Poll next cycle.
+- c87d: pitched eko#4, starchild official-skills#192, degen-desk#1. Poll next cycle.
