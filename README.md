@@ -135,6 +135,10 @@ curl -i "$BASE/crypto/funding?limit=10"
 Any x402-capable client (e.g. the [`x402`](https://www.npmjs.com/package/x402) libraries)
 handles the 402 → sign → retry automatically.
 
+## Measured status
+
+Uptime and latency per safety route are measured from a probe cron and published in [docs/STATUS.md](docs/STATUS.md) (regenerated hourly; window stated in the file, not an SLA).
+
 ## How it runs
 
 A single [Cloudflare Worker](./src/index.ts) implements every HTTP endpoint and the MCP server
