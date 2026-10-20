@@ -2,3 +2,4 @@
 - 2026-10-20 c61: svalin-agent#2 (Solana/NEAR, not Base) closed-not-related; skillware#445 refuses paid gateway; Miles (liquidlogicx) will run free MCP scan preview this week, no double-send. Pitched microsoft/mcp-gateway#112, gh-aw-mcpg#15262, supergateway#358. Paste-mode /scan/mcp/preview verified live.
 - c61b: 5 more gateway pitches (bifrost#8758, octelium#86, docker/mcp-gateway#607, ThinkWatch#113, anythingmcp#1174); total c61 = 8
 - c61c: 7 directory/aggregator pitches
+- 2026-10-20 c65: found bridge.liquidlogicx.com/mcp =401; sent Miles paste-mode instructions (msg 1a15932ffcdcca26) in thread 1a157c9da1e86694; awaiting tools array.
