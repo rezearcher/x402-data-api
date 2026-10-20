@@ -25,8 +25,10 @@ d=json.load(sys.stdin)
 if not d.get('ok'):
     print('read failed:', d.get('detail') or d); sys.exit(0)
 st=d.get('stats',[])
-print('distinct paths:', len(st), '| total hits:', sum(x['count'] for x in st))
-for x in st[:50]: print(f\"  {x['count']:>7}  {x['path']}\")
+scale=d.get('nonpaid_scale',1)
+print(f\"distinct paths: {len(st)} | sampled hits: {sum(x['count'] for x in st)} | nonpaid_scale x{scale} (non-paid sampled)\")
+print(f\"  {'sampled':>7}  {'~true':>8}  path\")
+for x in st[:50]: print(f\"  {x['count']:>7}  {x['count']*scale:>8}  {x['path']}\")
 "
 echo "=== paid feed, last ${HOURS}h ==="
 curl -s "$B/internal/traffic-stats?window_hours=${HOURS}&secret=${SEC}&paid=1" | python3 -c "

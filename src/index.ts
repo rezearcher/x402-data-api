@@ -685,7 +685,11 @@ app.get("/internal/traffic-stats", async (c) => {
   try {
     if (c.req.query("paid") === "1") return c.json({ ok: true, window_hours: hours, paid: await stub.getPaid(hours * 3600) });
     const stats = await stub.getStats(hours * 3600);
-    return c.json({ ok: true, window_hours: hours, stats, timestamp: Math.floor(Date.now() / 1000) });
+    // Non-paid hits are sampled at NONPAID_SAMPLE to protect the DO write budget;
+    // multiply `count` by nonpaid_scale for an estimate of true non-paid volume.
+    // PAID rows are never sampled. Relative ranking across paths is exact.
+    const nonpaid_scale = Math.round(1 / TrafficLog.NONPAID_SAMPLE);
+    return c.json({ ok: true, window_hours: hours, nonpaid_sample_rate: TrafficLog.NONPAID_SAMPLE, nonpaid_scale, stats, timestamp: Math.floor(Date.now() / 1000) });
   } catch (e) {
     return c.json({ ok: false, window_hours: hours, error: "traffic_read_failed", detail: e instanceof Error ? e.message : String(e) }, 500);
   }
@@ -2806,7 +2810,21 @@ export class TrafficLog extends DurableObject<Env> {
     });
   }
 
+  // Fraction of NON-paid hits we persist. The high-volume probe/crawler traffic
+  // (402 challenges, catalog sweeps, preview hits) was writing one row per request
+  // and exhausting the DO free-tier daily rows-written budget well before UTC
+  // midnight — which broke BOTH logHit (lost traffic, fail-open) and every read
+  // ("Exceeded allowed rows written"), blinding the demand sensor most of the day.
+  // Sampling non-paid writes at this rate keeps the budget alive all day. PAID
+  // hits (the revenue signal) are ALWAYS persisted — never sampled. Non-paid
+  // counts are therefore ~1/rate of true volume; getStats() reports the scale
+  // factor so a reader can multiply back. Relative ranking across paths is
+  // preserved because every non-paid path is sampled at the same rate.
+  static readonly NONPAID_SAMPLE = 0.05;
+
   async logHit(path: string, method: string, ua: string): Promise<void> {
+    // Always persist PAID; sample everything else to protect the write budget.
+    if (method !== "PAID" && Math.random() >= TrafficLog.NONPAID_SAMPLE) return;
     await this.ctx.storage.sql.exec("INSERT INTO hits (ts, path, method, ua) VALUES (?, ?, ?, ?)", Math.floor(Date.now() / 1000), path, method, ua);
     // Opportunistic prune: ~0.2% of writes trigger a small bounded delete of
     // old rows. Averages <1 extra write per logHit (vs 5000/wake before), so the
