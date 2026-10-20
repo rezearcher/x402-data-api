@@ -15,3 +15,11 @@ https://github.com/DrVelvetFog/x402-pilot/issues/13
 https://github.com/swarm-agent-operator/swarm-x402-mcp/issues/2
 https://github.com/coinbase/agentkit/issues/1091
 https://github.com/crewAIInc/crewAI/issues/7227
+https://github.com/financedistrict-platform/medusa-plugin-agentic-commerce/issues/80
+https://github.com/selimaytac/hashspan/issues/493
+https://github.com/Vellar-Wallet/vellar-sdk/issues/746
+https://github.com/red-cup-engineering/x402-exact-purchase-service/issues/5
+https://github.com/nuanu-ai/agent-payment-node/issues/561
+https://github.com/twzrd-sol/twzrd-trust/issues/214
+https://github.com/nuanu-ai/agentify/issues/164
+https://github.com/d85rcrcy27-creator/ArbiVault/issues/39
