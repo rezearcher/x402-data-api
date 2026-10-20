@@ -6826,7 +6826,8 @@ function analyzeMcpTool(name: string, description: string, schemaText: string): 
   // it to an external destination.
   const secretArtifact = /(\.env\b|~\/\.ssh|id_rsa|\bprivate key\b|exfiltrat)/i;
   const externalize = /(send|post|upload|transmit|forward|leak|exfiltrat\w*)\b[\s\S]{0,60}?(https?:\/\/|\bwebhook\b|\bexternal\b|third[- ]?party|attacker|\bendpoint\b|\bexfil)/i;
-  const exfilHit = low.match(secretArtifact) || low.match(externalize);
+  const descLow = description.toLowerCase(); // sentence-scoped: never match across the description/schema boundary
+  const exfilHit = low.match(secretArtifact) || descLow.match(externalize);
   if (exfilHit) add("high", "exfiltration-hint",
     "Description instructs sending data to an external destination, or references a secret-file artifact (.env/.ssh/id_rsa).", exfilHit[0]);
 
@@ -6836,7 +6837,7 @@ function analyzeMcpTool(name: string, description: string, schemaText: string): 
     "Tool exposes code/command execution or destructive filesystem ops.", (low.match(danger) || [""])[0]);
 
   // 4. Cross-tool shadowing / rug-pull language (altering other tools' behavior)
-  const shadow = /(other tools?|all tools?|every tool|override|shadow|when (any|another) tool|modify the behavior)/i;
+  const shadow = /(\b(other|all|every|any) tools?\b[^.]{0,40}\b(behaviou?r|description|output|call|invoke|instruction)s?\b|\boverride (the )?(other|all|every|any|previous) |\bshadow(s|ing)? (the )?(other|all|every)|when (any|another) tool|modify the behaviou?r of)/i;
   if (shadow.test(low)) add("medium", "cross-tool-shadowing",
     "Description references other tools' behavior — shadowing / rug-pull risk.", (low.match(shadow) || [""])[0]);
 
