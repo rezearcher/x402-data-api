@@ -6831,7 +6831,7 @@ function analyzeMcpTool(name: string, description: string, schemaText: string): 
     "Description instructs sending data to an external destination, or references a secret-file artifact (.env/.ssh/id_rsa).", exfilHit[0]);
 
   // 3. Dangerous capability surface
-  const danger = /(exec|eval|subprocess|shell|os\.system|child_process|rm -rf|sudo|chmod|arbitrary (code|command)|remote code)/i;
+  const danger = /(\b(exec|execs|exec\(|eval|eval\(|subprocess|shell|sudo|chmod)\b|os\.system|child_process|rm -rf|arbitrary (code|command)|remote code|\bexecute (shell|arbitrary|code|commands?)\b|run (shell|arbitrary) (commands?|code))/i;
   if (danger.test(low)) add("high", "dangerous-capability",
     "Tool exposes code/command execution or destructive filesystem ops.", (low.match(danger) || [""])[0]);
 
