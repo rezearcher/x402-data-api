@@ -2627,21 +2627,25 @@ export class CreditLedger extends DurableObject<Env> {
 export class TrafficLog extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+    // DDL once per DO instance; index on ts so windowed reads don't full-scan (CF free-tier rows_read cap).
+    ctx.blockConcurrencyWhile(async () => {
+      ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS hits (ts INTEGER, path TEXT, method TEXT, ua TEXT)");
+      ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS hits_ts ON hits(ts)");
+      // prune rows older than 7d (bounded batch) so the table stops growing forever
+      ctx.storage.sql.exec("DELETE FROM hits WHERE rowid IN (SELECT rowid FROM hits WHERE ts < ? LIMIT 5000)", Math.floor(Date.now() / 1000) - 7 * 86400);
+    });
   }
 
   async logHit(path: string, method: string, ua: string): Promise<void> {
-    await this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS hits (ts INTEGER, path TEXT, method TEXT, ua TEXT)");
     await this.ctx.storage.sql.exec("INSERT INTO hits (ts, path, method, ua) VALUES (?, ?, ?, ?)", Math.floor(Date.now() / 1000), path, method, ua);
   }
 
   async getPaid(windowSeconds: number = 86400): Promise<Array<{ path: string; payer: string; count: number }>> {
-    await this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS hits (ts INTEGER, path TEXT, method TEXT, ua TEXT)");
     const cursor = await this.ctx.storage.sql.exec("SELECT path, ua, COUNT(*) FROM hits WHERE method = 'PAID' AND ts > ? GROUP BY path, ua ORDER BY 3 DESC", Math.floor(Date.now() / 1000) - windowSeconds);
     return Array.from(cursor.raw()).map((row) => ({ path: String(row[0]), payer: String(row[1]), count: Number(row[2]) }));
   }
 
   async getStats(windowSeconds: number = 86400): Promise<Array<{ path: string; count: number }>> {
-    await this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS hits (ts INTEGER, path TEXT, method TEXT, ua TEXT)");
     const cursor = await this.ctx.storage.sql.exec("SELECT path, COUNT(*) FROM hits WHERE method != 'PAID' AND ts > ? GROUP BY path ORDER BY 2 DESC", Math.floor(Date.now() / 1000) - windowSeconds);
     return Array.from(cursor.raw()).map((row) => ({ path: String(row[0]), count: Number(row[1]) }));
   }
