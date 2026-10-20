@@ -28,3 +28,4 @@ Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; A
 - 2026-10-20T05:40Z c40: 0 buyer replies (Gmail: LinkedIn/recruiters/CF alert only; sensor: Sluzen bot only). 5 listing PRs still open, no merges; verified-catalog #1-4 silent; Pages repo 0 views. Opened trustscoreagent/trustscoreagent#160 (service-trust registry; ask: registry listing + optional gate/swap tool in langchain/crewai integrations). Krystian not re-emailed.
 - 2026-10-20T05:50Z c40: opened felippeyann/agentfi issue (pre-swap gate). Skipped Vellar (Stellar), Mandate (hackathon, testnet).
 - 2026-10-20T06:00Z c40: pitched pay-guard#108, Haven-AI#4107, pokter#213 (from merged-PR searches 'x402 sdk/middleware').
+- 2026-10-20T06:10Z c40: pitched LiquidLogicX/liquid-logic-agent (Base treasurer that PAYS allowlisted x402 endpoints = real buyer archetype). Other 'x402 client/facilitator/agent' results mostly Stellar/billing noise.
