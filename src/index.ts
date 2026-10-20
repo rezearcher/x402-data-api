@@ -1024,6 +1024,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/chain/nonce?address=<0x…> — $0.01 — tx count (nonce), latest + pending.
 - GET ${BASE}/chain/block?number=<n|latest> — $0.005 — block summary (hash, timestamp, tx count, gas, base fee).
 - GET ${BASE}/ai/ask?q=<prompt> — $0.002 — cheap LLM answer (Llama 3.2 3B), no API key.
+- POST ${BASE}/v1/chat/completions — $0.002 — OpenAI-compatible chat (Llama 3.3 70B, stream:true supported), no API key; point any OpenAI SDK base URL here with an x402 fetch wrapper. Free real-model try: POST ${BASE}/v1/chat/completions/preview (3/day/IP). Model list: GET ${BASE}/v1/models.
 - GET ${BASE}/chain/erc20-meta?token=<0x…> — $0.01 — ERC-20 name/symbol/decimals/totalSupply.
 - GET ${BASE}/chain/is-contract?address=<0x…> — $0.002 — contract vs EOA + bytecode size.
 - GET ${BASE}/chain/fee-estimate — $0.003 — Base EIP-1559 fee tiers (slow/standard/fast) + transfer cost.
