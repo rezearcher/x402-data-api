@@ -678,9 +678,17 @@ app.get("/internal/traffic-stats", async (c) => {
   if (!c.env.TRAFFIC_LOG) return c.json({ error: "traffic logging not configured" }, 503);
   const hours = Math.min(Math.max(parseInt(c.req.query("window_hours") ?? "24") || 24, 1), 720);
   const stub = c.env.TRAFFIC_LOG.get(c.env.TRAFFIC_LOG.idFromName("default"));
-  if (c.req.query("paid") === "1") return c.json({ ok: true, window_hours: hours, paid: await stub.getPaid(hours * 3600) });
-  const stats = await stub.getStats(hours * 3600);
-  return c.json({ ok: true, window_hours: hours, stats, timestamp: Math.floor(Date.now() / 1000) });
+  // Fail-soft + self-diagnosing: the DO SQLite read can throw (free-tier
+  // rows_read/storage limit, or a transient DO reset). An opaque 500 made this
+  // demand-measurement endpoint useless — surface the real error to the
+  // authed caller instead so it stays actionable.
+  try {
+    if (c.req.query("paid") === "1") return c.json({ ok: true, window_hours: hours, paid: await stub.getPaid(hours * 3600) });
+    const stats = await stub.getStats(hours * 3600);
+    return c.json({ ok: true, window_hours: hours, stats, timestamp: Math.floor(Date.now() / 1000) });
+  } catch (e) {
+    return c.json({ ok: false, window_hours: hours, error: "traffic_read_failed", detail: e instanceof Error ? e.message : String(e) }, 500);
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -2784,10 +2792,18 @@ export class TrafficLog extends DurableObject<Env> {
     super(ctx, env);
     // DDL once per DO instance; index on ts so windowed reads don't full-scan (CF free-tier rows_read cap).
     ctx.blockConcurrencyWhile(async () => {
-      ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS hits (ts INTEGER, path TEXT, method TEXT, ua TEXT)");
-      ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS hits_ts ON hits(ts)");
-      // prune rows older than 7d (bounded batch) so the table stops growing forever
-      ctx.storage.sql.exec("DELETE FROM hits WHERE rowid IN (SELECT rowid FROM hits WHERE ts < ? LIMIT 5000)", Math.floor(Date.now() / 1000) - 7 * 86400);
+      // Fail-soft: a throw anywhere here (e.g. free-tier rows_written limit hit
+      // by the prune DELETE) would brick the whole DO so EVERY method 500s —
+      // which is exactly how the demand-measurement read broke. DDL and prune
+      // are best-effort; never let them abort construction.
+      try {
+        ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS hits (ts INTEGER, path TEXT, method TEXT, ua TEXT)");
+        ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS hits_ts ON hits(ts)");
+        // prune rows older than 7d (bounded batch) so the table stops growing forever
+        ctx.storage.sql.exec("DELETE FROM hits WHERE rowid IN (SELECT rowid FROM hits WHERE ts < ? LIMIT 5000)", Math.floor(Date.now() / 1000) - 7 * 86400);
+      } catch {
+        /* best-effort: table may already exist and reads still work */
+      }
     });
   }
 
@@ -2796,12 +2812,12 @@ export class TrafficLog extends DurableObject<Env> {
   }
 
   async getPaid(windowSeconds: number = 86400): Promise<Array<{ path: string; payer: string; count: number }>> {
-    const cursor = await this.ctx.storage.sql.exec("SELECT path, ua, COUNT(*) FROM hits WHERE method = 'PAID' AND ts > ? GROUP BY path, ua ORDER BY 3 DESC", Math.floor(Date.now() / 1000) - windowSeconds);
+    const cursor = await this.ctx.storage.sql.exec("SELECT path, ua, COUNT(*) FROM hits WHERE method = 'PAID' AND ts > ? GROUP BY path, ua ORDER BY 3 DESC LIMIT 500", Math.floor(Date.now() / 1000) - windowSeconds);
     return Array.from(cursor.raw()).map((row) => ({ path: String(row[0]), payer: String(row[1]), count: Number(row[2]) }));
   }
 
   async getStats(windowSeconds: number = 86400): Promise<Array<{ path: string; count: number }>> {
-    const cursor = await this.ctx.storage.sql.exec("SELECT path, COUNT(*) FROM hits WHERE method != 'PAID' AND ts > ? GROUP BY path ORDER BY 2 DESC", Math.floor(Date.now() / 1000) - windowSeconds);
+    const cursor = await this.ctx.storage.sql.exec("SELECT path, COUNT(*) FROM hits WHERE method != 'PAID' AND ts > ? GROUP BY path ORDER BY 2 DESC LIMIT 500", Math.floor(Date.now() / 1000) - windowSeconds);
     return Array.from(cursor.raw()).map((row) => ({ path: String(row[0]), count: Number(row[1]) }));
   }
 }
