@@ -19,3 +19,4 @@ Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; A
 2026-10-20T01:45Z c19b: short-keyword repo searches (rugpull/honeypot/token-safety/scam-token base) return only competitor reference agents (Odds7/fia-risk-aware-swapper = Fia Signals buyer, stale Apr) and hobby repos; no pitch. Multiword gh queries return 0 - use 1-2 words.
 2026-10-20T01:50Z c19c: logged IDEAS competitor-buyer-repo displacement (Fia reference swapper stale since Apr, low odds).
 - 2026-10-20T02:10Z c24: 0 buyer replies, Krystian silent (not double-sent), Hermes#141825 open.
+- c26 02:25Z: Gmail 0 buyer replies (CF DO-limit alert, newsletters); issue sensor newest = Sluzen bot (guidoalejo). Wallet flat 32.81524.
