@@ -2,3 +2,7 @@ https://github.com/Nikolife2016/pulsefeed-x402/issues/39
 https://github.com/Fizzl13/x402-examples/issues/255
 https://github.com/bytesbrains/16ane/issues/81
 https://github.com/ucsandman/x402watch/issues/5
+https://github.com/revanthrajeev/spendveto/issues/4
+https://github.com/presidio-v/presidio-hardened-x402/issues/151
+https://github.com/skew-labs/economic-machine/issues/23
+https://github.com/withgrokbot/verified-catalog/issues/5

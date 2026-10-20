@@ -4,3 +4,4 @@
 - c61c: 7 directory/aggregator pitches
 - 2026-10-20 c65: found bridge.liquidlogicx.com/mcp =401; sent Miles paste-mode instructions (msg 1a15932ffcdcca26) in thread 1a157c9da1e86694; awaiting tools array.
 - c66: 4 pitches (pulsefeed-x402#39, x402-examples#255, 16ane#81, x402watch#5); earlier 'remaining gateways' were already pitched in c61. Fresh-repo search 'x402' sort=updated yields unpitched buyers-side repos.
+- c66b: 4 more pitches (spendveto#4, presidio-hardened-x402#151, economic-machine#23, verified-catalog#5)
