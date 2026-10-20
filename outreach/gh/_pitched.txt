@@ -255,3 +255,5 @@ github.com/Noooblien/mcpgate 2026-10-20
 github.com/preloop/preloop 2026-10-20
 github.com/dbalchunas2-pixel/forculus 2026-10-20
 https://github.com/Nikolife2016/pulsefeed-x402/issues/41
+https://github.com/alextitonis/fly.ai/issues/14
+https://github.com/audifyx/og-scan/issues/258
