@@ -45,3 +45,4 @@ Kitomv/KuroTrade
 BackTrackCo/tenjin-agent
 https://github.com/LPSignals/lpsignal-mcp/issues/1
 
+https://github.com/Akixama/intent-firewall/issues/1
