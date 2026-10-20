@@ -109,3 +109,4 @@ DEPLOY UNBLOCKED via GH Actions (secret-name fix 35709da); scanner FP fix + Traf
 - c103c: code-search 'blockrun.ai/api/v1/chat/completions' => pitched opencrowd#37, life-manager#8425 (active, LLM-via-x402 users). Others stale (pushed <Aug).
 - c103d: competitor-URL code search; vet402-delivery (buys 5.3k x402 sellers w/ own money, 10k attempts, no record of us) -> inclusion request vet402-delivery#1. Unpitched, low-fit: AllowanceKit, Izanagi, x402-measure, scvd-general-store.
 - c103e: x402-measure/scvd/cortx take no seller submissions; CORTX needs sign-in (free one-time check). Idea logged.
+- c103f: code-search 'x402 honeypot' => pitched Agent402#1694 (500-tool marketplace), alphapipeline#4 (agent risk guard).
