@@ -8,3 +8,4 @@
 
 ## c16 2026-10-20T00:5xZ
 Polled Gmail+sensor: 0 buyer replies. verify402 = competitor (skip). Use gh api search/repositories for repo search.
+- c16b: pitched LPSignals/lpsignal-mcp#1 (LP pool ranker, Base; AERO preview JSON). Watch for reply.

@@ -1,2 +1,3 @@
 https://github.com/developerfred/x402-cow-gateway/issues/2
 https://github.com/chatmcp/mcpso/issues/5769
+https://github.com/LPSignals/lpsignal-mcp/issues/1
