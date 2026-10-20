@@ -80,3 +80,5 @@ On 2026-10-19 the loop (c14c) and the interactive monitor both answered Krystian
 - I15 (c17): Bazaar 'token security honeypot' top-17 are all rivals (rallylive multi-chain w/ measured buy/sell tax, agentsvc, trust-agent, tanod, marketintelligenceapi $0.02). Differentiators they advertise that we lack: measured buy/sell tax %, multi-chain. Our description refresh needs a self-pay (forbidden) so Bazaar text can't be improved; tax measurement stays demand-gated (build only if a named buyer asks).
 
 - I16 (cycle 18, DOWNVOTE of "more GitHub repo sweeps"): 7 repo queries + 2 web searches again returned only pitched repos, rivals (agentrisk-*, picklecheck, quvr-pulse) or Solana. Stop sweeping; next new prospects only via named replies, the 05:00Z queued sends, or B2B-embedder outreach.
+
+- I17 (cycle 18): token-report now reports MEASURED `security.transferTaxBps` (eth_simulateV1 balance-delta on a plain transfer; deployed 48c7c425, AERO=0). Covers fee-on-transfer tokens, NOT DEX buy/sell tax (still null). Positive case (a real taxed token) NOT yet verified — don't claim detection accuracy (Claims Law) until tested on a known taxed Base token.

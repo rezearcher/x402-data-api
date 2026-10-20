@@ -6025,11 +6025,47 @@ interface HoneypotSim {
   slot_layout: string | null;
   transferable: boolean | null;
   revert_reason: string | null;
+  transfer_tax_bps?: number | null;
   note: string;
 }
 
 const HONEYPOT_SIM_METHOD =
   "eth_call with a stateDiff override: gives a synthetic wallet (0x1111...1111) a token balance out-of-band (no real funds move) by overriding the ERC-20's balance-mapping storage slot, then attempts a plain transfer() to a second synthetic wallet and checks for a revert. Detects wallet-to-wallet transfer blocks (the most common honeypot/blacklist pattern). This is NOT a full DEX buy+sell round-trip through a router (Aerodrome/Uniswap) — no buy_tax_pct/sell_tax_pct is computed. A token could in principle allow plain transfers while still blocking sells specifically through its LP pair, or vice versa; treat transferable:false as a strong red flag and transferable:true as 'no basic transfer-block found', not a full sellability guarantee.";
+
+// Measured fee-on-transfer: eth_simulateV1 runs [balanceOf(R), transfer(H->R, X), balanceOf(R)]
+// in ONE simulated block with the same stateDiff, so received = after - before. This is a
+// plain-transfer tax (catches fee-on-transfer/reflection tokens), NOT a DEX buy/sell tax.
+// Own fetch loop (no rpcMarkBad): a provider lacking eth_simulateV1 must not be demoted for other calls.
+async function measureTransferTaxBps(token: string, key: string, amount: bigint): Promise<number | null> {
+  const word = (n: bigint) => n.toString(16).padStart(64, "0");
+  const bal = { to: token, data: `0x70a08231${PROBE_RECIPIENT.slice(2).toLowerCase().padStart(64, "0")}` };
+  const body = JSON.stringify({
+    jsonrpc: "2.0", id: 1, method: "eth_simulateV1",
+    params: [{
+      blockStateCalls: [{
+        stateOverrides: { [token]: { stateDiff: { [key]: "0x" + word(PROBE_VALUE) } } },
+        calls: [bal,
+          { from: PROBE_HOLDER, to: token, data: `0xa9059cbb${PROBE_RECIPIENT.slice(2).toLowerCase().padStart(64, "0")}${word(amount)}` },
+          bal],
+      }],
+      validation: false,
+    }, "latest"],
+  });
+  for (const url of rpcOrder().slice(0, 2)) {
+    try {
+      const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body, signal: AbortSignal.timeout(4000) });
+      if (!res.ok) continue;
+      const j = (await res.json()) as { result?: { calls?: { status?: string; returnData?: string }[] }[] };
+      const c = j.result?.[0]?.calls;
+      if (!c || c.length !== 3 || c[1].status !== "0x1") continue;
+      const before = BigInt(c[0].returnData || "0x0"), after = BigInt(c[2].returnData || "0x0");
+      const received = after - before;
+      if (received < 0n || received > amount) return null;
+      return Number(((amount - received) * 10000n) / amount);
+    } catch { continue; }
+  }
+  return null;
+}
 
 async function simulateTransferProbe(token: string): Promise<HoneypotSim> {
   const balanceOfData = (holder: string) => `0x70a08231${holder.slice(2).toLowerCase().padStart(64, "0")}`;
@@ -6118,6 +6154,7 @@ async function simulateTransferProbe(token: string): Promise<HoneypotSim> {
       note: "A synthetic wallet holding this token could NOT complete a plain transfer() — it reverted. Strong honeypot / transfer-restriction signal.",
     };
   }
+  const transferTaxBps = await measureTransferTaxBps(token, key, sendAmount);
   return {
     sim_status: "tested",
     method: HONEYPOT_SIM_METHOD,
@@ -6125,6 +6162,7 @@ async function simulateTransferProbe(token: string): Promise<HoneypotSim> {
     slot_layout: slotLayout,
     transferable: true,
     revert_reason: null,
+    transfer_tax_bps: transferTaxBps,
     note: "A synthetic wallet holding this token successfully completed a plain transfer() with no revert. No basic transfer-block detected (does not rule out DEX-pair-specific sell restrictions).",
   };
 }
@@ -6205,6 +6243,10 @@ async function analyzeTokenSecurity(token: string): Promise<TokenSecurityResult>
     if (sim.sim_status === "tested" && sim.transferable === false) {
       score += 75;
       flags.push("simulated transfer reverted — token appears non-transferable / possible honeypot");
+    }
+    if (sim.sim_status === "tested" && typeof sim.transfer_tax_bps === "number" && sim.transfer_tax_bps >= 500) {
+      score += 25;
+      flags.push(`measured ${(sim.transfer_tax_bps / 100).toFixed(1)}% fee on a plain transfer() (fee-on-transfer token)`);
     }
     if (proxy.is_proxy) {
       score += 15;
@@ -6497,7 +6539,8 @@ async function buildTokenReport(token: string) {
       sellable,
       buyTaxBps: null as number | null,
       sellTaxBps: null as number | null,
-      taxNote: "buy/sell tax not measured by the transfer simulation; taxMutable reflects whether the owner can change fees",
+      transferTaxBps: simTested ? (sim!.transfer_tax_bps ?? null) : null,
+      taxNote: "buyTaxBps/sellTaxBps (DEX swap tax) are not measured; transferTaxBps is the MEASURED fee on a plain transfer() via eth_simulateV1 (null if the RPC could not simulate it); taxMutable reflects whether the owner can change fees",
       taxMutable: caps ? caps.has_fee_setter : null,
       ownerRenounced,
       upgradeableProxy: sec ? sec.proxy.is_upgradeable : null,
