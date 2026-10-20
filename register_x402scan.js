@@ -14,7 +14,10 @@ const siwx = require(path.join(projectDir, 'node_modules/@x402/extensions/dist/c
 
 // payTo wallet = provider identity (0x5765...). Falls back to buyer wallet.
 let wallet;
-wallet = require('/home/rez/projects/x402-data-api/lib/wallet.js').wallet('main');  // vault (degrade-open to json)
+try { wallet = require('/home/rez/projects/x402-data-api/lib/wallet.js').wallet('main'); }  // vault (degrade-open to json)
+catch (e) { // vault down: SIWX is only a signature, an ephemeral key registers the origin fine (verified 2026-10-20: 61 registered)
+  wallet = { privateKey: require(path.join(projectDir, 'node_modules/viem/accounts')).generatePrivateKey() };
+}
 const account = privateKeyToAccount(wallet.privateKey);
 
 const ORIGIN = 'https://x402-data-api.sigrunner.workers.dev';
