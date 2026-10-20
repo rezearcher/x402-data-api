@@ -6869,6 +6869,20 @@ app.get("/check", (c) => {
   );
 });
 
+// Absolute, directly-quotable paid URL built from the live preview request: drop the "/preview"
+// segment and keep the caller's exact query (token, side, notional_usd). An agent can feed the
+// result straight into an x402 client (wrapFetchWithPayment) or a hosted quote rail with zero
+// string-munging — the paid-handoff step that was the main conversion friction on the 429 path.
+function paidUrlFrom(c: any): string {
+  try {
+    const u = new URL(c.req.url);
+    u.pathname = u.pathname.replace(/\/preview$/, "");
+    return u.toString();
+  } catch {
+    return "";
+  }
+}
+
 // Integrators pass the token under many names; never silently fall back to a demo token for a safety gate.
 function tokenQ(c: any): string | undefined {
   for (const k of ["token", "address", "tokenAddress", "token_address", "contract", "contractAddress"]) {
@@ -6882,7 +6896,7 @@ app.get("/chain/token-report/preview", async (c) => {
   if (tq !== undefined && !ADDR_RE.test(tq) && !PREVIEW_DEMO_TOKENS[tq.toLowerCase()]) return c.json({ error: "token must be a 0x-prefixed 20-byte Base address (or demo: usdc|weth|cbbtc|aero|degen)" }, { status: 400 });
   try {
     const t = await trialToken(c, tq);
-    if (t.exhausted) return c.json({ error: "free real-token trial exhausted (3/day/IP) - this is NOT a result for the token you asked about", trial: { real_token_checks_left_today: 0 }, paid: `GET /chain/token-report?token=${tq}`, pay_with: "x402: npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f(url) - pays USDC on Base automatically. Docs: https://api.greyridgesignals.ai/llms.txt" }, { status: 429 });
+    if (t.exhausted) { const pu = paidUrlFrom(c); return c.json({ error: "free real-token trial exhausted (3/day/IP) - this is NOT a result for the token you asked about", trial: { real_token_checks_left_today: 0 }, paid: pu, paid_url: pu, price_usdc: "0.01", pay_with: `x402: npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f("${pu}") - pays USDC on Base automatically. Docs: https://api.greyridgesignals.ai/llms.txt` }, { status: 429 }); }
     const result = await buildTokenReport(t.token);
     return c.json({
       ...result,
@@ -6912,11 +6926,11 @@ app.get("/gate/swap/preview", async (c) => {
   if (tq !== undefined && !ADDR_RE.test(tq) && !PREVIEW_DEMO_TOKENS[tq.toLowerCase()]) return c.json({ error: "token must be a 0x-prefixed 20-byte Base address (or demo: usdc|weth|cbbtc|aero|degen)" }, { status: 400 });
   try {
     const t = await trialToken(c, tq);
-    if (t.exhausted) return c.json({ error: "free real-token trial exhausted (3/day/IP) - this is NOT a result for the token you asked about", trial: { real_token_checks_left_today: 0 }, paid: `GET /gate/swap?token=${tq}`, pay_with: "x402: npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f(url) - pays USDC on Base automatically. Docs: https://api.greyridgesignals.ai/llms.txt" }, { status: 429 });
+    if (t.exhausted) { const pu = paidUrlFrom(c); return c.json({ error: "free real-token trial exhausted (3/day/IP) - this is NOT a result for the token you asked about", trial: { real_token_checks_left_today: 0 }, paid: pu, paid_url: pu, price_usdc: "0.008", pay_with: `x402: npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f("${pu}") - pays USDC on Base automatically. Docs: https://api.greyridgesignals.ai/llms.txt` }, { status: 429 }); }
     const pSide = c.req.query("side") === "sell" ? "sell" : "buy";
     const pNotional = Number(c.req.query("notional_usd") ?? "100");
     const out = await buildSwapGate(t.token, pSide, Number.isFinite(pNotional) && pNotional > 0 ? pNotional : 100);
-    if (t.left !== null) return c.json({ ...out, trial: { real_token_checks_left_today: t.left }, note: t.left === 0 && t.token === previewToken(c.req.query("token")) ? "Free real-token trial exhausted for today (3/day/IP); showing demo token. Paid: GET /gate/swap?token=<0x…> ($0.008)." : `Free real-token trial (${t.left} left today). Paid: GET /gate/swap?token=<0x…>&side=buy|sell&notional_usd=<n> ($0.008).` });
+    if (t.left !== null) return c.json({ ...out, trial: { real_token_checks_left_today: t.left }, paid_gate: { url: paidUrlFrom(c), price_usdc: "0.008" }, note: t.left === 0 && t.token === previewToken(c.req.query("token")) ? "Free real-token trial exhausted for today (3/day/IP); showing demo token. Paid: GET /gate/swap?token=<0x…> ($0.008)." : `Free real-token trial (${t.left} left today). Paid: GET /gate/swap?token=<0x…>&side=buy|sell&notional_usd=<n> ($0.008).` });
     return c.json({ ...out, note: "Free live sample (demo tokens via ?token=usdc|weth|cbbtc|aero|degen; default Base USDC, buy, $100) — full: GET /gate/swap?token=<0x…>&side=buy|sell&notional_usd=<n> ($0.008) for ANY Base ERC-20." });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
