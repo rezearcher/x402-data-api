@@ -1,0 +1,10 @@
+https://github.com/6ixtyy/switchbord/issues/1
+https://github.com/Agorean/claude-plugin/issues/1
+https://github.com/Pranavms09/decentralization_DI05_/issues/16
+https://github.com/Bitterbot-AI/bitterbot-desktop/issues/279
+https://github.com/alsk1992/CloddsBot/issues/154
+https://github.com/nirholas/agenti/issues/179
+https://github.com/desplega-ai/agent-swarm/issues/2269
+https://github.com/DrVelvetFog/x402-pilot/issues/13
+https://github.com/swarm-agent-operator/swarm-x402-mcp/issues/2
+https://github.com/OWASP/www-project-top-10-for-large-language-model-applications/issues/843

@@ -72,3 +72,5 @@ On 2026-10-19 the loop (c14c) and the interactive monitor both answered Krystian
 - I10 (c15): goat-sdk/goat last merged PR 2025-08 (dead); elizaos-plugins/registry repo gone. Don't pursue framework-plugin PRs there.
 
 - I12 (c17, 2026-10-20): token-report/gate-swap previews silently fell back to demo USDC when an integrator passed ?address=/?tokenAddress= (wrong-token verdict on a SAFETY gate = trust killer). Fixed: alias params (address|tokenAddress|token_address|contract) on preview AND paid routes; malformed explicit token -> 400. Deployed 6e578eab. Lesson: test integrator-natural param names, never silently default on a gate.
+
+- I13 (c17): issue_reply_watch.sh preferred a stale GH_TOKEN_CLASSIC from the environment (revoked -> 401 -> silent 0 replies). Now 1Password first, env last; also auto-discovers every open issue/PR we authored with comments (outreach/gh/issues_auto.txt) so no pitch is unregistered. Lesson: a sensor that reports 0 must distinguish "no data" from "auth failed".

@@ -3,7 +3,7 @@
 cd "$(dirname "$0")/.."
 # Secret source (migration cutover 2026-10-19): prefer 1Password vault, fall back
 # to plaintext .env so this NEVER breaks if op/the service account is unavailable.
-T="${GH_TOKEN_CLASSIC:-}"
+T=""
 if [ -z "$T" ]; then
   [ -f "$HOME/.config/greyridge/op.env" ] && . "$HOME/.config/greyridge/op.env" 2>/dev/null
   OP="$(command -v op || echo "$HOME/bin/op")"
@@ -11,7 +11,14 @@ if [ -z "$T" ]; then
     T=$("$OP" read "op://Division/GH_TOKEN_CLASSIC/credential" 2>/dev/null)
   fi
 fi
+[ -z "$T" ] && T="${GH_TOKEN_CLASSIC:-}"
 [ -z "$T" ] && T=$(grep -rh ^GH_TOKEN_CLASSIC .env ~/.env ~/.hermes/.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')
+# Auto-discover every open issue/PR we authored so none is missed by manual registration (I13).
+curl -s -G -H "Authorization: token $T" --data-urlencode "q=author:rezearcher is:open comments:>0 -user:rezearcher" -d per_page=100 -d sort=updated https://api.github.com/search/issues | python3 -c "
+import sys,json
+try:
+  for i in json.load(sys.stdin)['items']: print(i['html_url'].replace('/pull/','/issues/'))
+except Exception: pass" > outreach/gh/issues_auto.txt
 OUT=~/.hermes/data/x402_issue_replies; mkdir -p "$OUT"
 cat outreach/gh/issues*.txt | grep -o 'https://github.com/[^ ]*/issues/[0-9]*' | sort -u | while read u; do
   curl -s -H "Authorization: token $T" "https://api.github.com/repos/${u#https://github.com/}/comments" | U="$u" python3 -c "
