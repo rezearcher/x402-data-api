@@ -23,3 +23,4 @@ https://github.com/nuanu-ai/agent-payment-node/issues/561
 https://github.com/twzrd-sol/twzrd-trust/issues/214
 https://github.com/nuanu-ai/agentify/issues/164
 https://github.com/d85rcrcy27-creator/ArbiVault/issues/39
+https://github.com/dorjenorbulim/michael-trading-agent/issues/11
