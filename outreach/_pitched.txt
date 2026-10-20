@@ -4,3 +4,6 @@ dsh-web3 veyline-mcp cedulon
 nirholas/crypto-vision#18
 ak10082247-max/base-trading-bot-starter#2 sukrutkrdg/x402-bazaar-mcp#12 h100envy/crawl-hive#4
 forgemeshlabs/utility-grid-mcp nirholas/x402-payments-mcp whiteknightonhorse/APIbase
+https://github.com/Nutshell2000/agent-data-tools/issues/195
+https://github.com/aronaplana-os/arona-gateway-skill/issues/1
+https://github.com/bridgenode-ai/bridgenode-mcp/issues/34
