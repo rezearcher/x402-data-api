@@ -1,3 +1,4 @@
+https://github.com/HelpCode-ai/anythingmcp/issues/1174
 https://github.com/Agorean/claude-plugin/issues/1
 https://github.com/ValentinTorassa/VT-Agent-Firewall/issues/1
 https://github.com/d-hinders/Haven-AI/issues/4107
@@ -9,7 +10,6 @@ https://github.com/api-evangelist/cracked/issues/1
 https://github.com/samanhappy/mcphub/issues/1357
 https://github.com/guardana/control/issues/27
 https://github.com/Kuadrant/mcp-gateway/issues/1617
-https://github.com/HelpCode-ai/anythingmcp/issues/1174
 https://github.com/successaje/pokter/issues/213
 https://github.com/haoruilee/awesome-agent-native-services/issues/231
 https://github.com/noobshole/svalin-agent/issues/2

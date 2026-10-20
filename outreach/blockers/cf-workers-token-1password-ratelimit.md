@@ -12,3 +12,6 @@ The env token CF_API_TOKEN (id fa1b9941bd3697c79b50ae821c3034a1, account 9b5a408
 1. https://dash.cloudflare.com/profile/api-tokens (or Manage Account > Account API Tokens) -> edit that token -> add Account > Workers Scripts > Edit (+ Workers KV Storage Edit, Durable Objects) -> Save. Token value unchanged, so the env var works immediately; next cycle deploys.
 2. Optional: `gh secret set CLOUDFLARE_API_TOKEN` on rezearcher/x402-data-api -> .github/workflows/deploy.yml (added c90) deploys on every push to main, independent of 1Password.
 Unlocks: TrafficLog DO read-cap fix (75ee84f) + trial 429 + scanner round-3 for Miles.
+
+## RESOLVED 2026-10-20 c99
+Deploy blocker was a SECRET NAME MISMATCH: deploy.yml read secrets.CLOUDFLARE_API_TOKEN but the repo secret is CF_WORKERS_TOKEN. Fixed (35709da); `gh workflow run deploy.yml` succeeded (run 39462465180). Deploy path = push to main touching src/** or `gh workflow run deploy.yml`. No Rez action needed.
