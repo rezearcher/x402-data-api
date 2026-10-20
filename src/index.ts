@@ -1158,6 +1158,19 @@ const FLAGSHIP_OPERATION_IDS: Record<string, string> = {
   "/v1/chat/completions": "openai_compatible_chat_completions_llm",
 };
 
+// Router-search aliases (Agent402 sweep 2026-10-20: commodity routes ranked outside top 3 because
+// buyer queries say "fear and greed index" / "defi yield apy" / "gas price base" / "get eth price").
+const ROUTER_SLUG_ALIASES: Record<string, string> = {
+  "/crypto/fear-greed": "fear_and_greed_index",
+  "/defi/yields": "defi_yield_apy",
+  "/chain/gas-price": "base_gas_price",
+  "/chain/eth-usd": "get_eth_price",
+  "/crypto/prices": "crypto_prices_bitcoin",
+  "/crypto/funding": "funding_rates",
+  "/pm/markets": "polymarket_odds",
+  "/chain/balance": "base_wallet_balance",
+};
+
 function withOperationIds<T extends Record<string, Record<string, any>>>(paths: T): T {
   for (const [path, item] of Object.entries(paths)) {
     for (const [method, op] of Object.entries(item)) {
@@ -1188,6 +1201,7 @@ function withOperationIds<T extends Record<string, Record<string, any>>>(paths: 
       // matching works; dns/whois use the names buyers search for.
       if (path.startsWith("/dns/")) op.operationId = "dns_lookup";
       else if (path.startsWith("/whois/")) op.operationId = "domain_whois";
+      else if (ROUTER_SLUG_ALIASES[path]) op.operationId = ROUTER_SLUG_ALIASES[path];
       else op.operationId = words.length === 0 ? "root" : words.join("_").replace(/-/g, "_");
     }
   }
