@@ -59,6 +59,9 @@ Krystian/agenticpay asked latency + uptime + free-tier; we DID answer uptime but
 ### I9 — HOLDING IS NOT AN OPTION at $0; every cycle ships one concrete improvement. **[HIGH]**
 "Saturation" / "polled replies, nothing new" / "waiting for a reply" is a FAILED cycle, not a valid outcome. The only reason to hold is nothing-left-to-improve, which is false while external revenue = $0. While a reply is pending, still ship ONE of: (a) advance a live conversation, (b) distribution — get embedded where integrators already are (framework tool registries like the LangChain/CrewAI package, their communities), (c) product must-have-ness. Cold GitHub-issue pitches are near-zero-conversion seller-noise — prefer (b)/(c) over more of them. *Evidence: cycle 11 "saturation" = a do-nothing cycle; Rez 2026-10-19 "you always choose nothing".*
 
+### I11 — ONE actor per live thread: the autonomous loop OWNS outreach/sends; a monitor/human session must NEVER also send. **[HIGH]**
+On 2026-10-19 the loop (c14c) and the interactive monitor both answered Krystian's uptime question within 12s -> two near-identical emails (thread msg4+msg5) to the prospect. A pre-send thread read does NOT prevent this (the other actor's send lands in the same window = race). Rule: only the loop sends on an active outreach thread; any other session observes and records, never sends. If a human must intervene on a thread, PAUSE the loop first. *Evidence: thread 1a1524ad msg4/msg5, 17:35:24 vs 17:35:36.*
+
 ---
 
 ## GRAVEYARD (pruned — do NOT re-run)

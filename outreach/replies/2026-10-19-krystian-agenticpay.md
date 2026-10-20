@@ -13,3 +13,6 @@ He asked latency + UPTIME + free-tier; our reply covered latency + tier but NOT 
 ## CORRECTION + FOLLOW-UP SENT (2026-10-19 ~19:3xZ)
 CORRECTION: msg3 DID answer uptime (point 4: no account/key/rate-limit to fail, ~1s settle, no-charge-on-error, "no SLA, small service"). Earlier "unanswered" note was wrong — it was answered but WEAK.
 ACTION: sent value-add follow-up (msg 1a156bc3160dc77b, thread 1a1524ad) with NEW measured reliability data: token-report 100% p50 1.1s/p95 1.9s, gate/swap 100% p50 1.3s/p95 2.0s (continuous 5-min probe, "accumulating toward published figure" — no SLA claim, Claims Law OK) + multi-provider RPC failover + free test-your-own-token + the direct ask. Ball now back in Krystian's court — do NOT send again until he replies.
+
+## DOUBLE-SEND (2026-10-19 17:35 PDT) — root cause recorded
+Thread now has msg4 (LOOP, 17:35:24) + msg5 (MONITOR/manual, 17:35:36), 12s apart, both answering uptime with measured data. The loop and the interactive monitor both acted on the same live thread simultaneously = double-send to the prospect. NOT sending a 3rd (apology would amplify). Ball in Krystian's court. Do NOT send again until he replies.
