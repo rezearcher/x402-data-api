@@ -1,3 +1,4 @@
+https://github.com/0xcuy/adexto/issues/4
 https://github.com/NousResearch/hermes-agent/issues/141825
 https://github.com/gelu22/x402-gateway-omarchy/issues/3
 https://github.com/HelpCode-ai/anythingmcp/issues/1174

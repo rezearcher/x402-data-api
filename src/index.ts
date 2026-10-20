@@ -1154,6 +1154,7 @@ const FLAGSHIP_OPERATION_IDS: Record<string, string> = {
   "/chain/token-report": "token_honeypot_check",
   "/chain/token-security": "honeypot_check",
   "/gate/swap": "pre_trade_token_safety_gate_swap",
+  "/v1/chat/completions": "openai_compatible_chat_completions_llm",
 };
 
 function withOperationIds<T extends Record<string, Record<string, any>>>(paths: T): T {
@@ -1173,7 +1174,7 @@ function withOperationIds<T extends Record<string, Record<string, any>>>(paths: 
       // Search-friendly names for the flagship safety routes: x402 routers (Agent402 /api/route)
       // rank mainly on slug-word match, and camelCase slugs never match "honeypot check".
       const flagship = FLAGSHIP_OPERATION_IDS[path];
-      if (flagship && method === "get") { op.operationId = flagship; continue; }
+      if (flagship && (method === "get" || path === "/v1/chat/completions")) { op.operationId = flagship; continue; }
       const words = path
         .split("/")
         .filter(Boolean)
