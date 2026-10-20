@@ -286,3 +286,8 @@ trigeochiral/snap-router-mcp#1
 domondi1/inferrail#174
 staccDOTsol/openzoo#104
 veenrek/mapleai-gateway#1
+gelu22/x402-gateway-omarchy#3
+daedalusdevelopmentgroup/ddg-agent-payable-services#18
+OnchainRouter/onchain-router-hermes#7
+laurenthalbrun/x402-agent-gateway#3
+plagtech/spraay-x402-gateway#3
