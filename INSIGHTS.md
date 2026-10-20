@@ -56,6 +56,9 @@ scripts/bazaar_rank.py (CDP /discovery/search, limit<=20): of 9 buyer-style quer
 ### I8 — Answer an integrator's reliability/uptime question with measured-so-far + failover; never go silent on it. **[HIGH]**
 Krystian/agenticpay asked latency + uptime + free-tier; we DID answer uptime but WEAKLY ("no SLA, small service"). Claims Law blocks a published SLA until ~14d samples, but that is NOT a reason for silence: answer with what's true TODAY — the uptime sensor's measured-so-far success%/p50/p95 (data/uptime_samples.jsonl + ~/.hermes/data/x402-data-api-uptime/latest.json, ~0 failures, n>100) PLUS the multi-provider RPC failover design (README, "never fails a paid call on one provider's rate limit"). General rule: when a prospect asks X and we OWN an asset that truthfully answers X, connect them — do not leave workstreams in isolation. His next touch must lead with this. *Evidence: thread 1a1524ad, reply 2026-10-19; uptime sensor live n>100.*
 
+### I9 — HOLDING IS NOT AN OPTION at $0; every cycle ships one concrete improvement. **[HIGH]**
+"Saturation" / "polled replies, nothing new" / "waiting for a reply" is a FAILED cycle, not a valid outcome. The only reason to hold is nothing-left-to-improve, which is false while external revenue = $0. While a reply is pending, still ship ONE of: (a) advance a live conversation, (b) distribution — get embedded where integrators already are (framework tool registries like the LangChain/CrewAI package, their communities), (c) product must-have-ness. Cold GitHub-issue pitches are near-zero-conversion seller-noise — prefer (b)/(c) over more of them. *Evidence: cycle 11 "saturation" = a do-nothing cycle; Rez 2026-10-19 "you always choose nothing".*
+
 ---
 
 ## GRAVEYARD (pruned — do NOT re-run)
