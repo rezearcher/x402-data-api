@@ -167,3 +167,5 @@ Agent skill (drop-in SKILL.md for OpenClaw/Hermes-style agents): https://github.
 
 ## CI gate for MCP servers
 `uses: rezearcher/x402-data-api/actions/mcp-scan@main` with `url:` or `tools-file:` runs the free MCP tool-poisoning preview in CI and fails on a `block` verdict. See `actions/mcp-scan/README.md`.
+
+> Python note: the default `Python-urllib` User-Agent is rejected with 403 at the Cloudflare edge. Use `requests`/`httpx`, or set any custom `User-Agent` header.
