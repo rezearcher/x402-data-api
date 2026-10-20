@@ -6,3 +6,10 @@ https://github.com/octelium/octelium/issues/86
 https://github.com/docker/mcp-gateway/issues/607
 https://github.com/ThinkWatchProject/ThinkWatch/issues/113
 https://github.com/HelpCode-ai/anythingmcp/issues/1174
+https://github.com/sitbon/magg/issues/22
+https://github.com/eL1fe/mcpdir/issues/30
+https://github.com/MCPFind/mcp-find/issues/304
+https://github.com/directorybase/toolidx/issues/6
+https://github.com/shibley/mymcptools/issues/12
+https://github.com/wwqking/mcp-radar/issues/29
+https://github.com/domdomegg/mcp-aggregator/issues/55
