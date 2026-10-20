@@ -1,0 +1,61 @@
+name: 'MCP Tool-Poisoning Scan'
+description: 'Static scan of an MCP server (URL or tools/list JSON) for tool poisoning, hidden unicode and prompt-injection. Fails the build on a block verdict.'
+branding:
+  icon: shield
+  color: gray-dark
+inputs:
+  url:
+    description: 'Streamable-HTTP MCP endpoint (e.g. https://host/mcp). Must answer initialize/tools/list over POST.'
+    required: false
+  tools-file:
+    description: 'Path to a JSON file holding the "tools" array from tools/list (for stdio or private servers; only tool metadata leaves the runner).'
+    required: false
+  fail-on:
+    description: 'Verdict that fails the job: block (default), review, or never.'
+    required: false
+    default: 'block'
+  endpoint:
+    description: 'Scanner base URL.'
+    required: false
+    default: 'https://x402-data-api.sigrunner.workers.dev'
+outputs:
+  verdict:
+    description: 'clear | review | block'
+    value: ${{ steps.scan.outputs.verdict }}
+  risk-score:
+    description: '0-100'
+    value: ${{ steps.scan.outputs.risk }}
+runs:
+  using: composite
+  steps:
+    - id: scan
+      shell: bash
+      env:
+        IN_URL: ${{ inputs.url }}
+        IN_FILE: ${{ inputs.tools-file }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        EP: ${{ inputs.endpoint }}
+      run: |
+        set -euo pipefail
+        if [ -n "$IN_FILE" ]; then
+          body=$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));print(json.dumps({"tools":d.get("tools",d) if isinstance(d,dict) else d}))' "$IN_FILE")
+          out=$(curl -sS -m 60 -X POST "$EP/scan/mcp/preview" -H 'content-type: application/json' -d "$body")
+        elif [ -n "$IN_URL" ]; then
+          out=$(curl -sS -m 60 -G "$EP/scan/mcp/preview" --data-urlencode "url=$IN_URL")
+        else
+          echo "::error::set either url or tools-file"; exit 2
+        fi
+        echo "$out"
+        verdict=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("verdict","error"))' "$out")
+        risk=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("risk_score",-1))' "$out")
+        echo "verdict=$verdict" >> "$GITHUB_OUTPUT"; echo "risk=$risk" >> "$GITHUB_OUTPUT"
+        {
+          echo "### MCP scan: **$verdict** (risk $risk/100)"
+          echo ""
+          echo "Itemized findings with evidence and OWASP mapping: x402 \`GET $EP/scan/mcp?url=...\` (\$0.05 USDC on Base). Measured accuracy and corpus size: https://github.com/rezearcher/x402-data-api/tree/main/benchmarks"
+        } >> "$GITHUB_STEP_SUMMARY"
+        case "$FAIL_ON" in
+          never) exit 0;;
+          review) [ "$verdict" = "clear" ] || { echo "::error::MCP scan verdict $verdict"; exit 1; };;
+          *) [ "$verdict" != "block" ] || { echo "::error::MCP scan verdict block"; exit 1; };;
+        esac
