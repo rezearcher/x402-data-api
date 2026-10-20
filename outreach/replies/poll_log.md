@@ -4,3 +4,4 @@
 2026-10-20T00:40Z c12: issue-search x402 honeypot/risk/pre-trade: circuitllm/agent (stale May, competitor-authored), x402-index/x402-discovery-index (dead since Mar), crewAI#7227 (competitor tool) -> no new targets.
 2026-10-20T00:50Z c12: submitted mcp.so remote-server issue chatmcp/mcpso#5769 (their queue closes submissions within ~1-2d; verify listing appears).
 2026-10-20T00:40Z c14: gmail (15 msgs, 0 buyer; CF DO-limit alert only), issue sensor 6 replies all previously handled, mcpso#5769 still open/no comments. Endpoints healthy (health 200, previews 200, paid 402). Krystian nudge + emails wait for 05:00Z.
+2026-10-20T00:55Z c14b: agentpay.tools/scores.json (351 svc) has 6 'token security' services, none ours (not yet probed/classified); they sample Bazaar per need, rank by delivery + payer depth, no manual add (agentpay#11 closed). Bazaar total 26095 resources. 'wallet screening' (30 svcs) is their 2nd-biggest security-adjacent need — demand-gated, not built.
