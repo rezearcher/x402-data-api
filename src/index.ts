@@ -1000,6 +1000,11 @@ app.get("/llms.txt", (c) => {
 Each paid GET returns HTTP 402 with an x402 v2 payment-required challenge (network eip155:8453 / Base, asset USDC).
 Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 
+## Start here — pre-trade safety gate for Base trading agents (flagship)
+- GET ${BASE}/gate/swap?token=<0x…>&side=buy&notional_usd=500 — $0.008 — ONE decision GO|HOLD|BLOCK sized to your trade (honeypot/sellability + liquidity price impact). Free try: ${BASE}/gate/swap/preview?token=usdc|weth|cbbtc|aero|degen (any real Base 0x address: 3 free/day/IP).
+- GET ${BASE}/chain/token-report?token=<0x…> — $0.01 — SAFE|CAUTION|AVOID + risk_score 0-100 + reasons. Free try: ${BASE}/chain/token-report/preview?token=aero
+- Measured uptime/latency of these (not an SLA): https://github.com/rezearcher/x402-data-api/blob/main/docs/STATUS.md
+
 ## Endpoints
 - Human/agent try-it page: ${BASE}/check?token=<0x… Base ERC-20> — free verdict card (3/day/IP).
 - GET ${BASE}/crypto/prices?coins=bitcoin,ethereum,solana — $0.004 — spot token prices + change_24h (DefiLlama), keyless.
