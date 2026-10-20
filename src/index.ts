@@ -7007,7 +7007,7 @@ function previewOf(r: McpScanResult) {
   for (const f of r.findings) by[f.severity]++;
   const upsell =
     r.findings.length === 0
-      ? "Clean on static checks. Run the full scan_mcp_server ($0.005) for the itemized report + evidence."
+      ? "Clean on static checks. Run the full /scan/mcp ($0.05 via x402) for the itemized report + evidence."
       : `${r.findings.length} issue(s) found${by.critical ? `, ${by.critical} CRITICAL` : ""}. This preview hides WHICH tools and the evidence — get the full itemized findings + remediation via the paid scan_mcp_server tool ($0.005 USDC) or GET /scan/mcp ($0.05).`;
   return {
     target: r.target,
