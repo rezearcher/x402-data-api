@@ -139,3 +139,4 @@ DEPLOY UNBLOCKED via GH Actions (secret-name fix 35709da); scanner FP fix + Traf
 - c113 (15:10 CDT): 0 buyer replies (Gmail noise; only new sensor reply = pokter BNB decline). All live threads (adexto, Miles, Krystian, Haven-AI) already answered; no double-send. Wallet flat 33.01624.
 - c113b: pitched Agent-Layer#36, the-penniless-agent#6, keryx#617 (found via REST search pushed:>2026-10-17, unpitched). Poll next cycle.
 - c113c: pitched FX-Factor/autonomous-ict-trading-bot, UltraStarz/tollkit-wallet. Poll next cycle.
+- c113d (15:10 CDT): Agent402 register succeeded (listed, 67 tools, routable). Router: honeypot query top5 incl. token_honeypot_check 67 (ours? verify seller); chat query top = chatCompletions 52 (competitor slugs) - do not know ours rank; register done, don't repeat today.
