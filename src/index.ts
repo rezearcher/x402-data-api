@@ -5645,6 +5645,17 @@ app.get("/ai/ask", async (c) => {
   }
 });
 
+// Free OpenAI-client compatibility: SDKs/gateways probe GET /v1/models before calling chat.
+app.get("/v1/models", (c) =>
+  c.json({
+    object: "list",
+    data: [
+      { id: "llama-3.3-70b-instruct-fp8-fast", object: "model", created: 1730000000, owned_by: "greyridge", default: true },
+      { id: "llama-3.2-3b-instruct", object: "model", created: 1730000000, owned_by: "greyridge" },
+    ],
+    pay: { endpoint: "POST /v1/chat/completions", price_usdc: "0.002", network: "base", protocol: "x402" },
+  }));
+
 app.post("/v1/chat/completions/preview", (c) =>
   c.json({
     id: "chatcmpl-preview", object: "chat.completion", created: Math.floor(Date.now() / 1000), model: "llama-3.2-3b-instruct",
