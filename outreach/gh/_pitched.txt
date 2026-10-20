@@ -220,3 +220,10 @@ https://github.com/directorybase/toolidx/issues/6
 https://github.com/shibley/mymcptools/issues/12
 https://github.com/wwqking/mcp-radar/issues/29
 https://github.com/domdomegg/mcp-aggregator/issues/55
+https://github.com/ascending-llc/jarvis-registry/issues/635
+https://github.com/toolsdk-ai/toolsdk-mcp-registry/issues/947
+https://github.com/pathintegral-institute/mcpm.sh/issues/475
+https://github.com/apappascs/mcp-servers-hub/issues/41
+https://github.com/Observal/Observal/issues/1950
+https://github.com/aklivity/zilla/issues/2751
+https://github.com/gebruder/wirken/issues/290
