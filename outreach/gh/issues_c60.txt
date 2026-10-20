@@ -1,0 +1,5 @@
+https://github.com/agentic-community/mcp-gateway-registry/issues/1905
+https://github.com/IBM/mcp-context-forge/issues/7285
+https://github.com/samanhappy/mcphub/issues/1357
+https://github.com/AmoyLab/Unla/issues/338
+https://github.com/Kuadrant/mcp-gateway/issues/1617
