@@ -48,3 +48,6 @@ https://github.com/coinbase/agentkit/issues/1091
 https://github.com/crewAIInc/crewAI/issues/7227
 https://github.com/punkpeye/awesome-mcp-servers/issues/10353
 https://github.com/nirholas/crypto-vision/issues/18
+https://github.com/ak10082247-max/base-trading-bot-starter/issues/2
+https://github.com/sukrutkrdg/x402-bazaar-mcp/issues/12
+https://github.com/h100envy/crawl-hive/issues/4

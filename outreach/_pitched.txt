@@ -2,3 +2,4 @@ kzmttkc/vet402
 guardrail-core#5 verigate#12
 dsh-web3 veyline-mcp cedulon
 nirholas/crypto-vision#18
+ak10082247-max/base-trading-bot-starter#2 sukrutkrdg/x402-bazaar-mcp#12 h100envy/crawl-hive#4
