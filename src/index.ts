@@ -5645,6 +5645,13 @@ app.get("/ai/ask", async (c) => {
   }
 });
 
+app.post("/v1/chat/completions/preview", (c) =>
+  c.json({
+    id: "chatcmpl-preview", object: "chat.completion", created: Math.floor(Date.now() / 1000), model: "llama-3.2-3b-instruct",
+    choices: [{ index: 0, message: { role: "assistant", content: "[preview] Same response shape as the paid POST /v1/chat/completions ($0.002 USDC via x402 on Base). No model is run on this free path." }, finish_reason: "stop" }],
+    usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+  }));
+
 app.post("/v1/chat/completions", async (c) => {
   if (!c.env.AI) return c.json({ error: "ai unavailable" }, { status: 501 });
   let body: { messages?: { role?: string; content?: unknown }[]; max_tokens?: number } = {};
