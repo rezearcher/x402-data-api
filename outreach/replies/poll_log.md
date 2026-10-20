@@ -62,3 +62,4 @@ Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; A
 - c82 (2026-10-20 09:50 CDT): 0 buyer replies (Gmail: Miles known thread + noise; sensor: only rejections svalin/agentbridge/mcphub/guardana/kinlane). black-box/.env CF token verifies active but wrangler deploy => 'No access to specified service' (dead path, don't retry). op still rate-limited (try 18 fail 14:44Z). c69 batch waits 10-21.
 - c82c: pitched mioku50/miorail#1 (Base execution-verification; fresh repo from pushed>10-18 search). Poll next cycle.
 - c82d: pitched ophis-fi/awesome-ophis (new).
+- c82e: pitched naxytra/naxytra-mcp.
