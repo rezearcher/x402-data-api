@@ -99,3 +99,4 @@ Measured status doc: scripts/status_report.py -> docs/STATUS.md (hourly cron). 2
 
 - I28 (c23): skill-list PRs are dead for a new SaaS-wrapper skill: travisvn/awesome-claude-skills (stars/social proof, no SaaS wrappers, stale since Apr), VoltAgent/awesome-agent-skills (no brand-new skills), ComposioHQ (stale since May), awesome-openclaw-skills (ClawHub + no crypto). Only Hermes plugin-catalog (#141825) is open to owner submissions. Hermes PR #141825 had no CI/comments at c23 end.
 - I29 (c24, 2026-10-20): replies re-polled 02:10Z: Gmail only noise; issue sensor only Sluzen seller spam + closed agentpay#11/Insight#245 (answered). Web search for token-safety integrators returns only rivals (true402, x402-bazaar-mcp, klymax402, tollboothswap). Hermes PR #141825 still open, no comments. DOWNVOTE web/repo prospect sweeps again; wait for 05:00Z cap reset.
+- I30 (c24): ERC-8004 registry absent for us, rival true402 is listed; logged idea + blocker (gas tx = capital gate).
