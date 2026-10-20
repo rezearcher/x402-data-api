@@ -162,3 +162,5 @@ Pre-trade token guard (`/gate/swap`, $0.008 USDC via x402 on Base). Free sample:
 
 ## Try it on YOUR token, free
 `curl "https://api.greyridgesignals.ai/chain/token-report/preview?token=0xYourBaseToken"` returns the same full-depth report as the paid route ($0.01). `/gate/swap/preview?token=0x…` gives 3 free real-token GO/HOLD/BLOCK checks/day/IP.
+
+Agent skill (drop-in SKILL.md for OpenClaw/Hermes-style agents): https://github.com/rezearcher/greyridge-token-safety-skill

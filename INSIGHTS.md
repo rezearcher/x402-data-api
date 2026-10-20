@@ -92,3 +92,5 @@ On 2026-10-19 the loop (c14c) and the interactive monitor both answered Krystian
 
 ### I25 — 2026-10-20 (loop)
 Measured status doc: scripts/status_report.py -> docs/STATUS.md (hourly cron). 230 samples/3.7h, 100% success on 5 preview routes; token-report p50 1062ms p95 1744ms, gate/swap p50 1322 p95 1982. Short window: cite as measurement with window, not SLA. Next nudge to Krystian can link docs/STATUS.md.
+
+- I26 (c23, 2026-10-20): rival true402 distributes via per-framework wrappers (ElizaOS plugin, Vercel AI SDK, OpenClaw skill, Hermes skills, npx CLI) = integrator-shaped reach. We now have LangChain/CrewAI + a SKILL.md repo (rezearcher/greyridge-token-safety-skill, pushed). awesome-openclaw-skills requires ClawHub publish + bans crypto + no brand-new skills -> dead for us; ClawHub login is browser OAuth (blocker file written). Gap remaining: Vercel AI SDK / ElizaOS wrappers (npm blocked; could ship as GitHub-installable).
