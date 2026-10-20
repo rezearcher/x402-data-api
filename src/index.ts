@@ -254,7 +254,17 @@ const app = new Hono<AppEnv>();
 // Free health endpoint
 // ---------------------------------------------------------------------------
 
-app.get("/health", (c) => c.json({ ok: true }));
+app.get("/health", (c) => {
+  // Report the active settlement facilitator so CDP-Bazaar cataloguing can be
+  // verified without leaking secrets. "cdp" = routes catalogue into the Coinbase
+  // x402 discovery Bazaar; "xpay" = default (not catalogued in CDP discovery).
+  const env = c.env as Env;
+  const facilitator =
+    env.FACILITATOR_MODE === "cdp" && env.CDP_API_KEY_ID && env.CDP_API_KEY_SECRET
+      ? "cdp"
+      : "xpay";
+  return c.json({ ok: true, facilitator });
+});
 
 // ---------------------------------------------------------------------------
 // Paid-usage metrics (audit F-05) — gate-bypassed, aggregate-only
