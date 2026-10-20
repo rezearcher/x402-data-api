@@ -16,3 +16,4 @@ Gmail 24h: 0 buyer replies (CF DO-limit alert, LinkedIn, recruiter only). Issue 
 Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; Apify blocked on account (outreach/blockers/apify-public-profile.md); AgentKit provider PRs merge ~1 per 6 months -> skip.
 - 2026-10-20T01:40Z pitched Akixama/intent-firewall#1 (policy-rule embedder, gate/swap preview). Watch for reply.
 2026-10-20T01:30Z c19: 0 buyer replies (Krystian msg 18:39Z already answered). Raised transferTaxBps RPC retries 2->3.
+2026-10-20T01:45Z c19b: short-keyword repo searches (rugpull/honeypot/token-safety/scam-token base) return only competitor reference agents (Odds7/fia-risk-aware-swapper = Fia Signals buyer, stale Apr) and hobby repos; no pitch. Multiword gh queries return 0 - use 1-2 words.
