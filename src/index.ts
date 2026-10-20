@@ -6740,7 +6740,7 @@ app.get("/chain/token-report/preview", async (c) => {
   if (tq !== undefined && !ADDR_RE.test(tq) && !PREVIEW_DEMO_TOKENS[tq.toLowerCase()]) return c.json({ error: "token must be a 0x-prefixed 20-byte Base address (or demo: usdc|weth|cbbtc|aero|degen)" }, { status: 400 });
   try {
     const t = await trialToken(c, tq);
-    if (t.exhausted) return c.json({ error: "free real-token trial exhausted (3/day/IP) - this is NOT a result for the token you asked about", trial: { real_token_checks_left_today: 0 }, paid: `GET /chain/token-report?token=${tq}` }, { status: 429 });
+    if (t.exhausted) return c.json({ error: "free real-token trial exhausted (3/day/IP) - this is NOT a result for the token you asked about", trial: { real_token_checks_left_today: 0 }, paid: `GET /chain/token-report?token=${tq}`, pay_with: "x402: npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f(url) - pays USDC on Base automatically. Docs: https://api.greyridgesignals.ai/llms.txt" }, { status: 429 });
     const result = await buildTokenReport(t.token);
     return c.json({
       ...result,
@@ -6770,7 +6770,7 @@ app.get("/gate/swap/preview", async (c) => {
   if (tq !== undefined && !ADDR_RE.test(tq) && !PREVIEW_DEMO_TOKENS[tq.toLowerCase()]) return c.json({ error: "token must be a 0x-prefixed 20-byte Base address (or demo: usdc|weth|cbbtc|aero|degen)" }, { status: 400 });
   try {
     const t = await trialToken(c, tq);
-    if (t.exhausted) return c.json({ error: "free real-token trial exhausted (3/day/IP) - this is NOT a result for the token you asked about", trial: { real_token_checks_left_today: 0 }, paid: `GET /gate/swap?token=${tq}` }, { status: 429 });
+    if (t.exhausted) return c.json({ error: "free real-token trial exhausted (3/day/IP) - this is NOT a result for the token you asked about", trial: { real_token_checks_left_today: 0 }, paid: `GET /gate/swap?token=${tq}`, pay_with: "x402: npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f(url) - pays USDC on Base automatically. Docs: https://api.greyridgesignals.ai/llms.txt" }, { status: 429 });
     const pSide = c.req.query("side") === "sell" ? "sell" : "buy";
     const pNotional = Number(c.req.query("notional_usd") ?? "100");
     const out = await buildSwapGate(t.token, pSide, Number.isFinite(pNotional) && pNotional > 0 ? pNotional : 100);
