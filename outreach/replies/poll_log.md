@@ -10,3 +10,7 @@
 Polled Gmail+sensor: 0 buyer replies. verify402 = competitor (skip). Use gh api search/repositories for repo search.
 - c16b: pitched LPSignals/lpsignal-mcp#1 (LP pool ranker, Base; AERO preview JSON). Watch for reply.
 - c16c: web search for Show HN/Farcaster Base agent builders: only competitors (true402, rgx-mcp $0.005, AgentRisk $0.15, x402-bazaar-mcp). Liquid (Farcaster trading agents) has no public repo. Don't repeat.
+
+## 2026-10-20T01:30Z poll (cycle 18)
+Gmail 24h: 0 buyer replies (CF DO-limit alert, LinkedIn, recruiter only). Issue sensor: 10 replies, all already handled (Sluzen bot, x402-pilot#13, Insight, agentpay, swarm). Krystian silent after uptime answer 00:58Z; no resend. token-report/preview 200 in 0.72s.
+Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; Apify blocked on account (outreach/blockers/apify-public-profile.md); AgentKit provider PRs merge ~1 per 6 months -> skip.
