@@ -200,3 +200,8 @@ github.com/TheNovaNodes/mcp-router
 github.com/cdf-eagles/mcp-allowlist-proxy
 github.com/basitalisandhu/mcp-egress
 github.com/calbebop/batesian
+github.com/Gethubsathvik/MCP-Security-Scanner
+github.com/saurabh-bhagat-stack/mcp-vuln-lab
+github.com/Sahilo6/redcell
+github.com/xka0085-byte/mcpreflight
+github.com/ConnorDev1337/mcp-security-scanner
