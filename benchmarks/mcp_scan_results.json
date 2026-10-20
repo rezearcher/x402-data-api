@@ -1,0 +1,122 @@
+{
+ "endpoint": "https://x402-data-api.sigrunner.workers.dev",
+ "n": 22,
+ "tp": 4,
+ "fn": 4,
+ "fp": 0,
+ "tn": 14,
+ "recall": 0.5,
+ "precision": 1.0,
+ "rows": [
+  {
+   "name": "add",
+   "label": "bad",
+   "verdict": "review"
+  },
+  {
+   "name": "get_weather",
+   "label": "bad",
+   "verdict": "review"
+  },
+  {
+   "name": "notes",
+   "label": "bad",
+   "verdict": "clear"
+  },
+  {
+   "name": "fetch",
+   "label": "bad",
+   "verdict": "review"
+  },
+  {
+   "name": "calc",
+   "label": "bad",
+   "verdict": "block"
+  },
+  {
+   "name": "run",
+   "label": "bad",
+   "verdict": "clear"
+  },
+  {
+   "name": "search",
+   "label": "bad",
+   "verdict": "clear"
+  },
+  {
+   "name": "translate",
+   "label": "bad",
+   "verdict": "clear"
+  },
+  {
+   "name": "evaluate_model",
+   "label": "good",
+   "verdict": "clear"
+  },
+  {
+   "name": "get_price",
+   "label": "good",
+   "verdict": "clear"
+  },
+  {
+   "name": "send_message",
+   "label": "good",
+   "verdict": "clear"
+  },
+  {
+   "name": "read_file",
+   "label": "good",
+   "verdict": "clear"
+  },
+  {
+   "name": "create_issue",
+   "label": "good",
+   "verdict": "clear"
+  },
+  {
+   "name": "query_db",
+   "label": "good",
+   "verdict": "clear"
+  },
+  {
+   "name": "webhook_register",
+   "label": "good",
+   "verdict": "clear"
+  },
+  {
+   "name": "export_report",
+   "label": "good",
+   "verdict": "clear"
+  },
+  {
+   "name": "list_tools",
+   "label": "good",
+   "verdict": "clear"
+  },
+  {
+   "name": "run_tests",
+   "label": "good",
+   "verdict": "clear"
+  },
+  {
+   "name": "get_weather",
+   "label": "good",
+   "verdict": "clear"
+  },
+  {
+   "name": "summarize",
+   "label": "good",
+   "verdict": "clear"
+  },
+  {
+   "name": "upload_file",
+   "label": "good",
+   "verdict": "clear"
+  },
+  {
+   "name": "deploy",
+   "label": "good",
+   "verdict": "clear"
+  }
+ ]
+}

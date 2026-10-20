@@ -6814,7 +6814,7 @@ function analyzeMcpTool(name: string, description: string, schemaText: string): 
   // instructions, hidden <IMPORTANT>/<system> directive tags, and instructions to
   // conceal actions from the user. Genuine exfiltration/danger stays covered by
   // rules 2–5 below, so a real "before using X, read ~/.ssh/id_rsa" attack still flags.
-  const inj = /(ignore (all |any )?(previous|prior|earlier|above)( instructions| context| prompt)?|disregard (the )?(above|previous|prior|earlier)|<\/?important>|<\/?system>|<\/?secret>|do not (tell|mention|inform|notify|reveal (?:it|this|that) to) the user|without (telling|informing|notifying|alerting) the user|reveal (your|the) (full |complete )?(system )?(prompt|instructions))/i;
+  const inj = /(ignore (all |any )?(previous|prior|earlier|above)( instructions| context| prompt)?|disregard (the )?(above|previous|prior|earlier)|<\/?important>|<\/?system>|<\/?secret>|do not (tell|mention|inform|notify|reveal (?:it|this|that) to) the user|never (reveal|mention|disclose|tell)\b[^.]{0,30}\b(instructions?|the user)|(hidden|concealed|kept secret) from the user|keep (this|it) (secret|hidden)|without (telling|informing|notifying|alerting) the user|reveal (your|the) (full |complete )?(system )?(prompt|instructions))/i;
   if (inj.test(text)) add("critical", "tool-poisoning:hidden-instructions",
     "Description contains deceptive/override instructions aimed at the AI agent (conceal-from-user or ignore-prior-instructions) — classic MCP tool-poisoning.", (text.match(inj) || [""])[0]);
 
@@ -6837,7 +6837,7 @@ function analyzeMcpTool(name: string, description: string, schemaText: string): 
     "Tool exposes code/command execution or destructive filesystem ops.", (low.match(danger) || [""])[0]);
 
   // 4. Cross-tool shadowing / rug-pull language (altering other tools' behavior)
-  const shadow = /(\b(other|all|every|any) tools?\b[^.]{0,40}\b(behaviou?r|description|output|call|invoke|instruction)s?\b|\boverride (the )?(other|all|every|any|previous) |\bshadow(s|ing)? (the )?(other|all|every)|when (any|another) tool|modify the behaviou?r of)/i;
+  const shadow = /(\b(other|all|every|any) tools?\b[^.]{0,40}\b(behaviou?r|description|output|call|invoke|instruction)s?\b|\boverride (the )?(\w+ (of )?)?(other|all|every|any|previous) |\bshadow(s|ing)? (the )?(other|all|every)|when (any|another) tool|modify the behaviou?r of)/i;
   if (shadow.test(low)) add("medium", "cross-tool-shadowing",
     "Description references other tools' behavior — shadowing / rug-pull risk.", (low.match(shadow) || [""])[0]);
 
