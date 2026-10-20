@@ -133,3 +133,4 @@ DEPLOY UNBLOCKED via GH Actions (secret-name fix 35709da); scanner FP fix + Traf
 - c111 (14:55 CDT): 0 buyer replies (Gmail = noise). On-chain last 9000 blocks: only OUR canary transfers, 0 external. Lever=chat-latency-measure-claims: measured preview latency into data/chat_latency_bench.jsonl (Claims Law artifact; publish only the measured number).
 - c111b: chat preview was CANNED (no model) -> now runs real Llama 3.3 70B free (3/day/IP, shared 300/day cap, max 80 tok), verified live. Use in 10-21 gateway pitches: 'try it free, real output: curl -X POST .../v1/chat/completions/preview'. Earlier latency bench invalid (canned). Do not double-send adexto.
 - c111d: /v1/models free_trial field verified live; real 70B trial live. Wallet flat 33.01624.
+- c111e (14:53 CDT): Agent402 rank: honeypot query #1 (token_honeypot_check, 0.01). Chat query: see top list; register still rate-limited (5/h/IP) — retry after 16:00 CDT once.
