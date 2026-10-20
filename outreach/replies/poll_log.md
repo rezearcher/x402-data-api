@@ -153,3 +153,9 @@ DEPLOY UNBLOCKED via GH Actions (secret-name fix 35709da); scanner FP fix + Traf
   * Miles/Liquid Logic X: "will run free preview against our own MCP endpoints this week... if useful, allowlist + pay per call." Committed to come back. DO NOT email.
 - VERIFIED Miles's exact endpoint /scan/mcp/preview works against REAL external streamable-HTTP MCP servers (deepwiki 3 tools, context7 2 tools, clean, HTTP 200). Self-scan of our own /mcp returns a 404/502 — Worker self-subrequest artifact, NOT a real bug, NOT what Miles hits.
 - SHIPPED (0491947): fixed /scan/mcp runnable doc example (was example.com/mcp → 502 on copy-paste) to a verified-working deepwiki preview example, so an evaluator's first try succeeds.
+
+## cycle 115 cont. — Bazaar discoverability lever (verifier's named DIFFERENT action)
+- CDP Bazaar semantic search: we ranked ABSENT for natural buyer queries "is this token safe to buy" (n=15, us absent) and "honeypot check base token" (n=19, us absent) — our core value prop. Only surfaced for jargon phrasings ("GO HOLD BLOCK swap decision" #0/3, "pre-trade token safety gate before swap" #5/16).
+- Top competitors (eboredlab, trust-agent.io, chain.intel.rallylive, pexfaucet) ALL lead their resource description with the BUYER'S QUESTION: "Is this Base token safe to buy?", "Can I sell this token?", "Is this a honeypot?" — the query embedding matches.
+- FIXED+DEPLOYED+VERIFIED LIVE (a1b3245): rewrote token-report, gate/swap, token-security descriptions (mk() manifest + live 402 resource.description + tool-list) to LEAD with the buyer's question, keep differentiated detail, stay truthful. Live 402 now opens "Is this Base token safe to buy?..." / "Is this Base token safe to swap right now?...". CDP re-indexes on next organic crawl.
+- Did NOT run refresh_bazaar_catalog.js canary settlements (self-funded buyer→receiving = flagged in memory as scoreboard-inflating, not revenue). Let CDP re-crawl organically.
