@@ -94,3 +94,4 @@ Gmail/GH sensor unchanged (0 buyer replies). Env CF_WORKERS_TOKEN also invalid (
 ## c99 2026-10-20 17:05Z
 DEPLOY UNBLOCKED via GH Actions (secret-name fix 35709da); scanner FP fix + TrafficLog + 429 now live. 0 buyer replies. Wallet flat.
 ## c99b: Bazaar catalog re-seeded for 23 routes post-deploy (secret from ~/.hermes/secrets/.env.x402-data-api.pre-delete-bak). Note: seeds inflate wallet; not external.
+## c99c bazaar_rank post-reseed: only 'pre-trade safety gate' surfaces us (rank 12/15, gate/swap); token-report/honeypot queries still absent — settle-indexed ranking, not metadata.
