@@ -473,17 +473,17 @@ app.get("/", async (c) => {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Agent-native, pay-per-call data on Base mainnet. Base RPC reads, crypto/DeFi/prediction markets, and security endpoints—no account, no API key. Settled inline in USDC over x402 protocol.">
-<meta property="og:title" content="Grey Ridge Signals — Base-native x402 Data API">
-<meta property="og:description" content="Agent-native, pay-per-call data on Base mainnet. Base RPC reads, crypto/DeFi/prediction markets, and security endpoints—no account, no API key.">
+<meta name="description" content="Pre-trade token-safety gate for Base trading agents: GO/HOLD/BLOCK on any ERC-20 for $0.008 per call, plus honeypot simulation, DeFi and on-chain data. No account, no API key. Settled inline in USDC over x402.">
+<meta property="og:title" content="Grey Ridge Signals — Pre-trade token-safety gate (x402)">
+<meta property="og:description" content="Pre-trade token-safety gate for Base trading agents: GO/HOLD/BLOCK on any ERC-20 for $0.008 per call, plus honeypot simulation, DeFi and on-chain data. No account, no API key. Settled inline in USDC over x402.">
 <meta property="og:url" content="https://x402-data-api.sigrunner.workers.dev/">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Grey Ridge Signals — Base-native x402 Data API">
-<meta name="twitter:description" content="Agent-native, pay-per-call data on Base mainnet. No account, no API key. Settled in USDC via x402.">
+<meta name="twitter:title" content="Grey Ridge Signals — Pre-trade token-safety gate (x402)">
+<meta name="twitter:description" content="Pre-trade token-safety gate for Base trading agents: GO/HOLD/BLOCK on any ERC-20 for $0.008 per call, plus honeypot simulation, DeFi and on-chain data. No account, no API key. Settled inline in USDC over x402.">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://x402-data-api.sigrunner.workers.dev/">
-<title>Grey Ridge Signals — Base-native x402 Data API</title>
+<title>Grey Ridge Signals — Pre-trade token-safety gate for Base agents (x402)</title>
 ${provisionMeta}
 <style>
   :root { color-scheme: dark; }
@@ -517,7 +517,7 @@ ${provisionMeta}
 </head>
 <body>
 <main>
-  <h1>Grey Ridge Signals — Base-native x402 Data API</h1>
+  <h1>Grey Ridge Signals — Pre-trade token-safety gate for Base agents (x402)</h1>
   <p class="tagline">Agent-native, pay-per-call data on Base — no account, no API key.</p>
   ${keyPanel}
   <p>

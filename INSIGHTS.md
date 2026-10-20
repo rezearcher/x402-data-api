@@ -102,3 +102,4 @@ Measured status doc: scripts/status_report.py -> docs/STATUS.md (hourly cron). 2
 - I30 (c24): ERC-8004 registry absent for us, rival true402 is listed; logged idea + blocker (gas tx = capital gate).
 - I31 (c24): /.well-known/x402 service_overview still led with Polymarket/MCP audits; rewrote tagline+description to lead with gate/swap + token-report (deployed 46e2bf0e, live verified).
 - I32 (c24): agent-card.json had no gate-swap skill (our flagship); added as first skill, deployed 863c2e0a, live verified.
+- I33 (c24): landing page title/meta/og now lead with pre-trade gate (deployed 880a823c, live verified). Discovery surfaces (well-known, agent-card, landing) now consistent.
