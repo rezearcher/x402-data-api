@@ -6518,7 +6518,7 @@ async function buildTokenReport(token: string) {
 }
 
 app.get("/chain/token-report", async (c) => {
-  const token = c.req.query("token");
+  const token = tokenQ(c);
   if (!token || !ADDR_RE.test(token)) {
     return c.json({ error: "token query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
   }
@@ -6567,7 +6567,7 @@ async function buildSwapGate(token: string, side: "buy" | "sell", notional: numb
 
 // Pre-trade gate: compact go/hold/block built on the token-report engine.
 app.get("/gate/swap", async (c) => {
-  const token = c.req.query("token");
+  const token = tokenQ(c);
   if (!token || !ADDR_RE.test(token)) {
     return c.json({ error: "token query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
   }
@@ -6634,9 +6634,19 @@ app.get("/check", (c) => {
   );
 });
 
+// Integrators pass the token under many names; never silently fall back to a demo token for a safety gate.
+function tokenQ(c: any): string | undefined {
+  for (const k of ["token", "address", "tokenAddress", "token_address", "contract", "contractAddress"]) {
+    const v = c.req.query(k);
+    if (v !== undefined && v !== "") return v;
+  }
+  return undefined;
+}
 app.get("/chain/token-report/preview", async (c) => {
+  const tq = tokenQ(c);
+  if (tq !== undefined && !ADDR_RE.test(tq) && !PREVIEW_DEMO_TOKENS[tq.toLowerCase()]) return c.json({ error: "token must be a 0x-prefixed 20-byte Base address (or demo: usdc|weth|cbbtc|aero|degen)" }, { status: 400 });
   try {
-    const t = await trialToken(c, c.req.query("token"));
+    const t = await trialToken(c, tq);
     const result = await buildTokenReport(t.token);
     return c.json({
       ...result,
@@ -6662,8 +6672,10 @@ async function trialToken(c: any, q: string | undefined): Promise<{ token: strin
   return { token: raw, left: TRIAL_PER_DAY - used - 1 };
 }
 app.get("/gate/swap/preview", async (c) => {
+  const tq = tokenQ(c);
+  if (tq !== undefined && !ADDR_RE.test(tq) && !PREVIEW_DEMO_TOKENS[tq.toLowerCase()]) return c.json({ error: "token must be a 0x-prefixed 20-byte Base address (or demo: usdc|weth|cbbtc|aero|degen)" }, { status: 400 });
   try {
-    const t = await trialToken(c, c.req.query("token"));
+    const t = await trialToken(c, tq);
     const pSide = c.req.query("side") === "sell" ? "sell" : "buy";
     const pNotional = Number(c.req.query("notional_usd") ?? "100");
     const out = await buildSwapGate(t.token, pSide, Number.isFinite(pNotional) && pNotional > 0 ? pNotional : 100);

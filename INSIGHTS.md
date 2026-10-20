@@ -70,3 +70,5 @@ On 2026-10-19 the loop (c14c) and the interactive monitor both answered Krystian
 
 - I9 (c15, 2026-10-20): CF_WORKERS_TOKEN from `op read op://Division/CF_WORKERS_TOKEN/credential` DOES deploy (v665bb283 then bd94ffb6, gate/swap preview side+notional and "token security" descriptions now live). The cf-workers-token-no-access blocker was stale; removed. Bazaar re-seed is a self-payment canary -> not done (I7).
 - I10 (c15): goat-sdk/goat last merged PR 2025-08 (dead); elizaos-plugins/registry repo gone. Don't pursue framework-plugin PRs there.
+
+- I12 (c17, 2026-10-20): token-report/gate-swap previews silently fell back to demo USDC when an integrator passed ?address=/?tokenAddress= (wrong-token verdict on a SAFETY gate = trust killer). Fixed: alias params (address|tokenAddress|token_address|contract) on preview AND paid routes; malformed explicit token -> 400. Deployed 6e578eab. Lesson: test integrator-natural param names, never silently default on a gate.
