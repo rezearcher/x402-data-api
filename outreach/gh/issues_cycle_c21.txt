@@ -6,3 +6,4 @@ https://github.com/BlockRunAI/ClawRouter/discussions/483
 https://github.com/waiaas/WAIaaS/discussions/421
 https://github.com/GMGNAI/gmgn-skills/discussions/252
 https://github.com/nirholas/lyra-tool-discovery/discussions/92
+https://github.com/kawacukennedy/kuberna-labs/discussions/112
