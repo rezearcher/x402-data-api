@@ -52,3 +52,4 @@ Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; A
 - c52: 5 MCP-scan pitch issues opened (MCP-Security-Scanner#1, mcp-vuln-lab#1, redcell#1, mcpreflight#18, mcp-security-scanner#9). Poll next cycle.
 - 2026-10-20T08:50Z c53: 0 buyer replies (Gmail+sensor); Miles/Krystian silent; awesome-mcp-security dead; deploy blocked.
 - 2026-10-20T13:40Z c73: 0 buyer replies (Gmail: Miles' 23:47 msg only, already answered; mcp-egress#19 closed out by us); CF token not in ~/.hermes/.env or secrets.env, op still rate-limited (try 13 fail 13:29Z); cap spent; c69 batch waits for 10-21.
+- c73b: GH repo search for Base trading-agent integrators (gh api search/repositories; 'gh search repos' returns [] here) found nothing viable; SlumperSan/agent-governed-vaults is on Arc (not Base) -> skip. Haven-AI 4107 is d-hinders/Haven-AI, CLOSED after merge.
