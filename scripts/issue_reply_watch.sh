@@ -14,13 +14,13 @@ fi
 [ -z "$T" ] && T="${GH_TOKEN_CLASSIC:-}"
 [ -z "$T" ] && T=$(grep -rh ^GH_TOKEN_CLASSIC .env ~/.env ~/.hermes/.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')
 # Auto-discover every open issue/PR we authored so none is missed by manual registration (I13).
-curl -s -G -H "Authorization: token $T" --data-urlencode "q=author:rezearcher is:open comments:>0 -user:rezearcher" -d per_page=100 -d sort=updated https://api.github.com/search/issues | python3 -c "
+curl -s -G -H "Authorization: token $T" --data-urlencode "q=author:rezearcher comments:>0 -user:rezearcher" -d per_page=100 -d sort=updated https://api.github.com/search/issues | python3 -c "
 import sys,json
 try:
   for i in json.load(sys.stdin)['items']: print(i['html_url'].replace('/pull/','/issues/'))
 except Exception: pass" > outreach/gh/issues_auto.txt
 # Also issues we only commented on (pitches posted as comments on others' threads).
-curl -s -G -H "Authorization: token $T" --data-urlencode "q=commenter:rezearcher is:open comments:>1 -user:rezearcher" -d per_page=100 -d sort=updated https://api.github.com/search/issues | python3 -c "
+curl -s -G -H "Authorization: token $T" --data-urlencode "q=commenter:rezearcher comments:>1 -user:rezearcher" -d per_page=100 -d sort=updated https://api.github.com/search/issues | python3 -c "
 import sys,json
 try:
   for i in json.load(sys.stdin)['items']: print(i['html_url'].replace('/pull/','/issues/'))
