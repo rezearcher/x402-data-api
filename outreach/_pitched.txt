@@ -26,3 +26,5 @@ https://monid.ai (provider form submitted 2026-10-20)
 lopushok9/Agent-Layer
 Echolonius/the-penniless-agent
 tang-vu/keryx
+FX-Factor/autonomous-ict-trading-bot
+UltraStarz/tollkit-wallet

@@ -138,3 +138,4 @@ DEPLOY UNBLOCKED via GH Actions (secret-name fix 35709da); scanner FP fix + Traf
 - c112b (15:01 CDT): stream:true SSE emulation deployed+verified live (preview returns text/event-stream, [DONE] terminated). OpenAI SDK default-stream clients no longer break on chat route.
 - c113 (15:10 CDT): 0 buyer replies (Gmail noise; only new sensor reply = pokter BNB decline). All live threads (adexto, Miles, Krystian, Haven-AI) already answered; no double-send. Wallet flat 33.01624.
 - c113b: pitched Agent-Layer#36, the-penniless-agent#6, keryx#617 (found via REST search pushed:>2026-10-17, unpitched). Poll next cycle.
+- c113c: pitched FX-Factor/autonomous-ict-trading-bot, UltraStarz/tollkit-wallet. Poll next cycle.
