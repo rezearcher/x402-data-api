@@ -844,8 +844,8 @@ app.get("/.well-known/agent-card.json", (c) => {
         id: "gate-swap",
         name: "Pre-Trade Swap Gate (GO/HOLD/BLOCK)",
         description:
-          "One-call pre-trade gate for trading agents: pass a Base ERC-20, side and notional, get decision go|hold|block, reason, SAFE/CAUTION/AVOID verdict, risk_score, pool liquidity and price impact as % of pool. " +
-          "Route: GET /gate/swap?token=0x...&side=buy|sell&notional_usd=100. Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. " +
+          "Is this Base token safe to swap right now? One-call pre-trade gate for trading agents: is it a honeypot, can you sell it, is your trade too big for the pool? Pass a Base ERC-20 (token is the only required param; side defaults buy, notional_usd defaults 100), get decision go|hold|block, reason, SAFE/CAUTION/AVOID verdict, risk_score, pool liquidity and price impact as % of pool. " +
+          "Route: GET /gate/swap?token=0x... (optional &side=buy|sell&notional_usd=100). Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. " +
           "Price: $0.008. Free preview at GET /gate/swap/preview (demo tokens usdc|weth|cbbtc|aero|degen). " +
           "Machine-readable payment manifest: /.well-known/x402.",
         tags: ["security", "base", "trading", "gate", "pre-trade", "token", "swap"],
@@ -2493,6 +2493,7 @@ function makeRoutes(payTo: string) {
         input: { token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
         inputSchema: {
           type: "object",
+          required: ["token"],
           properties: {
             token: { type: "string", description: "0x-prefixed 20-byte ERC-20 contract address on Base mainnet" },
           },
@@ -2526,10 +2527,11 @@ function makeRoutes(payTo: string) {
         input: { token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", side: "buy", notional_usd: "500" },
         inputSchema: {
           type: "object",
+          required: ["token"],
           properties: {
-            token: { type: "string", description: "0x-prefixed ERC-20 contract on Base mainnet" },
-            side: { type: "string", description: "buy or sell (default buy)" },
-            notional_usd: { type: "string", description: "intended trade size in USD (default 100)" },
+            token: { type: "string", description: "0x-prefixed ERC-20 contract on Base mainnet (only required param)" },
+            side: { type: "string", description: "buy or sell (optional, default buy)" },
+            notional_usd: { type: "string", description: "intended trade size in USD (optional, default 100)" },
           },
         },
         output: {
@@ -2545,13 +2547,14 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Token security / honeypot detector for a Base mainnet ERC-20: EIP-1967/1822 proxy + upgradeability detection, bytecode dispatcher scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, and a live eth_call state-override simulation testing whether a synthetic wallet can actually transfer() the token. Returns risk_score (0-100) + verdict (clear/review/block) + human-readable flags. Use when an agent needs detailed honeypot, mint, pause and proxy checks for a Base ERC-20.",
+        "Is this Base token a honeypot — can a real wallet actually sell it? Token security / honeypot detector for a Base mainnet ERC-20: EIP-1967/1822 proxy + upgradeability detection, bytecode dispatcher scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, and a live eth_call state-override simulation testing whether a synthetic wallet can actually transfer() the token. Returns risk_score (0-100) + verdict (clear/review/block) + human-readable flags. Use when an agent needs detailed honeypot, mint, pause and proxy checks for a Base ERC-20.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
         input: { token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
         inputSchema: {
           type: "object",
+          required: ["token"],
           properties: {
             token: { type: "string", description: "0x-prefixed 20-byte ERC-20 contract address on Base mainnet" },
           },
