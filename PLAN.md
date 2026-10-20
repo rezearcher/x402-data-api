@@ -439,3 +439,4 @@ INSIGHTS.md = loop-owned voted RULE ledger (ADD/UPVOTE/DOWNVOTE/PRUNE). Goal str
 
 - 2026-10-19 c2: probed previews (free, no pay). /chain/token-report/preview and /gate/swap/preview with a real 0x Base token returned 200 x5-6 from one IP, so the documented "3 real-token checks/IP/day" cap is NOT enforced (or the same token is cached/uncounted). Harmless to buyers; but the doc claim is inaccurate. Low priority; fix wording or enforce only when deploy token is restored.
 ## cycle c6: KuroTrade#9 depth pitch (buyGate.js uses only DexScreener liq/FDV/txns; no contract-level check). Search saturated otherwise: tollkit/sentinel-mesh/underwriter already pitched.
+- cycle 25: IndexNow pinged llms.txt/openapi.json/ after gate-first reorder (593e4bc2, cb58aa67).
