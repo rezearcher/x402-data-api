@@ -7679,7 +7679,16 @@ app.all("/mcp", async (c) => {
       return c.text("Invalid JSON", 400);
     }
   }
-  const res = await mcpHandler.fetch(c.req.raw, { parsedBody });
+  // Lenient Accept: simple probes/clients that omit text/event-stream would
+  // otherwise get a 406 that looks like an auth wall. Normalize on POST.
+  let mcpReq = c.req.raw;
+  const acc = (c.req.header("accept") ?? "").toLowerCase();
+  if (mcpReq.method === "POST" && !(acc.includes("application/json") && acc.includes("text/event-stream"))) {
+    const h = new Headers(mcpReq.headers);
+    h.set("accept", "application/json, text/event-stream");
+    mcpReq = new Request(mcpReq, { headers: h });
+  }
+  const res = await mcpHandler.fetch(mcpReq, { parsedBody });
   // The gate middleware sets `rail` ONLY on paid tools/call (x402-paid after
   // payment, or rapidapi-bypass / api-key on the marketplace rails). MCP
   // discovery (initialize / tools/list / notifications) and free preview
