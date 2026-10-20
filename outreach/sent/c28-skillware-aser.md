@@ -1,3 +1,9 @@
 ARPAHLS/skillware#445 2026-10-20
 AmeNetwork/aser#9 2026-10-20
 Mftrferdinand/Zeline, alextitonis/fly.ai 2026-10-20
+chadi0x/TheBigBrother 2026-10-20
+almanak-co/sdk 2026-10-20
+YD811/potbot-v2 2026-10-20
+Twigpine/openlaunch 2026-10-20
+0xfnzero/FnzSafe 2026-10-20
+Ridwannurudeen/shieldbot 2026-10-20
