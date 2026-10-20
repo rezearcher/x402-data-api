@@ -6938,6 +6938,19 @@ function paidUrlFrom(c: any): string {
   }
 }
 
+// Machine-readable upgrade CTA appended to free-preview responses so an agent
+// evaluating the preview has a zero-friction, paste-ready path to the paid call
+// (the exact paid URL for the token it just previewed + an x402 wiring snippet).
+// Strictly additive — preview data depth is unchanged.
+function upgradeCTA(paidUrl: string, price: string, adds: string) {
+  return {
+    paid_url: paidUrl,
+    price_usdc: price,
+    adds,
+    pay_with: `x402 (USDC on Base, settles inline): npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f("${paidUrl}"). Any x402 client works (@x402/fetch, Cloudflare withX402Client). Docs: https://api.greyridgesignals.ai/llms.txt`,
+  };
+}
+
 // Integrators pass the token under many names; never silently fall back to a demo token for a safety gate.
 function tokenQ(c: any): string | undefined {
   for (const k of ["token", "address", "tokenAddress", "token_address", "contract", "contractAddress"]) {
@@ -6957,6 +6970,7 @@ app.get("/chain/token-report/preview", async (c) => {
       ...result,
       ...(t.left !== null ? { trial: { real_token_checks_left_today: t.left } } : {}),
       note: "Free live sample (Base USDC) — same depth as the paid route. Full: GET /chain/token-report?token=<0x…> ($0.01) for ANY Base ERC-20.",
+      upgrade: upgradeCTA(paidUrlFrom(c), "0.01", "Unmetered, any Base ERC-20 (this free preview is capped at 3 real tokens/IP/day)."),
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -6985,8 +6999,9 @@ app.get("/gate/swap/preview", async (c) => {
     const pSide = c.req.query("side") === "sell" ? "sell" : "buy";
     const pNotional = Number(c.req.query("notional_usd") ?? "100");
     const out = await buildSwapGate(t.token, pSide, Number.isFinite(pNotional) && pNotional > 0 ? pNotional : 100);
-    if (t.left !== null) return c.json({ ...out, trial: { real_token_checks_left_today: t.left }, paid_gate: { url: paidUrlFrom(c), price_usdc: "0.008" }, note: t.left === 0 && t.token === previewToken(c.req.query("token")) ? "Free real-token trial exhausted for today (3/day/IP); showing demo token. Paid: GET /gate/swap?token=<0x…> ($0.008)." : `Free real-token trial (${t.left} left today). Paid: GET /gate/swap?token=<0x…>&side=buy|sell&notional_usd=<n> ($0.008).` });
-    return c.json({ ...out, note: "Free live sample (demo tokens via ?token=usdc|weth|cbbtc|aero|degen; default Base USDC, buy, $100) — full: GET /gate/swap?token=<0x…>&side=buy|sell&notional_usd=<n> ($0.008) for ANY Base ERC-20." });
+    const swapUpgrade = upgradeCTA(paidUrlFrom(c), "0.008", "Unmetered, any Base ERC-20, sized to your trade via side & notional_usd (this free preview is capped at 3 real tokens/IP/day).");
+    if (t.left !== null) return c.json({ ...out, trial: { real_token_checks_left_today: t.left }, paid_gate: { url: paidUrlFrom(c), price_usdc: "0.008" }, upgrade: swapUpgrade, note: t.left === 0 && t.token === previewToken(c.req.query("token")) ? "Free real-token trial exhausted for today (3/day/IP); showing demo token. Paid: GET /gate/swap?token=<0x…> ($0.008)." : `Free real-token trial (${t.left} left today). Paid: GET /gate/swap?token=<0x…>&side=buy|sell&notional_usd=<n> ($0.008).` });
+    return c.json({ ...out, upgrade: swapUpgrade, note: "Free live sample (demo tokens via ?token=usdc|weth|cbbtc|aero|degen; default Base USDC, buy, $100) — full: GET /gate/swap?token=<0x…>&side=buy|sell&notional_usd=<n> ($0.008) for ANY Base ERC-20." });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
