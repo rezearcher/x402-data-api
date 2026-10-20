@@ -282,3 +282,7 @@ bluetieroperations-create/blackwall-x402-mcp#3
 OgenaLabs/gate402-mcp#2
 HeyElsa/elsa-x402-skills#1
 prithwish122/Aegis#1
+trigeochiral/snap-router-mcp#1
+domondi1/inferrail#174
+staccDOTsol/openzoo#104
+veenrek/mapleai-gateway#1
