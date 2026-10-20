@@ -1,0 +1,4 @@
+https://github.com/Nikolife2016/pulsefeed-x402/issues/39
+https://github.com/Fizzl13/x402-examples/issues/255
+https://github.com/bytesbrains/16ane/issues/81
+https://github.com/ucsandman/x402watch/issues/5
