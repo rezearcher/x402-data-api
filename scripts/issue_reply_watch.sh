@@ -28,6 +28,17 @@ try:
     if c['user']['login']!='rezearcher' and not c['user']['login'].endswith('bot'): print(json.dumps({'url':os.environ['U'],'user':c['user']['login'],'at':c['created_at'],'body':c['body'][:200]}))
 except Exception: pass"
 done > "$OUT/replies.jsonl"
+# GitHub Discussions we authored (listed in outreach/gh/*.txt as /discussions/N): comments via GraphQL.
+cat outreach/gh/issues*.txt | grep -o 'https://github.com/[^ ]*/discussions/[0-9]*' | sort -u | while read u; do
+  p=${u#https://github.com/}; p=${p#orgs/}; o=${p%%/*}; r=${p#*/}; r=${r%%/*}; n=${p##*/}
+  if [[ "$u" == *"/orgs/"* ]]; then r=eliza; fi
+  curl -s -H "Authorization: bearer $T" -d "{\"query\":\"{repository(owner:\\\"$o\\\",name:\\\"$r\\\"){discussion(number:$n){comments(first:50){nodes{createdAt body author{login}}}}}}\"}" https://api.github.com/graphql | U="$u" python3 -c "
+import sys,json,os
+try:
+  for c in json.load(sys.stdin)['data']['repository']['discussion']['comments']['nodes']:
+    if c['author']['login']!='rezearcher': print(json.dumps({'url':os.environ['U'],'user':c['author']['login'],'at':c['createdAt'],'body':c['body'][:200]}))
+except Exception: pass"
+done >> "$OUT/replies.jsonl"
 python3 - "$OUT" <<'P'
 import sys,json,datetime
 d=sys.argv[1]; r=[json.loads(l) for l in open(d+'/replies.jsonl') if l.strip()]
