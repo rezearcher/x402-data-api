@@ -5665,6 +5665,7 @@ app.get("/v1/models", (c) =>
       { id: "llama-3.2-3b-instruct", object: "model", created: 1730000000, owned_by: "greyridge" },
     ],
     pay: { endpoint: "POST /v1/chat/completions", price_usdc: "0.002", network: "base", protocol: "x402" },
+    free_trial: { endpoint: "POST /v1/chat/completions/preview", real_model: true, limit: "3/day/IP" },
   }));
 
 app.post("/v1/chat/completions/preview", async (c) => {

@@ -38,6 +38,7 @@ https://github.com/xpaysh/awesome-x402/issues/868
 https://github.com/Haustorium12/gold-402/issues/38
 https://github.com/punkpeye/awesome-mcp-servers/issues/10353
 https://github.com/Br0ski777/x402-agent-tools/issues/7
+https://github.com/0xcuy/adexto/issues/4
 https://github.com/Agorean/claude-plugin/issues/1
 https://github.com/d-hinders/Haven-AI/issues/4107
 https://github.com/basitalisandhu/mcp-egress/issues/19
