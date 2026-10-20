@@ -42,7 +42,7 @@ Base-native, multi-provider RPC with automatic failover (never fails a paid call
 ### Agent trading gates (new)
 | Endpoint | Price | Returns |
 |---|---|---|
-| `GET /gate/swap?token=0x…&side=buy\|sell&notional_usd=N` | $0.01 | **Pre-trade go/hold/block decision** for any Base ERC-20: safety verdict, risk score, pool liquidity and price-impact of your size, flags. One call before an agent swaps. Free live sample: [`/gate/swap/preview`](https://api.greyridgesignals.ai/gate/swap/preview) |
+| `GET /gate/swap?token=0x…&side=buy\|sell&notional_usd=N` | $0.008 | **Pre-trade go/hold/block decision** for any Base ERC-20: safety verdict, risk score, pool liquidity and price-impact of your size, flags. One call before an agent swaps. Free live sample: [`/gate/swap/preview`](https://api.greyridgesignals.ai/gate/swap/preview) |
 | `GET /chain/token-report?token=0x…` | see `/openapi.json` | Full token due-diligence report (security + liquidity + metadata) in one call |
 
 ### Security
