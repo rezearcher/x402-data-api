@@ -39,3 +39,4 @@ Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; A
 - 2026-10-20T06:40Z c44: 0 buyer replies; sensor 0; wallet 32.81524 flat
 - 2026-10-20T07:00Z c44: FX-Factor#1 opened; agentwallet-langchain archived
 - 2026-10-20T06:55Z c45: liquidlogicx (Miles) replied NO-FIT (treasurer pays operating services only, no swaps; would allowlist if that changes). Replied asking which services they buy, offered tech-risk/scan-mcp; sent correction (tech-risk has no preview). thread 1a157c9da1e86694
+- 2026-10-20T07:20Z c47: Gmail: only liquidlogicx thread (Miles: MCP scan interests them, will run free preview on own MCP endpoints this week, will report back; wallet-less). Waiting - no double-send. Issue sensor 0 replies. Shipped mcpscan npx CLI.
