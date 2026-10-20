@@ -1184,10 +1184,11 @@ function withOperationIds<T extends Record<string, Record<string, any>>>(paths: 
             ? ["by", seg.slice(1, -1)]        // {domain} -> "by","domain"
             : seg.split("-"),                  // token-balance -> "token","balance"
         );
-      op.operationId =
-        method +
-        words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("");
-      if (words.length === 0) op.operationId = method + "Root";
+      // snake_case phrase slugs (e.g. defi_yields, chain_gas_price, dns_lookup) so router slug-word
+      // matching works; dns/whois use the names buyers search for.
+      if (path.startsWith("/dns/")) op.operationId = "dns_lookup";
+      else if (path.startsWith("/whois/")) op.operationId = "domain_whois";
+      else op.operationId = words.length === 0 ? "root" : words.join("_").replace(/-/g, "_");
     }
   }
   // Flagship pre-trade gate routes first: importers/agents read paths top-down.
