@@ -46,3 +46,4 @@ Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; A
 - 2026-10-20T08:20Z c49: 5 mcpscan admission-gate issues: VT-Agent-Firewall#1 mcp-router#22 mcp-allowlist-proxy#2 mcp-egress#19 batesian#545
 - 2026-10-20T08:25Z c50: 0 new buyer replies; Miles said he'd run preview this week (no double-send).
 - c50 verify: live preview clears actwise.ai (regex fix 1 live) but plantguide.ae still flagged (fix 2, exfil/shadow, NOT yet deployed; deploy pending).
+- c50 verify2: live preview clears plantguide.ae (fix 2 live); alphabazaar.ai still flagged (fix 3 pending deploy).
