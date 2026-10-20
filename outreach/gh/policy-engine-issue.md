@@ -1,0 +1,6 @@
+Idea for a policy input: your recipient-allowlist / spend-cap rules decide *who* an agent may pay, but not whether the *thing being bought* is safe. Two cheap external signals that slot into a rule as a deterministic pre-check (free preview, same response shape as paid):
+
+- Token about to be swapped/bought on Base: `curl -s "https://x402-data-api.sigrunner.workers.dev/gate/swap/preview?token=weth"` returns go / hold / block from a honeypot sell-simulation, measured transfer tax and liquidity depth. Paid route is $0.008 USDC via x402.
+- A new MCP tool/vendor the agent is about to trust: `curl -s -X POST https://x402-data-api.sigrunner.workers.dev/scan/mcp/preview -H 'content-type: application/json' -d '{"tools":[...tools/list array...]}'` returns verdict clear/review/block for tool-poisoning/prompt-injection (static metadata analysis only). Itemized findings are $0.05 via x402.
+
+Measured so far (small samples, no SLA): p50 ~1.1-1.3s on the gate routes; MCP-scan accuracy on a hand-built corpus is in benchmarks/ of https://github.com/rezearcher/x402-data-api with sample sizes stated. If a hook for external verdicts is useful, I'm happy to send a PR adapting the response to your decision schema. No reply needed if not relevant.
