@@ -240,3 +240,4 @@ github.com/PolicyLayer/mcp-precheck
 github.com/m9labs-railscope/verantis-mcp
 github.com/kaditang/402sentinel-mcp
 mioku50/miorail
+ophis-fi/awesome-ophis
