@@ -151,3 +151,4 @@ Measured status doc: scripts/status_report.py -> docs/STATUS.md (hourly cron). 2
 - I79 (c39) 'gh search repos <q> --sort updated' + pushedAt jq filter surfaces fresh x402 repos (--updated date filter silently returns nothing); mostly 0-star sellers, 2 adjacent trust/directory projects pitched.
 - I80 (c39) fresh-repo search for 'trading agent' is ~70% noraz-agent spam clones; filter them out.
 - I81 (c40, 2026-10-20): 'gh search prs "x402 plugin" --merged' surfaced payer-side guard projects (trustscoreagent, Fizzl13/presign-guard) -- pitched trustscoreagent#160. Merged-PR search on 'x402 plugin' is a productive new-prospect feed; try 'x402 guard', 'x402 policy' next.
+- I82 (c40): merged-PR searches 'x402 sdk','x402 middleware' gave ~8 new buyer-side/wallet projects; 'pre-trade check','base swap agent','token safety agent' return noise. Use the x402-prefixed queries only.
