@@ -4,11 +4,11 @@
   "description": "x402 pay-per-call: pre-trade swap gate, token safety, Base RPC, DeFi/Polymarket data (USDC)",
   "version": "0.1.1",
   "$comment": "Version mirrors root package.json (canonical).",
-  "websiteUrl": "https://x402-data-api.sigrunner.workers.dev",
+  "websiteUrl": "https://api.greyridgesignals.ai",
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://x402-data-api.sigrunner.workers.dev/mcp"
+      "url": "https://api.greyridgesignals.ai/mcp"
     }
   ]
 }
