@@ -6740,6 +6740,7 @@ app.get("/chain/token-report/preview", async (c) => {
   if (tq !== undefined && !ADDR_RE.test(tq) && !PREVIEW_DEMO_TOKENS[tq.toLowerCase()]) return c.json({ error: "token must be a 0x-prefixed 20-byte Base address (or demo: usdc|weth|cbbtc|aero|degen)" }, { status: 400 });
   try {
     const t = await trialToken(c, tq);
+    if (t.exhausted) return c.json({ error: "free real-token trial exhausted (3/day/IP) - this is NOT a result for the token you asked about", trial: { real_token_checks_left_today: 0 }, paid: `GET /chain/token-report?token=${tq}` }, { status: 429 });
     const result = await buildTokenReport(t.token);
     return c.json({
       ...result,
@@ -6753,14 +6754,14 @@ app.get("/chain/token-report/preview", async (c) => {
 
 // Free real-token trial: 3 arbitrary-token checks per IP per UTC day (approximate; KV is eventually consistent).
 const TRIAL_PER_DAY = 3;
-async function trialToken(c: any, q: string | undefined): Promise<{ token: string; left: number | null }> {
+async function trialToken(c: any, q: string | undefined): Promise<{ token: string; left: number | null; exhausted?: boolean }> {
   const raw = (q ?? "").trim();
   if (!/^0x[0-9a-fA-F]{40}$/.test(raw) || !c.env.API_KEYS) return { token: previewToken(q), left: null };
   if (Object.values(PREVIEW_DEMO_TOKENS).some((a) => a.toLowerCase() === raw.toLowerCase())) return { token: raw, left: null };
   const ip = c.req.header("cf-connecting-ip") ?? "unknown";
   const key = `trial:${ip}:${new Date().toISOString().slice(0, 10)}`;
   const used = parseInt((await c.env.API_KEYS.get(key)) ?? "0", 10) || 0;
-  if (used >= TRIAL_PER_DAY) return { token: previewToken(q), left: 0 };
+  if (used >= TRIAL_PER_DAY) return { token: previewToken(q), left: 0, exhausted: true };
   await c.env.API_KEYS.put(key, String(used + 1), { expirationTtl: 90000 });
   return { token: raw, left: TRIAL_PER_DAY - used - 1 };
 }
@@ -6769,6 +6770,7 @@ app.get("/gate/swap/preview", async (c) => {
   if (tq !== undefined && !ADDR_RE.test(tq) && !PREVIEW_DEMO_TOKENS[tq.toLowerCase()]) return c.json({ error: "token must be a 0x-prefixed 20-byte Base address (or demo: usdc|weth|cbbtc|aero|degen)" }, { status: 400 });
   try {
     const t = await trialToken(c, tq);
+    if (t.exhausted) return c.json({ error: "free real-token trial exhausted (3/day/IP) - this is NOT a result for the token you asked about", trial: { real_token_checks_left_today: 0 }, paid: `GET /gate/swap?token=${tq}` }, { status: 429 });
     const pSide = c.req.query("side") === "sell" ? "sell" : "buy";
     const pNotional = Number(c.req.query("notional_usd") ?? "100");
     const out = await buildSwapGate(t.token, pSide, Number.isFinite(pNotional) && pNotional > 0 ? pNotional : 100);
