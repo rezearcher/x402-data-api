@@ -1079,6 +1079,7 @@ Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
 - GET ${BASE}/chain/token-report/preview?token=usdc|weth|cbbtc|aero|degen — free, full real trade-safety report, same depth as the paid route.
 - GET ${BASE}/chain/token-security/preview — free, full real analysis of a fixed well-known token (Base WETH), same depth as the paid route.
 - GET ${BASE}/scan/mcp/preview?url=<mcp-server> — free preview (counts + risk score; withholds detail).
+- GET ${BASE}/enrich/tech-risk/preview?domain=<d> — free preview (verdict + CVE/KEV counts + top CVE; withholds full list).
 - GET ${BASE}/.well-known/x402 — machine-readable discovery manifest.
 `);
 });
@@ -3574,6 +3575,31 @@ app.get("/enrich/tech-risk", async (c) => {
       { error: (e as Error).message },
       { status: 400 },
     );
+  }
+});
+
+// Free preview: verdict + counts + the single top-risk CVE; withholds the full list.
+app.get("/enrich/tech-risk/preview", async (c) => {
+  const domain = c.req.query("domain");
+  if (!domain) {
+    return c.json({ error: "domain query param required, e.g. ?domain=stripe.com" }, { status: 400 });
+  }
+  try {
+    const r = await enrichTechRisk({ domain } as EnrichTechRiskParams);
+    const top = [...r.vulnerabilities].sort((a, b) => (b.cvss_score ?? 0) - (a.cvss_score ?? 0))[0] ?? null;
+    return c.json({
+      preview: true,
+      domain: r.domain,
+      tech_stack: r.tech_stack,
+      verdict: r.verdict,
+      cve_count: r.vulnerabilities.length,
+      kev_count: r.vulnerabilities.filter((v) => v.in_kev).length,
+      top_cve: top,
+      note: "Preview withholds the full CVE list. Paid GET /enrich/tech-risk?domain=<d> returns all CVEs with EPSS/KEV ($0.01 USDC, x402 on Base).",
+      generated_at: r.generated_at,
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 400 });
   }
 });
 
