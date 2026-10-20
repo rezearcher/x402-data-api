@@ -6825,7 +6825,7 @@ function analyzeMcpTool(name: string, description: string, schemaText: string): 
   // a tool description, or (b) a sensitive target PAIRED with an instruction to send
   // it to an external destination.
   const secretArtifact = /(\.env\b|~\/\.ssh|id_rsa|\bprivate key\b|exfiltrat)/i;
-  const externalize = /(send|post|upload|transmit|forward|leak|exfiltrat\w*)\b[\s\S]{0,60}?(https?:\/\/|\bwebhook\b|\bexternal\b|third[- ]?party|attacker|\bendpoint\b|\bexfil)/i;
+  const externalize = /(send|post|upload|transmit|forward|leak|exfiltrat\w*)\b[^.]{0,60}?\b(secrets?|credentials?|passwords?|api[ _-]?keys?|access tokens?|cookies?|private keys?|conversation|chat history|system prompt|environment variables?|contents? of (the |any )?files?)\b[^.]{0,80}?(https?:\/\/|\bwebhook\b|\bexternal\b|third[- ]?party|attacker|\bexfil)|(secrets?|credentials?|passwords?|api[ _-]?keys?|cookies?|private keys?|conversation|chat history|system prompt)\b[^.]{0,60}?\b(to|at|via) (https?:\/\/|an? (external|remote|third[- ]?party)|attacker)/i;
   const descLow = description.toLowerCase(); // sentence-scoped: never match across the description/schema boundary
   const exfilHit = low.match(secretArtifact) || descLow.match(externalize);
   if (exfilHit) add("high", "exfiltration-hint",
