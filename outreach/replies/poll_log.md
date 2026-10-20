@@ -128,3 +128,4 @@ DEPLOY UNBLOCKED via GH Actions (secret-name fix 35709da); scanner FP fix + Traf
 - c109b: xpay.sh agent-ready-index = SaaS-pricing index (not x402 seller registry), we are absent, no submit path; web search found no other free instant x402 seller registry beyond Agent402 (done) and Circle (form, needs Rez). Don't re-search.
 - c109c: /v1/chat/completions operationId -> openai_compatible_chat_completions_llm (we were absent from Agent402 router top-5 for 3 chat queries; top: blackwood_llm_chat 0.03, blockrun api-v1-chat-completions 0.002). Pushed; after deploy + the single register call (~15:15 CDT) recheck router for 'openai compatible chat completions'.
 - c110: adexto#4 (0xcuy) replied "interesting fallback/cheap lane, will evaluate"; answered with drop-in fetchWithPayment snippet + preview/models URLs. Waiting; no double-send. No other new buyer replies (others = declines).
+- c110b: Gmail poll 19:30Z: no buyer replies (Venmo/LinkedIn/CF DO-limit alert only).
