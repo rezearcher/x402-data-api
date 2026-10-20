@@ -164,3 +164,6 @@ Pre-trade token guard (`/gate/swap`, $0.008 USDC via x402 on Base). Free sample:
 `curl "https://x402-data-api.sigrunner.workers.dev/chain/token-report/preview?token=0xYourBaseToken"` returns the same full-depth report as the paid route ($0.01). `/gate/swap/preview?token=0x…` gives 3 free real-token GO/HOLD/BLOCK checks/day/IP.
 
 Agent skill (drop-in SKILL.md for OpenClaw/Hermes-style agents): https://github.com/rezearcher/greyridge-token-safety-skill
+
+## CI gate for MCP servers
+`uses: rezearcher/x402-data-api/actions/mcp-scan@main` with `url:` or `tools-file:` runs the free MCP tool-poisoning preview in CI and fails on a `block` verdict. See `actions/mcp-scan/README.md`.
