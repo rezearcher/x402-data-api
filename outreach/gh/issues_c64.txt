@@ -1,0 +1,2 @@
+open /tmp/b.md: no such file or directory
+open /tmp/b.md: no such file or directory
