@@ -2792,15 +2792,14 @@ export class TrafficLog extends DurableObject<Env> {
     super(ctx, env);
     // DDL once per DO instance; index on ts so windowed reads don't full-scan (CF free-tier rows_read cap).
     ctx.blockConcurrencyWhile(async () => {
-      // Fail-soft: a throw anywhere here (e.g. free-tier rows_written limit hit
-      // by the prune DELETE) would brick the whole DO so EVERY method 500s —
-      // which is exactly how the demand-measurement read broke. DDL and prune
-      // are best-effort; never let them abort construction.
+      // DDL only — best-effort. The prune does NOT run here: the DO wakes on
+      // essentially every request, and a per-wake DELETE ... LIMIT 5000 wrote up
+      // to 5000 rows PER wake, which exhausted the DO free-tier rows-written
+      // budget — breaking logHit (fail-open => lost traffic) and every read.
+      // Pruning now happens probabilistically inside logHit (see below).
       try {
         ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS hits (ts INTEGER, path TEXT, method TEXT, ua TEXT)");
         ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS hits_ts ON hits(ts)");
-        // prune rows older than 7d (bounded batch) so the table stops growing forever
-        ctx.storage.sql.exec("DELETE FROM hits WHERE rowid IN (SELECT rowid FROM hits WHERE ts < ? LIMIT 5000)", Math.floor(Date.now() / 1000) - 7 * 86400);
       } catch {
         /* best-effort: table may already exist and reads still work */
       }
@@ -2809,6 +2808,16 @@ export class TrafficLog extends DurableObject<Env> {
 
   async logHit(path: string, method: string, ua: string): Promise<void> {
     await this.ctx.storage.sql.exec("INSERT INTO hits (ts, path, method, ua) VALUES (?, ?, ?, ?)", Math.floor(Date.now() / 1000), path, method, ua);
+    // Opportunistic prune: ~0.2% of writes trigger a small bounded delete of
+    // old rows. Averages <1 extra write per logHit (vs 5000/wake before), so the
+    // table stays bounded without exhausting the free-tier rows-written budget.
+    if (Math.random() < 0.002) {
+      try {
+        this.ctx.storage.sql.exec("DELETE FROM hits WHERE rowid IN (SELECT rowid FROM hits WHERE ts < ? LIMIT 200)", Math.floor(Date.now() / 1000) - 7 * 86400);
+      } catch {
+        /* prune is best-effort; never fail a log on it */
+      }
+    }
   }
 
   // NOTE: no GROUP BY/ORDER BY in these reads. On the DO SQLite free tier an
