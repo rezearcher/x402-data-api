@@ -6,8 +6,6 @@ TheLunarCompany/lunar | devops@lunar.dev
 YugantM/hvtracker | hadiyalyugant@gmail.com
 agentic-community/mcp-gateway-registry | yannick.delmont@btp-consultants.fr
 aklivity/zilla | john@aklivity.io
-api-evangelist/cracked | kinlane@gmail.com
-api-evangelist/meta-agent-tools | kinlane@gmail.com
 ascending-llc/jarvis-registry | 1016068291@qq.com
 bytesbrains/16ane | sandeep@nandal.in
 directorybase/toolidx | GregoryDCollins@mac.com
