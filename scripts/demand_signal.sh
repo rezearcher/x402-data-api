@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# demand_signal.sh — read REAL inbound demand on the live x402 API.
+#
+# Prints per-path hit counts (all non-paid probes + free-preview hits) and the
+# paid feed from the TrafficLog Durable Object. This is the ground-truth signal
+# for which routes buyers actually touch — use it instead of guessing demand.
+#
+# Requires: 1Password service-account `op` (Division vault) for the authed secret.
+# Usage: scripts/demand_signal.sh [window_hours]   (default 168 = 7d)
+#
+# NOTE: the DO runs on the CF free tier. If it returns
+#   "Exceeded allowed rows written in Durable Objects free tier"
+# the daily write budget is spent; it resets at UTC midnight. The per-wake prune
+# amplification that used to burn the budget was fixed 2026-10-20 (commit ad28e19).
+set -euo pipefail
+B="https://x402-data-api.sigrunner.workers.dev"
+HOURS="${1:-168}"
+SEC="$(op item get byllgy4p3b27hrscwcdxofe6e4 --vault Division --fields credential --reveal 2>/dev/null)"
+if [ -z "$SEC" ]; then echo "ERROR: could not read TRAFFIC_STATS_SECRET from 1Password"; exit 1; fi
+
+echo "=== non-paid hits, last ${HOURS}h ==="
+curl -s "$B/internal/traffic-stats?window_hours=${HOURS}&secret=${SEC}" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+if not d.get('ok'):
+    print('read failed:', d.get('detail') or d); sys.exit(0)
+st=d.get('stats',[])
+print('distinct paths:', len(st), '| total hits:', sum(x['count'] for x in st))
+for x in st[:50]: print(f\"  {x['count']:>7}  {x['path']}\")
+"
+echo "=== paid feed, last ${HOURS}h ==="
+curl -s "$B/internal/traffic-stats?window_hours=${HOURS}&secret=${SEC}&paid=1" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+if not d.get('ok'):
+    print('read failed:', d.get('detail') or d); sys.exit(0)
+p=d.get('paid',[])
+print('paid rows:', len(p))
+for r in p[:30]: print('  ', r)
+"
