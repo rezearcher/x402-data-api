@@ -1,5 +1,5 @@
 // LangChain.js tool: block honeypot/scam swaps before your agent trades. $0.008 USDC/call via x402 on Base.
-// Free sample (3/IP/day, any Base token): curl "https://api.greyridgesignals.ai/gate/swap/preview?token=0x..."
+// Free sample (3/IP/day, any Base token): curl "https://x402-data-api.sigrunner.workers.dev/gate/swap/preview?token=0x..."
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import { wrapFetchWithPayment } from "@x402/fetch";
@@ -13,7 +13,7 @@ const payFetch = wrapFetchWithPayment(fetch, client);
 
 export const swapGuard = tool(
   async ({ token, side, notional_usd }) => {
-    const r = await payFetch(`https://api.greyridgesignals.ai/gate/swap?token=${token}&side=${side}&notional_usd=${notional_usd}`);
+    const r = await payFetch(`https://x402-data-api.sigrunner.workers.dev/gate/swap?token=${token}&side=${side}&notional_usd=${notional_usd}`);
     return JSON.stringify(await r.json()); // decision: go | hold | block
   },
   {

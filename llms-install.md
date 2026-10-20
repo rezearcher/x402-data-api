@@ -7,7 +7,7 @@ payload before paying.
 
 ## Endpoint
 ```
-https://api.greyridgesignals.ai/mcp
+https://x402-data-api.sigrunner.workers.dev/mcp
 ```
 
 ## Add to an MCP client (streamable-http)
@@ -17,7 +17,7 @@ Claude Desktop / Cline / Cursor `mcp` config:
   "mcpServers": {
     "greyridge-x402": {
       "type": "streamable-http",
-      "url": "https://api.greyridgesignals.ai/mcp"
+      "url": "https://x402-data-api.sigrunner.workers.dev/mcp"
     }
   }
 }

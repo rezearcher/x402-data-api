@@ -15,7 +15,7 @@ export const swapGuardAction = {
   validate: async () => !!process.env.PRIVATE_KEY,
   handler: async (_rt, message, _s, options, callback) => {
     const token = options?.token ?? message.content.text.match(/0x[a-fA-F0-9]{40}/)?.[0];
-    const r = await payFetch(`https://api.greyridgesignals.ai/gate/swap?token=${token}&side=buy&notional_usd=${options?.notional_usd ?? 100}`);
+    const r = await payFetch(`https://x402-data-api.sigrunner.workers.dev/gate/swap?token=${token}&side=buy&notional_usd=${options?.notional_usd ?? 100}`);
     const out = await r.json();
     callback({ text: `${out.decision}: ${out.reason}`, content: out });
     return out.decision === "go";

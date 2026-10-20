@@ -9,7 +9,7 @@ can taste the payload before paying.
 
 - **Base URL:** `https://x402-data-api.sigrunner.workers.dev`
 - **MCP endpoint (streamable-http):** `https://x402-data-api.sigrunner.workers.dev/mcp`
-- **Canonical domain:** `https://api.greyridgesignals.ai` (same API)
+- **Canonical domain:** `https://x402-data-api.sigrunner.workers.dev` (same API)
 - **Discovery:** [`/.well-known/x402`](https://x402-data-api.sigrunner.workers.dev/.well-known/x402) · [`/openapi.json`](https://x402-data-api.sigrunner.workers.dev/openapi.json) · [`/llms.txt`](https://x402-data-api.sigrunner.workers.dev/llms.txt)
 - **Network:** Base mainnet (`eip155:8453`), USDC. Settles via the non-custodial [xpay](https://facilitator.xpay.sh) facilitator — no Coinbase/CDP account needed. Also listed on the CDP x402 Bazaar.
 
@@ -42,7 +42,7 @@ Base-native, multi-provider RPC with automatic failover (never fails a paid call
 ### Agent trading gates (new)
 | Endpoint | Price | Returns |
 |---|---|---|
-| `GET /gate/swap?token=0x…&side=buy\|sell&notional_usd=N` | $0.008 | **Pre-trade go/hold/block decision** for any Base ERC-20: safety verdict, risk score, pool liquidity and price-impact of your size, flags. One call before an agent swaps. Free live sample: [`/gate/swap/preview`](https://api.greyridgesignals.ai/gate/swap/preview) |
+| `GET /gate/swap?token=0x…&side=buy\|sell&notional_usd=N` | $0.008 | **Pre-trade go/hold/block decision** for any Base ERC-20: safety verdict, risk score, pool liquidity and price-impact of your size, flags. One call before an agent swaps. Free live sample: [`/gate/swap/preview`](https://x402-data-api.sigrunner.workers.dev/gate/swap/preview) |
 | `GET /chain/token-report?token=0x…` | see `/openapi.json` | Full token due-diligence report (security + liquidity + metadata) in one call |
 
 ### Security
@@ -152,7 +152,7 @@ targets except the explicitly-scoped `/scan/mcp` and enrichment endpoints).
 MIT — see [LICENSE](./LICENSE).
 
 ## Agent-framework examples
-Pre-trade token guard (`/gate/swap`, $0.008 USDC via x402 on Base). Free sample: `curl "https://api.greyridgesignals.ai/gate/swap/preview?token=degen"`
+Pre-trade token guard (`/gate/swap`, $0.008 USDC via x402 on Base). Free sample: `curl "https://x402-data-api.sigrunner.workers.dev/gate/swap/preview?token=degen"`
 - Node: `docs/examples/swap-gate/gate.mjs`
 - LangChain.js tool: `docs/examples/langchain/swapGuardTool.mjs`
 - ElizaOS action: `docs/examples/elizaos/swapGuardAction.mjs`
@@ -161,6 +161,6 @@ Pre-trade token guard (`/gate/swap`, $0.008 USDC via x402 on Base). Free sample:
 `pip install "git+https://github.com/rezearcher/greyridge-x402-tools"` — `token_report()` and `swap_gate()` helpers (free preview by default, paid x402 mode optional) plus LangChain tools.
 
 ## Try it on YOUR token, free
-`curl "https://api.greyridgesignals.ai/chain/token-report/preview?token=0xYourBaseToken"` returns the same full-depth report as the paid route ($0.01). `/gate/swap/preview?token=0x…` gives 3 free real-token GO/HOLD/BLOCK checks/day/IP.
+`curl "https://x402-data-api.sigrunner.workers.dev/chain/token-report/preview?token=0xYourBaseToken"` returns the same full-depth report as the paid route ($0.01). `/gate/swap/preview?token=0x…` gives 3 free real-token GO/HOLD/BLOCK checks/day/IP.
 
 Agent skill (drop-in SKILL.md for OpenClaw/Hermes-style agents): https://github.com/rezearcher/greyridge-token-safety-skill

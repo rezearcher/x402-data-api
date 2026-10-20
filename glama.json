@@ -3,7 +3,7 @@
   "name": "x402-data-api",
   "type": "streamable-http",
   "description": "Pay-per-call crypto, DeFi, prediction-market, and on-chain data for AI agents — HTTP 402 payment-enabled MCP server on Base mainnet. Companion stdio MCP client (mcp-client/, x402-data-api-mcp) included for stdio-only agents.",
-  "url": "https://api.greyridgesignals.ai/mcp",
+  "url": "https://x402-data-api.sigrunner.workers.dev/mcp",
   "repository": "https://github.com/rezearcher/x402-data-api",
   "authors": [
     {
@@ -19,7 +19,7 @@
   ],
   "logoUrl": "https://img.shields.io/badge/x402-data--api-blue",
   "homepage": "https://github.com/rezearcher/x402-data-api",
-  "documentation": "https://api.greyridgesignals.ai/llms.txt",
+  "documentation": "https://x402-data-api.sigrunner.workers.dev/llms.txt",
   "privacy": "https://github.com/rezearcher/x402-data-api#privacy",
   "license": "MIT",
   "capabilities": [

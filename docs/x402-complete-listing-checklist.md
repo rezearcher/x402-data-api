@@ -6,10 +6,10 @@ Checklist we apply to Grey Ridge's endpoints:
 
 1. **Real output contract** in the 402 `extensions.bazaar.schema` (field names, types, required) — not just an example.
 2. **Free preview path** so a buyer can see the real response shape before paying:
-   `curl 'https://api.greyridgesignals.ai/gate/swap/preview?token=degen'`
-   `curl 'https://api.greyridgesignals.ai/chain/token-report/preview?token=weth'`
+   `curl 'https://x402-data-api.sigrunner.workers.dev/gate/swap/preview?token=degen'`
+   `curl 'https://x402-data-api.sigrunner.workers.dev/chain/token-report/preview?token=weth'`
    (demo tokens: usdc, weth, cbbtc, aero, degen)
-3. **Same-origin OpenAPI** with `x-payment-info` + `x-guidance`: `https://api.greyridgesignals.ai/openapi.json`
+3. **Same-origin OpenAPI** with `x-payment-info` + `x-guidance`: `https://x402-data-api.sigrunner.workers.dev/openapi.json`
 4. **Payment-required header mirrored in the 402 body** so v1 crawlers can parse it.
 5. **Priced at the market point** ($0.01 gate/swap, $0.02 token-security, $0.05 token-report).
 
