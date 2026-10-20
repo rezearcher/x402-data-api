@@ -17,3 +17,4 @@ Prospect sweeps (7 repo queries, 2 web): nothing new; Agent402 already listed; A
 - 2026-10-20T01:40Z pitched Akixama/intent-firewall#1 (policy-rule embedder, gate/swap preview). Watch for reply.
 2026-10-20T01:30Z c19: 0 buyer replies (Krystian msg 18:39Z already answered). Raised transferTaxBps RPC retries 2->3.
 2026-10-20T01:45Z c19b: short-keyword repo searches (rugpull/honeypot/token-safety/scam-token base) return only competitor reference agents (Odds7/fia-risk-aware-swapper = Fia Signals buyer, stale Apr) and hobby repos; no pitch. Multiword gh queries return 0 - use 1-2 words.
+2026-10-20T01:50Z c19c: logged IDEAS competitor-buyer-repo displacement (Fia reference swapper stale since Apr, low odds).
