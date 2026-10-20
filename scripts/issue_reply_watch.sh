@@ -13,6 +13,10 @@ if [ -z "$T" ]; then
 fi
 [ -z "$T" ] && T="${GH_TOKEN_CLASSIC:-}"
 [ -z "$T" ] && T=$(grep -rh ^GH_TOKEN_CLASSIC .env ~/.env ~/.hermes/.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')
+# Fallback: git credential helper holds a working token when env/1Password ones are revoked or rate-limited.
+if ! curl -sf -H "Authorization: token $T" https://api.github.com/rate_limit >/dev/null 2>&1; then
+  T=$(git credential fill <<<$'protocol=https\nhost=github.com\n' 2>/dev/null | sed -n 's/^password=//p')
+fi
 # Auto-discover every open issue/PR we authored so none is missed by manual registration (I13).
 curl -s -G -H "Authorization: token $T" --data-urlencode "q=author:rezearcher comments:>0 -user:rezearcher" -d per_page=100 -d sort=updated https://api.github.com/search/issues | python3 -c "
 import sys,json
