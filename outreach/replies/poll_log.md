@@ -117,3 +117,4 @@ DEPLOY UNBLOCKED via GH Actions (secret-name fix 35709da); scanner FP fix + Traf
 - c105c 2026-10-20T18:16:36Z: polled issue sensor (48 replies, none new buyers; Sluzen = seller pitch, skillware declined) + Gmail Miles/Krystian threads (latest msgs already answered). deploy.yml x402scan step ran green on c5e9b62.
 - c106d (13:30 CDT): 70B chat deploy verified (CI+deploy success on 1339853; POST /v1/chat/completions=402; .well-known/x402 shows Llama 3.3 70B). Wallet flat 33.01624; 0 buyer replies.
 - c106f (13:32 CDT): /v1/models rolling out (mixed 200/404 across 6 probes while deploy in_progress; recheck). Wallet 33.01624 flat; no new buyer replies. Next: 10-21 email batch w/ /v1/models + chat preview URLs.
+- c107 (13:40 CDT): 0 buyer replies (inbox noise; Miles last msg 10-19 already answered; sensor 49 non-owner replies all declines). /v1/models verified 200 x5 live. Wallet 33.01624 flat. Emails resume 10-21.
