@@ -1,2 +1,8 @@
 https://github.com/orgs/elizaOS/discussions/37111
 https://github.com/google-agentic-commerce/a2a-x402/discussions/196
+https://github.com/NoFxAiOS/nofx/discussions/1551
+https://github.com/crestalnetwork/intentkit/discussions/1005
+https://github.com/BlockRunAI/ClawRouter/discussions/483
+https://github.com/waiaas/WAIaaS/discussions/421
+https://github.com/GMGNAI/gmgn-skills/discussions/252
+https://github.com/nirholas/lyra-tool-discovery/discussions/92
