@@ -8,13 +8,13 @@
  */
 const fs = require('fs');
 const path = require('path');
-const projectDir = path.resolve(process.env.HOME, 'projects/x402-data-api');
+const projectDir = __dirname;
 const { privateKeyToAccount } = require(path.join(projectDir, 'node_modules/viem/accounts'));
 const siwx = require(path.join(projectDir, 'node_modules/@x402/extensions/dist/cjs/sign-in-with-x/index.js'));
 
 // payTo wallet = provider identity (0x5765...). Falls back to buyer wallet.
 let wallet;
-try { wallet = require('/home/rez/projects/x402-data-api/lib/wallet.js').wallet('main'); }  // vault (degrade-open to json)
+try { wallet = require(path.join(projectDir, 'lib/wallet.js')).wallet('main'); }  // vault (degrade-open to json)
 catch (e) { // vault down: SIWX is only a signature, an ephemeral key registers the origin fine (verified 2026-10-20: 61 registered)
   wallet = { privateKey: require(path.join(projectDir, 'node_modules/viem/accounts')).generatePrivateKey() };
 }
