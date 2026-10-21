@@ -3,3 +3,8 @@
 [DRIFT] GET /gate/swap
    advertised example MISSING live keys: ['upgrade', 'upgrade.adds', 'upgrade.paid_url', 'upgrade.pay_with', 'upgrade.price_usdc']
 [ok]   GET /chain/token-security: advertised example matches live output shape (45 keys)
+[DRIFT] GET /chain/token-report
+   advertised example MISSING live keys: ['upgrade', 'upgrade.adds', 'upgrade.paid_url', 'upgrade.pay_with', 'upgrade.price_usdc']
+[DRIFT] GET /gate/swap
+   advertised example MISSING live keys: ['upgrade', 'upgrade.adds', 'upgrade.paid_url', 'upgrade.pay_with', 'upgrade.price_usdc']
+[ok]   GET /chain/token-security: advertised example matches live output shape (45 keys)

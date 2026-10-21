@@ -1,0 +1,9 @@
+WARN: could not read TrafficLog secret: [Errno 2] No such file or directory: 'op'
+=== buyer-demand intel (window 336h) ===
+census rows: 3900 | distinct payers: 0 | real candidate integrators: 0 | probe/scorer bots filtered: 0
+demand by lane (our paid calls): {}
+TOP DEMAND LANE: None
+
+=== payers (candidate integrators first, probe bots demoted) ===
+
+wrote /home/rez/.hermes/data/x402-demand/buyer_intel_latest.json

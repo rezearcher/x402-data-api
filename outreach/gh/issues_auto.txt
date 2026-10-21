@@ -1,3 +1,7 @@
+https://github.com/alextitonis/fly.ai/issues/14
+https://github.com/d-hinders/Haven-AI/issues/4188
+https://github.com/alextitonis/fly.ai/issues/13
+https://github.com/basitalisandhu/mcp-egress/issues/19
 https://github.com/theselfruleorg/polyrob/issues/27
 https://github.com/X402blockchains/x402-registry/issues/16
 https://github.com/shivanagendrakore/agent-firewall/issues/1
@@ -12,7 +16,6 @@ https://github.com/HelpCode-ai/anythingmcp/issues/1174
 https://github.com/Agorean/claude-plugin/issues/1
 https://github.com/ValentinTorassa/VT-Agent-Firewall/issues/1
 https://github.com/d-hinders/Haven-AI/issues/4107
-https://github.com/basitalisandhu/mcp-egress/issues/19
 https://github.com/desplega-ai/agent-swarm/issues/2269
 https://github.com/tianzizhiming-svg/agentbridge/issues/8
 https://github.com/api-evangelist/meta-agent-tools/issues/1
@@ -42,6 +45,7 @@ https://github.com/xpaysh/awesome-x402/issues/868
 https://github.com/Haustorium12/gold-402/issues/38
 https://github.com/punkpeye/awesome-mcp-servers/issues/10353
 https://github.com/Br0ski777/x402-agent-tools/issues/7
+https://github.com/basitalisandhu/mcp-egress/issues/19
 https://github.com/X402blockchains/x402-registry/issues/16
 https://github.com/0xcuy/adexto/issues/4
 https://github.com/romudille-bit/agentpay/issues/11
@@ -50,7 +54,6 @@ https://github.com/DrVelvetFog/x402-pilot/issues/13
 https://github.com/successaje/pokter/issues/213
 https://github.com/Agorean/claude-plugin/issues/1
 https://github.com/d-hinders/Haven-AI/issues/4107
-https://github.com/basitalisandhu/mcp-egress/issues/19
 https://github.com/haoruilee/awesome-agent-native-services/issues/231
 https://github.com/punkpeye/awesome-remote-mcp-servers/issues/2350
 https://github.com/swarm-agent-operator/swarm-x402-mcp/issues/2
