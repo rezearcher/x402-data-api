@@ -383,6 +383,19 @@ app.get("/status", (c) => {
 // ledger (mirrors x402-cve-triage /metrics). Aggregate-only — no per-request
 // data, no PAY_TO, no keys. Never x402-gated: FREE_PATHS in the middleware.
 app.get("/metrics", async (c) => {
+  // Edge-cache the aggregate metrics for 60s. /metrics is public + unauthenticated
+  // and every uncached hit runs two Durable Object reads (UsageCounter.list() +
+  // TrafficLog.getNetExternalPaid over a 30-day window). Public crawlers hitting
+  // this endpoint were the only unbounded multiplier on CF free-tier DO rows_read
+  // (the account hit 90% of the 5M/day cap at ~zero real traffic). A 60s cache caps
+  // DO reads from /metrics at <=1440/day regardless of crawl volume; the daily
+  // reconcile + goal-gate tolerate <=60s staleness on an aggregate counter.
+  const cache = (globalThis as { caches?: { default: Cache } }).caches?.default;
+  const cacheKey = new Request(new URL(c.req.url).toString());
+  if (cache) {
+    const hit = await cache.match(cacheKey);
+    if (hit) return hit;
+  }
   const metrics = await getMetrics(makeUsageCounter(c.env));
   // Augment the GROSS counter with a payer-aware net-external block from
   // TrafficLog. total_paid_calls includes our own self/test settlements and
@@ -402,7 +415,14 @@ app.get("/metrics", async (c) => {
       net_external = { error: "traffic_read_failed", detail: e instanceof Error ? e.message : String(e) };
     }
   }
-  return c.json({ ...metrics, net_external_paid_calls, net_external });
+  const res = c.json({ ...metrics, net_external_paid_calls, net_external });
+  // Only cache a well-formed read (net_external is null only when the binding is
+  // absent, which is fine to cache; a throw-path sets net_external.error — still
+  // cacheable, just a transient blip for <=60s). Response must carry Cache-Control
+  // for caches.default to store it.
+  res.headers.set("Cache-Control", "public, max-age=60");
+  if (cache) fireAndForget(c, cache.put(cacheKey, res.clone()));
+  return res;
 });
 
 // ---------------------------------------------------------------------------
@@ -3217,6 +3237,18 @@ export class TrafficLog extends DurableObject<Env> {
       try {
         ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS hits (ts INTEGER, path TEXT, method TEXT, ua TEXT)");
         ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS hits_ts ON hits(ts)");
+        // Composite (method, ts) index: every PAID-filtered read
+        // (getPaid/getSettlements/getRefStats/getBuyers/getNetExternalPaid) does
+        // `WHERE method='PAID' AND ts>? ORDER BY ts DESC`. With only hits_ts,
+        // SQLite walks the whole ts-window and reads EACH row to test the method
+        // filter — so a 30-day read (getNetExternalPaid, on every /metrics hit)
+        // scans the entire table (dominated by 1%-sampled non-paid rows) and
+        // burns CF free-tier rows_read proportional to table size × read rate.
+        // PAID rows are a tiny fraction (tens over the 7-day retention window), so
+        // this composite index turns those reads into a narrow index range scan
+        // that touches only PAID rows. Additive + idempotent; getStats' non-paid
+        // (`method != 'PAID'`) query is non-selective and unaffected.
+        ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS hits_method_ts ON hits(method, ts)");
       } catch {
         /* best-effort: table may already exist and reads still work */
       }
