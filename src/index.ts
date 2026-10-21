@@ -6188,6 +6188,12 @@ app.get("/v1/models", (c) =>
       { id: "llama-3.2-3b-instruct", object: "model", created: 1730000000, owned_by: "greyridge" },
     ],
     pay: { endpoint: "POST /v1/chat/completions", price_usdc: "0.002", network: "base", protocol: "x402" },
+    // Honest, measured positioning for a provider deciding whether to wire us in:
+    // the differentiator is keyless pay-per-call (no account/API key/minimum),
+    // not a lower per-token rate. Flat $0.002/call; break-even vs Together's
+    // Llama-3.3-70B ($1.04/1M in+out, measured 2026-10-21) is ~1,900 tokens/call
+    // — cheaper for long-context calls, a small convenience premium on short ones.
+    positioning: { model: "keyless-pay-per-call", differentiator: "no account/API key/minimum; settles USDC on Base inline via x402", price_per_call_usdc: "0.002", vs_together_70b_per_1m_usd: "1.04", breakeven_tokens_per_call: 1923 },
     free_trial: { endpoint: "POST /v1/chat/completions/preview", real_model: true, limit: "3 70B calls/day/IP, then a real 3B sample (10/day/IP); paid route is full 70B" },
   }));
 

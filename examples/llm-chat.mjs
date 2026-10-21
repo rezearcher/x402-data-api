@@ -3,8 +3,16 @@
 // Every other example here is a GET data route. This is the one the *compute*
 // buyers need: an OpenAI-compatible chat completion that signs + settles USDC on
 // Base inline via x402. No API key, no account, no gas ETH (EIP-3009 gasless).
-// Llama 3.3 70B fp8 on Workers AI at $0.002/call; pass model=llama-3.2-3b-instruct
-// for the cheap small model.
+// Llama 3.3 70B fp8 on Workers AI at a flat $0.002/call; pass
+// model=llama-3.2-3b-instruct for the small model.
+//
+// Why this instead of a keyed provider — it is not "always cheaper", it is
+// keyless. There is no account, no API key, no prepaid balance, no monthly
+// minimum: an agent pays per call inline in USDC over x402. On raw price it is
+// a flat $0.002/call vs e.g. Together's Llama-3.3-70B at $1.04 / 1M tokens
+// (in+out, measured 2026-10-21) — break-even is ~1,900 total tokens/call, so we
+// are cheaper for long-context calls and a small convenience premium on short
+// ones. The win is zero setup + USDC settlement, not a lower per-token rate.
 //
 //   npm i x402-fetch viem
 //   EVM_PRIVATE_KEY=0xYOURKEY node examples/llm-chat.mjs "What is the Base chain id?"
@@ -19,7 +27,8 @@
 // taggaverse/ai-trading-agent's X402LLMProvider reads DREAMS_ROUTER_URL). Because this
 // endpoint speaks the standard x402 402-challenge flow (accepts[] with scheme=exact,
 // network=eip155:8453, USDC asset) and the OpenAI /v1/chat/completions shape, you can
-// point that provider straight at us for a cheap Base-USDC fallback:
+// point that provider straight at us as a keyless Base-USDC fallback (no API
+// key to provision, settles per call in USDC):
 //
 //   DREAMS_ROUTER_URL=https://x402-data-api.sigrunner.workers.dev   # base; it POSTs to /v1/chat/completions
 //   model=llama-3.3-70b                                             # our model id (not provider/model)
