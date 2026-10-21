@@ -495,17 +495,17 @@ app.get("/", async (c) => {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Pre-trade token-safety gate for Base trading agents: GO/HOLD/BLOCK on any ERC-20 for $0.008 per call, plus honeypot simulation, DeFi and on-chain data. No account, no API key. Settled inline in USDC over x402.">
-<meta property="og:title" content="Grey Ridge Signals — Pre-trade token-safety gate (x402)">
-<meta property="og:description" content="Pre-trade token-safety gate for Base trading agents: GO/HOLD/BLOCK on any ERC-20 for $0.008 per call, plus honeypot simulation, DeFi and on-chain data. No account, no API key. Settled inline in USDC over x402.">
+<meta name="description" content="Pay-per-call market & on-chain data for Base trading agents over x402: live DeFi yields, cross-venue funding rates, token prices, Polymarket and RPC data — plus a pre-trade token-safety gate (GO/HOLD/BLOCK). No account, no API key; agents pay inline in USDC from $0.001/call.">
+<meta property="og:title" content="Grey Ridge Signals — pay-per-call market & on-chain data for Base agents (x402)">
+<meta property="og:description" content="Pay-per-call market & on-chain data for Base trading agents over x402: live DeFi yields, cross-venue funding rates, token prices, Polymarket and RPC data — plus a pre-trade token-safety gate (GO/HOLD/BLOCK). No account, no API key; agents pay inline in USDC from $0.001/call.">
 <meta property="og:url" content="https://x402-data-api.sigrunner.workers.dev/">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Grey Ridge Signals — Pre-trade token-safety gate (x402)">
-<meta name="twitter:description" content="Pre-trade token-safety gate for Base trading agents: GO/HOLD/BLOCK on any ERC-20 for $0.008 per call, plus honeypot simulation, DeFi and on-chain data. No account, no API key. Settled inline in USDC over x402.">
+<meta name="twitter:title" content="Grey Ridge Signals — pay-per-call market & on-chain data for Base agents (x402)">
+<meta name="twitter:description" content="Pay-per-call market & on-chain data for Base trading agents over x402: live DeFi yields, cross-venue funding rates, token prices, Polymarket and RPC data — plus a pre-trade token-safety gate (GO/HOLD/BLOCK). No account, no API key; agents pay inline in USDC from $0.001/call.">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://x402-data-api.sigrunner.workers.dev/">
-<title>Grey Ridge Signals — Pre-trade token-safety gate for Base agents (x402)</title>
+<title>Grey Ridge Signals — pay-per-call market & on-chain data for Base agents (x402)</title>
 ${provisionMeta}
 <style>
   :root { color-scheme: dark; }
@@ -539,7 +539,7 @@ ${provisionMeta}
 </head>
 <body>
 <main>
-  <h1>Grey Ridge Signals — Pre-trade token-safety gate for Base agents (x402)</h1>
+  <h1>Grey Ridge Signals — pay-per-call market & on-chain data for Base agents (x402)</h1>
   <p class="tagline">Agent-native, pay-per-call data on Base — no account, no API key.</p>
   ${keyPanel}
   <p>
@@ -843,9 +843,9 @@ app.get("/.well-known/x402", (c) => {
   return c.json({
     service_overview: {
       name: "Grey Ridge Signals — x402 Data & Security",
-      tagline: "Pre-trade token-safety gate for Base trading agents, plus on-chain, DeFi and prediction-market data, pay-per-call over x402.",
+      tagline: "Pay-per-call market & on-chain data for Base trading agents over x402 — live DeFi yields, cross-venue funding rates, prices, Polymarket and RPC data, plus a pre-trade token-safety gate.",
       description:
-        "Pay-per-call x402 services on Base: /gate/swap (GO/HOLD/BLOCK pre-trade gate for any Base ERC-20), /chain/token-report (SAFE/CAUTION/AVOID with measured transfer tax), /chain/token-security (honeypot simulation), plus DeFi yields, prices, funding, Polymarket data and MCP security scans. Free /preview paths for every gate route. No account, no key — agents pay inline in USDC.",
+        "Pay-per-call x402 data for Base agents: /defi/yields (top lending/LP yields + IL risk), /crypto/funding (cross-venue Hyperliquid+OKX+dYdX funding + arb spread), /crypto/prices, /pm/markets (Polymarket), and 20+ Base RPC/chain routes — plus a pre-trade safety gate: /gate/swap (GO/HOLD/BLOCK sized to your trade) and /chain/token-report (SAFE/CAUTION/AVOID with measured transfer tax). Free /preview paths on the flagship routes. No account, no key — agents pay inline in USDC from $0.001/call.",
       website: BASE,
       categories: ["prediction-markets", "crypto", "data", "security", "mcp", "funding", "yield", "token-price", "rpc", "base", "onchain", "blockchain"],
     },
