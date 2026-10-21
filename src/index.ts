@@ -1246,6 +1246,7 @@ Runnable version: https://github.com/rezearcher/x402-data-api/blob/main/examples
 - GET ${BASE}/gate/swap?token=<0x…>&side=buy&notional_usd=500 — $0.008 — ONE decision GO|HOLD|BLOCK sized to your trade (honeypot/sellability + liquidity price impact). Free try: ${BASE}/gate/swap/preview?token=usdc|weth|cbbtc|aero|degen (any real Base 0x address: 3 free/day/IP).
 - GET ${BASE}/chain/token-report?token=<0x…> — $0.01 — SAFE|CAUTION|AVOID + risk_score 0-100 + reasons. Free try: ${BASE}/chain/token-report/preview?token=aero
 - Measured uptime/latency of these (not an SLA): GET ${BASE}/status (live machine-readable JSON) or https://github.com/rezearcher/x402-data-api/blob/main/docs/STATUS.md
+- Proof pack for integrators (a real settled Base-mainnet x402 tx + decoded receipt, measured reliability, and accuracy stated honestly incl. what we have NOT yet benchmarked): https://github.com/rezearcher/x402-data-api/blob/main/docs/EVIDENCE.md
 
 ## Endpoints
 - Human/agent try-it page: ${BASE}/check?token=<0x… Base ERC-20> — free verdict card (3/day/IP).
