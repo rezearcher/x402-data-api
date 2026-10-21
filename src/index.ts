@@ -830,6 +830,25 @@ app.get("/.well-known/x402", (c) => {
           .join(" ")
       )
       .join(" ");
+  // Attach a compact sample of what the agent BUYS, pulled from the same
+  // RESPONSE_EXAMPLES the OpenAPI serves (no vaporware — real shapes on disk).
+  // A browsing buyer-agent decides whether to pay far more readily when it can
+  // see the output shape first; competitors (e.g. three.ws) publish an example
+  // per paid route in their discovery doc for exactly this reason. Bounded so
+  // the manifest stays crawler-friendly: arrays collapse to their first element.
+  const sampleOf = (p: string): unknown | undefined => {
+    const ex = RESPONSE_EXAMPLES[p];
+    if (ex === undefined) return undefined;
+    const compact = Array.isArray(ex) ? ex.slice(0, 1) : ex;
+    try {
+      const s = JSON.stringify(compact);
+      // Guard against a pathological large example bloating the manifest.
+      if (s.length > 1200) return undefined;
+    } catch {
+      return undefined;
+    }
+    return compact;
+  };
   const mk = (p: string, method: string, price: string, units: string, desc: string, tags: string[]) => ({
     x402Version: 2,
     type: "http",
@@ -842,6 +861,7 @@ app.get("/.well-known/x402", (c) => {
     scheme: "exact",
     payTo,
     price_usdc: price,
+    ...(sampleOf(p) !== undefined ? { outputExample: sampleOf(p) } : {}),
     tags,
     accepts: [{
       scheme: "exact", network: NETWORK, amount: units, maxAmountRequired: units,
