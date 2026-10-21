@@ -39,6 +39,18 @@ const { decision } = await r.json(); // "GO" | "HOLD" | "BLOCK" — act only on 
 Deeper verdict: `/chain/token-report` ($0.01) returns SAFE|CAUTION|AVOID + risk_score 0-100 + reasons.
 Both are also MCP tools (`gate_swap`, `chain_token_report`) at `/mcp`.
 
+## Cross-venue funding-arb scanner
+`/crypto/funding` ($0.001) ranks live perpetual funding spreads across Hyperliquid, OKX
+and dYdX with the arb direction + annualized rates — a drop-in data feed for a funding
+agent:
+```js
+const r = await f("https://x402-data-api.sigrunner.workers.dev/crypto/funding?limit=20");
+const rows = await r.json(); // [{coin, funding_spread_bps, best_long_venue, best_short_venue, signal, ...}]
+```
+A full runnable scanner (free preview with no wallet, then the paid ranked scan) is in
+[`examples/funding-arb-scanner.mjs`](../examples/funding-arb-scanner.mjs):
+`node examples/funding-arb-scanner.mjs` (preview) · `EVM_PRIVATE_KEY=0x... node examples/funding-arb-scanner.mjs` (full scan).
+
 ## Look before you pay (free, no wallet)
 Every flagship route has a `/preview` with the same response shape — demo tokens are
 unlimited, arbitrary real tokens get 3 free checks/IP/day, then a 429 with the paid URL:
