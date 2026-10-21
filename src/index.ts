@@ -707,6 +707,59 @@ app.get("/internal/traffic-stats", async (c) => {
   }
 });
 
+// Settlement-evidence finder — scans Base mainnet for a real USDC Transfer from a
+// given payer to our receiving wallet (PAY_TO), returning the on-chain tx hash +
+// amount so settlement can be proven to registries/buyers from ground truth
+// (not our word). Runs on Cloudflare IPs via the rotating baseRpc so it works
+// where datacenter RPC/explorer calls get 403'd. Secret-gated (read-only logs).
+app.get("/internal/find-settlement", async (c) => {
+  const configured = c.env.TRAFFIC_STATS_SECRET;
+  const presented = c.req.query("secret") ?? "";
+  if (!configured || !presented || !timingSafeEqual(presented, configured)) return c.json({ error: "unauthorized" }, 401);
+  const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+  const TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+  const pad = (a: string) => "0x" + a.toLowerCase().replace(/^0x/, "").padStart(64, "0");
+  const from = c.req.query("from"); // payer address; omit to match any sender
+  const to = c.env.PAY_TO; // always our receiving wallet
+  const token = (c.req.query("token") ?? USDC).toLowerCase();
+  const chunk = Math.min(Math.max(parseInt(c.req.query("chunk") ?? "3000") || 3000, 100), 20000);
+  const maxChunks = Math.min(Math.max(parseInt(c.req.query("max_chunks") ?? "40") || 40, 1), 45);
+  const stopAtFirst = c.req.query("all") !== "1";
+  try {
+    const latestHex = await baseRpc("eth_blockNumber", []);
+    const latest = parseInt(String(latestHex), 16);
+    const topics: (string | null)[] = [TRANSFER, from ? pad(from) : null, pad(to)];
+    const hits: { txHash: string; block: number; amount_usdc: number; from: string; basescan: string }[] = [];
+    let scanned = 0;
+    for (let i = 0; i < maxChunks; i++) {
+      const toBlk = latest - i * (chunk + 1);
+      const fromBlk = Math.max(0, toBlk - chunk);
+      scanned = latest - fromBlk;
+      let logs: any[] = [];
+      try {
+        logs = (await baseRpc("eth_getLogs", [{ address: token, topics, fromBlock: "0x" + fromBlk.toString(16), toBlock: "0x" + toBlk.toString(16) }])) as any[];
+      } catch {
+        continue; // provider rejected this range; keep scanning older windows
+      }
+      for (const lg of logs ?? []) {
+        hits.push({
+          txHash: lg.transactionHash,
+          block: parseInt(lg.blockNumber, 16),
+          amount_usdc: parseInt(lg.data, 16) / 1e6,
+          from: "0x" + String(lg.topics?.[1] ?? "").slice(26),
+          basescan: `https://basescan.org/tx/${lg.transactionHash}`,
+        });
+      }
+      if (stopAtFirst && hits.length > 0) break;
+      if (fromBlk === 0) break;
+    }
+    hits.sort((a, b) => b.block - a.block);
+    return c.json({ ok: true, latest_block: latest, blocks_scanned: scanned, payer: from ?? "(any)", receiver: to, token, matches: hits.length, settlements: hits });
+  } catch (e) {
+    return c.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, 502);
+  }
+});
+
 // ---------------------------------------------------------------------------
 // 402index.io domain-ownership verification (static hash file)
 // ---------------------------------------------------------------------------
