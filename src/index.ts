@@ -1244,7 +1244,7 @@ Runnable version: https://github.com/rezearcher/x402-data-api/blob/main/examples
 - GET ${BASE}/chain/nonce?address=<0x…> — $0.002 — tx count (nonce), latest + pending.
 - GET ${BASE}/chain/block?number=<n|latest> — $0.002 — block summary (hash, timestamp, tx count, gas, base fee).
 - GET ${BASE}/ai/ask?q=<prompt> — $0.002 — cheap LLM answer (Llama 3.2 3B), no API key.
-- POST ${BASE}/v1/chat/completions — $0.002 — OpenAI-compatible chat (Llama 3.3 70B, stream:true supported), no API key; point any OpenAI SDK base URL here with an x402 fetch wrapper. Free real-model try: POST ${BASE}/v1/chat/completions/preview (3/day/IP). Model list: GET ${BASE}/v1/models.
+- POST ${BASE}/v1/chat/completions — $0.002 — OpenAI-compatible chat (Llama 3.3 70B, stream:true supported), no API key; point any OpenAI SDK base URL here with an x402 fetch wrapper. Free real-model try: POST ${BASE}/v1/chat/completions/preview (3/day/IP). Model list: GET ${BASE}/v1/models. Runnable buyer: https://github.com/rezearcher/x402-data-api/blob/main/examples/llm-chat.mjs — also a drop-in x402 LLM fallback for Daydreams / Lucid-Agents agents (point their provider base URL here, model=llama-3.3-70b).
 - GET ${BASE}/chain/erc20-meta?token=<0x…> — $0.002 — ERC-20 name/symbol/decimals/totalSupply.
 - GET ${BASE}/chain/is-contract?address=<0x…> — $0.002 — contract vs EOA + bytecode size.
 - GET ${BASE}/chain/fee-estimate — $0.002 — Base EIP-1559 fee tiers (slow/standard/fast) + transfer cost.
@@ -6155,7 +6155,7 @@ app.post("/v1/chat/completions/preview", async (c) => {
     paid_url: "https://x402-data-api.sigrunner.workers.dev/v1/chat/completions",
     price_usdc: "0.002",
     adds: "Paid route: full Llama 3.3 70B on every call, up to 400 output tokens, unmetered. This free preview serves the real 70B for your first 3 calls/day/IP, then real Llama 3.2 3B samples (<=80 tokens) — the response's `model` field tells you which you got, so you always see live model output before paying.",
-    pay_with: 'x402 (USDC on Base): npm i x402-fetch viem; const walletClient=createWalletClient({account:privateKeyToAccount(process.env.EVM_PRIVATE_KEY),chain:base,transport:http()}); const f=wrapFetchWithPayment(fetch, walletClient); await f("https://x402-data-api.sigrunner.workers.dev/v1/chat/completions",{method:"POST",body:JSON.stringify({model:"llama-3.3-70b",messages})}). Runnable: https://github.com/rezearcher/x402-data-api/blob/main/examples/buyer.mjs  Docs: https://api.greyridgesignals.ai/llms.txt',
+    pay_with: 'x402 (USDC on Base): npm i x402-fetch viem; const walletClient=createWalletClient({account:privateKeyToAccount(process.env.EVM_PRIVATE_KEY),chain:base,transport:http()}); const f=wrapFetchWithPayment(fetch, walletClient); await f("https://x402-data-api.sigrunner.workers.dev/v1/chat/completions",{method:"POST",body:JSON.stringify({model:"llama-3.3-70b",messages})}). Runnable: https://github.com/rezearcher/x402-data-api/blob/main/examples/llm-chat.mjs (POST LLM example; also a drop-in x402 fallback provider for Daydreams/Lucid-Agents). Docs: https://api.greyridgesignals.ai/llms.txt',
   };
   const previewOut = (txt: string, model: string) =>
     wantStream ? chatSse(txt, model) : c.json({
