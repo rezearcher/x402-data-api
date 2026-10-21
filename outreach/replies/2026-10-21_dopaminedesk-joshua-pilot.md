@@ -22,3 +22,12 @@
 - Pilot proposal: tag gate_swap with ?ref=dopaminedesk; run free preview this week; capped paid test 100 calls=$0.80 to prove settlement; then commercial terms. Asked which flow to wire first.
 
 ## Status: BALL IN THEIR COURT — do not re-ping until they reply (chose flow / ran preview).
+
+---
+## Update (cycle 76, 2026-10-21): referral tagging is now LIVE
+The `?ref=` tagging I proposed to Joshua is shipped + deployed + live-verified (commit 26895b4):
+- Any call URL accepts `&ref=dopaminedesk` (survives the x402 402→sign→retry; recorded on the settled on-chain PAID row).
+- Reconcile view: `GET /internal/traffic-stats?ref_stats=1` (secret-gated) → per-tag external-vs-self payer split + basescan txHashes.
+- Advertised publicly in llms.txt ("Resellers / referral partners").
+
+**When Joshua replies with a flow pick**, hand him the exact x402-fetch snippet for that route WITH `&ref=dopaminedesk` appended, and note that his 100-call paid test will reconcile as a traced sale (external_calls + distinct_external_payers + txHashes). Do NOT re-ping before he replies (ball-in-court).
