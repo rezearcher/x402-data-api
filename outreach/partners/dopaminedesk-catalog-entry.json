@@ -1,0 +1,61 @@
+{
+  "_note": "Paste-ready catalog entries for the DopamineDesk x402 Marketplace (jblaz6335/mcp-server-aidatamarketplace). Shape mirrors the product objects discovery.js consumes (operation_id, name, use_when, description, price_usdc, source, example_request, input_parameters). Prices verified live from our 402 challenges 2026-10-21 (token-report 10000 units=$0.010, gate/swap 8000 units=$0.008, token-security 9000 units=$0.009 — Base USDC, 6 decimals). Settlement pays our wallet 0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10 directly via standard x402 v2 exact scheme on Base mainnet (eip155:8453) through Coinbase CDP — same flow DopamineDesk already uses. Our 402 manifest is at https://x402-data-api.sigrunner.workers.dev/.well-known/x402 so your live-OpenAPI loader can also auto-ingest.",
+  "seller": {
+    "name": "Grey Ridge Signals",
+    "contact": "contact@greyridgesignals.ai",
+    "manifest": "https://x402-data-api.sigrunner.workers.dev/.well-known/x402",
+    "openapi": "https://x402-data-api.sigrunner.workers.dev/openapi.json",
+    "payTo": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10",
+    "network": "eip155:8453",
+    "asset_usdc": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+  },
+  "products": [
+    {
+      "operation_id": "greyridge_gate_swap",
+      "name": "Grey Ridge Swap Safety Gate (Base)",
+      "use_when": "An autonomous trading agent needs a GO / HOLD / BLOCK decision right before a Base ERC-20 swap.",
+      "description": "Pre-trade GO/HOLD/BLOCK gate for a Base ERC-20 swap. Combines honeypot/sellability simulation, admin-control checks (mint/pause/blacklist/fee-setter/upgradeable-proxy, owner-renounced) and Uniswap v3 WETH-pool liquidity vs. your trade size (price-impact guard). Returns one decision + reason + risk_score. Pairs with DopamineDesk transaction-preflight.",
+      "price_usdc": "0.008",
+      "source": "Grey Ridge Signals",
+      "paid_url": "https://x402-data-api.sigrunner.workers.dev/gate/swap",
+      "preview_url": "https://x402-data-api.sigrunner.workers.dev/gate/swap/preview?token=aero&side=buy&notional_usd=500",
+      "example_request": { "token": "0x940181a94A35A4569E4529A3CDfB74e38FD98631", "side": "buy", "notional_usd": 500, "ref": "dopaminedesk" },
+      "input_parameters": [
+        { "name": "token", "required": true, "description": "0x-prefixed ERC-20 contract on Base mainnet" },
+        { "name": "side", "required": false, "description": "buy | sell (default buy)" },
+        { "name": "notional_usd", "required": false, "description": "intended trade size in USD (default 100)" },
+        { "name": "ref", "required": false, "description": "referral tag — set to dopaminedesk so settled calls are attributed to you for reconcile" }
+      ]
+    },
+    {
+      "operation_id": "greyridge_token_report",
+      "name": "Grey Ridge Token Trade-Safety Report (Base)",
+      "use_when": "An agent or buyer wants a full SAFE/CAUTION/AVOID verdict on a Base token before holding or trading it.",
+      "description": "Base ERC-20 trade-safety verdict in one call: SAFE | CAUTION | AVOID + risk_score (0-100) + reasons. Bundles honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, measured transfer tax, symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Pairs with DopamineDesk token-audit.",
+      "price_usdc": "0.010",
+      "source": "Grey Ridge Signals",
+      "paid_url": "https://x402-data-api.sigrunner.workers.dev/chain/token-report",
+      "preview_url": "https://x402-data-api.sigrunner.workers.dev/chain/token-report/preview?token=aero",
+      "example_request": { "token": "0x940181a94A35A4569E4529A3CDfB74e38FD98631", "ref": "dopaminedesk" },
+      "input_parameters": [
+        { "name": "token", "required": true, "description": "0x-prefixed ERC-20 contract on Base mainnet" },
+        { "name": "ref", "required": false, "description": "referral tag — set to dopaminedesk for attributed reconcile" }
+      ]
+    },
+    {
+      "operation_id": "greyridge_token_security",
+      "name": "Grey Ridge Token Security Analysis (Base)",
+      "use_when": "An agent needs the deep per-check security breakdown for a single Base token (not just the summary verdict).",
+      "description": "Full security analysis for a Base ERC-20: per-check honeypot/sellability, admin controls, tax mutability, proxy/upgradeability, LP lock/liquidity. Returns the itemized evidence behind the verdict.",
+      "price_usdc": "0.009",
+      "source": "Grey Ridge Signals",
+      "paid_url": "https://x402-data-api.sigrunner.workers.dev/chain/token-security",
+      "preview_url": "https://x402-data-api.sigrunner.workers.dev/chain/token-security/preview",
+      "example_request": { "token": "0x940181a94A35A4569E4529A3CDfB74e38FD98631", "ref": "dopaminedesk" },
+      "input_parameters": [
+        { "name": "token", "required": true, "description": "0x-prefixed ERC-20 contract on Base mainnet" },
+        { "name": "ref", "required": false, "description": "referral tag — set to dopaminedesk for attributed reconcile" }
+      ]
+    }
+  ]
+}

@@ -1327,6 +1327,10 @@ Runnable version: https://github.com/rezearcher/x402-data-api/blob/main/examples
 
 ## Resellers / referral partners
 Featuring these endpoints in your MCP client, router, or agent? Append &ref=<your-tag> to any call URL (e.g. ${BASE}/gate/swap?token=aero&ref=yourname). The tag rides through the x402 402→sign→retry and is recorded on the settled on-chain call, so your referred volume is measurable and attributable — we can reconcile exactly how many settled calls (and distinct buyers) your integration drove, with Base txHashes. Ask contact@greyridgesignals.ai for a reconcile report on your tag.
+
+## Where to buy (marketplaces / MCP buyer-adapters)
+These third-party x402 buyer tools let agents discover and purchase pay-per-call APIs (including ours) with Base USDC — useful if you want a ready-made buyer client instead of wiring x402-fetch yourself:
+- DopamineDesk x402 Marketplace (by Blaz Algo Systems) — plain-language product discovery, free previews, and capped Base-USDC purchases through one MCP adapter. Repo: https://github.com/jblaz6335/mcp-server-aidatamarketplace — integration partner; our token-safety gate (/gate/swap) and token report (/chain/token-report) pair with their token-audit and transaction-preflight tools.
 `);
 });
 
