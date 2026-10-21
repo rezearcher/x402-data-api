@@ -74,3 +74,23 @@ This is a **distinct lane from token-safety/data** — the ONLY warm pitch-reply
 - Do-not-repeat: don't pitch compute SELLERS (own-models LLM gateways/inference providers);
   don't pitch Solana-rail proxies (openzoo). Genuine compute BUYER = routes LLM calls, wants
   cheap/fallback provider, Base-x402-capable, non-seller (adexto is ~the whole set today).
+
+## Manifest/402 shape is NOT the blocker — VERIFIED v2-compliant (2026-10-21, cycle 53)
+Ruled out the "our discovery manifest/402 is unsignable → silent conversion killer"
+hypothesis with authoritative evidence from the *installed* `@x402/core` schema:
+- `node_modules/@x402/core/.../schemas/index.d.ts:205` — "V2 uses `amount` instead of
+  `maxAmountRequired` and doesn't include resource info." `PaymentRequirementsV2Schema` =
+  `{scheme, network, amount, asset, payTo, maxTimeoutSeconds, extra}`; the 402's top-level
+  `resource:{url,description,...}` carries the URL (not per-accept).
+- Our LIVE 402 on `/gate/swap` returns EXACTLY those fields (`amount:"8000"`,
+  `asset:0x833589…` = Base USDC **contract**, `payTo`, `maxTimeoutSeconds:300`, `extra`)
+  + top-level `resource.url`. Fully v2-signable by stock `x402-fetch`/`wrapFetchWithPayment`.
+- CDP facilitator `@coinbase/cdp-sdk .../guardrails/apply.ts:166` reads `amount` first,
+  falls back to `maxAmountRequired` — so our v2 `amount` is parsed correctly.
+- Our `.well-known/x402` also emits BOTH `amount`+`maxAmountRequired`+per-resource `resource`
+  (belt-and-suspenders, covers v1 clients too). Payable per x402-measure's 4-field rubric
+  (network+asset-as-contract+amount-atomic+payTo); we are in the ~8.2% payable elite.
+- meloliva14/x402-measure (active public network scoreboard, pushed hourly) probes us at
+  `/chain/tx` only; a researcher/measurer, not a buyer. Do NOT pitch (measurers don't pay).
+- **Do-not-repeat:** don't re-investigate manifest/402 field shape as a conversion cause.
+  The blocker is demand (buyer-empty tiny lane), not discovery-shape or signability.
