@@ -1361,8 +1361,12 @@ function withOperationIds<T extends Record<string, Record<string, any>>>(paths: 
       else op.operationId = words.length === 0 ? "root" : words.join("_").replace(/-/g, "_");
     }
   }
-  // Flagship pre-trade gate routes first: importers/agents read paths top-down.
-  const first = ["/gate/swap", "/chain/token-report"];
+  // Data lane first: importers/agents read paths top-down, and the data routes are the
+  // ones that actually convert (the single real non-sweep external payer bought /defi/yields;
+  // the token-safety pitch is dead across 35+ integrator replies). Lead every auto-imported
+  // catalog (x402scan, RapidAPI, registry crawlers) with the proven lane, gate routes after.
+  // This matches the /.well-known/x402 x-guidance ordering so both discovery surfaces agree.
+  const first = ["/defi/yields", "/crypto/funding", "/crypto/prices", "/pm/markets", "/gate/swap", "/chain/token-report"];
   const ordered: Record<string, any> = {};
   for (const k of first) if (k in paths) ordered[k] = (paths as any)[k];
   for (const k of Object.keys(paths)) if (!(k in ordered)) ordered[k] = (paths as any)[k];
@@ -1410,7 +1414,7 @@ app.get("/openapi.json", (c) => {
       title: "Grey Ridge Signals — x402 Data & Security APIs",
       version: "0.1.0", // mirror root package.json (canonical)
       description: "Agent-native pay-per-call data on Base (USDC via x402). No API keys, no signup. Discovery: /.well-known/x402",
-      "x-guidance": "Pay-per-call Base (USDC, x402) APIs for trading agents: /gate/swap (GO/HOLD/BLOCK pre-trade gate, any Base ERC-20, $0.008), /chain/token-report (SAFE/CAUTION/AVOID, $0.01), /chain/token-security (honeypot sim, $0.009), plus DeFi yields, prices, funding, Polymarket and on-chain reads. Free samples: /gate/swap/preview?token=degen and /chain/token-report/preview?token=aero.",
+      "x-guidance": "Pay-per-call Base (USDC, x402) data for agents: /defi/yields (top lending/LP APY + IL risk, $0.001), /crypto/funding (cross-venue funding + arb spread, $0.004), /crypto/prices ($0.001), /pm/markets (Polymarket, $0.005), and 20+ Base RPC/chain reads — plus a pre-trade safety gate: /gate/swap (GO/HOLD/BLOCK, $0.008) and /chain/token-report (SAFE/CAUTION/AVOID, $0.01). Free samples: /defi/yields/preview and /crypto/funding/preview.",
       contact: { name: "Grey Ridge Signals", email: "contact@greyridgesignals.ai", url: "https://x402-data-api.sigrunner.workers.dev" },
     },
     // Custom domain FIRST — an importer takes servers[0] as the base URL, and the
