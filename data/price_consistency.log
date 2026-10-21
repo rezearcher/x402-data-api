@@ -18,3 +18,45 @@
   "n_enforced_routes": 62,
   "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
 }
+{
+  "ts": "2026-10-21T17:25:01.198347+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": true,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 60,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 2,
+      "flat_price": 0.005
+    }
+  },
+  "mismatches": [
+    {
+      "tool": "chain_token_report",
+      "advertised": [
+        0.01
+      ],
+      "enforced": 0.005,
+      "surface": "mcp"
+    },
+    {
+      "tool": "gate_swap",
+      "advertised": [
+        0.008
+      ],
+      "enforced": 0.005,
+      "surface": "mcp"
+    }
+  ],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "2 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}
