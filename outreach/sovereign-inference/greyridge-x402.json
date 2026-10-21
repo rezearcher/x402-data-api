@@ -1,0 +1,23 @@
+{
+  "logging_policy": "metadata_only",
+  "manifest_uri": "https://x402-data-api.sigrunner.workers.dev/v1/models",
+  "max_context": 24000,
+  "models": [
+    "llama-3.3-70b-instruct-fp8-fast",
+    "llama-3.2-3b-instruct"
+  ],
+  "node_type": "external-adapter",
+  "pricing": {
+    "unit": "x402"
+  },
+  "privacy_modes": [
+    "direct"
+  ],
+  "provider_pubkey": "ed25519:3CpzlIc_WyMfdMkDhLd5G3M8F3XD5ijg4sZkV3_mKco",
+  "published_at": "2026-10-21T18:38:52Z",
+  "runtime_adapters": [
+    "openai-compatible-http"
+  ],
+  "schema": "sip-ai.provider_manifest.v1",
+  "signature": "ed25519:Mng2vjdRdDF2OwPoic431L9an4HTI5rnMmvLTbw9ovT7pnqij5hmV4rtOULoHBfBX1b6uJ92OpcO7JEdvapICw"
+}

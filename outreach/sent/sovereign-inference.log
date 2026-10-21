@@ -1,0 +1,6 @@
+2026-10-21 — joshuaswarren/sovereign-inference (SIP-AI, Apache-2.0, DecentralizeAI hackathon entry, x402 direct-pay Phase 3 DONE, external adapters Phase 4 scaffolded)
+WIRE-PR #56: added registry/provider-manifests/greyridge-x402.json — a REAL Ed25519-signed, schema-valid provider manifest advertising our keyless x402 70B endpoint as node_type=external-adapter.
+- Signature produced with their exact documents.py scheme (canonical_json minus signature field); verify_document() == True; jsonschema draft2020-12 == 0 errors.
+- provider_pubkey ed25519:3CpzlIc_WyMfdMkDhLd5G3M8F3XD5ijg4sZkV3_mKco (privkey at ~/.hermes/data/sovereign-inference/provider.key, NOT committed).
+- pricing.unit=x402 (flat 0.002 USDC/call via live 402), models llama-3.3-70b + 3.2-3b, max_context 24000, logging metadata_only.
+Ball-in-court: maintainer joshuaswarren review. Do NOT re-ping. If they ask for a dispatch shim (adapters/provider-greyridge/) that's the next wire action.
