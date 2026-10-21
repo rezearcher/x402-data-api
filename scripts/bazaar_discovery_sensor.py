@@ -112,6 +112,35 @@ def probe(q):
             "our_route": best[1], "our_count": len(ranks), "top3": top3}
 
 
+def metadata_health():
+    """Measure whether CDP actually reflects our CURRENT catalog metadata, or a
+    frozen first-registration snapshot. PROVEN 2026-10-21 (cycle ap+): CDP freezes
+    serviceName/description at first registration — a settlement only bumps
+    quality.lastCalledAt, it does NOT overwrite serviceName/desc. Confirmed: the
+    canary refresh ran 12.8h earlier sending the correct serviceName
+    ('Base Token Safety & Honeypot Scanner') + buyer-language desc, yet CDP still
+    returns serviceName=null + the old jargon desc for 19/20 routes (only
+    /defi/yields ever captured a serviceName, and a STALE one: 'Grey Ridge Signals').
+    Because production revenue settles via xpay (never the CDP facilitator), the
+    ONLY settlements that touch CDP's catalog are our own canary self-pays — which
+    are forbidden (self-dealing, scoreboard pollution). => CDP need-phrase rank is
+    NOT a legitimately movable lever for us; low coverage is a STRUCTURAL state,
+    not an actionable regression. Returns (named, total, frozen:bool)."""
+    try:
+        u = BASE + "?" + urllib.parse.urlencode({"query": "sigrunner", "limit": 20})
+        req = urllib.request.Request(u, headers={"user-agent": "Mozilla/5.0 (greyridge-discovery-sensor)"})
+        d = json.load(urllib.request.urlopen(req, timeout=25))
+        rs = [r for r in (d.get("resources") or d.get("items") or []) if _is_ours(r)]
+        named = sum(1 for r in rs if (r.get("serviceName") or (r.get("info") or {}).get("serviceName")))
+        total = len(rs)
+        # frozen when the vast majority of indexed routes still lack the serviceName
+        # the catalog refresh has been sending for weeks (>=70% null = pinned-stale)
+        frozen = total > 0 and named <= 0.3 * total
+        return named, total, frozen
+    except Exception:
+        return None, None, None
+
+
 def main():
     results = []
     cat_by_q = dict(QUERY_CATS)
@@ -138,13 +167,36 @@ def main():
          for d, c in dom_cats.items() if len(c) >= 2),
         key=lambda x: (-len(x["categories"]), -x["top3_hits"], x["domain"]),
     )
+    named, named_total, frozen = metadata_health()
+    # STRUCTURAL FINDING (cycle ap+, 2026-10-21): low CDP coverage is NOT an
+    # actionable regression when our metadata is frozen stale — CDP pins
+    # serviceName/desc at first registration and only self-pay settlements (which
+    # are forbidden) touch its catalog. So we only ALERT on low coverage if the
+    # metadata is NOT frozen (i.e. coverage dropped for a reason we could actually
+    # fix). When frozen, we record the dead-lever conclusion and do NOT cry wolf.
+    structural_block = None
+    if frozen:
+        structural_block = (
+            "CDP metadata frozen at first-registration: %s/%s indexed routes carry "
+            "a serviceName despite the catalog refresh sending it for weeks. CDP "
+            "settlements only bump quality.lastCalledAt; serviceName/desc are not "
+            "overwritten. Production revenue settles via xpay (never CDP facilitator), "
+            "so the only catalog-touching settlements are forbidden self-pays. => CDP "
+            "need-phrase rank is NOT a legitimately movable lever; pursue direct dev "
+            "integrations (wire-our-URL PRs) + x402scan browse instead." % (named, named_total)
+        )
     payload = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "endpoint": BASE,
         "total_queries": total,
         "found_for": found,
         "coverage_pct": cov,
-        "alert": cov < 50.0,
+        "metadata_named_routes": named,
+        "metadata_total_routes": named_total,
+        "metadata_frozen": frozen,
+        "structural_block": structural_block,
+        # alert only on a FIXABLE coverage gap, never on the proven dead lever
+        "alert": cov < 50.0 and not frozen,
         "distribution_candidates": distribution_candidates,
         "queries": results,
     }
@@ -153,6 +205,8 @@ def main():
         json.dump(payload, f, indent=2)
     print(f"bazaar discovery coverage: {found}/{total} queries surface us ({cov}%)"
           + ("  [ALERT: most buyer queries don't find us]" if payload["alert"] else ""))
+    if structural_block:
+        print(f"  [STRUCTURAL / dead lever — not an actionable alert] {structural_block}")
     for r in results:
         rk = r.get("our_best_rank")
         tag = f"rank {rk} {r.get('our_route')}" if rk else ("ERR " + r["error"] if r.get("error") else "NOT in top-20")
