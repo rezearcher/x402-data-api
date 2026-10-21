@@ -886,6 +886,20 @@ app.get("/.well-known/x402", (c) => {
         "Pay-per-call x402 for Base agents, led by the pre-trade safety gate: /gate/swap (GO/HOLD/BLOCK sized to your trade, $0.008), /chain/token-report (SAFE/CAUTION/AVOID with measured transfer tax, $0.01) and /chain/token-security (live honeypot/sellability sim, $0.009) — a honeypot check for a fraction of what rival Base token-safety APIs charge (up to $0.25/call). Plus market & on-chain data: /defi/yields (lending/LP yields + IL risk), /crypto/funding (cross-venue Hyperliquid+OKX+dYdX funding + arb spread), /crypto/prices, /pm/markets (Polymarket) and 20+ Base RPC/chain routes. Free /preview paths on the flagship routes. No account, no key — agents pay inline in USDC from $0.001/call.",
       website: BASE,
       categories: ["prediction-markets", "crypto", "data", "security", "mcp", "funding", "yield", "token-price", "rpc", "base", "onchain", "blockchain"],
+      // Measured reliability — the question every integrator asks first (latency/uptime).
+      // Sourced from STATUS_SNAPSHOT (scripts/status_report.py over data/uptime_samples.jsonl),
+      // surfaced here so a buyer-agent or registry reviewer evaluating trust reads the real
+      // number from the machine-readable surface rather than having to ask. Measurement, not an SLA.
+      reliability: {
+        measured_success_pct: STATUS_SNAPSHOT.overall_success_pct,
+        samples: STATUS_SNAPSHOT.window.samples,
+        window_from: STATUS_SNAPSHOT.window.from,
+        window_to: STATUS_SNAPSHOT.window.to,
+        probe: "free /preview paths, every 5 min",
+        live_readout: `${BASE}/status`,
+        raw_samples: "https://github.com/rezearcher/x402-data-api/blob/main/data/uptime_samples.jsonl",
+        note: STATUS_SNAPSHOT.note,
+      },
     },
     name: "Grey Ridge Signals",
     provider: "Grey Ridge Signals Group LLC",
@@ -1494,6 +1508,13 @@ app.get("/openapi.json", (c) => {
           summary: "Landing page (HTML, free).",
           description: "Self-contained HTML landing page — pitch, endpoint-group pricing table, free curl sample, MCP install snippet, discovery links. No payment required.",
           responses: { "200": { description: "HTML landing page" } },
+        },
+      },
+      "/status": {
+        get: {
+          summary: "Measured uptime/latency snapshot (free).",
+          description: "Machine-readable reliability artifact: measured success rate and per-route p50/p95 latency from a 5-minute probe over the free /preview paths (source: data/uptime_samples.jsonl). This is the latency/uptime answer every integrator asks for, served as JSON — a measurement, not an SLA. No payment required.",
+          responses: { "200": { description: "JSON — overall_success_pct, window, and per-endpoint samples/success_pct/p50_ms/p95_ms" } },
         },
       },
       "/crypto/prices": paid("Spot token prices + change_24h (DefiLlama).", "0.001", [{ name: "coins", desc: "comma-separated coingecko ids (max 25)", example: "bitcoin,ethereum" }]),
