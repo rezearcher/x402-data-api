@@ -958,10 +958,29 @@ app.get("/.well-known/x402", (c) => {
 // discovery (https://a2a-protocol.org/latest/topics/agent-discovery).
 // Lists every skill this service provides as an A2A-discoverable agent.
 // Skills reference real route/tool names from this API (not fabricated),
-// and describe the x402 payment flow in plain language since A2A's spec
-// has no native payment-extension field yet.
+// and declare x402 payment structurally via the A2A x402 extension
+// (capabilities.extensions uri=https://x402.org/extension/v1) + an
+// x402Payment securityScheme, so A2A+x402 agents can auto-wire payment
+// without reading prose (adopted from the graded-conformant ChainAware
+// A2A card, 2026-10-21).
 app.get("/.well-known/agent-card.json", (c) => {
   const BASE = "https://x402-data-api.sigrunner.workers.dev";
+  // Per-skill machine metadata: real route + live-enforced USDC price
+  // (verified vs /.well-known/x402 on 2026-10-21) so an agent can auto-wire
+  // the exact endpoint and expected price. Previews only where one exists.
+  const RM: Record<string, { endpoint: string; price_usdc: string; preview?: string }> = {
+    "gate-swap": { endpoint: "/gate/swap", price_usdc: "0.008", preview: "/gate/swap/preview" },
+    "crypto-prices": { endpoint: "/crypto/prices", price_usdc: "0.001", preview: "/crypto/prices/preview" },
+    "funding-rates": { endpoint: "/crypto/funding", price_usdc: "0.004", preview: "/crypto/funding/preview" },
+    "defi-yields": { endpoint: "/defi/yields", price_usdc: "0.001", preview: "/defi/yields/preview" },
+    "polymarket-markets": { endpoint: "/pm/markets", price_usdc: "0.005", preview: "/pm/markets/preview" },
+    "base-chain-reads": { endpoint: "/chain/gas-price", price_usdc: "0.002", preview: "/chain/gas-price/preview" },
+    "token-report": { endpoint: "/chain/token-report", price_usdc: "0.01", preview: "/chain/token-report/preview" },
+    "token-security": { endpoint: "/chain/token-security", price_usdc: "0.009", preview: "/chain/token-security/preview" },
+    "mcp-security-scan": { endpoint: "/scan/mcp", price_usdc: "0.05", preview: "/scan/mcp/preview" },
+    "domain-enrichment": { endpoint: "/enrich/domain", price_usdc: "0.01" },
+  };
+  const X402SEC = [{ x402Payment: [] as string[] }];
   return c.json({
     name: "Grey Ridge Signals — x402 Data & Security API",
     description:
@@ -975,11 +994,32 @@ app.get("/.well-known/agent-card.json", (c) => {
       url: BASE,
     },
     version: "0.1.0", // mirror root package.json (canonical)
+    protocolVersion: "0.3.0",
+    preferredTransport: "HTTP+JSON",
     documentationUrl: BASE,
     capabilities: {
       streaming: false,
       pushNotifications: false,
+      extensions: [
+        {
+          uri: "https://x402.org/extension/v1",
+          description:
+            "x402 HTTP micropayment protocol. Each paid skill returns HTTP 402 until the request carries a valid X-PAYMENT header: an EIP-3009 gasless USDC authorization on Base (network eip155:8453, asset USDC, 6 decimals). The x402-fetch client signs + retries automatically. Free previews are unpaid. Machine-readable manifest: /.well-known/x402.",
+          required: false,
+          params: { protocol: "x402", scheme: "exact", network: "eip155:8453", asset: "USDC", version: 2 },
+        },
+      ],
     },
+    securitySchemes: {
+      x402Payment: {
+        type: "apiKey",
+        in: "header",
+        name: "X-PAYMENT",
+        description:
+          "x402 v2 micropayment header (EIP-3009 gasless USDC on Base, network eip155:8453). Construct it with the x402-fetch client against the returned 402 challenge. No account or API key required. See https://x402.org and /.well-known/x402.",
+      },
+    },
+    security: [{ x402Payment: [] }],
     defaultInputModes: ["application/json"],
     defaultOutputModes: ["application/json"],
     skills: [
@@ -1127,7 +1167,23 @@ app.get("/.well-known/agent-card.json", (c) => {
           "GET /whois/example.com",
         ],
       },
-    ],
+    ].map((s: any) => {
+      const m = RM[s.id];
+      return {
+        ...s,
+        security: X402SEC,
+        securityRequirements: X402SEC,
+        inputModes: ["application/json"],
+        outputModes: ["application/json"],
+        metadata: {
+          method: "GET",
+          network: "eip155:8453",
+          asset: "USDC",
+          ...(m ? { price_usdc: m.price_usdc, endpoint: BASE + m.endpoint } : {}),
+          ...(m?.preview ? { preview: BASE + m.preview } : {}),
+        },
+      };
+    }),
   });
 });
 
