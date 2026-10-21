@@ -51,6 +51,21 @@ A full runnable scanner (free preview with no wallet, then the paid ranked scan)
 [`examples/funding-arb-scanner.mjs`](../examples/funding-arb-scanner.mjs):
 `node examples/funding-arb-scanner.mjs` (preview) · `EVM_PRIVATE_KEY=0x... node examples/funding-arb-scanner.mjs` (full scan).
 
+## Audit an MCP server you run (free preview, works through auth)
+If you operate MCP servers, screen the advertised tool metadata for tool-poisoning /
+prompt-injection before trusting a tool. `/scan/mcp/preview` is static analysis of the
+tool descriptions only — it never invokes a tool and nothing leaves your side except the
+metadata your server already advertises. One tested one-liner pulls your server's
+`tools/list` (through auth) and pipes it straight into the free preview:
+```sh
+BRIDGE=https://your-mcp-host/mcp TOKEN="Bearer eyJ..." ./examples/mcp-scan-preview.sh
+```
+Returns `tools_scanned`, severity breakdown, `risk_score` and a go/review verdict. The
+paid itemized scan ($0.05 via `GET /scan/mcp`, or $0.005 as the `scan_mcp_server` MCP
+tool) adds which tool, the evidence and remediation. Script:
+[`examples/mcp-scan-preview.sh`](../examples/mcp-scan-preview.sh). Paste mode (no network
+reachability needed): `POST {"tools":[...]}` to the same preview URL.
+
 ## Look before you pay (free, no wallet)
 Every flagship route has a `/preview` with the same response shape — demo tokens are
 unlimited, arbitrary real tokens get 3 free checks/IP/day, then a 429 with the paid URL:
