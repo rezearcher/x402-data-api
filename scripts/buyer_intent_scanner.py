@@ -16,13 +16,25 @@ responsive. The sensor ranks them so each cycle can act on the single best targe
 instead of re-grepping GitHub by hand.
 
 Ground-truth signals (NO hardcoded roster-as-logic — all derived at runtime):
-  - network: inferred from repo description + topics + a code-signal count, so a
-    Base-only API (ours) is not pitched at a Stellar/Solana/Aptos/BNB-only buyer
-    whose own x402 client policy would REFUSE a Base USDC challenge (observed:
-    OracleDesk, halora, pokter all network-refuse us). Base/EVM-compatible = HOT.
-  - freshness: pushed_at age — a stale (>45d) demo is near-dead; active = HOT.
+  - chain-fit (the PROVEN replied->paid killer, measured against the 58-reply corpus
+    2026-10-21): HOT requires POSITIVE Base/EVM evidence (net == base-evm), because
+    every explicit NO that named a reason was a chain mismatch — Robinhood Chain
+    (fly.ai), XRP (Sluzen/Agorean), BNB (pokter), Solana/NEAR (noobshole). An agent
+    whose framework signs another chain replies "interested" then cannot sign our Base
+    EIP-3009 USDC authorization. "unknown"/"multi" = chain-fit UNCONFIRMED -> WARM, never
+    crowned the single best target.
+  - seller-vs-buyer: an insider issue on an active Base repo looks identical whether the
+    team builds a data BUYER (demand) or a data/trust SELLER (rival). SELLER_SELF keys on
+    the repo's OWN description self-describing as a provider/guard-layer/facilitator/
+    gateway that sells a service -> SELLER_PITCH (observed: pulsefeed-x402, industrial-
+    platform-agent-tools were sellers surfacing as HOT).
+  - role: census/observatory/operating-ledger/market-size automations forbid or never
+    make paid requests -> RESEARCH.
+  - freshness: pushed_at age — a stale (>45d) demo is near-dead; active required for HOT.
   - ownership: issues authored by us (rezearcher) are OUR pitches, not demand — dropped.
   - contacted: deduped against outreach/sent/ so we never re-pitch.
+All signals derive from each repo's own description/topics/body and degrade open
+(unmatched stays visible as WARM for manual judgement) — never a maintained list.
 
 Output: ranked JSON (HOT/WARM/COLD) + human summary naming this cycle's single best
 Base-compatible, active, un-contacted target. Degrades open: on any gh error it
@@ -68,8 +80,25 @@ OTHER_CHAIN = re.compile(r"\b(stellar|soroban|solana|aptos|sui|\bbnb\b|bsc|xrp|p
 # were all read-only analysts that constrain "no paid requests/self-payments") burns
 # pulls. The signal is the issue's own stated constraint/role, not a repo roster.
 NO_PAY = re.compile(r"no (paid|external) (requests|payments|services)|no self-?payment|without approval|read-?only collector", re.I)
-ANALYST = re.compile(r"\b(observatory|census|collector|crawler|market research|demand research|scouting|scout the|catalog(ue)? scan|discovery (collector|index|scan))\b", re.I)
+ANALYST = re.compile(r"\b(observatory|census|collector|crawler|market research|demand research|scouting|scout the|catalog(ue)? scan|discovery (collector|index|scan)|operating ledger|ledger archive|market-size)\b", re.I)
 PARKED = re.compile(r"\bPARKED\b|priority[- ]reset|paused\b|do not (create|build) another", re.I)
+
+# Seller/competitor self-description discriminator (derived from the repo's OWN
+# description — the ground-truth of what the repo IS, not a maintained roster). An
+# insider issue on an active Base repo looks identical whether the team is building a
+# data BUYER (demand, convertible) or a data/trust SELLER (a rival — never pays us).
+# Observed 2026-10-21: all 3 "HOT" survivors were sellers — pulsefeed-x402 ("trust &
+# safety LAYER for x402 ... Guard SDK"), industrial-platform-agent-tools ("integration
+# TOOLKIT ... to ... data SERVICES"), so the insider+base+active gate alone is ~0%
+# precision. These markers key on self-as-PROVIDER framing (sells/exposes/monetizes a
+# service, or is a trust/guard/facilitator/gateway layer). Degrades open: no match =
+# unchanged, still surfaced for manual judgement.
+SELLER_SELF = re.compile(
+    r"(trust ?& ?safety layer|guard sdk|\bfacilitator\b|pay-?per-?(call|tool|request) (micropayments?|server|api|infrastructure)"
+    r"|monetiz|\bresell|\bgateway\b|\brouter\b|unified payment|data services via|our (api|endpoint|feed|service|data)"
+    r"|sell (your|data|signals)|expose[sd]? .{0,20}paid|payment (execution )?layer|\bprovider\b.{0,20}(sdk|toolkit|platform))",
+    re.I,
+)
 
 
 def gh(args):
@@ -168,7 +197,17 @@ def main():
         net = infer_network(meta, it.get("body", ""))
         contacted = already_contacted(repo, num)
         active = age_days is not None and age_days <= 45
-        base_ok = net in ("base-evm", "multi-or-ambiguous", "unknown")
+        # Chain-fit is the PROVEN replied->paid conversion killer. Measured against the
+        # 58-reply corpus (2026-10-21): every explicit NO that named a reason gave chain
+        # mismatch — Robinhood Chain (fly.ai), XRP (Sluzen/Agorean), BNB (pokter),
+        # Solana/NEAR (noobshole). Our paid call requires signing a *Base* EIP-3009 USDC
+        # authorization; an agent whose wallet/framework signs another chain replies
+        # "interested" then cannot convert without cross-chain friction. So HOT now needs
+        # POSITIVE Base/EVM evidence (net == base-evm), not merely absence of another chain.
+        # "unknown"/"multi" = chain-fit UNCONFIRMED -> WARM (surfaced, never named the single
+        # best target). Signal is derived per-repo from desc/topics/body, degrades open.
+        strong_base = net == "base-evm"
+        plausible_base = net in ("multi-or-ambiguous", "unknown")
         # Demand vs rival-seller: a repo OWNER/MEMBER/COLLABORATOR opening the issue is
         # the team building/planning a BUYER (demand-side). An outsider (assoc NONE)
         # posting an external endpoint + price is a rival SELLER pitching — not a buyer
@@ -178,19 +217,23 @@ def main():
         body = it.get("body", "")
         text = (it.get("title", "") + "\n" + body)
         research = bool(NO_PAY.search(text) or ANALYST.search(text) or PARKED.search(text))
+        # Seller-self keys on the REPO's own description (what it IS), not the issue text.
+        seller_self = bool(SELLER_SELF.search(meta.get("description") or ""))
 
         if contacted:
             tier = "CONTACTED"
-        elif not insider:
-            tier = "SELLER_PITCH"  # outsider pitching their own endpoint — a rival, not demand
+        elif not insider or seller_self:
+            tier = "SELLER_PITCH"  # outsider pitching, OR an insider whose repo sells/exposes its own service — a rival, not demand
         elif research:
             tier = "RESEARCH"  # census/collector/observatory or forbids paid requests — never a payer
         elif net == "other-chain":
             tier = "COLD"  # their x402 client policy would refuse a Base challenge
-        elif base_ok and active:
-            tier = "HOT"
-        elif base_ok:
-            tier = "WARM"  # Base-ok but stale
+        elif strong_base and active:
+            tier = "HOT"  # positive Base/EVM evidence + active = genuinely convertible
+        elif strong_base:
+            tier = "WARM"  # Base-confirmed but stale
+        elif plausible_base and active:
+            tier = "WARM"  # active but chain-fit UNCONFIRMED — don't crown it the best target
         else:
             tier = "COLD"
 
