@@ -1,0 +1,4 @@
+2026-10-21 | BiscayneDev/shipyard-inference PR #34 | wire-PR: createGreyRidgeProvider (keyless x402 OpenAI-compat LLM, Base USDC)
+ICP: compute-fallback aggregator (wraps Anthropic/OpenAI/UsePod behind one LLMProvider, already does x402 w/ Open Wallet Standard signing).
+Rationale: matches the ONE warm reply ICP (adexto #4 — cheap x402 fallback lane); NOT the dead token-safety lane (5/5 fresh NOs).
+Edge for this repo: keyless → zero signup, pays via their existing createPayingFetch. Mergeable.
