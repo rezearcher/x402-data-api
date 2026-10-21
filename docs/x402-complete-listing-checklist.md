@@ -11,7 +11,7 @@ Checklist we apply to Grey Ridge's endpoints:
    (demo tokens: usdc, weth, cbbtc, aero, degen)
 3. **Same-origin OpenAPI** with `x-payment-info` + `x-guidance`: `https://x402-data-api.sigrunner.workers.dev/openapi.json`
 4. **Payment-required header mirrored in the 402 body** so v1 crawlers can parse it.
-5. **Priced at the market point** ($0.01 gate/swap, $0.02 token-security, $0.05 token-report).
+5. **Priced at the market point** ($0.008 gate/swap, $0.009 token-security, $0.01 token-report) — verified live against the 402 challenges; keep in sync with `/.well-known/x402`.
 
 Use case: before an autonomous Base trading agent swaps into a token, call `/gate/swap` for a one-word GO / HOLD / BLOCK (honeypot sim, admin controls, pool-liquidity price impact). Example client: `docs/examples/swap-gate/gate.mjs`.
 

@@ -88,6 +88,104 @@ const NETWORK = "eip155:8453" as const; // Base mainnet
 // Native USDC on Base (the x402 settlement asset). 6 decimals — published in the
 // 402 offer's `extra` so a buyer can render the human amount without guessing.
 const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
+
+// Short human-readable route name for Bazaar discovery (e.g. "/pm/markets" -> "PM Markets").
+function shortRouteName(p: string): string {
+  return p
+    .replace(/^\/+|\/+$/g, "")
+    .split("/")
+    .map((seg) =>
+      seg
+        .replace(/[{}]/g, "")
+        .split("-")
+        .map((w) => (w === "defi" ? "DeFi" : w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
+        .join(" ")
+    )
+    .join(" ");
+}
+
+// Routes that expose a free, key-less /preview path (same response shape as the
+// paid call, no payment). Mirrors the `${p}/preview` handlers registered in this
+// file — kept as an explicit data set so the machine-readable manifest can tell a
+// marketplace/reseller auto-wiring our catalog to offer buyers a free trial before
+// the paid call (a buyer evaluating us via a catalog shouldn't have to pay blind).
+// Degrades open: a route missing from this set simply omits preview_url (never a
+// broken link or a false claim). Every entry here is a real, live-probed handler.
+const PREVIEW_ROUTES = new Set<string>([
+  "/gate/swap", "/chain/token-report", "/chain/token-security", "/crypto/prices",
+  "/crypto/funding", "/defi/yields", "/pm/markets", "/chain/gas-price",
+  "/chain/block-number", "/chain/token-balance", "/defi/protocol-risk",
+  "/defi/safe-yields", "/enrich/tech-risk", "/scan/mcp", "/ai/ask", "/ai/extract",
+  "/v1/chat/completions",
+]);
+
+// Single source of truth for paid routes: [path, method, price_usdc, atomic_units, description, tags].
+    // Lane order derived from measured on-chain demand (onchain_demand_by_lane.json):
+    // token-safety is the #1 live-demand lane — lead the machine-import surface with it.
+const ROUTE_CATALOG: Array<[string, string, string, string, string, string[]]> = [
+  ["/gate/swap", "GET", "0.008", "8000", "Is this Base token safe to swap right now? GO / HOLD / BLOCK pre-trade safety gate for autonomous trading agents: is it a honeypot, can you sell it, and is your trade too big for the pool? Honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your notional — one decision + reason in one fast call.", ["security", "base", "onchain", "trading", "gate", "agents", "token", "honeypot", "token-security", "data"]],
+  ["/chain/token-report", "GET", "0.01", "10000", "Is this Base token safe to buy? One call returns a trade-safety verdict — SAFE | CAUTION | AVOID — with risk_score (0-100) and reasons: honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, measured transfer tax, symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade before an agent buys a Base ERC-20.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "verdict", "trading", "token-security", "data"]],
+  ["/chain/token-security", "GET", "0.009", "9000", "Is this Base token a honeypot — can a real wallet actually sell it? Token-security / honeypot detector for a Base ERC-20: EIP-1967 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement, and a live eth_call state-override sim testing whether a synthetic wallet can transfer() it. Real compute, not a thin data wrapper. Returns risk_score (0-100) + verdict (clear/review/block) + flags.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "token-security", "data"]],
+  ["/pm/markets", "GET", "0.005", "5000", "Live Polymarket prediction markets — question, outcomes, bestBid/bestAsk/spread, volume24hr/volume1wk, oneDayPriceChange, clobTokenIds, conditionId, category tags, liquidity, end date. Ranked by volume24hr; filter by keyword.", ["prediction-markets", "polymarket", "markets", "crypto", "data"]],
+  ["/crypto/funding", "GET", "0.004", "4000", "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, premium/basis, annualized_hl/annualized_okx, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices, open interest.", ["crypto", "funding", "perps", "hyperliquid", "okx", "dydx", "arbitrage", "defi", "market-data", "data"]],
+  ["/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, pool id, APY breakdown + 1d/7d/30d APY trend, IL risk (incl. il7d), exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL. Filter by project, chain, or stablecoin-only; sort by TVL or risk-adjusted APY.", ["defi", "yield", "lending", "apy", "tvl", "defi-yields", "data"]],
+  ["/crypto/prices", "GET", "0.001", "1000", "Spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/change_24h/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "market-data", "defi", "data"]],
+  ["/scan/mcp", "GET", "0.05", "50000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score + verdict (clear/review/block).", ["security", "mcp", "audit", "prompt-injection"]],
+  ["/enrich/tech-risk", "GET", "0.01", "10000", "Tech-stack fingerprint -> CVE (NVD) + EPSS + CISA-KEV attack-surface risk + verdict (clear/review/block) for a domain.", ["security", "cve", "risk"]],
+  ["/enrich/domain", "GET", "0.01", "10000", "Firmographic + tech-stack enrichment for a domain, incl. full subdomain enumeration via certificate-transparency logs (crt.sh, RDAP, DoH, HTTP fingerprint) + verdict (clear/review/block, based on domain age).", ["data", "domain", "enrichment"]],
+  ["/chain/block-number", "GET", "0.002", "2000", "Current Base mainnet block number.", ["rpc", "base", "onchain", "blockchain", "data"]],
+  ["/chain/gas-price", "GET", "0.002", "2000", "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, and gas_price_usd — no price oracle on ETH-only competitors.", ["rpc", "base", "onchain", "blockchain", "data"]],
+  ["/chain/balance", "GET", "0.002", "2000", "ETH balance of a Base mainnet address, incl. balance_usd (internal ETH price cross-call).", ["rpc", "base", "onchain", "blockchain", "data"]],
+  ["/chain/token-balance", "GET", "0.002", "2000", "ERC-20 token balance of a Base mainnet address, incl. symbol, decimals, balance_formatted.", ["rpc", "base", "onchain", "blockchain", "data"]],
+  ["/chain/tx", "GET", "0.005", "5000", "Transaction details by hash on Base mainnet.", ["rpc", "base", "onchain", "blockchain", "data"]],
+  ["/chain/receipt", "GET", "0.005", "5000", "Transaction receipt by hash on Base mainnet — status, gas used, full logs, and the L1 fee breakdown (l1_fee_wei, l1_gas_price_wei, l1_gas_used, effective_gas_price_wei) + l1_fee_usd/total_fee_usd an ETH-only competitor can't offer.", ["rpc", "base", "onchain", "blockchain", "data"]],
+  ["/chain/code", "GET", "0.002", "2000", "Contract-code check for a Base mainnet address (is_contract + code size + EIP-7702 delegated-EOA detection).", ["rpc", "base", "onchain", "blockchain", "data"]],
+  ["/chain/erc20-meta", "GET", "0.002", "2000", "ERC-20 metadata on Base: name, symbol, decimals, totalSupply for any token contract.", ["rpc", "base", "onchain", "token", "erc20", "data"]],
+  ["/chain/nonce", "GET", "0.002", "2000", "Transaction count (nonce) for a Base address, latest and pending.", ["rpc", "base", "onchain", "blockchain", "data"]],
+  ["/chain/is-contract", "GET", "0.002", "2000", "Is a Base address a smart contract or an EOA (is_contract + bytecode size).", ["rpc", "base", "onchain", "contract", "data"]],
+  ["/chain/fee-estimate", "GET", "0.002", "2000", "Base EIP-1559 fee estimate: base fee, suggested priority fee, max-fee tiers (slow/standard/fast) in gwei and a 21k-gas transfer cost.", ["rpc", "base", "onchain", "gas", "fees", "data"]],
+  ["/chain/network-status", "GET", "0.002", "2000", "Base network status snapshot: chain id, latest block, block age, gas used ratio and tx count.", ["rpc", "base", "onchain", "status", "health", "data"]],
+  ["/chain/l1-base-fee", "GET", "0.002", "2000", "Ethereum L1 base fee as seen by Base's GasPriceOracle (wei/gwei) plus estimated L1 data fee for a simple transfer.", ["rpc", "base", "onchain", "gas", "l1", "fees", "data"]],
+  ["/chain/fee-history", "GET", "0.002", "2000", "Base fee history for the last 10 blocks: base fee per block (gwei), gas-used ratios and a min/max/avg summary. Use when an agent times transactions around cheap blocks.", ["rpc", "base", "onchain", "gas", "fees", "history", "data"]],
+  ["/chain/blob-base-fee", "GET", "0.002", "2000", "Base EIP-4844 blob base fee from the GasPriceOracle (wei/gwei). Use when an agent estimates L1 data-availability cost for Base batches.", ["rpc", "base", "onchain", "gas", "blob", "fees", "data"]],
+  ["/chain/eth-usd", "GET", "0.001", "1000", "Base ETH/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain ETH price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]],
+  ["/chain/btc-usd", "GET", "0.001", "1000", "Base BTC/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain BTC price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]],
+  ["/chain/prices", "GET", "0.001", "1000", "Base crypto price snapshot in one call: BTC, ETH, LINK and SOL USD spot from Chainlink aggregators with per-feed staleness. Use when an agent needs a multi-asset trusted on-chain price board.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "snapshot", "data"]],
+  ["/chain/sol-usd", "GET", "0.001", "1000", "Base SOL/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain SOL price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]],
+  ["/chain/link-usd", "GET", "0.001", "1000", "Base LINK/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain LINK price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]],
+  ["/chain/total-supply", "GET", "0.002", "2000", "ERC-20 total supply on Base (raw + formatted, with symbol and decimals).", ["rpc", "base", "onchain", "token", "erc20", "data"]],
+  ["/chain/storage-at", "GET", "0.002", "2000", "Raw storage slot read (eth_getStorageAt) for any Base contract; slot defaults to 0x0. Use when an agent needs proxy implementation/admin slots or raw contract state.", ["rpc", "base", "onchain", "contract", "data"]],
+  ["/chain/proxy-info", "GET", "0.002", "2000", "EIP-1967 proxy resolver for a Base contract: returns implementation, admin and beacon addresses (read from the standard storage slots) plus is_proxy flag. Use when an agent must know what code actually runs behind a proxy before trusting or calling it.", ["rpc", "base", "onchain", "contract", "proxy", "security", "data"]],
+  ["/chain/allowance", "GET", "0.002", "2000", "ERC-20 allowance(owner, spender) on Base, raw + formatted, flags unlimited approvals.", ["rpc", "base", "onchain", "token", "erc20", "data"]],
+  ["/defi/chains-tvl", "GET", "0.003", "3000", "Top blockchains ranked by total DeFi TVL (DefiLlama): name, TVL USD, gas token. No params. Use when an agent needs a quick map of where DeFi capital sits.", ["defi", "tvl", "chains", "data"]],
+  ["/crypto/stablecoins", "GET", "0.003", "3000", "Top stablecoins by circulating supply (DefiLlama): name, symbol, price, peg type, circulating USD. No params. Use when an agent needs stablecoin supply and depeg checks.", ["crypto", "stablecoins", "depeg", "supply", "data"]],
+  ["/defi/protocols-top", "GET", "0.003", "3000", "Top DeFi protocols by TVL (DefiLlama): name, category, TVL USD, 1d/7d change, chain. No params. Use when an agent needs a ranked protocol league table.", ["defi", "protocols", "tvl", "data"]],
+  ["/defi/dex-volume", "GET", "0.003", "3000", "Top DEXs by 24h trading volume (DefiLlama): name, 24h/7d volume USD, 1d change, plus market total. No params. Use when an agent needs where on-chain swap volume is flowing.", ["defi", "dex", "volume", "data"]],
+  ["/crypto/fear-greed", "GET", "0.002", "2000", "Crypto Fear & Greed Index (alternative.me): current value 0-100, classification, history of last N days. No params. Use when an agent needs a market-sentiment gauge.", ["crypto", "sentiment", "fear-greed", "data"]],
+  ["/crypto/trending", "GET", "0.003", "3000", "Trending coins on CoinGecko right now: name, symbol, market-cap rank, 24h price change. No params. Use when an agent needs what the market is searching for.", ["crypto", "trending", "coingecko", "data"]],
+  ["/defi/fees-top", "GET", "0.003", "3000", "Top DeFi protocols by 24h fees (DefiLlama): name, 24h/7d fees USD, 1d change, plus market total. No params. Use when an agent needs which protocols earn the most.", ["defi", "fees", "revenue", "data"]],
+  ["/crypto/global", "GET", "0.002", "2000", "Global crypto market stats (CoinGecko): total market cap, 24h volume, BTC/ETH dominance, active coins. No params. Use when an agent needs a one-call market overview.", ["crypto", "market", "global", "data"]],
+  ["/crypto/markets-top", "GET", "0.003", "3000", "Top coins by market cap (CoinGecko): price, market cap, 24h volume, 24h change; ?limit= up to 100. No required params. Use when an agent needs a ranked market snapshot.", ["crypto", "markets", "price", "data"]],
+  ["/crypto/movers", "GET", "0.003", "3000", "Top 24h gainers and losers among the top-100 coins (CoinGecko). No params. Use when an agent needs what is moving the market right now.", ["crypto", "movers", "gainers", "losers", "data"]],
+  ["/brief/market", "GET", "0.01", "10000", "One-call crypto market brief: Fear & Greed, global market cap/dominance, top movers, trending coins and top DeFi fee earners. No params. Use when an agent needs a full market snapshot in a single payment.", ["crypto", "market", "brief", "snapshot", "data"]],
+  ["/crypto/exchanges-top", "GET", "0.003", "3000", "Top crypto exchanges by trust score (CoinGecko): name, country, year, trust score and rank, 24h BTC volume. No params. Use when an agent needs exchange due-diligence data.", ["crypto", "exchanges", "trust", "data"]],
+  ["/crypto/categories", "GET", "0.003", "3000", "Crypto sector performance (CoinGecko categories): market cap, 24h change, volume per sector, top by market cap. No params. Use when an agent needs sector rotation signals.", ["crypto", "sectors", "categories", "data"]],
+  ["/defi/hacks-recent", "GET", "0.003", "3000", "Most recent DeFi/crypto hacks and exploits (DefiLlama): date, name, amount lost USD, chain, technique, bridge-hack flag; ?limit= up to 50. No required params. Use when an agent needs live security-incident risk signals.", ["defi", "security", "hacks", "exploits", "data"]],
+  ["/crypto/derivatives-exchanges", "GET", "0.003", "3000", "Top crypto derivatives exchanges (CoinGecko): open interest BTC, 24h volume BTC, perpetual and futures pair counts, year established. No params. Use when an agent needs perp/futures venue liquidity data.", ["crypto", "derivatives", "futures", "open-interest", "data"]],
+  ["/defi/protocol-risk", "GET", "0.01", "10000", "Protocol risk score from DefiLlama: joins TVL, 1d/7d TVL change, age, audits, chain count and matching hack history into one 0-100 score with flags; ?protocol=<slug> (default aave-v3). Use when an agent needs a due-diligence check before routing funds to a DeFi protocol.", ["defi", "risk", "security", "due-diligence", "data"]],
+  ["/defi/safe-yields", "GET", "0.01", "10000", "Vetted stablecoin yields: top stablecoin pools (DefiLlama, TVL>$5M, APY 1-25%) joined with each protocol's age and hack history, safest-yield first; optional ?chain= & ?limit=. No required params. Use when an agent needs where to park stablecoins with due-diligence already applied.", ["defi", "yield", "stablecoin", "risk", "data"]],
+  ["/defi/yields-top", "GET", "0.003", "3000", "Top DeFi yield pools by TVL (DefiLlama): chain, project, symbol, APY, TVL USD; optional ?chain= & ?stable=true. Use when an agent needs where to earn yield.", ["defi", "yield", "apy", "data"]],
+  ["/ai/classify", "GET", "0.003", "3000", "Zero-shot text classification (Llama 3.2 3B): ?text=<up to 1000 chars>&labels=<comma-separated labels, 2-10> returns the single best label. Use when an agent needs to route or tag text (intent, sentiment, topic, spam) in one cheap call.", ["ai", "llm", "classification", "text", "data"]],
+  ["/ai/summarize", "GET", "0.003", "3000", "Text summarization (Llama 3.2 3B): ?text=<up to 1500 chars> returns a 1-3 sentence summary. Use when an agent needs to compress a passage cheaply before reasoning over it.", ["ai", "llm", "summarization", "text", "data"]],
+  ["/ai/translate", "GET", "0.003", "3000", "Text translation (Llama 3.2 3B): ?text=<up to 800 chars>&to=<target language, e.g. es, fr, de, ja> returns the translated text only. Use when an agent needs quick pay-per-call translation with no API key.", ["ai", "llm", "translation", "language", "data"]],
+  ["/ai/extract", "GET", "0.005", "5000", "Text-to-JSON extraction (Llama 3.2 3B): ?text=<up to 1500 chars>&fields=<comma-separated field names> returns a strict JSON object with exactly those keys (null when absent). Use when an agent needs messy text turned into typed structured data.", ["ai", "llm", "extraction", "json", "structured", "data"]],
+  ["/v1/chat/completions", "POST", "0.002", "2000", "OpenAI-compatible chat completions (Llama 3.3 70B fp8 on Workers AI; set model=llama-3.2-3b-instruct for the small model): POST {messages:[{role,content}]} returns choices[0].message. Drop-in for chat-completions clients, pay-per-call, no API key.", ["ai", "llm", "chat", "completions", "openai", "inference", "llm-inference"]],
+  ["/ai/ask", "GET", "0.002", "2000", "Cheap LLM answer (Llama 3.2 3B on Workers AI): ?q=<prompt up to 500 chars>, returns concise text. Pay-per-call, no API key.", ["ai", "llm", "inference", "chat", "data"]],
+  ["/chain/block", "GET", "0.002", "2000", "Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.", ["rpc", "base", "onchain", "blockchain", "data"]],
+  ["/chain/wallet", "GET", "0.003", "3000", "Wallet screening bundle (balance, activity, contract vs EOA check): ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]],
+  ["/dns/{domain}", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", ["dns", "domain", "data", "recon"]],
+  ["/whois/{domain}", "GET", "0.01", "10000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", ["whois", "rdap", "domain", "data", "recon"]],
+];
 // Non-custodial facilitator — no Coinbase/CDP API key needed.
 const FACILITATOR_URL = "https://facilitator.xpay.sh";
 // CDP hosted facilitator — settlements through this get catalogued in the x402 Bazaar.
@@ -848,19 +946,6 @@ app.get("/.well-known/x402", (c) => {
   const BASE = "https://x402-data-api.sigrunner.workers.dev";
   const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
   const payTo = c.env.PAY_TO;
-  // Short human-readable route name for Bazaar discovery (e.g. "/pm/markets" -> "PM Markets").
-  const shortRouteName = (p: string): string =>
-    p
-      .replace(/^\/+|\/+$/g, "")
-      .split("/")
-      .map((seg) =>
-        seg
-          .replace(/[{}]/g, "")
-          .split("-")
-          .map((w) => (w === "defi" ? "DeFi" : w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
-          .join(" ")
-      )
-      .join(" ");
   // Attach a compact sample of what the agent BUYS, pulled from the same
   // RESPONSE_EXAMPLES the OpenAPI serves (no vaporware — real shapes on disk).
   // A browsing buyer-agent decides whether to pay far more readily when it can
@@ -880,20 +965,6 @@ app.get("/.well-known/x402", (c) => {
     }
     return compact;
   };
-  // Routes that expose a free, key-less /preview path (same response shape as the
-  // paid call, no payment). Mirrors the `${p}/preview` handlers registered in this
-  // file — kept as an explicit data set so the machine-readable manifest can tell a
-  // marketplace/reseller auto-wiring our catalog to offer buyers a free trial before
-  // the paid call (a buyer evaluating us via a catalog shouldn't have to pay blind).
-  // Degrades open: a route missing from this set simply omits preview_url (never a
-  // broken link or a false claim). Every entry here is a real, live-probed handler.
-  const PREVIEW_ROUTES = new Set<string>([
-    "/gate/swap", "/chain/token-report", "/chain/token-security", "/crypto/prices",
-    "/crypto/funding", "/defi/yields", "/pm/markets", "/chain/gas-price",
-    "/chain/block-number", "/chain/token-balance", "/defi/protocol-risk",
-    "/defi/safe-yields", "/enrich/tech-risk", "/scan/mcp", "/ai/ask", "/ai/extract",
-    "/v1/chat/completions",
-  ]);
   const mk = (p: string, method: string, price: string, units: string, desc: string, tags: string[]) => ({
     x402Version: 2,
     type: "http",
@@ -980,73 +1051,52 @@ app.get("/.well-known/x402", (c) => {
     network: NETWORK,
     networks: [NETWORK],
     mcp_endpoint: `${BASE}/mcp`,
-    resources: [
-      // Lane order derived from measured on-chain demand (onchain_demand_by_lane.json):
-      // token-safety is the #1 live-demand lane — lead the machine-import surface with it.
-      mk("/gate/swap", "GET", "0.008", "8000", "Is this Base token safe to swap right now? GO / HOLD / BLOCK pre-trade safety gate for autonomous trading agents: is it a honeypot, can you sell it, and is your trade too big for the pool? Honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your notional — one decision + reason in one fast call.", ["security", "base", "onchain", "trading", "gate", "agents", "token", "honeypot", "token-security", "data"]),
-      mk("/chain/token-report", "GET", "0.01", "10000", "Is this Base token safe to buy? One call returns a trade-safety verdict — SAFE | CAUTION | AVOID — with risk_score (0-100) and reasons: honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, measured transfer tax, symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade before an agent buys a Base ERC-20.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "verdict", "trading", "token-security", "data"]),
-      mk("/chain/token-security", "GET", "0.009", "9000", "Is this Base token a honeypot — can a real wallet actually sell it? Token-security / honeypot detector for a Base ERC-20: EIP-1967 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement, and a live eth_call state-override sim testing whether a synthetic wallet can transfer() it. Real compute, not a thin data wrapper. Returns risk_score (0-100) + verdict (clear/review/block) + flags.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "token-security", "data"]),
-      mk("/pm/markets", "GET", "0.005", "5000", "Live Polymarket prediction markets — question, outcomes, bestBid/bestAsk/spread, volume24hr/volume1wk, oneDayPriceChange, clobTokenIds, conditionId, category tags, liquidity, end date. Ranked by volume24hr; filter by keyword.", ["prediction-markets", "polymarket", "markets", "crypto", "data"]),
-      mk("/crypto/funding", "GET", "0.004", "4000", "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, premium/basis, annualized_hl/annualized_okx, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices, open interest.", ["crypto", "funding", "perps", "hyperliquid", "okx", "dydx", "arbitrage", "defi", "market-data", "data"]),
-      mk("/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, pool id, APY breakdown + 1d/7d/30d APY trend, IL risk (incl. il7d), exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL. Filter by project, chain, or stablecoin-only; sort by TVL or risk-adjusted APY.", ["defi", "yield", "lending", "apy", "tvl", "defi-yields", "data"]),
-      mk("/crypto/prices", "GET", "0.001", "1000", "Spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/change_24h/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "market-data", "defi", "data"]),
-      mk("/scan/mcp", "GET", "0.05", "50000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score + verdict (clear/review/block).", ["security", "mcp", "audit", "prompt-injection"]),
-      mk("/enrich/tech-risk", "GET", "0.01", "10000", "Tech-stack fingerprint -> CVE (NVD) + EPSS + CISA-KEV attack-surface risk + verdict (clear/review/block) for a domain.", ["security", "cve", "risk"]),
-      mk("/enrich/domain", "GET", "0.01", "10000", "Firmographic + tech-stack enrichment for a domain, incl. full subdomain enumeration via certificate-transparency logs (crt.sh, RDAP, DoH, HTTP fingerprint) + verdict (clear/review/block, based on domain age).", ["data", "domain", "enrichment"]),
-      mk("/chain/block-number", "GET", "0.002", "2000", "Current Base mainnet block number.", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/gas-price", "GET", "0.002", "2000", "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, and gas_price_usd — no price oracle on ETH-only competitors.", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/balance", "GET", "0.002", "2000", "ETH balance of a Base mainnet address, incl. balance_usd (internal ETH price cross-call).", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/token-balance", "GET", "0.002", "2000", "ERC-20 token balance of a Base mainnet address, incl. symbol, decimals, balance_formatted.", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/tx", "GET", "0.005", "5000", "Transaction details by hash on Base mainnet.", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/receipt", "GET", "0.005", "5000", "Transaction receipt by hash on Base mainnet — status, gas used, full logs, and the L1 fee breakdown (l1_fee_wei, l1_gas_price_wei, l1_gas_used, effective_gas_price_wei) + l1_fee_usd/total_fee_usd an ETH-only competitor can't offer.", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/code", "GET", "0.002", "2000", "Contract-code check for a Base mainnet address (is_contract + code size + EIP-7702 delegated-EOA detection).", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/erc20-meta", "GET", "0.002", "2000", "ERC-20 metadata on Base: name, symbol, decimals, totalSupply for any token contract.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
-      mk("/chain/nonce", "GET", "0.002", "2000", "Transaction count (nonce) for a Base address, latest and pending.", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/is-contract", "GET", "0.002", "2000", "Is a Base address a smart contract or an EOA (is_contract + bytecode size).", ["rpc", "base", "onchain", "contract", "data"]),
-      mk("/chain/fee-estimate", "GET", "0.002", "2000", "Base EIP-1559 fee estimate: base fee, suggested priority fee, max-fee tiers (slow/standard/fast) in gwei and a 21k-gas transfer cost.", ["rpc", "base", "onchain", "gas", "fees", "data"]),
-      mk("/chain/network-status", "GET", "0.002", "2000", "Base network status snapshot: chain id, latest block, block age, gas used ratio and tx count.", ["rpc", "base", "onchain", "status", "health", "data"]),
-      mk("/chain/l1-base-fee", "GET", "0.002", "2000", "Ethereum L1 base fee as seen by Base's GasPriceOracle (wei/gwei) plus estimated L1 data fee for a simple transfer.", ["rpc", "base", "onchain", "gas", "l1", "fees", "data"]),
-      mk("/chain/fee-history", "GET", "0.002", "2000", "Base fee history for the last 10 blocks: base fee per block (gwei), gas-used ratios and a min/max/avg summary. Use when an agent times transactions around cheap blocks.", ["rpc", "base", "onchain", "gas", "fees", "history", "data"]),
-      mk("/chain/blob-base-fee", "GET", "0.002", "2000", "Base EIP-4844 blob base fee from the GasPriceOracle (wei/gwei). Use when an agent estimates L1 data-availability cost for Base batches.", ["rpc", "base", "onchain", "gas", "blob", "fees", "data"]),
-      mk("/chain/eth-usd", "GET", "0.001", "1000", "Base ETH/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain ETH price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]),
-      mk("/chain/btc-usd", "GET", "0.001", "1000", "Base BTC/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain BTC price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]),
-      mk("/chain/prices", "GET", "0.001", "1000", "Base crypto price snapshot in one call: BTC, ETH, LINK and SOL USD spot from Chainlink aggregators with per-feed staleness. Use when an agent needs a multi-asset trusted on-chain price board.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "snapshot", "data"]),
-      mk("/chain/sol-usd", "GET", "0.001", "1000", "Base SOL/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain SOL price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]),
-      mk("/chain/link-usd", "GET", "0.001", "1000", "Base LINK/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain LINK price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]),
-      mk("/chain/total-supply", "GET", "0.002", "2000", "ERC-20 total supply on Base (raw + formatted, with symbol and decimals).", ["rpc", "base", "onchain", "token", "erc20", "data"]),
-      mk("/chain/storage-at", "GET", "0.002", "2000", "Raw storage slot read (eth_getStorageAt) for any Base contract; slot defaults to 0x0. Use when an agent needs proxy implementation/admin slots or raw contract state.", ["rpc", "base", "onchain", "contract", "data"]),
-      mk("/chain/proxy-info", "GET", "0.002", "2000", "EIP-1967 proxy resolver for a Base contract: returns implementation, admin and beacon addresses (read from the standard storage slots) plus is_proxy flag. Use when an agent must know what code actually runs behind a proxy before trusting or calling it.", ["rpc", "base", "onchain", "contract", "proxy", "security", "data"]),
-      mk("/chain/allowance", "GET", "0.002", "2000", "ERC-20 allowance(owner, spender) on Base, raw + formatted, flags unlimited approvals.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
-      mk("/defi/chains-tvl", "GET", "0.003", "3000", "Top blockchains ranked by total DeFi TVL (DefiLlama): name, TVL USD, gas token. No params. Use when an agent needs a quick map of where DeFi capital sits.", ["defi", "tvl", "chains", "data"]),
-      mk("/crypto/stablecoins", "GET", "0.003", "3000", "Top stablecoins by circulating supply (DefiLlama): name, symbol, price, peg type, circulating USD. No params. Use when an agent needs stablecoin supply and depeg checks.", ["crypto", "stablecoins", "depeg", "supply", "data"]),
-      mk("/defi/protocols-top", "GET", "0.003", "3000", "Top DeFi protocols by TVL (DefiLlama): name, category, TVL USD, 1d/7d change, chain. No params. Use when an agent needs a ranked protocol league table.", ["defi", "protocols", "tvl", "data"]),
-      mk("/defi/dex-volume", "GET", "0.003", "3000", "Top DEXs by 24h trading volume (DefiLlama): name, 24h/7d volume USD, 1d change, plus market total. No params. Use when an agent needs where on-chain swap volume is flowing.", ["defi", "dex", "volume", "data"]),
-      mk("/crypto/fear-greed", "GET", "0.002", "2000", "Crypto Fear & Greed Index (alternative.me): current value 0-100, classification, history of last N days. No params. Use when an agent needs a market-sentiment gauge.", ["crypto", "sentiment", "fear-greed", "data"]),
-      mk("/crypto/trending", "GET", "0.003", "3000", "Trending coins on CoinGecko right now: name, symbol, market-cap rank, 24h price change. No params. Use when an agent needs what the market is searching for.", ["crypto", "trending", "coingecko", "data"]),
-      mk("/defi/fees-top", "GET", "0.003", "3000", "Top DeFi protocols by 24h fees (DefiLlama): name, 24h/7d fees USD, 1d change, plus market total. No params. Use when an agent needs which protocols earn the most.", ["defi", "fees", "revenue", "data"]),
-      mk("/crypto/global", "GET", "0.002", "2000", "Global crypto market stats (CoinGecko): total market cap, 24h volume, BTC/ETH dominance, active coins. No params. Use when an agent needs a one-call market overview.", ["crypto", "market", "global", "data"]),
-      mk("/crypto/markets-top", "GET", "0.003", "3000", "Top coins by market cap (CoinGecko): price, market cap, 24h volume, 24h change; ?limit= up to 100. No required params. Use when an agent needs a ranked market snapshot.", ["crypto", "markets", "price", "data"]),
-      mk("/crypto/movers", "GET", "0.003", "3000", "Top 24h gainers and losers among the top-100 coins (CoinGecko). No params. Use when an agent needs what is moving the market right now.", ["crypto", "movers", "gainers", "losers", "data"]),
-      mk("/brief/market", "GET", "0.01", "10000", "One-call crypto market brief: Fear & Greed, global market cap/dominance, top movers, trending coins and top DeFi fee earners. No params. Use when an agent needs a full market snapshot in a single payment.", ["crypto", "market", "brief", "snapshot", "data"]),
-      mk("/crypto/exchanges-top", "GET", "0.003", "3000", "Top crypto exchanges by trust score (CoinGecko): name, country, year, trust score and rank, 24h BTC volume. No params. Use when an agent needs exchange due-diligence data.", ["crypto", "exchanges", "trust", "data"]),
-      mk("/crypto/categories", "GET", "0.003", "3000", "Crypto sector performance (CoinGecko categories): market cap, 24h change, volume per sector, top by market cap. No params. Use when an agent needs sector rotation signals.", ["crypto", "sectors", "categories", "data"]),
-      mk("/defi/hacks-recent", "GET", "0.003", "3000", "Most recent DeFi/crypto hacks and exploits (DefiLlama): date, name, amount lost USD, chain, technique, bridge-hack flag; ?limit= up to 50. No required params. Use when an agent needs live security-incident risk signals.", ["defi", "security", "hacks", "exploits", "data"]),
-      mk("/crypto/derivatives-exchanges", "GET", "0.003", "3000", "Top crypto derivatives exchanges (CoinGecko): open interest BTC, 24h volume BTC, perpetual and futures pair counts, year established. No params. Use when an agent needs perp/futures venue liquidity data.", ["crypto", "derivatives", "futures", "open-interest", "data"]),
-      mk("/defi/protocol-risk", "GET", "0.01", "10000", "Protocol risk score from DefiLlama: joins TVL, 1d/7d TVL change, age, audits, chain count and matching hack history into one 0-100 score with flags; ?protocol=<slug> (default aave-v3). Use when an agent needs a due-diligence check before routing funds to a DeFi protocol.", ["defi", "risk", "security", "due-diligence", "data"]),
-      mk("/defi/safe-yields", "GET", "0.01", "10000", "Vetted stablecoin yields: top stablecoin pools (DefiLlama, TVL>$5M, APY 1-25%) joined with each protocol's age and hack history, safest-yield first; optional ?chain= & ?limit=. No required params. Use when an agent needs where to park stablecoins with due-diligence already applied.", ["defi", "yield", "stablecoin", "risk", "data"]),
-      mk("/defi/yields-top", "GET", "0.003", "3000", "Top DeFi yield pools by TVL (DefiLlama): chain, project, symbol, APY, TVL USD; optional ?chain= & ?stable=true. Use when an agent needs where to earn yield.", ["defi", "yield", "apy", "data"]),
-      mk("/ai/classify", "GET", "0.003", "3000", "Zero-shot text classification (Llama 3.2 3B): ?text=<up to 1000 chars>&labels=<comma-separated labels, 2-10> returns the single best label. Use when an agent needs to route or tag text (intent, sentiment, topic, spam) in one cheap call.", ["ai", "llm", "classification", "text", "data"]),
-      mk("/ai/summarize", "GET", "0.003", "3000", "Text summarization (Llama 3.2 3B): ?text=<up to 1500 chars> returns a 1-3 sentence summary. Use when an agent needs to compress a passage cheaply before reasoning over it.", ["ai", "llm", "summarization", "text", "data"]),
-      mk("/ai/translate", "GET", "0.003", "3000", "Text translation (Llama 3.2 3B): ?text=<up to 800 chars>&to=<target language, e.g. es, fr, de, ja> returns the translated text only. Use when an agent needs quick pay-per-call translation with no API key.", ["ai", "llm", "translation", "language", "data"]),
-      mk("/ai/extract", "GET", "0.005", "5000", "Text-to-JSON extraction (Llama 3.2 3B): ?text=<up to 1500 chars>&fields=<comma-separated field names> returns a strict JSON object with exactly those keys (null when absent). Use when an agent needs messy text turned into typed structured data.", ["ai", "llm", "extraction", "json", "structured", "data"]),
-      mk("/v1/chat/completions", "POST", "0.002", "2000", "OpenAI-compatible chat completions (Llama 3.3 70B fp8 on Workers AI; set model=llama-3.2-3b-instruct for the small model): POST {messages:[{role,content}]} returns choices[0].message. Drop-in for chat-completions clients, pay-per-call, no API key.", ["ai", "llm", "chat", "completions", "openai", "inference", "llm-inference"]),
-      mk("/ai/ask", "GET", "0.002", "2000", "Cheap LLM answer (Llama 3.2 3B on Workers AI): ?q=<prompt up to 500 chars>, returns concise text. Pay-per-call, no API key.", ["ai", "llm", "inference", "chat", "data"]),
-      mk("/chain/block", "GET", "0.002", "2000", "Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/wallet", "GET", "0.003", "3000", "Wallet screening bundle (balance, activity, contract vs EOA check): ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]),
-      mk("/dns/{domain}", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", ["dns", "domain", "data", "recon"]),
-      mk("/whois/{domain}", "GET", "0.01", "10000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", ["whois", "rdap", "domain", "data", "recon"]),
-    ],
+    resources: ROUTE_CATALOG.map((r) => mk(...r)),
   });
+
+app.get("/.well-known/agent-capabilities.json", (c) => {
+  const BASE = "https://x402-data-api.sigrunner.workers.dev";
+  const q = (c.req.query("q") || "").toLowerCase().trim();
+  const limRaw = parseInt(c.req.query("limit") || "3", 10);
+  const limit = Number.isFinite(limRaw) ? Math.max(1, Math.min(62, limRaw)) : 3;
+  const opId = (p: string) => "greyridge_" + p.replace(/^\/+|\/+$/g, "").replace(/[{}]/g, "").replace(/[/-]/g, "_");
+  const product = ([p, method, price, _units, desc, tags]: [string, string, string, string, string, string[]]) => ({
+    operation_id: opId(p),
+    name: "Grey Ridge " + shortRouteName(p),
+    use_when: desc.split(/(?<=[.?!])\s/)[0],
+    description: desc,
+    price_usdc: price,
+    source: "Grey Ridge Signals",
+    freshness: "real-time",
+    method,
+    paid_url: `${BASE}${p}`,
+    ...(PREVIEW_ROUTES.has(p) ? { preview_url: `${BASE}${p}/preview` } : {}),
+    request_schema: `${BASE}/openapi.json`,
+    tags,
+  });
+  let rows = ROUTE_CATALOG.slice();
+  if (q) {
+    const terms = q.split(/\s+/).filter(Boolean);
+    const score = ([p, , , , desc, tags]: [string, string, string, string, string, string[]]) => {
+      const hay = (p + " " + desc + " " + tags.join(" ")).toLowerCase();
+      return terms.reduce((n, t) => n + (hay.includes(t) ? 1 : 0), 0);
+    };
+    rows = rows.map((r) => [r, score(r)] as const).filter(([, s]) => s > 0).sort((a, b) => b[1] - a[1]).map(([r]) => r);
+  }
+  const products = rows.slice(0, limit).map(product);
+  return c.json({
+    service: "Grey Ridge Signals — x402 Data & Security",
+    provider: "Grey Ridge Signals Group LLC",
+    contact: "contact@greyridgesignals.ai",
+    x402_manifest: `${BASE}/.well-known/x402`,
+    openapi: `${BASE}/openapi.json`,
+    payment: { protocol: "x402", version: 2, network: NETWORK, asset: "USDC", attribution_param: "ref" },
+    query: q || null,
+    count: products.length,
+    total_available: ROUTE_CATALOG.length,
+    products,
+  });
+});
 });
 
 // A2A Agent Card — RFC-8615 well-known URI for Agent-to-Agent protocol
