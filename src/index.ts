@@ -8410,7 +8410,7 @@ const mcpHandler = createMcpHandler(() => {
     "gate_swap",
     {
       description:
-        "Pre-trade GO / HOLD / BLOCK gate for a Base ERC-20 swap: honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your trade size. One decision + reason. Cost: $0.01 USDC per call via x402.",
+        "Pre-trade GO / HOLD / BLOCK gate for a Base ERC-20 swap: honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your trade size. One decision + reason. Cost: $0.008 USDC per call via x402.",
       inputSchema: {
         token: z.string().describe("0x-prefixed ERC-20 contract on Base mainnet"),
         side: z.enum(["buy", "sell"]).optional().describe("default buy"),
