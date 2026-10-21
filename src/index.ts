@@ -6154,7 +6154,7 @@ app.post("/v1/chat/completions/preview", async (c) => {
   const UPGRADE = {
     paid_url: "https://x402-data-api.sigrunner.workers.dev/v1/chat/completions",
     price_usdc: "0.002",
-    adds: "Full Llama 3.3 70B, up to 400 output tokens, unmetered (this free preview is a small-model sample capped per IP/day).",
+    adds: "Paid route: full Llama 3.3 70B on every call, up to 400 output tokens, unmetered. This free preview serves the real 70B for your first 3 calls/day/IP, then real Llama 3.2 3B samples (<=80 tokens) — the response's `model` field tells you which you got, so you always see live model output before paying.",
     pay_with: 'x402 (USDC on Base): npm i x402-fetch viem; const walletClient=createWalletClient({account:privateKeyToAccount(process.env.EVM_PRIVATE_KEY),chain:base,transport:http()}); const f=wrapFetchWithPayment(fetch, walletClient); await f("https://x402-data-api.sigrunner.workers.dev/v1/chat/completions",{method:"POST",body:JSON.stringify({model:"llama-3.3-70b",messages})}). Runnable: https://github.com/rezearcher/x402-data-api/blob/main/examples/buyer.mjs  Docs: https://api.greyridgesignals.ai/llms.txt',
   };
   const previewOut = (txt: string, model: string) =>
