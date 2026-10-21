@@ -725,39 +725,61 @@ app.get("/internal/find-settlement", async (c) => {
   const chunk = Math.min(Math.max(parseInt(c.req.query("chunk") ?? "3000") || 3000, 100), 20000);
   const maxChunks = Math.min(Math.max(parseInt(c.req.query("max_chunks") ?? "40") || 40, 1), 45);
   const stopAtFirst = c.req.query("all") !== "1";
+  type Hit = { txHash: string; block: number; amount_usdc: number; from: string; timestamp?: string; method: string; basescan: string };
+  const hits: Hit[] = [];
+  const diag: Record<string, unknown> = {};
+
+  // Primary source: Blockscout v2 (reliable tx hashes, no getLogs range limit).
+  // Runs from a Cloudflare IP so it is not datacenter-403'd like direct calls.
   try {
-    const latestHex = await baseRpc("eth_blockNumber", []);
-    const latest = parseInt(String(latestHex), 16);
-    const topics: (string | null)[] = [TRANSFER, from ? pad(from) : null, pad(to)];
-    const hits: { txHash: string; block: number; amount_usdc: number; from: string; basescan: string }[] = [];
-    let scanned = 0;
-    for (let i = 0; i < maxChunks; i++) {
-      const toBlk = latest - i * (chunk + 1);
-      const fromBlk = Math.max(0, toBlk - chunk);
-      scanned = latest - fromBlk;
-      let logs: any[] = [];
-      try {
-        logs = (await baseRpc("eth_getLogs", [{ address: token, topics, fromBlock: "0x" + fromBlk.toString(16), toBlock: "0x" + toBlk.toString(16) }])) as any[];
-      } catch {
-        continue; // provider rejected this range; keep scanning older windows
+    const url = `https://base.blockscout.com/api/v2/addresses/${to}/token-transfers?type=ERC-20&filter=to`;
+    const res = await fetch(url, { headers: { "User-Agent": "greyridge-x402/1", accept: "application/json" }, signal: AbortSignal.timeout(12000) });
+    diag.blockscout_status = res.status;
+    if (res.ok) {
+      const j = (await res.json()) as { items?: any[] };
+      for (const it of j.items ?? []) {
+        const tokAddr = String((it.token ?? {}).address ?? "").toLowerCase();
+        if (tokAddr && tokAddr !== token) continue;
+        const frm = String((it.from ?? {}).hash ?? "").toLowerCase();
+        if (from && frm !== from.toLowerCase()) continue;
+        const dec = parseInt(String((it.total ?? {}).decimals ?? "6")) || 6;
+        const val = (it.total ?? {}).value ?? "0";
+        const txHash = it.transaction_hash ?? it.tx_hash ?? "";
+        hits.push({ txHash, block: Number(it.block_number ?? it.block ?? 0), amount_usdc: Number(val) / 10 ** dec, from: frm, timestamp: it.timestamp, method: "blockscout", basescan: `https://basescan.org/tx/${txHash}` });
+        if (stopAtFirst && hits.length > 0) break;
       }
-      for (const lg of logs ?? []) {
-        hits.push({
-          txHash: lg.transactionHash,
-          block: parseInt(lg.blockNumber, 16),
-          amount_usdc: parseInt(lg.data, 16) / 1e6,
-          from: "0x" + String(lg.topics?.[1] ?? "").slice(26),
-          basescan: `https://basescan.org/tx/${lg.transactionHash}`,
-        });
-      }
-      if (stopAtFirst && hits.length > 0) break;
-      if (fromBlk === 0) break;
     }
-    hits.sort((a, b) => b.block - a.block);
-    return c.json({ ok: true, latest_block: latest, blocks_scanned: scanned, payer: from ?? "(any)", receiver: to, token, matches: hits.length, settlements: hits });
   } catch (e) {
-    return c.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, 502);
+    diag.blockscout_error = e instanceof Error ? e.message : String(e);
   }
+
+  // Fallback: eth_getLogs over recent blocks (only if Blockscout yielded nothing).
+  if (hits.length === 0) {
+    try {
+      const latest = parseInt(String(await baseRpc("eth_blockNumber", [])), 16);
+      diag.latest_block = latest;
+      const topics: (string | null)[] = [TRANSFER, from ? pad(from) : null, pad(to)];
+      let okChunks = 0, errChunks = 0;
+      for (let i = 0; i < maxChunks; i++) {
+        const toBlk = latest - i * (chunk + 1);
+        const fromBlk = Math.max(0, toBlk - chunk);
+        try {
+          const logs = (await baseRpc("eth_getLogs", [{ address: token, topics, fromBlock: "0x" + fromBlk.toString(16), toBlock: "0x" + toBlk.toString(16) }])) as any[];
+          okChunks++;
+          for (const lg of logs ?? []) hits.push({ txHash: lg.transactionHash, block: parseInt(lg.blockNumber, 16), amount_usdc: parseInt(lg.data, 16) / 1e6, from: "0x" + String(lg.topics?.[1] ?? "").slice(26), method: "getLogs", basescan: `https://basescan.org/tx/${lg.transactionHash}` });
+        } catch { errChunks++; }
+        if (stopAtFirst && hits.length > 0) break;
+        if (fromBlk === 0) break;
+      }
+      diag.getlogs_ok_chunks = okChunks;
+      diag.getlogs_err_chunks = errChunks;
+    } catch (e) {
+      diag.getlogs_error = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  hits.sort((a, b) => b.block - a.block);
+  return c.json({ ok: true, payer: from ?? "(any)", receiver: to, token, matches: hits.length, settlements: hits, diag });
 });
 
 // ---------------------------------------------------------------------------
