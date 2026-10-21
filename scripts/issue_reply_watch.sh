@@ -54,3 +54,6 @@ import sys,json,datetime
 d=sys.argv[1]; r=[json.loads(l) for l in open(d+'/replies.jsonl') if l.strip()]
 json.dump({"fetched_at":datetime.datetime.utcnow().isoformat()+"Z","status":"ok","summary":f"{len(r)} non-owner pitch replies","alert":len(r)>1,"replies":r},open(d+'/latest.json','w'),indent=1)
 P
+# Chain the honest conversion classifier so x402_reply_funnel/latest.json refreshes
+# with the raw sensor (true convertible pool, not the rejection-inflated headline).
+python3 -I "$(dirname "$0")/classify_replies.py" >/dev/null 2>&1 || true
