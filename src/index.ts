@@ -751,7 +751,7 @@ app.get("/.well-known/x402", (c) => {
       description: desc, mimeType: "application/json",
       serviceName: shortRouteName(p),
       tags,
-      extra: { name: "USD Coin", version: "2", serviceName: shortRouteName(p), tags },
+      extra: { name: "USD Coin", version: "2", decimals: 6, serviceName: shortRouteName(p), tags },
     }],
   });
   return c.json({
