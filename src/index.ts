@@ -5988,7 +5988,7 @@ app.post("/v1/chat/completions", async (c) => {
   const msgs = (body.messages ?? []).filter((m) => m && typeof m.content === "string" && ["system", "user", "assistant"].includes(String(m.role)))
     .map((m) => ({ role: String(m.role), content: String(m.content) }));
   const total = msgs.reduce((n, m) => n + m.content.length, 0);
-  if (!msgs.length || total > 4000) return c.json({ error: "messages required, total content max 4000 chars" }, { status: 400 });
+  if (!msgs.length || total > 8000) return c.json({ error: "messages required, total content max 8000 chars" }, { status: 400 });
   const day = new Date().toISOString().slice(0, 10);
   const key = "aicap:" + day;
   const used = parseInt((await c.env.API_KEYS?.get(key)) ?? "0", 10);
