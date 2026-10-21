@@ -184,8 +184,12 @@ def already_contacted(full_name, number):
     return False
 
 
-def infer_network(repo_meta, body):
+def infer_network(repo_meta, body, title=""):
+    # The issue TITLE carries chain signal too ("...paid experiences on Celo (wCOP)")
+    # — excluding it misclassified an other-chain buyer as base-evm and emitted a
+    # false HOT (lukas-treasury-agent#1, 2026-10-21). Scan title+desc+topics+body.
     text = " ".join(filter(None, [
+        title or "",
         repo_meta.get("description") or "",
         " ".join(repo_meta.get("topics") or []),
         body or "",
@@ -352,7 +356,7 @@ def main():
                 age_days = (now - datetime.datetime.strptime(pushed, "%Y-%m-%dT%H:%M:%SZ")).days
             except Exception:
                 pass
-        net = infer_network(meta, it.get("body", ""))
+        net = infer_network(meta, it.get("body", ""), it.get("title", ""))
         # Compute the cheap discriminators first so we only spend the manifest-fetch
         # budget resolving the x402 ROLE for genuine HOT/WARM contenders.
         assoc = (it.get("assoc") or "NONE").upper()
