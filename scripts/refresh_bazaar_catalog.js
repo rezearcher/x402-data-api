@@ -445,9 +445,9 @@ const ROUTES = [
   },
   {
     route: '/chain/token-report',
-    desc: 'Decision-grade token trade-safety report for a Base ERC-20: security flags, risk score, verdict and rationale.',
-    serviceName: 'Base Token Trade-Safety Report',
-    tags: ['token-report', 'honeypot', 'rug-check', 'base', 'evm', 'security'],
+    desc: 'Is this Base token safe to buy? One call returns a SAFE / CAUTION / AVOID pre-trade safety verdict with a 0-100 risk score and reasons: honeypot & sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). A token safety / rug-pull / honeypot / scam check for an autonomous agent about to buy or swap a Base ERC-20.',
+    serviceName: 'Base Token Safety Check (is this token safe to buy?)',
+    tags: ['token-safety', 'token-report', 'honeypot', 'rug-check', 'scam-check', 'pre-trade', 'base', 'evm', 'security'],
     disc: {
       method: 'GET',
       input: { token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' },
@@ -457,9 +457,9 @@ const ROUTES = [
   },
   {
     route: '/chain/token-security',
-    desc: 'Token security / honeypot detector for a Base ERC-20: proxy/upgradeability check, mint/pause/blacklist/fee-setter bytecode scan, ownership check, honeypot simulation. Risk score + verdict + flags.',
-    serviceName: 'Base Token Security Scanner',
-    tags: ['token-security', 'honeypot', 'rug-check', 'base', 'evm', 'smart-contract', 'security'],
+    desc: 'Is this Base token a honeypot or rug-pull / scam risk? Token safety & security scan for a Base ERC-20: honeypot & sellability simulation, proxy/upgradeability check, mint/pause/blacklist/fee-setter bytecode scan, ownership-renounced check, measured transfer tax. Returns a 0-100 risk score, verdict and flags. A pre-trade token safety check for agents before buying or approving a Base ERC-20.',
+    serviceName: 'Base Token Safety & Honeypot Scanner',
+    tags: ['token-safety', 'token-security', 'honeypot', 'rug-check', 'scam-check', 'pre-trade', 'base', 'evm', 'smart-contract', 'security'],
     disc: {
       method: 'GET',
       input: { token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' },
