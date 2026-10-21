@@ -1,0 +1,20 @@
+{
+  "ts": "2026-10-21T11:25:01.939177+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 60,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}
