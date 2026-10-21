@@ -157,6 +157,8 @@ Pre-trade token guard (`/gate/swap`, $0.008 USDC via x402 on Base). Free sample:
 - LangChain.js tool: `docs/examples/langchain/swapGuardTool.mjs`
 - ElizaOS action: `docs/examples/elizaos/swapGuardAction.mjs`
 
+Market-data buyer (for agents that buy a price and must not present stale data as real-time — the Decision402 pattern): `examples/market-data-decision-buyer.mjs`. Runs the full agentic loop — reads the live 402 quote, enforces a per-call USDC budget, proves the feed via the free preview, pays `/crypto/prices` ($0.001 on Base), then **rejects any row older than `MAX_AGE_SECONDS`**. Steps 1-3 run with zero npm installs: `node examples/market-data-decision-buyer.mjs bitcoin,ethereum`.
+
 ## Python / LangChain / CrewAI
 `pip install "git+https://github.com/rezearcher/greyridge-x402-tools"` — `token_report()` and `swap_gate()` helpers (free preview by default, paid x402 mode optional) plus LangChain tools. Guides: https://rezearcher.github.io/greyridge-x402-tools/
 

@@ -1242,7 +1242,7 @@ Runnable version: https://github.com/rezearcher/x402-data-api/blob/main/examples
 
 ## Endpoints
 - Human/agent try-it page: ${BASE}/check?token=<0x… Base ERC-20> — free verdict card (3/day/IP).
-- GET ${BASE}/crypto/prices?coins=bitcoin,ethereum,solana — $0.001 — spot token prices + change_24h (DefiLlama), keyless.
+- GET ${BASE}/crypto/prices?coins=bitcoin,ethereum,solana — $0.001 — spot token prices + change_24h + unix timestamp (DefiLlama), keyless. Agentic buyer example with budget + freshness gates (reads the 402 quote before paying, rejects stale data): https://github.com/rezearcher/x402-data-api/blob/main/examples/market-data-decision-buyer.mjs
 - GET ${BASE}/crypto/funding?limit=20 — $0.004 — cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread (bps) + best long/short venue + premium/annualized/signal/next_funding_ts.
 - GET ${BASE}/defi/yields?limit=20&project=&chain=&stable=&sort=tvl|risk_adjusted — $0.001 — top DeFi lending/LP yields, APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast + TVL (DefiLlama).
 - GET ${BASE}/pm/markets?query=&limit=20 — $0.005 — live Polymarket prediction markets, ranked by volume24hr (bestBid/bestAsk/spread, clobTokenIds, category tags, liquidity).
