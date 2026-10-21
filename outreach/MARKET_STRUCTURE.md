@@ -268,3 +268,24 @@ with a careful, generalizable rationale (quote kept in `outreach/replies/2026-10
   map to that ABC cleanly, and the repo has ~0 buyers. Writing a CI-passing adapter for a buyer-empty router fails EV.
   **Rule: only invest adapter code where the router has demonstrated external buyer traffic.** Keep manifest self-host
   (zero-cost) in back pocket; invest code only on a router that shows real paying buyers.
+
+## 2026-10-21 (cycle 88) — verified dead-ends, do not re-walk
+
+- **Preview 70B→3B fallback is BY DESIGN, not a bug.** `/v1/chat/completions/preview`
+  serves flagship 70B for the first 3 calls/day/IP then real 3B samples; the `model`
+  field honestly reports which you got (src/index.ts ~6408). A local test from this
+  datacenter IP returns 3B because the shared IP's 3-call 70B budget is already spent —
+  NOT representative of a real evaluator arriving from a fresh IP. Do not "fix" this.
+  (Did ship a correct refinement: explicit `model:"...3b"` now skips the 70B branch so
+  it no longer burns the premium taste budget — commit b976015.)
+- **Daydreams x402-LLM-provider agent archetype = a single stale repo, not an ecosystem.**
+  Code-search `DREAMS_ROUTER_URL` / `X402LLMProvider` → only `taggaverse/ai-trading-agent`
+  (0★, pushed 2025-11-06, no license, hobby perps demo paying $0.10/call to Dreams Router
+  for Gemini-flash). Fails the proven-buyer-traffic gate (0★/stale/no volume → adapter EV≈$0).
+  Skip. The Daydreams *router* itself is a closed curated catalog (no self-reg).
+- **Fresh adexto-archetype router search = no new convertible.** `spraay-x402-gateway`
+  (plagtech, 0★) is a COMPETITOR seller (190+ endpoints, our whole product + more, Base/Solana/
+  Robinhood) not a buyer; `parallaxpay_x402` is Solana + stale (Dec 2025, chain-fit fail);
+  `hivemindos` archived. Buyer-empty reconfirmed.
+- **URL code-search (greyridgesignals.ai / workers.dev) = all known** measurers/directories/
+  handled (Haven, ArbiVault, hermes-agent catalogs, census repos). 0 net-new in-flight buyers.
