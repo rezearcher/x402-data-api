@@ -4,12 +4,12 @@
 // ranks the widest cross-venue arb candidates, using the keyless x402 payment loop:
 //
 //   - No wallet  → free preview (top-1 coin, proves the feed is live).
-//   - With wallet → full ranked candidate list (20 coins), auto-paying $0.001/call
+//   - With wallet → full ranked candidate list (20 coins), auto-paying $0.004/call
 //                   in USDC on Base via x402 (EIP-3009 gasless — no API key, no gas ETH).
 //
 //   npm i x402-fetch viem
 //   node examples/funding-arb-scanner.mjs                           # free preview only
-//   EVM_PRIVATE_KEY=0xYOURKEY node examples/funding-arb-scanner.mjs  # full ranked scan (pays $0.001)
+//   EVM_PRIVATE_KEY=0xYOURKEY node examples/funding-arb-scanner.mjs  # full ranked scan (pays $0.004)
 //
 // HONEST: this is a SCANNER, not financial advice and not a profit guarantee. The
 // arb ranking is naive — it ranks by raw funding spread and excludes trading fees,
@@ -53,7 +53,7 @@ async function main() {
   console.log(`\n=== Grey Ridge funding-arb scanner → ${BASE} ===`);
   console.log(
     HAS_KEY
-      ? "x402 wallet: configured — paid full scan enabled (auto-pays $0.001 USDC on Base).\n"
+      ? "x402 wallet: configured — paid full scan enabled (auto-pays $0.004 USDC on Base).\n"
       : "x402 wallet: none — free preview only. Set EVM_PRIVATE_KEY for the full ranked scan.\n"
   );
 
@@ -72,7 +72,7 @@ async function main() {
 
   if (!HAS_KEY) {
     console.log("→ Set EVM_PRIVATE_KEY (a Base EOA holding a little USDC) and re-run for the full");
-    console.log(`  ranked candidate list:  GET ${BASE}/crypto/funding?limit=${LIMIT}  ($0.001/call)\n`);
+    console.log(`  ranked candidate list:  GET ${BASE}/crypto/funding?limit=${LIMIT}  ($0.004/call)\n`);
     return;
   }
 

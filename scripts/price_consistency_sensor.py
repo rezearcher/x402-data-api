@@ -166,6 +166,77 @@ def scan_surface(text, enforced):
     return checked, mismatches
 
 
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# The in-repo artifacts a prospect actually copies to wire a PAID call. A stale
+# price here ($0.01 in docs/examples/swap-gate/gate.mjs sat invisible to the
+# live-surface scans until caught 2026-10-21) misquotes what the 402 enforces at
+# the exact moment of integration. Globbed, not a hardcoded file roster.
+ARTIFACT_GLOBS = ("docs/examples/**/*.mjs", "examples/**/*.mjs",
+                  "examples/**/*.sh", "docs/EXAMPLES.md")
+# Full-URL route reference in example code (our two live hostnames). The route
+# the file actually CALLS is ground truth for what it costs.
+URL_ROUTE_RE = re.compile(
+    r"(?:x402-data-api\.sigrunner\.workers\.dev|api\.greyridgesignals\.ai)"
+    r"(/[a-z0-9][a-z0-9\-/]*)")
+COMMENT_PRICE_RE = re.compile(r"^\s*(?://|#).*?(\$0?\.0*[0-9]+)", re.M)
+
+
+def _iter_artifact_files():
+    import glob
+    for pat in ARTIFACT_GLOBS:
+        for p in glob.glob(os.path.join(REPO_ROOT, pat), recursive=True):
+            if os.path.isfile(p):
+                yield p
+
+
+def scan_repo_artifacts(enforced, mcp_price=None):
+    """Flag stale prices in the in-repo example/doc files buyers copy.
+
+    Two deterministic, zero-false-positive passes (no hardcoded price roster —
+    enforced prices come from the live manifest; degrades open on read error):
+      1. same-line pairing (scan_surface) — catches doc rows "/route — $price".
+      2. primary-route check for code examples: if a file calls exactly ONE
+         paid (non-preview) route by full URL, every price in a COMMENT line
+         must equal that route's enforced price (a gate-only example quoting a
+         different route's price is a bug, not a cross-reference).
+    """
+    def _ok_mcp(adv):
+        # A price equal to the flat MCP tools/call price is a valid alternative
+        # quote for any route also exposed as an MCP tool (the "$0.05 via HTTP,
+        # or $0.005 as the MCP tool" dual form) — not a mismatch.
+        return mcp_price is not None and abs(adv - mcp_price) <= 1e-9
+
+    mismatches, checked = [], 0
+    for path in _iter_artifact_files():
+        rel = os.path.relpath(path, REPO_ROOT)
+        try:
+            txt = open(path, encoding="utf-8").read()
+        except Exception as e:  # degrade open
+            mismatches.append({"file": rel, "error": str(e)})
+            continue
+        c, mm = scan_surface(txt, enforced)
+        checked += c
+        for x in mm:
+            if _ok_mcp(x["advertised"]):
+                continue
+            x["file"] = rel
+            mismatches.append(x)
+        # primary-route comment-price check (code examples only)
+        if path.endswith((".mjs", ".sh")):
+            routes = {m.group(1).replace("/preview", "") for m in URL_ROUTE_RE.finditer(txt)}
+            paid = [r for r in routes if r in enforced]
+            if len(paid) == 1:
+                exp = enforced[paid[0]]
+                for pm in COMMENT_PRICE_RE.finditer(txt):
+                    checked += 1
+                    adv = usd_from_str(pm.group(1))
+                    if abs(adv - exp) > 1e-9 and not _ok_mcp(adv):
+                        mismatches.append({"file": rel, "route": paid[0],
+                                           "advertised": adv, "enforced": exp,
+                                           "where": "comment"})
+    return checked, mismatches
+
+
 def main():
     ts = datetime.now(timezone.utc).isoformat()
     result = {"ts": ts, "base": BASE, "status": "ok", "alert": False,
@@ -200,6 +271,7 @@ def main():
     # MCP tool-definition descriptions — the surface agent clients actually copy
     # (a stale "$0.01" in gate_swap's tool-def sat here, invisible to the path-
     # keyed landing/llms scans, until caught 2026-10-21).
+    mcp_price = None
     try:
         mcp_price = mcp_flat_price()
         if mcp_price is None:
@@ -216,6 +288,25 @@ def main():
     except Exception as e:  # degrade open
         result["surfaces"]["mcp"] = {"error": str(e)}
         result["errors"].append(f"mcp: {e}")
+
+    # In-repo example/doc artifacts (the files a prospect copies to wire a PAID
+    # call — invisible to the live-surface scans above).
+    try:
+        checked, mm = scan_repo_artifacts(enforced, mcp_price)
+        realmm = [x for x in mm if "error" not in x]
+        result["surfaces"]["repo"] = {"checked": checked, "mismatches": len(realmm)}
+        for x in mm:
+            if "error" in x:
+                result["errors"].append(f"repo {x['file']}: {x['error']}")
+                continue
+            key = (x.get("file"), x.get("route"), x["advertised"], x["enforced"])
+            if key not in seen:
+                seen.add(key)
+                x["surface"] = "repo"
+                result["mismatches"].append(x)
+    except Exception as e:  # degrade open
+        result["surfaces"]["repo"] = {"error": str(e)}
+        result["errors"].append(f"repo: {e}")
 
     result["alert"] = bool(result["mismatches"]) or bool(result["errors"])
     result["summary"] = (

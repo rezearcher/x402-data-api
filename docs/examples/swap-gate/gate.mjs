@@ -1,4 +1,4 @@
-// Check a Base token before your agent buys it. Pays $0.01 USDC via x402.
+// Check a Base token before your agent buys it. Pays $0.008 USDC via x402.
 // Free, no-wallet sample first: curl https://x402-data-api.sigrunner.workers.dev/gate/swap/preview?token=degen
 import { wrapFetchWithPayment } from "@x402/fetch";
 import { x402Client } from "@x402/core/client";

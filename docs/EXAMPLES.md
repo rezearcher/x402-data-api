@@ -40,7 +40,7 @@ Deeper verdict: `/chain/token-report` ($0.01) returns SAFE|CAUTION|AVOID + risk_
 Both are also MCP tools (`gate_swap`, `chain_token_report`) at `/mcp`.
 
 ## Cross-venue funding-arb scanner
-`/crypto/funding` ($0.001) ranks live perpetual funding spreads across Hyperliquid, OKX
+`/crypto/funding` ($0.004) ranks live perpetual funding spreads across Hyperliquid, OKX
 and dYdX with the arb direction + annualized rates — a drop-in data feed for a funding
 agent:
 ```js
@@ -80,7 +80,7 @@ curl -s "https://x402-data-api.sigrunner.workers.dev/gate/swap/preview?token=deg
 - `/defi/yields?limit=20` — $0.001 — top DeFi yields + IL/risk.
 - `/pm/markets?query=&limit=20` — $0.005 — live Polymarket markets.
 - `/scan/mcp?url=<mcp-server>` — $0.05 — MCP tool-poisoning / prompt-injection audit.
-- `/chain/block-number`, `/chain/gas-price` — $0.01 each (free `/preview` = identical live data).
+- `/chain/block-number`, `/chain/gas-price` — $0.002 each (free `/preview` = identical live data).
 
 Measured uptime/latency (not an SLA): `GET /status` (machine-readable) or `docs/STATUS.md`.
 
