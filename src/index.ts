@@ -1324,6 +1324,9 @@ Runnable version: https://github.com/rezearcher/x402-data-api/blob/main/examples
 - GET ${BASE}/scan/mcp/preview?url=<mcp-server> — free preview (counts + risk score; withholds detail).
 - GET ${BASE}/enrich/tech-risk/preview?domain=<d> — free preview (verdict + CVE/KEV counts + top CVE; withholds full list).
 - GET ${BASE}/.well-known/x402 — machine-readable discovery manifest.
+
+## Resellers / referral partners
+Featuring these endpoints in your MCP client, router, or agent? Append &ref=<your-tag> to any call URL (e.g. ${BASE}/gate/swap?token=aero&ref=yourname). The tag rides through the x402 402→sign→retry and is recorded on the settled on-chain call, so your referred volume is measurable and attributable — we can reconcile exactly how many settled calls (and distinct buyers) your integration drove, with Base txHashes. Ask contact@greyridgesignals.ai for a reconcile report on your tag.
 `);
 });
 
