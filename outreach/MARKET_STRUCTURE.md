@@ -289,3 +289,41 @@ with a careful, generalizable rationale (quote kept in `outreach/replies/2026-10
   `hivemindos` archived. Buyer-empty reconfirmed.
 - **URL code-search (greyridgesignals.ai / workers.dev) = all known** measurers/directories/
   handled (Haven, ArbiVault, hermes-agent catalogs, census repos). 0 net-new in-flight buyers.
+
+## 2026-10-21 (cycle 89) — two structural findings that redirect future effort
+
+### 1. ClawRouter #503 (registry PR) can NEVER settle revenue alone — real target is the BlockRun GATEWAY
+Deep-read ClawRouter src (proxy.ts + partners/{registry,tools}.ts). A PARTNER_SERVICES
+entry carries only `proxyPath` (relative to /v1) + method/params/pricing — **no per-entry
+host/baseUrl**. ALL partner traffic is matched by one regex
+`/^\/v1\/(?:partner|pm|exa|modal|stocks|usstock|crypto|fx|commodity|phone|voice)\//`
+then `proxyPaidApiRequest(req,res,apiBase,...)` where `apiBase = https://blockrun.ai/api`.
+i.e. every partner (Predexon etc.) is **hosted behind BlockRun's own gateway**; the router
+forwards to blockrun.ai, which internally routes `/v1/pm/*` → Predexon.
+**Consequence:** our `/gate/swap` proxyPath would (a) not match the prefix regex and (b) have
+no upstream host → the coderabbit 404 is architecturally correct, not a cosmetic nit. Making
+#503 "zero-friction mergeable" would require rewriting their core proxy routing + x402 payment
+flow (new external upstream, bypassing their gateway billing) — presumptuous, will be rejected.
+**The real integration = being onboarded into the BlockRun gateway (blockrun.ai/api).** That is
+their server-side call. Venue already opened: BlockRunAI/awesome-blockrun issue #142 (data
+provider). #142 is ball-in-court (0 comments, we filed). **Do NOT keep treating ClawRouter #503
+as "almost converting."** Prior memory "best buyer-target in 60 cycles" was right about the
+*buyer* (6633★, pays market-data partners) but the *path* is the gateway, not the router registry.
+
+### 2. AgentPay (agentpay.tools) = a LIVE real-volume x402 discovery BUYER — best discovery channel found recently
+scores.json pulled live: it's a "paid active prober" that samples the x402 marketplace per NEED,
+pays real Base probes ($0.005), checks a body returns post-settlement, and feeds a `verified_route`
+ranking that real paying agents consume. own_tools receipts (self-excluded from probing):
+`pre_trade_check` 108 paid calls @ $0.01, `verified_route` 36 @ $0.01, `session_create` 10 — all
+last-paid 2026-10-21. So it is a genuine buyer-facing product with live volume, not a census.
+Need taxonomy (by_need): defi yields, llm inference, market data, news, nft metadata, pdf ocr,
+sentiment analysis, token price, token security, twitter data, wallet screening, web search —
+we serve ~5 of these on Base. "token security" has only **1 ranked service (Otto AI, factor 1.05)**
++ 5 unprobed → thin, winnable. **We are NOT in their index** despite the maintainer saying we
+"appeared in a token-security sweep" (agentpay#11) — i.e. swept-but-unprobed. agentpay#11 is
+**ball-in-court (we are last sender, 2026-10-21T00:39, no reply)** → do NOT re-ping.
+Verified this cycle: the 3 routes we pitched them (/gate/swap, /chain/token-security, /defi/yields)
+are all live, correct 402 (eip155:8453, USDC, payTo correct) and return clean parseable preview
+bodies → **we will pass their delivery probe when it fires.** Only lever in our control = make
+need-based classifiers map us correctly (did: added need-phrase tags to manifest, commit 46f7fac).
+The convertible event is their organic probe; keep delivering clean bodies and stay accurately tagged.
