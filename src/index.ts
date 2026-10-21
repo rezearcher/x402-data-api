@@ -1060,9 +1060,10 @@ app.get("/.well-known/agent-capabilities.json", (c) => {
   const q = (c.req.query("q") || "").toLowerCase().trim();
   const limRaw = parseInt(c.req.query("limit") || "3", 10);
   const limit = Number.isFinite(limRaw) ? Math.max(1, Math.min(62, limRaw)) : 3;
-  const opId = (p: string) => "greyridge_" + p.replace(/^\/+|\/+$/g, "").replace(/[{}]/g, "").replace(/[/-]/g, "_");
   const product = ([p, method, price, _units, desc, tags]: [string, string, string, string, string, string[]]) => ({
-    operation_id: opId(p),
+    // Canonical id shared with openapi.json so a buyer adapter can resolve this product
+    // back to the billable operation when it places the paid call (see canonicalOperationId).
+    operation_id: canonicalOperationId(p, method),
     name: "Grey Ridge " + shortRouteName(p),
     use_when: desc.split(/(?<=[.?!])\s/)[0],
     description: desc,
@@ -1538,6 +1539,26 @@ const ROUTER_SLUG_ALIASES: Record<string, string> = {
   "/chain/balance": "base_wallet_balance",
 };
 
+/** Canonical operationId for a route — the SINGLE source of truth shared by openapi.json
+ * (withOperationIds) and /.well-known/agent-capabilities.json. A generic x402 buyer adapter
+ * discovers a product by operation_id (from agent-capabilities) and then resolves that SAME
+ * id back to the billable operation in our OpenAPI to place the paid call. If the two
+ * surfaces derive the id differently the discover->purchase handoff silently 404s, so both
+ * call this. Keep in lockstep with the inline fallbacks below. */
+function canonicalOperationId(path: string, method: string): string {
+  const m = method.toLowerCase();
+  const flagship = FLAGSHIP_OPERATION_IDS[path];
+  if (flagship && (m === "get" || path === "/v1/chat/completions")) return flagship;
+  if (path.startsWith("/dns/")) return "dns_lookup";
+  if (path.startsWith("/whois/")) return "domain_whois";
+  if (ROUTER_SLUG_ALIASES[path]) return ROUTER_SLUG_ALIASES[path];
+  const words = path
+    .split("/")
+    .filter(Boolean)
+    .flatMap((seg) => (seg.startsWith("{") ? ["by", seg.slice(1, -1)] : seg.split("-")));
+  return words.length === 0 ? "root" : words.join("_").replace(/-/g, "_");
+}
+
 function withOperationIds<T extends Record<string, Record<string, any>>>(paths: T): T {
   for (const [path, item] of Object.entries(paths)) {
     for (const [method, op] of Object.entries(item)) {
@@ -1552,24 +1573,10 @@ function withOperationIds<T extends Record<string, Record<string, any>>>(paths: 
         };
       }
       if (op.operationId) continue;
-      // Search-friendly names for the flagship safety routes: x402 routers (Agent402 /api/route)
-      // rank mainly on slug-word match, and camelCase slugs never match "honeypot check".
-      const flagship = FLAGSHIP_OPERATION_IDS[path];
-      if (flagship && (method === "get" || path === "/v1/chat/completions")) { op.operationId = flagship; continue; }
-      const words = path
-        .split("/")
-        .filter(Boolean)
-        .flatMap((seg) =>
-          seg.startsWith("{")
-            ? ["by", seg.slice(1, -1)]        // {domain} -> "by","domain"
-            : seg.split("-"),                  // token-balance -> "token","balance"
-        );
-      // snake_case phrase slugs (e.g. defi_yields, chain_gas_price, dns_lookup) so router slug-word
-      // matching works; dns/whois use the names buyers search for.
-      if (path.startsWith("/dns/")) op.operationId = "dns_lookup";
-      else if (path.startsWith("/whois/")) op.operationId = "domain_whois";
-      else if (ROUTER_SLUG_ALIASES[path]) op.operationId = ROUTER_SLUG_ALIASES[path];
-      else op.operationId = words.length === 0 ? "root" : words.join("_").replace(/-/g, "_");
+      // Search-friendly snake_case slugs (flagship safety routes get hand-tuned ids so
+      // x402 routers rank them on slug-word match). Shared with agent-capabilities.json
+      // via canonicalOperationId so the discover->purchase handoff resolves the same id.
+      op.operationId = canonicalOperationId(path, method);
     }
   }
   // Data lane first: importers/agents read paths top-down, and the data routes are the
