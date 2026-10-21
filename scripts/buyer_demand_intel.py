@@ -12,9 +12,14 @@ sources and tells the next cycle which lane actually has paying demand:
      footprint (how many distinct sellers / purchases they make ecosystem-wide)
      and surface the competitor sellers they also pay in our category.
 
-Output: ranked JSON + human summary. A buyer that paid us AND is highly active
-ecosystem-wide is the single most valuable prospect we have — it already crossed
-the funded-wallet + x402-client friction and chose us once.
+Output: ranked JSON + human summary, split into candidate-integrators vs
+probe/scorer-bots. CORRECTION (2026-10-20): breadth of ecosystem activity is an
+ANTI-signal, not a pro-signal — x402 endpoint scorers (Lumiere PayCheck, vet402)
+pay ~1 call to MANY sellers and sample a seller's whole route catalog to grade it.
+The old score rewarded that breadth and ranked the Lumiere prober (0xec2abd…) as
+our #1 prospect. We now classify by DEPTH/concentration: a real convertible
+integrator makes REPEAT calls on few routes and concentrates ecosystem spend;
+probe bots are demoted to score 0 so they never top the list again.
 
 Usage: python3 -I scripts/buyer_demand_intel.py [window_hours]   (default 336 = 14d)
 Requires: 1Password `op` (Division vault) for the TrafficLog secret.
@@ -36,6 +41,20 @@ OUR_WALLETS = {  # never count self-dealing
     "0x95e6a9761522e9533d74bbebe47e1c5ad8e3c685",  # buyer/test
 }
 WINDOW = int(sys.argv[1]) if len(sys.argv) > 1 else 336
+
+# --- probe-vs-buyer classifier thresholds (data, editable; degrade-open) --------
+# A real integrator is DEPTH: it hammers one/few routes repeatedly and concentrates
+# its ecosystem spend on few sellers. An x402 *scorer/census/probe bot* (e.g.
+# Lumiere PayCheck's lumiere-paycheck-prober, vet402 observatory) is BREADTH: it
+# pays ~1 call to MANY distinct sellers and samples a seller's whole route catalog
+# once to score it. The old score (paid_calls + ecosystem_purchases) REWARDED that
+# breadth and so ranked a probe bot as our #1 "prospect". These ground-truth
+# behavioral signals discriminate the two — no hardcoded wallet/UA roster (that
+# degrades silently as new probers appear); the signal is the buyer's own pattern.
+PROBE_MIN_ROUTES = 4        # sampled this many+ distinct routes of ours...
+PROBE_MAX_DEPTH_RATIO = 1.5 # ...with <=1.5 calls each on average = catalog sweep
+PROBE_MIN_SELLERS = 8       # OR active across this many distinct sellers...
+PROBE_MAX_CONCENTRATION = 2.5  # ...at <2.5 purchases/seller = spread-thin prober
 
 
 def lane_of(path: str) -> str:
@@ -118,21 +137,57 @@ def main():
         eco = activity.get(payer, 0)
         n_sellers = len(buyer_sellers.get(payer, set()))
         top_lane = info["lanes"].most_common(1)[0][0] if info["lanes"] else "?"
+        paid_calls = sum(x["count"] for x in info["routes"])
+        distinct_routes = len({x["path"] for x in info["routes"]})
+        max_route_calls = max((x["count"] for x in info["routes"]), default=0)
+        # depth = calls beyond one-per-route = genuine repeat usage (not catalog sampling)
+        repeat_depth = paid_calls - distinct_routes
+        depth_ratio = paid_calls / distinct_routes if distinct_routes else 0.0
+        concentration = eco / n_sellers if n_sellers else float(eco)
+
+        # ground-truth classification (behavior, not a roster)
+        catalog_sweep = distinct_routes >= PROBE_MIN_ROUTES and depth_ratio <= PROBE_MAX_DEPTH_RATIO
+        eco_spread = n_sellers >= PROBE_MIN_SELLERS and concentration < PROBE_MAX_CONCENTRATION
+        is_probe = catalog_sweep or eco_spread
+        classification = "probe/scorer-bot" if is_probe else "candidate-integrator"
+        reason = []
+        if catalog_sweep:
+            reason.append(f"sampled {distinct_routes} routes at {depth_ratio:.1f} calls each (catalog sweep)")
+        if eco_spread:
+            reason.append(f"{eco} buys across {n_sellers} sellers ({concentration:.1f}/seller, spread thin)")
+
+        # DEPTH-driven score: reward repeat usage + concentration; probes score ~0
+        # so they never top the ranked prospect list again.
+        if is_probe:
+            score = 0
+        else:
+            score = repeat_depth * 10 + max_route_calls * 3 + (eco if concentration >= PROBE_MAX_CONCENTRATION else 0)
+
         prospects.append({
             "payer": payer,
+            "classification": classification,
+            "classification_reason": "; ".join(reason) or "repeat/concentrated usage",
             "paid_routes": sorted({x["path"] for x in info["routes"]}),
-            "paid_calls": sum(x["count"] for x in info["routes"]),
+            "paid_calls": paid_calls,
+            "distinct_routes": distinct_routes,
+            "max_calls_one_route": max_route_calls,
+            "repeat_depth": repeat_depth,
             "top_lane": top_lane,
             "ecosystem_purchases": eco,        # budget proxy (how active in the whole rail)
             "ecosystem_distinct_sellers": n_sellers,
-            "score": sum(x["count"] for x in info["routes"]) + eco,  # paid-us + overall activity
+            "ecosystem_concentration": round(concentration, 2),
+            "score": score,
         })
-    prospects.sort(key=lambda x: -x["score"])
+    # real candidate integrators first (highest depth), probes demoted to the bottom
+    prospects.sort(key=lambda x: (x["classification"] == "probe/scorer-bot", -x["score"]))
 
+    real_candidates = [p for p in prospects if p["classification"] == "candidate-integrator"]
     out = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "window_hours": WINDOW,
         "our_distinct_buyers": len(prospects),
+        "real_candidate_integrators": len(real_candidates),
+        "probe_bots_filtered": len(prospects) - len(real_candidates),
         "demand_by_lane": dict(lane_totals.most_common()),
         "top_demand_lane": (lane_totals.most_common(1)[0][0] if lane_totals else None),
         "census_rows": len(rows),
@@ -143,14 +198,18 @@ def main():
 
     # human summary
     print(f"=== buyer-demand intel (window {WINDOW}h) ===")
-    print(f"census rows: {len(rows)} | our distinct real buyers: {len(prospects)}")
+    print(f"census rows: {len(rows)} | distinct payers: {len(prospects)} | "
+          f"real candidate integrators: {out['real_candidate_integrators']} | "
+          f"probe/scorer bots filtered: {out['probe_bots_filtered']}")
     print(f"demand by lane (our paid calls): {dict(lane_totals.most_common())}")
     print(f"TOP DEMAND LANE: {out['top_demand_lane']}")
-    print("\n=== our real buyers (ranked; exclude self) ===")
+    print("\n=== payers (candidate integrators first, probe bots demoted) ===")
     for p in prospects:
-        print(f"  {p['payer']}  score={p['score']}  "
-              f"paid_us={p['paid_calls']} in {p['top_lane']}  "
-              f"eco_purchases={p['ecosystem_purchases']} across {p['ecosystem_distinct_sellers']} sellers")
+        tag = "✦ CANDIDATE" if p["classification"] == "candidate-integrator" else "· probe/scorer"
+        print(f"  [{tag}] {p['payer']}  score={p['score']}  "
+              f"paid_us={p['paid_calls']} ({p['distinct_routes']} routes, max {p['max_calls_one_route']}/route) in {p['top_lane']}  "
+              f"eco={p['ecosystem_purchases']}/{p['ecosystem_distinct_sellers']}sellers conc={p['ecosystem_concentration']}")
+        print(f"      why: {p['classification_reason']}")
         print(f"      routes: {', '.join(p['paid_routes'])}")
     print(f"\nwrote {OUT}")
 
