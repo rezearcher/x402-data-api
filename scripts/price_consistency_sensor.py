@@ -63,21 +63,34 @@ def usd_from_str(s):
 
 
 def scan_surface(text, enforced):
-    """Find `$price` tokens near a known route path; flag disagreements."""
+    """Flag `$price` tokens that disagree with the enforced price of the route
+    they belong to.
+
+    A price is associated with the NEAREST route that PRECEDES it within a tight
+    window (prices in this API are written after their route: "GET /x — $0.002"
+    or "/x</code> ($0.002)"). Picking the nearest-preceding route (not the first
+    in a wide window) avoids mis-attributing a price to an earlier route on a
+    multi-route line, and skips range cells ("$0.002–$0.005") where the prices
+    come before the route list (no preceding route -> not checked).
+    """
     mismatches, checked = [], 0
     for m in PRICE_RE.finditer(text):
-        start = max(0, m.start() - 120)
-        window = text[start:m.end() + 40]
+        # Only look back within the CURRENT line (each route+price pair lives on
+        # one line / one table row), so a range cell's price can't bleed onto a
+        # route from the previous row.
+        line_start = text.rfind("\n", 0, m.start()) + 1
+        window = text[max(line_start, m.start() - 160):m.start()]
+        routes = list(ROUTE_RE.finditer(window))
+        if not routes:
+            continue
+        norm = routes[-1].group().replace("/preview", "")  # nearest preceding
+        if norm not in enforced:
+            continue
+        checked += 1
         adv = usd_from_str(m.group())
-        for rpath in ROUTE_RE.findall(window):
-            # normalise {domain}-style and trailing /preview
-            norm = rpath.replace("/preview", "")
-            if norm in enforced:
-                checked += 1
-                exp = enforced[norm]
-                if abs(adv - exp) > 1e-9:
-                    mismatches.append({"route": norm, "advertised": adv, "enforced": exp})
-                break
+        exp = enforced[norm]
+        if abs(adv - exp) > 1e-9:
+            mismatches.append({"route": norm, "advertised": adv, "enforced": exp})
     return checked, mismatches
 
 
