@@ -1053,6 +1053,7 @@ app.get("/.well-known/x402", (c) => {
     mcp_endpoint: `${BASE}/mcp`,
     resources: ROUTE_CATALOG.map((r) => mk(...r)),
   });
+});
 
 app.get("/.well-known/agent-capabilities.json", (c) => {
   const BASE = "https://x402-data-api.sigrunner.workers.dev";
@@ -1096,7 +1097,6 @@ app.get("/.well-known/agent-capabilities.json", (c) => {
     total_available: ROUTE_CATALOG.length,
     products,
   });
-});
 });
 
 // A2A Agent Card — RFC-8615 well-known URI for Agent-to-Agent protocol
