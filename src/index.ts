@@ -1171,22 +1171,22 @@ Runnable version: https://github.com/rezearcher/x402-data-api/blob/main/examples
 - GET ${BASE}/scan/mcp?url=<mcp-server> — $0.05 — security audit of an MCP server (tool-poisoning / prompt-injection, OWASP LLM01/LLM08); findings + risk score + verdict (clear/review/block).
 - GET ${BASE}/enrich/tech-risk?domain=<domain> — $0.01 — tech-stack -> CVE (NVD) + EPSS + CISA-KEV risk + verdict (clear/review/block).
 - GET ${BASE}/enrich/domain?domain=<domain> — $0.01 — firmographic + tech-stack enrichment, incl. subdomain enumeration (crt.sh) + verdict (clear/review/block, domain age).
-- GET ${BASE}/chain/block-number — $0.01 — current Base mainnet block number.
-- GET ${BASE}/chain/gas-price — $0.01 — current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd — no price oracle on ETH-only competitors.
-- GET ${BASE}/chain/balance?address=<0x…> — $0.01 — ETH balance of a Base address, incl. balance_usd.
-- GET ${BASE}/chain/token-balance?address=<0x…>&token=<0x…> — $0.01 — ERC-20 token balance of a Base address, incl. symbol/decimals/balance_formatted.
+- GET ${BASE}/chain/block-number — $0.002 — current Base mainnet block number.
+- GET ${BASE}/chain/gas-price — $0.002 — current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd — no price oracle on ETH-only competitors.
+- GET ${BASE}/chain/balance?address=<0x…> — $0.002 — ETH balance of a Base address, incl. balance_usd.
+- GET ${BASE}/chain/token-balance?address=<0x…>&token=<0x…> — $0.002 — ERC-20 token balance of a Base address, incl. symbol/decimals/balance_formatted.
 - GET ${BASE}/chain/tx?hash=<0x…> — $0.005 — transaction details by hash on Base.
 - GET ${BASE}/chain/receipt?hash=<0x…> — $0.005 — transaction receipt by hash on Base: status, gas used, full logs, L1 fee breakdown (l1_fee_wei/l1_gas_price_wei/l1_gas_used/effective_gas_price_wei) + l1_fee_usd/total_fee_usd.
-- GET ${BASE}/chain/nonce?address=<0x…> — $0.01 — tx count (nonce), latest + pending.
-- GET ${BASE}/chain/block?number=<n|latest> — $0.005 — block summary (hash, timestamp, tx count, gas, base fee).
+- GET ${BASE}/chain/nonce?address=<0x…> — $0.002 — tx count (nonce), latest + pending.
+- GET ${BASE}/chain/block?number=<n|latest> — $0.002 — block summary (hash, timestamp, tx count, gas, base fee).
 - GET ${BASE}/ai/ask?q=<prompt> — $0.002 — cheap LLM answer (Llama 3.2 3B), no API key.
 - POST ${BASE}/v1/chat/completions — $0.002 — OpenAI-compatible chat (Llama 3.3 70B, stream:true supported), no API key; point any OpenAI SDK base URL here with an x402 fetch wrapper. Free real-model try: POST ${BASE}/v1/chat/completions/preview (3/day/IP). Model list: GET ${BASE}/v1/models.
-- GET ${BASE}/chain/erc20-meta?token=<0x…> — $0.01 — ERC-20 name/symbol/decimals/totalSupply.
+- GET ${BASE}/chain/erc20-meta?token=<0x…> — $0.002 — ERC-20 name/symbol/decimals/totalSupply.
 - GET ${BASE}/chain/is-contract?address=<0x…> — $0.002 — contract vs EOA + bytecode size.
-- GET ${BASE}/chain/fee-estimate — $0.003 — Base EIP-1559 fee tiers (slow/standard/fast) + transfer cost.
-- GET ${BASE}/chain/network-status — $0.003 — Base chain id, latest block, block age, gas utilisation.
-- GET ${BASE}/chain/l1-base-fee — $0.003 — Ethereum L1 base fee seen by Base's GasPriceOracle + L1 data-fee estimate.
-- GET ${BASE}/chain/fee-history — $0.003 — Base base-fee history over the last 10 blocks with gas-used ratios.
+- GET ${BASE}/chain/fee-estimate — $0.002 — Base EIP-1559 fee tiers (slow/standard/fast) + transfer cost.
+- GET ${BASE}/chain/network-status — $0.002 — Base chain id, latest block, block age, gas utilisation.
+- GET ${BASE}/chain/l1-base-fee — $0.002 — Ethereum L1 base fee seen by Base's GasPriceOracle + L1 data-fee estimate.
+- GET ${BASE}/chain/fee-history — $0.002 — Base base-fee history over the last 10 blocks with gas-used ratios.
 - GET ${BASE}/defi/chains-tvl — $0.003 — Top chains by DeFi TVL.
 - GET ${BASE}/crypto/stablecoins — $0.003 — Top stablecoins by supply + peg price.
 - GET ${BASE}/defi/protocols-top — $0.003 — Top DeFi protocols by TVL.
@@ -1209,15 +1209,15 @@ Runnable version: https://github.com/rezearcher/x402-data-api/blob/main/examples
 - GET ${BASE}/ai/summarize?text=<…> — $0.003 — 1-3 sentence summary of a passage.
 - GET ${BASE}/ai/translate?text=<…>&to=es — $0.003 — Translate text into a target language.
 - GET ${BASE}/ai/extract?text=<…>&fields=a,b,c — $0.005 — Text-to-JSON extraction into exactly the fields you name.
-- GET ${BASE}/chain/blob-base-fee — $0.003 — Base EIP-4844 blob base fee (wei/gwei) from the GasPriceOracle.
-- GET ${BASE}/chain/eth-usd — $0.003 — Chainlink ETH/USD spot price on Base with staleness.
-- GET ${BASE}/chain/btc-usd — $0.003 — Chainlink BTC/USD spot price on Base with staleness.
-- GET ${BASE}/chain/prices — $0.005 — BTC/ETH/LINK/SOL Chainlink USD prices in one call.
-- GET ${BASE}/chain/sol-usd — $0.003 — Chainlink SOL/USD spot price on Base with staleness.
-- GET ${BASE}/chain/link-usd — $0.003 — Chainlink LINK/USD spot price on Base with staleness.
-- GET ${BASE}/chain/total-supply?token=<0x…> — $0.003 — ERC-20 total supply (raw + formatted).
+- GET ${BASE}/chain/blob-base-fee — $0.002 — Base EIP-4844 blob base fee (wei/gwei) from the GasPriceOracle.
+- GET ${BASE}/chain/eth-usd — $0.001 — Chainlink ETH/USD spot price on Base with staleness.
+- GET ${BASE}/chain/btc-usd — $0.001 — Chainlink BTC/USD spot price on Base with staleness.
+- GET ${BASE}/chain/prices — $0.001 — BTC/ETH/LINK/SOL Chainlink USD prices in one call.
+- GET ${BASE}/chain/sol-usd — $0.001 — Chainlink SOL/USD spot price on Base with staleness.
+- GET ${BASE}/chain/link-usd — $0.001 — Chainlink LINK/USD spot price on Base with staleness.
+- GET ${BASE}/chain/total-supply?token=<0x…> — $0.002 — ERC-20 total supply (raw + formatted).
 - GET ${BASE}/chain/allowance?token=<0x…>&owner=<0x…>&spender=<0x…> — $0.002 — ERC-20 allowance, flags unlimited approvals.
-- GET ${BASE}/chain/code?address=<0x…> — $0.01 — contract-code check for a Base address (EIP-7702 delegated-EOA aware).
+- GET ${BASE}/chain/code?address=<0x…> — $0.002 — contract-code check for a Base address (EIP-7702 delegated-EOA aware).
 - GET ${BASE}/chain/wallet?address=<0x…> — $0.003 — wallet bundle: balance + balance_usd + tx count + contract check (EIP-7702 delegated-EOA aware), one call.
 - WHY /gate/swap vs raw honeypot-flag APIs: raw flags make your agent interpret; this returns ONE decision (GO|HOLD|BLOCK) sized to YOUR trade (notional_usd vs Uniswap v3 liquidity price impact) plus a reason. Try free: ${BASE}/gate/swap/preview?token=degen
 - GET ${BASE}/gate/swap?token=<0x…>&side=buy&notional_usd=500 — $0.008 — pre-trade GO/HOLD/BLOCK gate for Base trading agents: honeypot/sellability + liquidity-vs-trade-size price impact in one fast call.
