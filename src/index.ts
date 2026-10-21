@@ -696,6 +696,18 @@ app.get("/internal/traffic-stats", async (c) => {
   // authed caller instead so it stays actionable.
   try {
     if (c.req.query("paid") === "1") return c.json({ ok: true, window_hours: hours, paid: await stub.getPaid(hours * 3600) });
+    if (c.req.query("settlements") === "1") {
+      // Self-documenting on-chain settlements (payer, path, txHash) for the window.
+      // Buildable basescan link per row; answers a trust-ask from our own store.
+      const settlements = await stub.getSettlements(hours * 3600);
+      return c.json({
+        ok: true,
+        window_hours: hours,
+        count: settlements.length,
+        settlements: settlements.map((s) => ({ ...s, basescan: `https://basescan.org/tx/${s.tx}` })),
+        timestamp: Math.floor(Date.now() / 1000),
+      });
+    }
     const stats = await stub.getStats(hours * 3600);
     // Non-paid hits are sampled at NONPAID_SAMPLE to protect the DO write budget;
     // multiply `count` by nonpaid_scale for an estimate of true non-paid volume.
@@ -2908,6 +2920,17 @@ export class TrafficLog extends DurableObject<Env> {
       } catch {
         /* best-effort: table may already exist and reads still work */
       }
+      // Additive migration: a `tx` column so every settled PAID row self-documents
+      // its on-chain settlement txHash (decoded from the facilitator's
+      // PAYMENT-RESPONSE header). Lets a registry/buyer trust-ask be answered from
+      // our own store instead of a manual chain scan, and lets buyer_demand_intel
+      // tie a paid call to its on-chain tx. SQLite has no ADD COLUMN IF NOT EXISTS,
+      // so swallow the "duplicate column" error on a DO that already has it.
+      try {
+        ctx.storage.sql.exec("ALTER TABLE hits ADD COLUMN tx TEXT");
+      } catch {
+        /* column already exists on this DO instance — expected after first run */
+      }
     });
   }
 
@@ -2923,10 +2946,10 @@ export class TrafficLog extends DurableObject<Env> {
   // preserved because every non-paid path is sampled at the same rate.
   static readonly NONPAID_SAMPLE = 0.01;
 
-  async logHit(path: string, method: string, ua: string): Promise<void> {
+  async logHit(path: string, method: string, ua: string, tx: string = ""): Promise<void> {
     // Always persist PAID; sample everything else to protect the write budget.
     if (method !== "PAID" && Math.random() >= TrafficLog.NONPAID_SAMPLE) return;
-    await this.ctx.storage.sql.exec("INSERT INTO hits (ts, path, method, ua) VALUES (?, ?, ?, ?)", Math.floor(Date.now() / 1000), path, method, ua);
+    await this.ctx.storage.sql.exec("INSERT INTO hits (ts, path, method, ua, tx) VALUES (?, ?, ?, ?, ?)", Math.floor(Date.now() / 1000), path, method, ua, tx);
     // Opportunistic prune: ~0.1% of writes trigger a small bounded delete of
     // old rows. Each deleted row also drops its hits_ts index entry, so a
     // LIMIT-100 prune costs up to 200 rows_written; at p=0.001 that averages
@@ -2961,6 +2984,22 @@ export class TrafficLog extends DurableObject<Env> {
       const e = agg.get(key); if (e) e.count++; else agg.set(key, { path, payer, count: 1 });
     }
     return Array.from(agg.values()).sort((a, b) => b.count - a.count).slice(0, 500);
+  }
+
+  // Self-documenting settlements: every PAID row that captured an on-chain
+  // settlement txHash, newest first. Answers a registry/buyer "show me a real
+  // Base mainnet settlement tied to a named resource" trust-ask from our own
+  // store (no manual chain scan), and lets buyer_demand_intel tie a paid call
+  // to its on-chain tx. Plain indexed scan on hits_ts (rows_read only), aggregate
+  // in JS — same write-budget discipline as getPaid/getStats.
+  async getSettlements(windowSeconds: number = 2592000): Promise<Array<{ ts: number; path: string; payer: string; tx: string }>> {
+    const cursor = await this.ctx.storage.sql.exec("SELECT ts, path, ua, tx FROM hits WHERE method = 'PAID' AND tx IS NOT NULL AND tx != '' AND ts > ? ORDER BY ts DESC LIMIT ?", Math.floor(Date.now() / 1000) - windowSeconds, TrafficLog.SCAN_CAP);
+    const out: Array<{ ts: number; path: string; payer: string; tx: string }> = [];
+    for (const row of cursor.raw()) {
+      out.push({ ts: Number(row[0]), path: String(row[1]), payer: String(row[2]), tx: String(row[3]) });
+      if (out.length >= 500) break;
+    }
+    return out;
   }
 
   async getStats(windowSeconds: number = 86400): Promise<Array<{ path: string; count: number }>> {
@@ -3423,17 +3462,33 @@ app.use(async (c, next) => {
   // show which routes real buyers settle (fail open, never on the response path).
   try {
     const payHdr = c.req.header("payment-signature") ?? c.req.header("x-payment");
-    const st = (mwRes ?? c.res)?.status;
+    const settledRes = mwRes ?? c.res;
+    const st = settledRes?.status;
     if (payHdr && st && st < 400 && c.env.TRAFFIC_LOG) {
       let payer = "unknown";
       try {
         const j = JSON.parse(atob(payHdr));
         payer = String(j?.payload?.authorization?.from ?? "unknown").toLowerCase();
       } catch { /* undecodable header */ }
+      // The facilitator rides the settled on-chain txHash back on the
+      // PAYMENT-RESPONSE header (base64 JSON: {success, transaction, network,
+      // payer}). Capture it so the PAID row self-documents its settlement — a
+      // registry/buyer trust-ask ("prove a real Base mainnet settlement") is then
+      // answered from our own store, not a manual chain scan. Prefer the settled
+      // payer (authoritative) over the request-header decode when present.
+      let tx = "";
+      try {
+        const prHdr = settledRes?.headers.get("payment-response") ?? settledRes?.headers.get("x-payment-response");
+        if (prHdr) {
+          const pr = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(prHdr), (ch) => ch.charCodeAt(0))));
+          if (pr?.transaction) tx = String(pr.transaction);
+          if (pr?.payer) payer = String(pr.payer).toLowerCase();
+        }
+      } catch { /* settle header absent/undecodable — log payer-only, never break the paid response */ }
       // Workers Logs line survives the TrafficLog DO daily-limit outage.
-      console.log(JSON.stringify({ evt: "PAID", path: c.req.path, payer }));
+      console.log(JSON.stringify({ evt: "PAID", path: c.req.path, payer, tx }));
       const stub = c.env.TRAFFIC_LOG.get(c.env.TRAFFIC_LOG.idFromName("default"));
-      fireAndForget(c, stub.logHit(c.req.path, "PAID", payer).catch(() => {}));
+      fireAndForget(c, stub.logHit(c.req.path, "PAID", payer, tx).catch(() => {}));
     }
   } catch { /* telemetry must never break a paid response */ }
   // x402 v2 carries the challenge only in the payment-required header and sends
