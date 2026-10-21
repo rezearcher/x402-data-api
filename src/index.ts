@@ -1023,9 +1023,9 @@ app.get("/.well-known/x402", (c) => {
       scheme: "exact", network: NETWORK, amount: units, maxAmountRequired: units,
       asset: USDC, payTo, maxTimeoutSeconds: 300, resource: `${BASE}${p}`,
       description: desc, mimeType: "application/json",
-      serviceName: shortRouteName(p),
+      serviceName: bazaarServiceNameFor(p),
       tags,
-      extra: { name: "USD Coin", version: "2", decimals: 6, serviceName: shortRouteName(p), tags },
+      extra: { name: "USD Coin", version: "2", decimals: 6, serviceName: bazaarServiceNameFor(p), tags },
     }],
   });
   return c.json({
@@ -1902,6 +1902,43 @@ let cachedMiddleware: MiddlewareHandler | null = null;
 // the tag/name search real buyers (and routers like agentpay) use to pick a
 // service. Competitors (OnchainPulse, token-risk, HumanMirror) all set both.
 const BAZAAR_SERVICE_NAME = "Grey Ridge Signals";
+// Route-specific serviceName overrides. CDP discovery /search is a HYBRID rank
+// (serviceName title + description); a single generic provider name as the title
+// for every route means NO route matches the buyer's natural query. Measured
+// 2026-10-21: with serviceName="Grey Ridge Signals" on every route we were
+// INVISIBLE in /discovery/search for "is this token a scam", "rug pull check
+// base token", "token security honeypot" and "token safety check before swap"
+// (ours_ranks=[] for all), while every top result (theboredlab "Base Honeypot &
+// Rug Check", marketintelligenceapi "Rug check for any token", dropenginehq
+// "Token Security Audit") carried a route-specific, query-matched title. These
+// names restate the route's REAL capability in the buyer's words (measured, not
+// vaporware). <=32 chars per CDP schema; verified in code below. Keyed by path
+// (method/params stripped), same normalization as bazaarTagsFor.
+const BAZAAR_SERVICE_NAME_OVERRIDES: Record<string, string> = {
+  "/gate/swap": "Base Token Safety Swap Gate",
+  "/chain/token-report": "Base Token Safety & Rug Check",
+  "/chain/token-security": "Token Security & Honeypot Scan",
+  "/scan/mcp": "MCP Server Security Scan",
+  "/enrich/tech-risk": "Domain & Tech Risk (CVE/EPSS)",
+  "/crypto/funding": "Cross-Venue Perp Funding Rates",
+  "/defi/yields": "Top DeFi Yields & APY",
+  "/pm/markets": "Polymarket Prediction Markets",
+  "/crypto/prices": "Live Crypto Spot Prices",
+  "/v1/chat/completions": "Keyless LLM Inference (x402)",
+  "/mcp": "Base Data & Token Safety (MCP)",
+};
+// Resolve the serviceName for a route key like "GET /chain/token-report".
+// Override wins; otherwise the provider brand. Hard-capped at 32 chars (CDP
+// schema) so a too-long override degrades to a truncation, never a dropped field.
+function bazaarServiceNameFor(routeKey: string): string {
+  const path = routeKey.replace(/^\w+\s+/, "").replace(/:\w+/g, "").replace(/\/+$/, "");
+  // Override (buyer-query-matched) wins; else a route-specific name derived from
+  // the path (e.g. "Base Block Number") — strictly more discoverable than the same
+  // generic provider brand repeated across all 62 routes. Brand stays in the
+  // manifest's top-level name/provider and the 402 `extra`, not the search title.
+  const name = BAZAAR_SERVICE_NAME_OVERRIDES[path] ?? shortRouteName(path);
+  return name.length > 32 ? name.slice(0, 32) : name;
+}
 // Curated keyword tags for the differentiated / revenue routes buyers search for.
 const BAZAAR_TAG_OVERRIDES: Record<string, string[]> = {
   "/gate/swap": ["token-safety", "honeypot", "pre-trade", "base", "swap-gate"],
@@ -3153,7 +3190,7 @@ function makeRoutes(payTo: string) {
   for (const key of Object.keys(routes)) {
     const rc = routes[key];
     if (rc && typeof rc === "object") {
-      if (rc.serviceName === undefined) rc.serviceName = BAZAAR_SERVICE_NAME;
+      if (rc.serviceName === undefined) rc.serviceName = bazaarServiceNameFor(key);
       if (rc.tags === undefined) rc.tags = bazaarTagsFor(key);
     }
   }
