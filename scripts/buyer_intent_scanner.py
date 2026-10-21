@@ -97,7 +97,8 @@ PARKED = re.compile(r"\bPARKED\b|priority[- ]reset|paused\b|do not (create|build
 SELLER_SELF = re.compile(
     r"(trust ?& ?safety layer|guard sdk|\bfacilitator\b|pay-?per-?(call|tool|request) (micropayments?|server|api|infrastructure)"
     r"|monetiz|\bresell|\bgateway\b|\brouter\b|unified payment|data services via|our (api|endpoint|feed|service|data)"
-    r"|sell (your|data|signals)|expose[sd]? .{0,20}paid|payment (execution )?layer|\bprovider\b.{0,20}(sdk|toolkit|platform))",
+    r"|sell (your|data|signals)|expose[sd]? .{0,20}paid|payment (execution )?layer|\bprovider\b.{0,20}(sdk|toolkit|platform)"
+    r"|(intelligence|signals?|analytics|data|feeds?|insights?) for [\w\s,-]{0,30}(human|machine|agent|decision))",
     re.I,
 )
 
@@ -169,18 +170,61 @@ OTHER_DEP = re.compile(
     re.I,
 )
 
+# Buyer-vs-seller is the NEXT targeting leak after chain-fit (observed 2026-10-21: all 4
+# newly-HOT Base-fit targets — geomacro, agentresolver, kind-meitner, misthos — were
+# PRODUCERS, not data buyers; the SELLER_SELF description check missed them). Ground truth
+# is the x402 ROLE in the dependency graph, not prose:
+#   - A repo that SHIPS a 402 server (x402-express/hono/next server middleware, a
+#     facilitator, @x402/*-server) SELLS pay-per-call — it is a rival, never our payer.
+#   - A repo that CALLS 402s as a CLIENT (x402-fetch/axios, wrapFetchWithPayment,
+#     withPaymentInterceptor) is a BUYER — the convertible audience.
+# @coinbase/x402 alone is ambiguous (ships both halves) → no role signal, degrade open.
+SELLER_DEP = re.compile(
+    r"x402-express|x402-hono|x402-next|x402-koa|x402-fastify|x402-elysia"
+    r"|@x402/(express|hono|next|koa|fastify|server)|paymentMiddleware|settleResponseHeader"
+    r"|useFacilitator|x402-facilitator|@x402/facilitator",
+    re.I,
+)
+BUYER_DEP = re.compile(
+    r"x402-fetch|x402-axios|@x402/(fetch|axios)|wrapFetchWithPayment|withPaymentInterceptor"
+    r"|createPaymentHeader|decodeXPaymentResponse",
+    re.I,
+)
 
-def enrich_network_from_repo(repo, current_net):
-    """When text inference is unconfirmed, resolve chain-fit from the repo's package
-    manifests (the ground-truth signal). Bounded: 1 tree call + <=3 manifest fetches.
-    Degrades open — any failure or no dependency signal returns ``current_net``."""
-    if current_net not in ("unknown", "multi-or-ambiguous"):
-        return current_net, None
+# Seller-build INTENT in the issue text itself — the signal the dep-role check misses
+# when a repo wires x402 via the ambiguous @coinbase/x402 package rather than a distinct
+# client/server framework. Observed 2026-10-21: all 3 "HOT" survivors were producers whose
+# OWN insider epic describes standing up a PAID surface to SELL (misthos#200 "Make x402 a
+# real, paid API surface for Misthos"; kind-meitner#2 "Paid service: use x402 ...
+# service-seller-sdk"; geomacro#2071 shipping its own category APIs behind x402). A buyer
+# epic instead describes CONSUMING/PAYING an external 402. Keys on producer-side phrasing;
+# derived from issue data, degrades open (no match = unchanged).
+SELLER_INTENT = re.compile(
+    r"monetiz|paid api surface|add paid (pricing|products?|routes?|endpoints?|tier)"
+    r"|metered endpoint|seller[- ]sdk|service-seller|paid rail|our (paid|metered|x402) (api|endpoint|service|surface)"
+    r"|sell (our|your|data|signals?|access|per-call)|charge (per|for) (call|request|api|tool)"
+    r"|expose[sd]? [\w\s]{0,40}(paid|per-?call|x402|metered)|turn [\w\s]{0,30}into a (paid )?(api |payment )?surface"
+    r"|(wire|put) [\w\s]{0,30}(existing )?apis? [\w\s]{0,20}(paid|metered|pricing|x402)"
+    r"|payment challenge|402 payment required .{0,30}(supplies|server)|facilitator (sdk|service|endpoint)",
+    re.I,
+)
+
+
+def enrich_network_from_repo(repo, current_net, need_role=False):
+    """Resolve chain-fit (and, when ``need_role``, the x402 BUYER/SELLER role) from the
+    repo's package manifests — the ground-truth signal. Bounded: 1 tree call + <=3
+    manifest fetches. The manifest blob is fetched when chain-fit is unconfirmed OR a
+    role verdict is wanted (a HOT/WARM contender). Degrades open — any failure or no
+    dependency signal returns ``current_net`` and role ``None``.
+    Returns (net, net_src, role) with role in {"buyer", "seller", None}."""
+    want_net = current_net in ("unknown", "multi-or-ambiguous")
+    if not want_net and not need_role:
+        return current_net, None, None
     tree = api_json(["repos/" + repo + "/git/trees/HEAD", "-X", "GET",
                      "-f", "recursive=1", "--jq",
                      "[.tree[] | select(.type==\"blob\") | .path]"])
     if not tree:
-        return current_net, None
+        return current_net, None, None
     manifests = [p for p in tree if p.rsplit("/", 1)[-1] == "package.json"]
     # root-most first, cap at 3 to stay inside the core-API budget
     manifests.sort(key=lambda p: p.count("/"))
@@ -197,16 +241,28 @@ def enrich_network_from_repo(repo, current_net):
         except Exception:
             continue
     if not blob:
-        return current_net, None
+        return current_net, None, None
+    # Role from the x402 dependency role (buyer client vs seller server). Unambiguous
+    # only when exactly one side appears; @coinbase/x402 alone ships both -> no verdict.
+    role = None
+    if need_role:
+        sells = bool(SELLER_DEP.search(blob))
+        buys = bool(BUYER_DEP.search(blob))
+        if sells and not buys:
+            role = "seller"
+        elif buys and not sells:
+            role = "buyer"
+    if not want_net:
+        return current_net, None, role
     base = bool(BASE_DEP.search(blob))
     other = bool(OTHER_DEP.search(blob))
     if base and not other:
-        return "base-evm", "deps"
+        return "base-evm", "deps", role
     if other and not base:
-        return "other-chain", "deps"
+        return "other-chain", "deps", role
     if base and other:
-        return "multi-or-ambiguous", "deps"
-    return current_net, None
+        return "multi-or-ambiguous", "deps", role
+    return current_net, None, role
 
 
 def main():
@@ -251,8 +307,22 @@ def main():
             except Exception:
                 pass
         net = infer_network(meta, it.get("body", ""))
-        # Prose was unconfirmed — resolve from the repo's x402 dependency graph (ground truth).
-        net, net_src = enrich_network_from_repo(repo, net)
+        # Compute the cheap discriminators first so we only spend the manifest-fetch
+        # budget resolving the x402 ROLE for genuine HOT/WARM contenders.
+        assoc = (it.get("assoc") or "NONE").upper()
+        insider = assoc in ("OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR")
+        body = it.get("body", "")
+        text = (it.get("title", "") + "\n" + body)
+        research = bool(NO_PAY.search(text) or ANALYST.search(text) or PARKED.search(text))
+        # Seller intent from EITHER the repo description (what it IS) or the issue text
+        # (what this epic BUILDS — a paid surface to sell). The issue-text signal catches
+        # @coinbase/x402 producers the dep-role check can't (ambiguous package).
+        seller_self = bool(SELLER_SELF.search(meta.get("description") or "")) or bool(SELLER_INTENT.search(text))
+        # A contender = an insider build-issue not already flagged seller/research by the
+        # cheap checks. For those, resolve buyer-vs-seller from the dep graph (ground truth).
+        contender = insider and not seller_self and not research
+        # Prose was unconfirmed — resolve chain-fit (and role) from the x402 dep graph.
+        net, net_src, role = enrich_network_from_repo(repo, net, need_role=contender)
         contacted = already_contacted(repo, num)
         active = age_days is not None and age_days <= 45
         # Chain-fit is the PROVEN replied->paid conversion killer. Measured against the
@@ -269,19 +339,13 @@ def main():
         # Demand vs rival-seller: a repo OWNER/MEMBER/COLLABORATOR opening the issue is
         # the team building/planning a BUYER (demand-side). An outsider (assoc NONE)
         # posting an external endpoint + price is a rival SELLER pitching — not a buyer
-        # for us. This is the key discriminator; without it the feed is ~80% rival noise.
-        assoc = (it.get("assoc") or "NONE").upper()
-        insider = assoc in ("OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR")
-        body = it.get("body", "")
-        text = (it.get("title", "") + "\n" + body)
-        research = bool(NO_PAY.search(text) or ANALYST.search(text) or PARKED.search(text))
-        # Seller-self keys on the REPO's own description (what it IS), not the issue text.
-        seller_self = bool(SELLER_SELF.search(meta.get("description") or ""))
+        # for us. The description-only SELLER_SELF check missed dep-level sellers, so a
+        # repo whose x402 dep graph ships a 402 SERVER (role=="seller") is demoted too.
 
         if contacted:
             tier = "CONTACTED"
-        elif not insider or seller_self:
-            tier = "SELLER_PITCH"  # outsider pitching, OR an insider whose repo sells/exposes its own service — a rival, not demand
+        elif not insider or seller_self or role == "seller":
+            tier = "SELLER_PITCH"  # outsider pitching, OR an insider repo that sells/exposes its own 402 service (by description or dep role) — a rival, not demand
         elif research:
             tier = "RESEARCH"  # census/collector/observatory or forbids paid requests — never a payer
         elif net == "other-chain":
@@ -299,7 +363,7 @@ def main():
             "repo": repo, "issue": num, "url": f"https://github.com/{repo}/issues/{num}",
             "title": it["title"], "author": it["user"], "assoc": assoc, "created": it["created"],
             "network": net, "net_src": net_src or "text", "age_days": age_days,
-            "stars": meta.get("stargazers_count"),
+            "stars": meta.get("stargazers_count"), "role": role,
             "lang": meta.get("language"), "contacted": contacted, "tier": tier,
         })
 
