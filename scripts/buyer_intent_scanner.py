@@ -66,6 +66,15 @@ QUERIES = [
     "add market data x402 source in:title,body state:open type:issue",
     "PaidHttpClient x402 in:title,body state:open type:issue",
     "x402 data provider in:title,body state:open type:issue",
+    # Compute-lane buyer-intent (added 2026-10-21): the only warm reply to date
+    # (0xcuy/adexto — "Agent Compute", called our $0.002/call x402 LLM tier an
+    # interesting fallback/cheap lane) came from a team ROUTING LLM calls, not a
+    # data buyer. These phrasings cast at devs who want a cheaper/fallback
+    # OpenAI-compatible provider they can pay per-call — the seller/buyer
+    # discriminator below still decides; a query match is never a verdict.
+    "x402 fallback LLM provider in:title,body state:open type:issue",
+    "cheaper OpenAI-compatible provider x402 in:title,body state:open type:issue",
+    "pay-per-call inference fallback x402 in:title,body state:open type:issue",
 ]
 # Only issues created within this window are considered (demand goes stale fast).
 CREATED_AFTER = (datetime.datetime.utcnow() - datetime.timedelta(days=60)).strftime("%Y-%m-%d")
@@ -99,6 +108,23 @@ SELLER_SELF = re.compile(
     r"|monetiz|\bresell|\bgateway\b|\brouter\b|unified payment|data services via|our (api|endpoint|feed|service|data)"
     r"|sell (your|data|signals)|expose[sd]? .{0,20}paid|payment (execution )?layer|\bprovider\b.{0,20}(sdk|toolkit|platform)"
     r"|(intelligence|signals?|analytics|data|feeds?|insights?) for [\w\s,-]{0,30}(human|machine|agent|decision))",
+    re.I,
+)
+
+# Compute-lane seller discriminator (added 2026-10-21). The compute lane surfaces its
+# own rivals: a repo that SELLS OpenAI-compatible LLM access over x402 (its OWN models
+# behind /v1/chat/completions or /v1/models, or self-described as an inference/LLM
+# provider for sale) is a competitor to our $0.002/call compute tier, never our payer.
+# SELLER_SELF already catches "gateway/router", but a compute seller may instead say
+# "inference provider", "sell LLM calls", "our models", or expose the OpenAI product
+# surface directly. Keys on self-as-model-PROVIDER framing; derived from the repo's own
+# description/issue text, degrades open (no match = unchanged, still surfaced).
+COMPUTE_SELLER = re.compile(
+    r"(/v1/chat/completions|/v1/models)\b[^.]{0,60}(our|sell|paid|per-?call|x402|offer|provide)"
+    r"|(inference|llm|model|completion|chat)[\s-]{0,10}(provider|api|gateway|upstream|backend|server)[\s\w]{0,30}(x402|pay-?per|usdc|for sale|monetiz)"
+    r"|sell[\w\s]{0,20}(llm|inference|model|completion|token) (calls?|access|requests?)"
+    r"|our (own )?(models?|llm|inference)\b[^.]{0,40}(x402|paid|per-?call|usdc)"
+    r"|openai-?compatible [\w\s]{0,20}(gateway|provider|upstream|server|api)[\s\w]{0,20}(x402|pay-?per|paid|usdc|sale)",
     re.I,
 )
 
@@ -317,7 +343,13 @@ def main():
         # Seller intent from EITHER the repo description (what it IS) or the issue text
         # (what this epic BUILDS — a paid surface to sell). The issue-text signal catches
         # @coinbase/x402 producers the dep-role check can't (ambiguous package).
-        seller_self = bool(SELLER_SELF.search(meta.get("description") or "")) or bool(SELLER_INTENT.search(text))
+        desc = meta.get("description") or ""
+        seller_self = (
+            bool(SELLER_SELF.search(desc))
+            or bool(SELLER_INTENT.search(text))
+            or bool(COMPUTE_SELLER.search(desc))
+            or bool(COMPUTE_SELLER.search(text))
+        )
         # A contender = an insider build-issue not already flagged seller/research by the
         # cheap checks. For those, resolve buyer-vs-seller from the dep graph (ground truth).
         contender = insider and not seller_self and not research
