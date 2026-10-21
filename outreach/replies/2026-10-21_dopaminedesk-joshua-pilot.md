@@ -31,3 +31,15 @@ The `?ref=` tagging I proposed to Joshua is shipped + deployed + live-verified (
 - Advertised publicly in llms.txt ("Resellers / referral partners").
 
 **When Joshua replies with a flow pick**, hand him the exact x402-fetch snippet for that route WITH `&ref=dopaminedesk` appended, and note that his 100-call paid test will reconcile as a traced sale (external_calls + distinct_external_payers + txHashes). Do NOT re-ping before he replies (ball-in-court).
+
+---
+## Cycle 77 update — 2026-10-21 (DID my pilot half + sent reciprocity follow-up)
+
+Discovered via repo read that DopamineDesk = an **x402 MARKETPLACE / buyer-adapter** (jblaz6335/mcp-server-aidatamarketplace, "Blaz Algo Systems"), not a passive MCP client. Its catalog loads **live from a production OpenAPI doc** (ai-data-marketplace Cloud Run), so new products appear without a package update. => Getting our endpoints into HIS catalog = his MCP-client buyers can discover+purchase our calls => real external USDC to our payTo. The bottleneck to buyer calls is on HIS side (adding us to the catalog).
+
+Executed my half of the two-way pilot unilaterally (no new ask):
+- Featured DopamineDesk in our /llms.txt "Where to buy (marketplaces)" section with attribution (commit bf5dd6e, deployed+live-verified).
+- Built outreach/partners/dopaminedesk-catalog-entry.json — paste-ready product entries in his discovery.js schema (operation_id/use_when/price_usdc/source/example_request/input_parameters), live-verified prices (gate/swap $0.008, token-report $0.010, token-security $0.009), ?ref=dopaminedesk baked in. Makes listing us zero-effort / auto-ingestible from our /.well-known/x402 manifest.
+- Sent threaded reply (msg 1a15fac254061f1b, In-Reply-To his CAE+n4WZ...) delivering both: proof of reciprocity + the drop-in entry + "no rush on preview."
+
+Status: ball-in-court (Joshua reviewing free previews "this week"). Do NOT re-ping. Next touch = when he picks a flow or reports preview results.
