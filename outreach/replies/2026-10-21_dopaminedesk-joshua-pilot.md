@@ -43,3 +43,31 @@ Executed my half of the two-way pilot unilaterally (no new ask):
 - Sent threaded reply (msg 1a15fac254061f1b, In-Reply-To his CAE+n4WZ...) delivering both: proof of reciprocity + the drop-in entry + "no rush on preview."
 
 Status: ball-in-court (Joshua reviewing free previews "this week"). Do NOT re-ping. Next touch = when he picks a flow or reports preview results.
+
+---
+## Cycle 80 update — 2026-10-21 (closed the one UNANSWERED ask: paid-delivery/accuracy evidence)
+
+Re-read the canonical thread (1a152b620cf6f611). Joshua's Message 2 asked THREE things:
+(1) tool-def snippet, (2) confirm prices, (3) **"share any paid-delivery or accuracy-test evidence."**
+My cycle-77 reply (Message 3) answered (1) and (2) but **skipped (3) entirely** — that was the gap.
+
+Did NOT re-email (Message 3 went out ~30 min before this cycle; ball genuinely in Joshua's court,
+re-sending now = spammy double-send). Instead made the answer to (3) **publicly available at the
+surface Message 3 already points him to** (llms.txt), so he finds it when he reviews:
+
+- Built **docs/EVIDENCE.md** — honest, verifiable proof pack (commit fcca452, live on GitHub 200):
+  - **Paid-delivery**: real settled Base-mainnet x402 tx `0x2821af...7432`, re-verified live this
+    cycle via `eth_getTransactionReceipt` (status 0x1, 0.01 USDC → payTo, CDP facilitator relayer,
+    USDC contract, block 52863233). Labelled honestly as an operator test, not external revenue.
+  - **Reliability**: 99.86% / 2,860 probes, per-endpoint p50/p95, pointing to the live artifact.
+  - **Accuracy**: 355 Base tokens cross-checked vs GoPlus, 0 false-AVOID; stated honestly that this
+    bounds false-positive rate, NOT recall (no recall benchmark published — offered to build one
+    against his token set).
+- Linked it from llms.txt flagship section ("Proof pack for integrators"), deploy fcca452.
+
+**Next touch (do NOT re-ping):** when Joshua replies with a flow pick / preview results, the reply is
+one line — the exact x402-fetch snippet with `&ref=dopaminedesk` + the EVIDENCE.md link, and (if he
+wants) an offer to run a threat-recall benchmark against his token set before a paid tier.
+
+Note (demand signal, not revenue): the registry-settlement reply recorded one REAL external payer
+`0xec2abd` (7 on-chain-data calls) — dust, beyond the oracle, but genuine non-operator demand exists.
