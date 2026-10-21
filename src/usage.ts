@@ -26,6 +26,7 @@ export type Route =
   | "GET /enrich/domain"
   | "GET /enrich/tech-risk"
   | "GET /scan/mcp"
+  | "POST /scan/mcp"
   | "GET /chain/token-security"
   | "GET /chain/token-report"
   | "GET /gate/swap"
@@ -161,6 +162,7 @@ const ALL_ROUTES: Route[] = [
   "GET /enrich/domain",
   "GET /enrich/tech-risk",
   "GET /scan/mcp",
+  "POST /scan/mcp",
   "GET /chain/token-security",
   "GET /chain/token-report",
   "GET /gate/swap",

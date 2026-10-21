@@ -48,11 +48,12 @@ Base-native, multi-provider RPC with automatic failover (never fails a paid call
 ### Security
 | Endpoint | Price | Returns |
 |---|---|---|
-| `GET /scan/mcp?url=` | $0.10 | Security audit of a target MCP server: tool-poisoning / prompt-injection / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08) + risk score |
+| `GET /scan/mcp?url=` | $0.05 | Security audit of a target MCP server: tool-poisoning / prompt-injection / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08) + risk score |
+| `POST /scan/mcp` `{"tools":[…]}` | $0.05 | **Zero-egress** audit — paste your own `tools/list` array; same itemized findings, **nothing leaves your side** and we never fetch/call your server. For OAuth-gated or private MCP servers that won't expose a URL |
 | `GET /enrich/tech-risk?domain=` | $0.05 | Tech-stack fingerprint → CVE (NVD) + EPSS + CISA-KEV attack-surface risk |
 | `GET /enrich/domain?domain=` | $0.01 | Firmographic + tech-stack enrichment, incl. **full subdomain enumeration** (`subdomains[]`) via crt.sh certificate-transparency logs, RDAP, DoH, HTTP fingerprint |
 
-Free previews: `GET /crypto/prices/preview`, `/crypto/funding/preview`, `/defi/yields/preview`, `/chain/block-number/preview`, `/chain/gas-price/preview` (full live data, not truncated), `/scan/mcp/preview?url=`.
+Free previews: `GET /crypto/prices/preview`, `/crypto/funding/preview`, `/defi/yields/preview`, `/chain/block-number/preview`, `/chain/gas-price/preview` (full live data, not truncated), `/scan/mcp/preview?url=`. **Zero-egress MCP scan** (for private/OAuth-gated servers): `POST /scan/mcp/preview` with `{"tools":[…]}` is the free counts-only preview; `POST /scan/mcp` with the same body is the paid itemized scan — nothing leaves your side. One-liner: [`examples/mcp-scan-preview.sh`](examples/mcp-scan-preview.sh).
 
 ---
 

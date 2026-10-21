@@ -1788,6 +1788,37 @@ function makeRoutes(payTo: string) {
         },
       }),
     },
+    "POST /scan/mcp": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.05",
+        network: NETWORK,
+        payTo,
+      },
+      description:
+        "Zero-egress MCP security scan: POST your own tools/list array ({\"tools\":[...]}) and get the full itemized audit back — prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08), per-tool findings + evidence + risk score + verdict. Nothing leaves your side except the tool descriptions you paste; we never fetch or call your server. For OAuth-gated / private MCP servers that must not expose a URL.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        pathParams: {},
+        pathParamsSchema: {
+          properties: {
+            tools: { type: "array", description: "Your tools/list result array (name, description, inputSchema per tool). Pasted, not fetched." },
+          },
+        },
+        output: {
+          example: {
+            target: "(pasted tools/list)",
+            tools_scanned: 3,
+            findings: [
+              { tool: "read_file", severity: "critical", rule: "tool-poisoning:hidden-instructions", detail: "…", evidence: "…" },
+            ],
+            risk_score: 40,
+            verdict: "review",
+            risk_summary: "1 issue across 3 tools, 1 CRITICAL (tool-poisoning). Risk 40/100.",
+          },
+        },
+      }),
+    },
     "GET /dns/:domain": {
       accepts: {
         scheme: "exact" as const,
@@ -7674,6 +7705,36 @@ app.get("/scan/mcp", async (c) => {
   }
 });
 
+// PAID zero-egress scan: POST your own tools/list array and get the FULL itemized
+// audit (same output as GET /scan/mcp) without exposing a server URL. For OAuth-gated
+// / private MCP servers whose operators won't send a reachable URL out — the paid
+// counterpart to the free paste-mode preview. x402-gated at $0.05 via "POST /scan/mcp".
+app.post("/scan/mcp", async (c) => {
+  let body: any;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'POST JSON body: {"tools":[{name,description,inputSchema}]} (your tools/list result)' }, { status: 400 });
+  }
+  const tools: { name?: string; description?: string; inputSchema?: unknown }[] = body?.tools ?? body?.result?.tools;
+  if (!Array.isArray(tools) || tools.length === 0 || tools.length > 200 || JSON.stringify(tools).length > 262144) {
+    return c.json({ error: "body.tools must be a non-empty array (<=200 tools, <=256KB)" }, { status: 400 });
+  }
+  const findings: ScanFinding[] = [];
+  for (const t of tools) findings.push(...analyzeMcpTool(t?.name ?? "(unnamed)", t?.description ?? "", JSON.stringify(t?.inputSchema ?? {})));
+  const weight = { critical: 40, high: 20, medium: 8, low: 3 } as const;
+  const risk_score = Math.min(100, findings.reduce((s, x) => s + weight[x.severity], 0));
+  const crit = findings.filter((x) => x.severity === "critical").length;
+  const risk_summary = findings.length === 0
+    ? `No tool-poisoning/injection patterns detected across ${tools.length} tool(s). Clean on static checks.`
+    : `${findings.length} issue(s) across ${tools.length} tool(s)${crit ? `, ${crit} CRITICAL (tool-poisoning)` : ""}. Risk ${risk_score}/100. Review flagged tools before trusting this server.`;
+  const result = { target: "(pasted tools/list)", tools_scanned: tools.length, findings, risk_score, verdict: verdictFromScore(risk_score), risk_summary, scanned_at: new Date().toISOString() };
+  console.log(JSON.stringify({ event: "paid_request", endpoint: "POST /scan/mcp", target: "(paste)", findings: findings.length, ts: result.scanned_at }));
+  const rail = c.get("rail") ?? "x402-paid";
+  fireAndForget(c, trackPaidRequest("POST /scan/mcp", rail, makeUsageCounter(c.env)));
+  return c.json(result);
+});
+
 // FREE preview — the conversion hook. Reveals THAT the target is vulnerable
 // (counts + severity + risk score) but withholds WHICH tools and the evidence.
 // A self-scanning agent that sees "2 CRITICAL tool-poisoning issues" must pay
@@ -7683,8 +7744,8 @@ function previewOf(r: McpScanResult) {
   for (const f of r.findings) by[f.severity]++;
   const upsell =
     r.findings.length === 0
-      ? "Clean on static checks. Run the full /scan/mcp ($0.05 via x402) for the itemized report + evidence."
-      : `${r.findings.length} issue(s) found${by.critical ? `, ${by.critical} CRITICAL` : ""}. This preview hides WHICH tools and the evidence — get the full itemized findings + remediation via the paid scan_mcp_server tool ($0.005 USDC) or GET /scan/mcp ($0.05).`;
+      ? "Clean on static checks. Full itemized report + evidence: GET /scan/mcp?url= or zero-egress POST /scan/mcp with your tools array ($0.05 via x402)."
+      : `${r.findings.length} issue(s) found${by.critical ? `, ${by.critical} CRITICAL` : ""}. This preview hides WHICH tools and the evidence — get the full itemized findings + remediation: paste-mode POST /scan/mcp (zero egress, same body you just used) or GET /scan/mcp?url= ($0.05), or the scan_mcp_server MCP tool ($0.005).`;
   return {
     target: r.target,
     tools_scanned: r.tools_scanned,
