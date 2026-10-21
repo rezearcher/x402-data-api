@@ -75,7 +75,7 @@ curl -s "https://x402-data-api.sigrunner.workers.dev/gate/swap/preview?token=deg
 ```
 
 ## Other priced routes (live amounts)
-- `/crypto/prices?coins=bitcoin,ethereum` — $0.004 — spot prices + 24h change.
+- `/crypto/prices?coins=bitcoin,ethereum` — $0.001 — spot prices + 24h change.
 - `/crypto/funding?limit=20` — $0.004 — cross-venue perp funding + arb spread.
 - `/defi/yields?limit=20` — $0.001 — top DeFi yields + IL/risk.
 - `/pm/markets?query=&limit=20` — $0.005 — live Polymarket markets.
