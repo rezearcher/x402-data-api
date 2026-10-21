@@ -327,3 +327,25 @@ are all live, correct 402 (eip155:8453, USDC, payTo correct) and return clean pa
 bodies → **we will pass their delivery probe when it fires.** Only lever in our control = make
 need-based classifiers map us correctly (did: added need-phrase tags to manifest, commit 46f7fac).
 The convertible event is their organic probe; keep delivering clean bodies and stay accurately tagged.
+
+### 2b. AgentPay organic discovery is Bazaar-GATED DEAD (traced cycle 90, 2026-10-21) — supersedes 2's "convertible on organic probe"
+Read AgentPay's prober source (romudille-bit/agentpay `agents/prober/run.py` + `gateway/radar.py`).
+SELECT draws candidates from `fetch_bazaar(need)` → **CDP Bazaar discovery/search
+`api.cdp.coinbase.com/platform/v2/x402/discovery/search?query=<need>`** — the exact frozen wall
+`bazaar_discovery_sensor.py::metadata_health()` measures. Queried that endpoint live for all 5 of
+our needs (token security / defi yields / market data / llm inference / token price): **we appear
+in ZERO of them.** We ARE in Bazaar (20 routes, only surface under the literal substring
+"sigrunner" = our hostname) but **19/20 carry serviceName=null**; only /defi/yields has a (stale)
+serviceName and even IT does not clear the relevance/volume cut (absent from "defi yields" top-17).
+Refresh mechanism (from our own `scripts/refresh_bazaar_catalog.js` header): CDP Bazaar metadata
+only updates on a settlement THROUGH the CDP facilitator; production settles via xpay (invisible to
+CDP), so the sole catalog-touching path is a **self-funded canary (buyer-wallet→receiving-wallet)
+= forbidden self-dealing**, and memory already proved it doesn't move rank anyway. AgentPay's `arc`
+subsystem pays listings but is **Arc-chain + a one-off 10-Oct study ($0.30 total)**, not Base, not
+recurring → not a fit (we're Base-only). **Conclusion: AgentPay cannot organically probe us at zero
+capital. Stop treating "stay ready for the organic probe" as a live path.** The only non-forbidden
+routes left are (a) the ball-in-court manual-seed thread agentpay#11 (do NOT re-ping) or (b) a real
+external payment on a route (which would refresh that route's Bazaar entry — the /defi/yields proof).
+Automated the ground-truth watch: `bazaar_discovery_sensor.py` now fetches agentpay.tools/scores.json
+each run and sets `agentpay_discovered` — flips True the day the volume-buyer actually probes us
+(currently: not in their 351-service index). That flag, not CDP rank, is the flywheel-turned signal.

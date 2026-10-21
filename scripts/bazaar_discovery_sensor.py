@@ -141,6 +141,48 @@ def metadata_health():
         return None, None, None
 
 
+def check_agentpay():
+    """Has the one real volume-buyer actually discovered/probed us yet?
+
+    AgentPay (romudille-bit/agentpay) is the only live x402 buyer we found with
+    real paid volume (verified_route 36 paid, pre_trade_check 108 paid). Its
+    Active Prober SELECTs candidates from CDP Bazaar discovery/search?query=<need>
+    (gateway/radar.py::fetch_bazaar) — the exact frozen wall metadata_health()
+    measures — so our Bazaar-invisibility means it can NEVER organically probe us
+    at zero capital (the only refresh is a forbidden self-pay canary). This checks
+    the ground truth: do WE appear in its live scores.json? The day we do (with
+    paid_probes>0) the discovery flywheel finally turned — that is the signal worth
+    waking a cycle for, far more than CDP rank. Read-only, degrades open.
+    Returns dict or None on any error (never blocks the sensor)."""
+    try:
+        req = urllib.request.Request(
+            "https://agentpay.tools/scores.json",
+            headers={"user-agent": "Mozilla/5.0 (compatible; x402-client)"})
+        d = json.load(urllib.request.urlopen(req, timeout=25))
+        svcs = d.get("services") or []
+        ours = []
+        for s in svcs:
+            blob = (str(s.get("resource_url") or "") + " " + str(s.get("name") or "")).lower()
+            if any(o in blob for o in OURS) or "5765ae06a52dc7a0bb71c36a11db512c7ea9ed10" in blob:
+                ours.append({
+                    "url": s.get("resource_url"), "need": s.get("need"),
+                    "paid_probes": s.get("paid_probes", 0),
+                    "delivery_rate": s.get("delivery_rate"),
+                    "delivery_factor": s.get("delivery_factor"),
+                    "flags": s.get("flags") or [],
+                })
+        probed = any((o.get("paid_probes") or 0) > 0 for o in ours)
+        return {
+            "reachable": True,
+            "total_services_indexed": d.get("count", len(svcs)),
+            "we_appear": bool(ours),
+            "we_were_probed": probed,
+            "our_entries": ours,
+        }
+    except Exception as e:
+        return {"reachable": False, "error": str(e)[:120]}
+
+
 def main():
     results = []
     cat_by_q = dict(QUERY_CATS)
@@ -168,6 +210,7 @@ def main():
         key=lambda x: (-len(x["categories"]), -x["top3_hits"], x["domain"]),
     )
     named, named_total, frozen = metadata_health()
+    agentpay = check_agentpay()
     # STRUCTURAL FINDING (cycle ap+, 2026-10-21): low CDP coverage is NOT an
     # actionable regression when our metadata is frozen stale — CDP pins
     # serviceName/desc at first registration and only self-pay settlements (which
@@ -195,6 +238,10 @@ def main():
         "metadata_total_routes": named_total,
         "metadata_frozen": frozen,
         "structural_block": structural_block,
+        "agentpay": agentpay,
+        # the real "discovery flywheel turned" signal: the one live volume-buyer
+        # actually probed us. True here => stop treating AgentPay as unreachable.
+        "agentpay_discovered": bool(agentpay and agentpay.get("we_were_probed")),
         # alert only on a FIXABLE coverage gap, never on the proven dead lever
         "alert": cov < 50.0 and not frozen,
         "distribution_candidates": distribution_candidates,
@@ -207,6 +254,15 @@ def main():
           + ("  [ALERT: most buyer queries don't find us]" if payload["alert"] else ""))
     if structural_block:
         print(f"  [STRUCTURAL / dead lever — not an actionable alert] {structural_block}")
+    if agentpay is not None:
+        if not agentpay.get("reachable"):
+            print(f"  [agentpay] scores.json unreachable: {agentpay.get('error')}")
+        elif agentpay.get("agentpay_discovered") or agentpay.get("we_were_probed"):
+            print(f"  [agentpay] *** DISCOVERED — the volume-buyer PROBED us: {agentpay['our_entries']}")
+        elif agentpay.get("we_appear"):
+            print(f"  [agentpay] indexed but not yet paid-probed: {agentpay['our_entries']}")
+        else:
+            print(f"  [agentpay] not in scores.json yet (of {agentpay.get('total_services_indexed')} svcs) — Bazaar-gated out, expected")
     for r in results:
         rk = r.get("our_best_rank")
         tag = f"rank {rk} {r.get('our_route')}" if rk else ("ERR " + r["error"] if r.get("error") else "NOT in top-20")
