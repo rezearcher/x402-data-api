@@ -165,3 +165,22 @@ BUYER traffic to a listed external endpoint. Ran discriminating traffic checks, 
   never the leak; demand is. **Do-not-repeat:** don't list on / pitch x402 routers/aggregators
   expecting buyer calls, and don't spend capital on a directory listing. The only channels that
   convert are DIRECT integrations a dev wires (Miles/LiquidLogicX ball-in-court; merged wire-PRs).
+
+## Surp (surp.ivc.lol) compute marketplace — MEASURED DEAD-FOR-US (cycle 78, 2026-10-21)
+- Probed the live keyless public API (`GET /api/providers`, `GET /api/markets`) off the
+  ivcained/surp-hermes-x402-llm plugin (pushed today). It is NOT a niche: **353 models, 32
+  providers** (OpenAI, Together AI, Fireworks, Groq, DeepSeek, Bedrock, Vertex, OpenRouter,
+  Anthropic, Mistral — mostly `trusted:true`/curated allowlist).
+- Our exact target model `llama-3.3-70b-instruct` already has **120 sellers**. Jev (their
+  decision model) selects per request on price/latency/cache/health. We proxy a single Workers-AI
+  upstream → **no price edge, no TPS/latency edge** → a 121st commodity-llama offer would win ~0
+  routed volume. Plus seller registration needs Rez's wallet **SIWE** (identity gate) and the
+  keyless-host allowlist (emailed support@, pending).
+- **Do-not-repeat:** do NOT pursue listing as a Surp (or any router-marketplace) commodity
+  inference seller — it is a price auction against hyperscalers we structurally lose. The Surplus
+  allowlist email can stay (costless) but is not a first-dollar path.
+- **Redirect (the edge that actually converts):** our compute lane wins only as an **ADDITIVE
+  reliability fallback** — wired as a router's secondary provider that fires solely when the
+  primary fails (adexto PR #5 = live reference impl, byte-identical when env unset). No price war,
+  no auction, buyer pays $0 until their primary breaks. Position on keyless + measured uptime,
+  never on "cheaper". Sharpened the llms.txt compute line to lead with this (cycle 78).
