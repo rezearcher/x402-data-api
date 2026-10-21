@@ -383,13 +383,19 @@ app.get("/status", (c) => {
 // ledger (mirrors x402-cve-triage /metrics). Aggregate-only — no per-request
 // data, no PAY_TO, no keys. Never x402-gated: FREE_PATHS in the middleware.
 app.get("/metrics", async (c) => {
-  // Edge-cache the aggregate metrics for 60s. /metrics is public + unauthenticated
+  // Edge-cache the aggregate metrics for 1h. /metrics is public + unauthenticated
   // and every uncached hit runs two Durable Object reads (UsageCounter.list() +
   // TrafficLog.getNetExternalPaid over a 30-day window). Public crawlers hitting
-  // this endpoint were the only unbounded multiplier on CF free-tier DO rows_read
-  // (the account hit 90% of the 5M/day cap at ~zero real traffic). A 60s cache caps
-  // DO reads from /metrics at <=1440/day regardless of crawl volume; the daily
-  // reconcile + goal-gate tolerate <=60s staleness on an aggregate counter.
+  // this endpoint are the only unbounded multiplier on CF free-tier DO rows_read.
+  // A 60s cache (prior fix) capped MISSES to 1440/day but NOT rows per miss:
+  // getNetExternalPaid reads every PAID row in the 30d window (~6673 today), so
+  // 1440 misses x 6673 rows = 9.6M rows_read/day = 192% of the 5M/day cap — the
+  // account still exceeded the limit on 2026-10-21 AFTER the edge cache shipped,
+  // 500-ing the DO layer until UTC reset (a live conversion-killer). The miss-cap
+  // alone was necessary but insufficient. A 1h TTL caps misses at 24/day, so even
+  // the SCAN_CAP ceiling (50k rows/call) = 1.2M/day = 24% of budget; one endpoint
+  // can no longer exhaust it. An aggregate counter read by a daily reconcile +
+  // goal-gate tolerates 1h staleness. Math: scripts/do_budget_check.py.
   const cache = (globalThis as { caches?: { default: Cache } }).caches?.default;
   const cacheKey = new Request(new URL(c.req.url).toString());
   if (cache) {
@@ -420,7 +426,7 @@ app.get("/metrics", async (c) => {
   // absent, which is fine to cache; a throw-path sets net_external.error — still
   // cacheable, just a transient blip for <=60s). Response must carry Cache-Control
   // for caches.default to store it.
-  res.headers.set("Cache-Control", "public, max-age=60");
+  res.headers.set("Cache-Control", "public, max-age=3600");
   if (cache) fireAndForget(c, cache.put(cacheKey, res.clone()));
   return res;
 });
