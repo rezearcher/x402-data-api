@@ -1168,9 +1168,11 @@ app.get("/.well-known/agent-card.json", (c) => {
         id: "token-security",
         name: "Token Security / Honeypot Detector",
         description:
-          "ERC-20 token security analysis for Base mainnet — EIP-1967/1822 proxy + upgradeability detection, " +
-          "bytecode dispatcher scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, " +
-          "and a live eth_call state-override simulation testing whether a synthetic wallet can actually transfer() the token. " +
+          "Is this Base token a honeypot or a rug pull? Can an agent actually sell it after buying? " +
+          "Deep per-check security analysis for any Base ERC-20 — the itemized evidence behind a trade-safety verdict. " +
+          "Runs a live eth_call state-override simulation testing whether a synthetic wallet can actually transfer() the token " +
+          "(real honeypot/sellability test, not a static flag), plus EIP-1967/1822 proxy + upgradeability detection, " +
+          "a bytecode dispatcher scan for mint/pause/blacklist/fee-setter/ownership selectors, and an owner() renouncement check. " +
           "Real compute, not a thin data wrapper. Returns risk_score (0-100) + verdict (clear/review/block) + human-readable flags. " +
           "Route: GET /chain/token-security. Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. " +
           "Price: $0.009. Free preview at GET /chain/token-security/preview (full analysis of Base WETH). " +

@@ -213,3 +213,35 @@ consumers), never for a single-author/0–1-star project. Skip these as first-do
 claims; see also joshuaswarren), so our measured provenance (MIT license + public repo +
 EVIDENCE.md + real settled tx, cycles 80–81) is the correct, standard-agnostic trust asset —
 keep that current. Only adopt a specific credential format once it clears the adoption bar above.
+
+## ERC-8004 / 8004scan is a CDP-Bazaar-shaped DEAD lever — do NOT spend capital on a mint (cycle 84, 2026-10-21)
+Chased a real signal: live on-chain buyer `0xf86e616a` pays competitor **onchainexpat** $0.15/call
+($4.95/day) for token-safety (see [[x402-token-safety-demand-is-real]]). onchainexpat's 402 responses
+carry a `link:` header advertising **ERC-8004 feedback** ("agent 22778", Reputation Registry claimed
+at `0x8004BAa17C55a88189AE136b182e5fdA19dE9b63` on Base). Investigated whether registering Grey Ridge
+in ERC-8004 would put us in front of that buyer. **Verdict: no — it's txn-gated bot-spam, same fatal
+shape as CDP Bazaar.**
+
+Evidence (researched this cycle, two web-fetch passes):
+- **ERC-8004 is identity+reputation, NOT a capability-search surface.** The spec (EIP-8004, Draft
+  2025-08-13) defines no on-chain function to search agents by service/skill/category. Discovery
+  depends entirely on off-chain indexers.
+- **Registration needs an on-chain mint** — `register(agentURI,…)` mints an ERC-721 agentId; requires
+  a wallet + ETH gas on the chosen chain. No spec-defined gasless path for registration (7702 sponsor
+  is only for *feedback* submitters). = **capital + Rez's wallet = atom, not zero-capital.**
+- **8004scan.io (the directory) is bot-spam-saturated:** 935,024 agents, **+126,620 in 24h**; newest
+  listings are auto-generated "CUSTOMX402" entries with Feedback 0 / Stars 0 / Score 0. Has text +
+  "AI semantic" search and a Base chain filter, but **no category/skill filter and ZERO buyer-side
+  traffic metrics** (no calls/payment-volume shown). No evidence any buyer discovers providers here.
+- The buyer paying onchainexpat almost certainly did NOT find them by browsing 935k spam agents.
+
+**Do-not-repeat:** do NOT register in ERC-8004 / mint an agentId / spend Rez capital chasing 8004scan
+rank. It is CDP-Bazaar II (frozen/txn-gated + spam-flooded + no buyer traffic). Serving an inert
+`agent-registration.json` without a mint is unverifiable and equally pointless.
+**Transferable win kept:** the ONE thing that mattered — buyers trust on-chain **proofOfPayment** — we
+already serve standard-agnostically via `docs/EVIDENCE.md` (real settled Base txHash) + MIT/provenance
+anchors (cycles 80-81). Keep that current; it's the right trust asset regardless of registry fashion.
+**Zero-capital action taken instead:** aligned the `token-security` A2A skill description to lead with
+the buyer's natural-language query ("Is this Base token a honeypot or a rug pull? Can an agent actually
+sell it?") instead of EIP-1967/1822 jargon — matches its gate-swap/token-report siblings, helps EVERY
+semantic indexer (x402scan, any A2A crawler, even 8004scan's AI search), not just one dead surface.
