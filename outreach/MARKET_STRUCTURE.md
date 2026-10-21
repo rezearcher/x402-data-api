@@ -184,3 +184,32 @@ BUYER traffic to a listed external endpoint. Ran discriminating traffic checks, 
   primary fails (adexto PR #5 = live reference impl, byte-identical when env unset). No price war,
   no auction, buyer pays $0 until their primary breaks. Position on keyless + measured uptime,
   never on "cheaper". Sharpened the llms.txt compute line to lead with this (cycle 78).
+
+## Agent-side auto-payers fail-closed on BESPOKE trust credentials — not bare x402 (cycle 83, 2026-10-21)
+The actual *buyer* shape (an agent that auto-pays sellers on a 402) keeps turning out to be
+non-convertible for us for the SAME structural reason, confirmed across three independent sources
+this cycle — this is a **targeting discriminator**, not a one-off:
+
+- **sovereign-inference `sip-openai-proxy`** (joshuaswarren, PR #56 CLOSED): the router's client
+  (`packages/router/src/sip_router/client.py`) requires `GET /sip/v1/health` (we don't serve it →
+  skipped as "unhealthy") AND reads a SIP-specific `sip_payment_required` challenge on the 402
+  (we return standard x402 `accepts`/EIP-3009 → `payment_required` → fail over). So a published
+  registry file pointing `--registry <url>` at us would NOT route — **vaporware if claimed.**
+  Maintainer declined the registry listing on "can't vouch for a paid 3rd-party we don't run" +
+  "a signature shows who wrote the file, not that the endpoint is honest/price-stable."
+- **slothpay** (eddyflores100-lang): a Base/x402 nightly auto-payer that fetches each `wants.json`
+  resource, and on a 402 reads the seller's **ATC/1.0 payment credential**, verifies rev-4
+  fail-closed (R0–R4, "any doubt = deny"), then pays. Bare-price x402 with no ATC/1.0 credential
+  = **denied.** slothpay + the ATC/1.0 trust API (`uta-trust-api.eddyflores100.workers.dev`,
+  $0.01/verify) + `alicelabs-llc/universal-trust-adapter` are **all one author** (eddyflores100),
+  a **1-star hacktoberfest ecosystem with zero external adoption.**
+
+**Generalizable rule (do-not-repeat):** an agent-side payer that fail-closes unless the seller
+presents a *bespoke* signed trust/payment credential (SIP `sip_payment_required`, ATC/1.0, etc.)
+is **non-convertible for us without implementing that exact format** — and implementing a bespoke
+credential is only worth it when that format has **real external adoption** (multiple independent
+consumers), never for a single-author/0–1-star project. Skip these as first-dollar targets.
+**Right investment direction** = the trust gap itself is real (buyers fail-closed on unverifiable
+claims; see also joshuaswarren), so our measured provenance (MIT license + public repo +
+EVIDENCE.md + real settled tx, cycles 80–81) is the correct, standard-agnostic trust asset —
+keep that current. Only adopt a specific credential format once it clears the adoption bar above.
