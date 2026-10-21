@@ -6389,9 +6389,14 @@ app.post("/v1/chat/completions/preview", async (c) => {
       usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
       x402_upgrade: UPGRADE,
     });
-  let body: { messages?: { role?: string; content?: unknown }[]; max_tokens?: number; stream?: boolean } = {};
+  let body: { messages?: { role?: string; content?: unknown }[]; max_tokens?: number; stream?: boolean; model?: string } = {};
   try { body = await c.req.json(); } catch { return canned(note); }
   wantStream = body.stream === true;
+  // Honour an explicit small-model request (same opt-in convention as the paid
+  // route, body.model containing "3b") so an evaluator who deliberately tests
+  // the 3B tier does NOT consume the scarce 3-per-IP/day 70B "taste" budget that
+  // a flagship evaluation depends on. Unknown/absent model → 70B-first (default).
+  const want3b = String(body.model ?? "").includes("3b");
   const msgs = (body.messages ?? []).filter((m) => m && typeof m.content === "string" && ["system", "user", "assistant"].includes(String(m.role)))
     .map((m) => ({ role: String(m.role), content: String(m.content) }));
   const total = msgs.reduce((n, m) => n + m.content.length, 0);
@@ -6404,8 +6409,10 @@ app.post("/v1/chat/completions/preview", async (c) => {
   const [ipUsed, used] = await Promise.all([c.env.API_KEYS.get(ipKey), c.env.API_KEYS.get(capKey)]);
   const ip70 = parseInt(ipUsed ?? "0", 10), g70 = parseInt(used ?? "0", 10);
   try {
-    // Premium taste: serve 70B while its (small) budget lasts.
-    if (ip70 < 3 && g70 < 300) {
+    // Premium taste: serve 70B while its (small) budget lasts — unless the caller
+    // explicitly asked for the 3B model, in which case fall through and preserve
+    // the 70B budget for flagship evaluations.
+    if (!want3b && ip70 < 3 && g70 < 300) {
       const r = (await c.env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", { messages: msgs, max_tokens: maxTok })) as { response?: string };
       await Promise.all([
         c.env.API_KEYS.put(ipKey, String(ip70 + 1), { expirationTtl: 172800 }),
