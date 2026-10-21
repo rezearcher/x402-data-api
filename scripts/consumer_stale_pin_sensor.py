@@ -67,6 +67,36 @@ def is_self(repo):
     return r.startswith("rezearcher/") or "greyridge" in r
 
 
+# GROUND-TRUTH PROBE (measured, not assumed): a stale-pinned skill only hurts
+# conversion if the custom domain it curls *actually* fails to serve. Earlier
+# cycles assumed `api.greyridgesignals.ai` 403s from datacenter ASNs ("proved on
+# GH Actions runners"), but on 2026-10-21 it returned HTTP 200 + full JSON from
+# two independent datacenter vantages (this host + the web-fetch agent). So we
+# probe it live each run instead of hard-coding "custom domain == broken". If it
+# serves, a pinned-old-sha manifest is NOT a conversion killer -> not a wire-PR
+# target. Degrades OPEN: if the probe cannot run (network error), assume broken
+# so we don't silently drop a genuine target.
+import urllib.request  # noqa: E402
+
+PROBE_URL = "https://" + CUSTOM_DOMAIN + "/gate/swap/preview?token=degen"
+
+
+def custom_domain_serves():
+    """Return (serves_ok: bool, status: str). serves_ok=True iff the custom
+    domain returns 200 with a JSON verdict body (i.e. agents on it convert)."""
+    try:
+        req = urllib.request.Request(PROBE_URL, headers={"User-Agent": "curl/8"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            code = resp.getcode()
+            body = resp.read(400).decode("utf-8", "replace")
+            ok = code == 200 and ('"verdict"' in body or '"decision"' in body)
+            return ok, f"HTTP {code}"
+    except urllib.error.HTTPError as e:  # 403/5xx = genuinely broken for agents
+        return False, f"HTTP {e.code}"
+    except Exception as e:  # network/probe failure -> degrade open (assume broken)
+        return False, f"probe-error:{type(e).__name__}"
+
+
 # A genuine wire-PR target is a repo whose agent is TOLD to call our API by a
 # plugin/skill manifest -- not a repo that merely records our receiving address
 # as on-chain analytics. The ground-truth distinction is the referencing file's
@@ -117,6 +147,8 @@ def repo_meta(repo):
 
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    # Measure the real signal ONCE: does the custom domain actually serve agents?
+    domain_ok, domain_status = custom_domain_serves()
     seen = {}  # (repo,path) -> record
     for q in QUERIES:
         hits = gh_json(["search", "code", q, "--limit", "40", "--json",
@@ -138,9 +170,18 @@ def main():
 
     consumers = sorted(seen.values(), key=lambda r: (r["klass"], r["repo"]))
     # targets = broken consumer manifests with NO open wire-PR from us yet (net-new)
+    # BUT only if the custom domain genuinely fails to serve (measured, not assumed).
+    # If the domain serves 200, a pinned-old-sha skill still converts -> no target.
     targets = []
     for c in consumers:
         if c["klass"] != "STALE_PIN":
+            continue
+        if domain_ok:
+            # ground truth says the pinned skill's domain works -> not a killer
+            c["klass"] = "STALE_PIN_BUT_DOMAIN_OK"
+            c["note"] = (f"pins old sha but custom domain serves {domain_status} "
+                         "from datacenter vantages -> skill still converts, not a "
+                         "wire-PR priority (cosmetic sha-bump only)")
             continue
         c["pr_open"] = has_open_rez_pr(c["repo"])
         if not c["pr_open"]:
@@ -149,18 +190,22 @@ def main():
     out = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "queries": QUERIES,
+        "custom_domain_serves": domain_ok,
+        "custom_domain_status": domain_status,
         "consumers": consumers,
         "targets": targets,
         "n_consumers": len(consumers),
-        "n_stale": sum(1 for c in consumers if c["klass"] == "STALE_PIN"),
+        "n_stale": sum(1 for c in consumers if str(c["klass"]).startswith("STALE_PIN")),
         "n_targets": len(targets),
         "alert": len(targets) >= 1,
-        "note": "targets = non-self consumer manifests still naming the 403-ing "
-                "custom domain AND with no open rezearcher wire-PR yet; each is a "
-                "net-new sha-bump/repoint PR candidate.",
+        "note": "targets = non-self consumer manifests still naming the custom "
+                "domain AND measured to FAIL (non-200) AND with no open rezearcher "
+                "wire-PR. If custom_domain_serves=true the pinned skill still "
+                "converts, so stale pins are cosmetic (not a conversion killer).",
     }
     OUT.write_text(json.dumps(out, indent=2))
-    print(f"consumers={len(consumers)} targets={len(targets)} alert={out['alert']} -> {OUT}")
+    print(f"custom_domain_serves={domain_ok} ({domain_status}) | "
+          f"consumers={len(consumers)} targets={len(targets)} alert={out['alert']} -> {OUT}")
     for t in targets:
         print(f"  WIRE-PR TARGET: {t['repo']}  ({t['path']}) stars={t.get('stars')} pushed={t.get('pushed_at')}")
     return 0

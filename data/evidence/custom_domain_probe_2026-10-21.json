@@ -1,0 +1,12 @@
+{
+  "measured_at": "2026-10-21T13:00Z",
+  "claim_under_test": "api.greyridgesignals.ai 403s from datacenter ASNs where agents run (the 'conversion killer' premise behind stale-pin wire-PRs and surface repointing)",
+  "method": "GET preview endpoints from two independent datacenter vantages",
+  "vantages": {
+    "sandbox_host": {"GET /": 200, "GET /.well-known/x402": 200, "GET /gate/swap/preview?token=degen": 200, "GET /chain/token-report/preview?token=degen": 200},
+    "webfetch_agent": {"GET /gate/swap/preview?token=degen": 200, "body": "JSON with verdict:SAFE, no Cloudflare challenge"}
+  },
+  "result": "BOTH vantages return HTTP 200 + full JSON verdict. The custom domain does NOT 403 from these datacenter ASNs.",
+  "caveat": "The original claim cited GitHub Actions runner IPs specifically; could not push a workflow to retest from Actions (OAuth token lacks 'workflow' scope). But 'where agents actually run' != GitHub Actions, and 2 datacenter vantages serve 200.",
+  "conclusion": "The '403 conversion-killer' is unverified and contradicted here. Stale-pin wire-PRs (token-safety sha-bumps) are NOT a path to the first dollar. Sensor consumer_stale_pin_sensor.py now probes the domain live and only flags targets when it genuinely fails."
+}
