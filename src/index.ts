@@ -722,7 +722,9 @@ app.get("/internal/find-settlement", async (c) => {
   const from = c.req.query("from"); // payer address; omit to match any sender
   const to = c.env.PAY_TO; // always our receiving wallet
   const token = (c.req.query("token") ?? USDC).toLowerCase();
-  const chunk = Math.min(Math.max(parseInt(c.req.query("chunk") ?? "3000") || 3000, 100), 20000);
+  // Public Base RPCs reject wide eth_getLogs ranges; ~800 blocks is accepted by
+  // most providers in the rotation, so default there for a usable out-of-box scan.
+  const chunk = Math.min(Math.max(parseInt(c.req.query("chunk") ?? "800") || 800, 100), 20000);
   const maxChunks = Math.min(Math.max(parseInt(c.req.query("max_chunks") ?? "40") || 40, 1), 45);
   const stopAtFirst = c.req.query("all") !== "1";
   type Hit = { txHash: string; block: number; amount_usdc: number; from: string; timestamp?: string; method: string; basescan: string };
