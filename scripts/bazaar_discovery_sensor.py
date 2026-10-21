@@ -25,20 +25,27 @@ Usage: python3 -I scripts/bazaar_discovery_sensor.py [extra query ...]
 """
 import json, os, sys, time, urllib.parse, urllib.request, datetime
 
-# Canonical queries an agent-buyer would actually type for our product surface.
-QUERIES = [
-    "token safety check before swap",
-    "is this token a scam",
-    "rug pull check base token",
-    "honeypot detector base erc20",
-    "token risk report",
-    "pre-trade safety gate",
-    "gas price base",
-    "crypto funding rates",
-    "defi yields",
-    "prediction market odds",
+# Canonical queries an agent-buyer would actually type for our product surface,
+# each tagged with the market CATEGORY it probes. The category tag lets us derive
+# which rival domains are AGGREGATORS/PLATFORMS (surface across >=2 unrelated
+# categories = they bundle many data types; a distribution surface, not a single
+# competing API) vs single-API competitors -- a measured structural signal, no
+# hardcoded roster.
+QUERY_CATS = [
+    ("token safety check before swap", "token-safety"),
+    ("is this token a scam", "token-safety"),
+    ("rug pull check base token", "token-safety"),
+    ("honeypot detector base erc20", "token-safety"),
+    ("token risk report", "token-safety"),
+    ("pre-trade safety gate", "token-safety"),
+    ("gas price base", "gas"),
+    ("crypto funding rates", "funding"),
+    ("defi yields", "yields"),
+    ("prediction market odds", "prediction"),
 ]
-QUERIES += sys.argv[1:]
+# extra CLI queries get a generic category so they don't skew aggregator derivation
+QUERY_CATS += [(q, "adhoc") for q in sys.argv[1:]]
+QUERIES = [q for q, _ in QUERY_CATS]
 
 OUT_DIR = os.path.join(os.path.expanduser("~"), ".hermes", "data", "x402_bazaar_index")
 OUT = os.path.join(OUT_DIR, "discovery_rank.json")
@@ -62,6 +69,23 @@ def _route_of(r):
     return (r.get("url") or r.get("description") or "")[:45]
 
 
+def _url_of(r):
+    res = r.get("resource")
+    if isinstance(res, str):
+        return res
+    if isinstance(res, dict):
+        return res.get("url") or ""
+    return r.get("url") or ""
+
+
+def _domain(url):
+    try:
+        net = urllib.parse.urlparse(url).netloc.lower()
+        return net or None
+    except Exception:
+        return None
+
+
 def probe(q):
     u = BASE + "?" + urllib.parse.urlencode({"query": q, "limit": 20})
     req = urllib.request.Request(u, headers={"user-agent": "Mozilla/5.0 (greyridge-discovery-sensor)"})
@@ -69,22 +93,51 @@ def probe(q):
         d = json.load(urllib.request.urlopen(req, timeout=25))
     except Exception as e:
         return {"q": q, "error": f"{type(e).__name__}: {e}", "n_results": 0,
-                "our_best_rank": None, "our_route": None, "our_count": 0}
+                "our_best_rank": None, "our_route": None, "our_count": 0, "top3": []}
     rs = d.get("resources") or d.get("items") or []
     ranks = [(i + 1, _route_of(r)) for i, r in enumerate(rs) if _is_ours(r)]
     best = ranks[0] if ranks else (None, None)
+    # capture the live competitor set (top-3 rivals that aren't us) — proof the
+    # demand is real and a map of who is currently capturing our market.
+    top3 = []
+    for r in rs:
+        if _is_ours(r):
+            continue
+        dom = _domain(_url_of(r))
+        if dom:
+            top3.append(dom)
+        if len(top3) >= 3:
+            break
     return {"q": q, "n_results": len(rs), "our_best_rank": best[0],
-            "our_route": best[1], "our_count": len(ranks)}
+            "our_route": best[1], "our_count": len(ranks), "top3": top3}
 
 
 def main():
     results = []
+    cat_by_q = dict(QUERY_CATS)
+    # domain -> set of distinct market categories it ranks top-3 in
+    dom_cats = {}
+    dom_hits = {}
     for q in QUERIES:
-        results.append(probe(q))
+        res = probe(q)
+        results.append(res)
+        cat = cat_by_q.get(q, "adhoc")
+        for dom in res.get("top3", []):
+            dom_cats.setdefault(dom, set()).add(cat)
+            dom_hits[dom] = dom_hits.get(dom, 0) + 1
         time.sleep(0.4)
     found = sum(1 for r in results if r.get("our_best_rank"))
     total = len(results)
     cov = round(100.0 * found / total, 1) if total else 0.0
+    # DERIVE distribution candidates: a domain ranking top-3 across >=2 DISTINCT
+    # market categories is structurally an aggregator/platform (it bundles many
+    # data types), i.e. a surface we could be listed ON — not a single-API rival.
+    # Pure measured signal from the live index; no hardcoded roster.
+    distribution_candidates = sorted(
+        ({"domain": d, "categories": sorted(c), "top3_hits": dom_hits.get(d, 0)}
+         for d, c in dom_cats.items() if len(c) >= 2),
+        key=lambda x: (-len(x["categories"]), -x["top3_hits"], x["domain"]),
+    )
     payload = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "endpoint": BASE,
@@ -92,6 +145,7 @@ def main():
         "found_for": found,
         "coverage_pct": cov,
         "alert": cov < 50.0,
+        "distribution_candidates": distribution_candidates,
         "queries": results,
     }
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -102,7 +156,14 @@ def main():
     for r in results:
         rk = r.get("our_best_rank")
         tag = f"rank {rk} {r.get('our_route')}" if rk else ("ERR " + r["error"] if r.get("error") else "NOT in top-20")
-        print(f"  {r['q']!r:40s} n={r['n_results']:2d}  {tag}")
+        comp = (" | top3: " + ", ".join(r.get("top3", []))) if r.get("top3") else ""
+        print(f"  {r['q']!r:40s} n={r['n_results']:2d}  {tag}{comp}")
+    if distribution_candidates:
+        print("DERIVED distribution candidates (rank top-3 across >=2 categories = aggregator/platform surface):")
+        for c in distribution_candidates:
+            print(f"  {c['domain']:40s} categories={c['categories']} hits={c['top3_hits']}")
+    else:
+        print("DERIVED distribution candidates: none (no rival domain spans >=2 categories)")
     print(f"written -> {OUT}")
     return 0
 

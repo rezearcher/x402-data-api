@@ -1,0 +1,12 @@
+bazaar discovery coverage: 1/10 queries surface us (10.0%)  [ALERT: most buyer queries don't find us]
+  'token safety check before swap'         n=11  NOT in top-20
+  'is this token a scam'                   n=17  NOT in top-20
+  'rug pull check base token'              n=15  NOT in top-20
+  'honeypot detector base erc20'           n=11  NOT in top-20
+  'token risk report'                      n=13  NOT in top-20
+  'pre-trade safety gate'                  n=15  rank 14 x402-data-api.sigrunner.workers.dev/gate/swap
+  'gas price base'                         n=13  NOT in top-20
+  'crypto funding rates'                   n=17  NOT in top-20
+  'defi yields'                            n=17  NOT in top-20
+  'prediction market odds'                 n=19  NOT in top-20
+written -> /home/rez/.hermes/data/x402_bazaar_index/discovery_rank.json
