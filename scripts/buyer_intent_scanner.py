@@ -79,6 +79,56 @@ QUERIES = [
 # Only issues created within this window are considered (demand goes stale fast).
 CREATED_AFTER = (datetime.datetime.utcnow() - datetime.timedelta(days=60)).strftime("%Y-%m-%d")
 
+# PRODUCT-FIT discriminator (added 2026-10-21, the next targeting leak after chain-fit
+# and buyer-vs-seller). A Base-native, active, build-side BUYER of "market data" still
+# will NOT convert when the data CLASS they demand is one our API cannot serve. Observed
+# 2026-10-21: 2042458785/Decision402#4 is an insider build-issue titled "Add a real-time
+# market data x402 service" whose worked example is "What is NVIDIA worth in USD?" —
+# EQUITIES. Our live manifest (.well-known/x402) serves crypto/DeFi/token-safety/compute
+# on Base only; an equities/forex/sports buyer replies "interested" then cannot be filled.
+# POSITIVE vocabulary (what we sell) is DERIVED at runtime from the live manifest below —
+# never a hardcoded roster — so it tracks our real routes and degrades open (fetch fails
+# -> product-fit check disabled, no demotion). MISFIT marks demand scoped to a clearly
+# different asset class; it only demotes when NO served-domain term co-occurs in the text.
+MANIFEST_URL = "https://x402-data-api.sigrunner.workers.dev/.well-known/x402"
+PRODUCT_MISFIT = re.compile(
+    r"\b(equit(y|ies)|stock(s| price| market|-market)?|\bNYSE\b|\bNASDAQ\b|\bNVDA\b|\bAAPL\b|\bTSLA\b|"
+    r"share price|S&P ?500|dow jones|\bforex\b|\bfx rate|currency pair|\bEUR/?USD\b|"
+    r"commodit(y|ies)|gold price|oil price|\bWTI\b|sports?[- ]?(odds|betting|scores?)|"
+    r"weather|flight (price|fare)|real[- ]?estate price|housing price)\b", re.I)
+# A NVIDIA/AAPL-style ticker demand with an equities cue (the Decision402 worked example).
+EQUITY_EXAMPLE = re.compile(r"\b(NVIDIA|Apple|Tesla|Microsoft|Amazon|Google|Meta)\b.{0,40}\b(worth|price|stock|USD|value)\b", re.I)
+
+
+def served_domain_vocab():
+    """Derive the set of data domains we actually sell from the LIVE x402 manifest —
+    the ground-truth signal, not a hardcoded list. Returns a lowercase token set, or an
+    empty set on any failure (product-fit check then degrades open = never demotes)."""
+    try:
+        res = subprocess.run(["curl", "-s", "--max-time", "12", MANIFEST_URL],
+                             capture_output=True, text=True, timeout=15)
+        if res.returncode != 0 or not res.stdout.strip():
+            return set()
+        blob = res.stdout.lower()
+    except Exception:
+        return set()
+    vocab = set()
+    for term in ("crypto", "token", "defi", "tvl", "swap", "funding", "yield",
+                 "liquidity", "honeypot", "coin", "price", "on-chain", "chain",
+                 "llm", "chat", "completion", "inference", "wallet", "erc-20", "erc20"):
+        if term in blob:
+            vocab.add(term)
+    return vocab
+
+
+# Served-domain cues an issue may name that mean "this IS in our lane" — if any appears,
+# we never demote for product-misfit even when an equities word is also present (a buyer
+# asking for "crypto prices AND stock prices" is still partially convertible).
+SERVED_CUE = re.compile(
+    r"\b(crypto|token|defi|de-fi|tvl|swap|funding rate|yield|liquidity|honeypot|"
+    r"on-?chain|erc-?20|usdc|stablecoin|wallet|memecoin|altcoin|bitcoin|ethereum|"
+    r"\bBTC\b|\bETH\b|\bSOL\b|llm|inference|completion|chat model)\b", re.I)
+
 # Network inference keyword sets (derived signal). Base/EVM = we can serve.
 BASE_EVM = re.compile(r"\b(base|evm|ethereum|usdc on base|base usdc|erc-?20|cdp|coinbase)\b", re.I)
 OTHER_CHAIN = re.compile(r"\b(stellar|soroban|solana|aptos|sui|\bbnb\b|bsc|xrp|polygon only|near|celo|wcop|rootstock|\brsk\b)\b", re.I)
@@ -342,6 +392,9 @@ def main():
                 seen[key] = it
 
     now = datetime.datetime.utcnow()
+    # Derive what-we-sell from the live manifest ONCE (ground truth, degrades open).
+    served = served_domain_vocab()
+    product_fit_on = bool(served)
     targets = []
     for (repo, num), it in seen.items():
         if it["user"] in OUR_AUTHORS:
@@ -369,6 +422,13 @@ def main():
         # (3 same-day NOs 2026-10-21: agent-firewall, polyrob, fly.ai). Checked on desc+text.
         self_safety = bool(SELF_SAFETY.search(meta.get("description") or "")
                            or SELF_SAFETY.search(text))
+        # Product-fit: demand scoped to an asset class our crypto/DeFi/compute manifest
+        # cannot serve (equities/forex/commodities/sports/weather). Only a misfit when a
+        # different-asset-class cue fires AND no served-domain cue co-occurs in the text.
+        # Disabled (never demotes) when the manifest fetch failed (product_fit_on False).
+        product_misfit = bool(product_fit_on
+                              and (PRODUCT_MISFIT.search(text) or EQUITY_EXAMPLE.search(text))
+                              and not SERVED_CUE.search(text))
         # Seller intent from EITHER the repo description (what it IS) or the issue text
         # (what this epic BUILDS — a paid surface to sell). The issue-text signal catches
         # @coinbase/x402 producers the dep-role check can't (ambiguous package).
@@ -409,6 +469,8 @@ def main():
             tier = "SELLER_PITCH"  # outsider pitching, OR an insider repo that sells/exposes its own 402 service (by description or dep role) — a rival, not demand
         elif research:
             tier = "RESEARCH"  # census/collector/observatory or forbids paid requests — never a payer
+        elif product_misfit:
+            tier = "PRODUCT_MISFIT"  # wants an asset class we don't serve (equities/forex/sports) — replies but can't convert
         elif self_safety:
             tier = "SELF_SERVE"  # self-hosts token-safety (GoPlus/local rules) or refuses paid 3rd-party screening — non-buyer of /gate/swap
         elif net == "other-chain":
@@ -430,7 +492,7 @@ def main():
             "lang": meta.get("language"), "contacted": contacted, "tier": tier,
         })
 
-    rank = {"HOT": 0, "WARM": 1, "COLD": 2, "RESEARCH": 3, "SELF_SERVE": 4, "SELLER_PITCH": 5, "CONTACTED": 6}
+    rank = {"HOT": 0, "WARM": 1, "COLD": 2, "RESEARCH": 3, "PRODUCT_MISFIT": 4, "SELF_SERVE": 5, "SELLER_PITCH": 6, "CONTACTED": 7}
     targets.sort(key=lambda t: (rank[t["tier"]], t["age_days"] if t["age_days"] is not None else 9999))
 
     out = {
@@ -452,9 +514,9 @@ def main():
     print(f"=== buyer-intent scanner ({out['status']}) — {len(targets)} open buyer-build issues since {CREATED_AFTER} ===")
     hot = out["hot"]
     print(f"HOT (Base-compatible + active + un-contacted): {len(hot)}")
-    flags = {"HOT": "✦", "WARM": "~", "COLD": "·", "RESEARCH": "?", "SELF_SERVE": "=", "SELLER_PITCH": "$", "CONTACTED": "✓"}
+    flags = {"HOT": "✦", "WARM": "~", "COLD": "·", "RESEARCH": "?", "PRODUCT_MISFIT": "✗", "SELF_SERVE": "=", "SELLER_PITCH": "$", "CONTACTED": "✓"}
     for t in targets:
-        if t["tier"] in ("RESEARCH", "SELF_SERVE", "SELLER_PITCH", "CONTACTED"):
+        if t["tier"] in ("RESEARCH", "PRODUCT_MISFIT", "SELF_SERVE", "SELLER_PITCH", "CONTACTED"):
             continue  # genuine Base-serviceable demand only in the human view; full set in JSON
         flag = flags[t["tier"]]
         age = f"{t['age_days']}d" if t["age_days"] is not None else "?"
