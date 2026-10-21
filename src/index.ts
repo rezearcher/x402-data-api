@@ -1023,9 +1023,20 @@ app.get("/llms.txt", (c) => {
 > Agent-native, pay-per-call data on Base (USDC via x402). No account, no API key — agents pay inline.
 > Landing page: ${BASE}/  |  Discovery: ${BASE}/.well-known/x402  |  OpenAPI: ${BASE}/openapi.json  |  Listed on the Coinbase CDP x402 Bazaar.
 
-## How to pay
-Each paid GET returns HTTP 402 with an x402 v2 payment-required challenge (network eip155:8453 / Base, asset USDC).
-Sign and retry per the x402 spec (https://x402.org). Settlement ~1s. No signup.
+## How to pay — first paid call in ~6 lines (copy-paste)
+Each paid GET returns HTTP 402 with an x402 v2 challenge (network eip155:8453 / Base, asset USDC, 6 decimals). The standard @x402/fetch client signs + retries for you — no account, no API key. Your wallet needs a little USDC on Base; no gas ETH (the exact scheme is EIP-3009 gasless — the facilitator submits).
+
+  npm i @x402/fetch @x402/core @x402/evm viem
+  import { wrapFetchWithPayment } from "@x402/fetch";
+  import { x402Client } from "@x402/core/client";
+  import { ExactEvmScheme } from "@x402/evm/exact/client";
+  import { privateKeyToAccount } from "viem/accounts";
+  const client = new x402Client().register("eip155:*", new ExactEvmScheme(privateKeyToAccount(process.env.EVM_PRIVATE_KEY)));
+  const pay = wrapFetchWithPayment(fetch, client);
+  const r = await pay("${BASE}/gate/swap?token=0x4200000000000000000000000000000000000006&side=buy&notional_usd=500");
+  console.log(await r.json());   // GO | HOLD | BLOCK — settles in ~1s, costs $0.008 USDC
+
+Python / Axios clients + full docs: https://x402.org buyer quickstart. Prefer to look before you pay? Every flagship route has a free, no-wallet /preview (same response shape) — see the Free section below.
 
 ## Start here — pre-trade safety gate for Base trading agents (flagship)
 - GET ${BASE}/gate/swap?token=<0x…>&side=buy&notional_usd=500 — $0.008 — ONE decision GO|HOLD|BLOCK sized to your trade (honeypot/sellability + liquidity price impact). Free try: ${BASE}/gate/swap/preview?token=usdc|weth|cbbtc|aero|degen (any real Base 0x address: 3 free/day/IP).
@@ -5908,7 +5919,7 @@ app.post("/v1/chat/completions/preview", async (c) => {
     paid_url: "https://x402-data-api.sigrunner.workers.dev/v1/chat/completions",
     price_usdc: "0.002",
     adds: "Full Llama 3.3 70B, up to 400 output tokens, unmetered (this free preview is a small-model sample capped per IP/day).",
-    pay_with: 'x402 (USDC on Base): point any OpenAI SDK base_url here with an x402 fetch wrapper — npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f("https://x402-data-api.sigrunner.workers.dev/v1/chat/completions",{method:"POST",body:JSON.stringify({model:"llama-3.3-70b",messages})}). Docs: https://api.greyridgesignals.ai/llms.txt',
+    pay_with: 'x402 (USDC on Base): wrap fetch with the standard @x402/fetch client — npm i @x402/fetch @x402/core @x402/evm viem; const client=new x402Client().register("eip155:*", new ExactEvmScheme(privateKeyToAccount(process.env.EVM_PRIVATE_KEY))); const f=wrapFetchWithPayment(fetch, client); await f("https://x402-data-api.sigrunner.workers.dev/v1/chat/completions",{method:"POST",body:JSON.stringify({model:"llama-3.3-70b",messages})}). Docs: https://api.greyridgesignals.ai/llms.txt',
   };
   const previewOut = (txt: string, model: string) =>
     wantStream ? chatSse(txt, model) : c.json({
