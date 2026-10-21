@@ -8388,7 +8388,7 @@ const mcpHandler = createMcpHandler(() => {
     "chain_token_report",
     {
       description:
-        "Token security check (honeypot detector + rug-pull risk score) for a Base ERC-20 in one call, decision-grade trade-safety verdict: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade. Cost: $0.01 USDC per call via x402.",
+        "Token security check (honeypot detector + rug-pull risk score) for a Base ERC-20 in one call, decision-grade trade-safety verdict: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, token symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade. Cost: $0.005 USDC per call via the shared MCP payment gate (the direct HTTP endpoint GET /chain/token-report is $0.01 — MCP tools/call is gated at a flat $0.005 per request).",
       inputSchema: {
         token: z.string().describe("0x-prefixed 20-byte ERC-20 contract address on Base mainnet"),
       },
@@ -8410,7 +8410,7 @@ const mcpHandler = createMcpHandler(() => {
     "gate_swap",
     {
       description:
-        "Pre-trade GO / HOLD / BLOCK gate for a Base ERC-20 swap: honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your trade size. One decision + reason. Cost: $0.008 USDC per call via x402.",
+        "Pre-trade GO / HOLD / BLOCK gate for a Base ERC-20 swap: honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your trade size. One decision + reason. Cost: $0.005 USDC per call via the shared MCP payment gate (the direct HTTP endpoint GET /gate/swap is $0.008 — MCP tools/call is gated at a flat $0.005 per request).",
       inputSchema: {
         token: z.string().describe("0x-prefixed ERC-20 contract on Base mainnet"),
         side: z.enum(["buy", "sell"]).optional().describe("default buy"),
