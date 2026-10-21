@@ -120,6 +120,13 @@ export interface UsageMetrics {
   by_rail: Record<Rail, number>;
   first_call_ts: number | null;
   last_call_ts: number | null;
+  /**
+   * True when the counter read threw (e.g. CF free-tier DO budget exhausted) and
+   * the zeros above are a fail-soft placeholder, NOT a genuine zero. Callers must
+   * NOT long-cache a degraded snapshot (it would pin bogus zeros on the public
+   * trust surface for the whole TTL). Absent/false => the numbers are real.
+   */
+  degraded?: boolean;
 }
 
 /**
@@ -254,6 +261,9 @@ export async function getMetrics(
     metrics.last_call_ts = last > 0 ? last : null;
   } catch (error) {
     console.error("Error fetching usage metrics:", error);
+    // The zeros above are a fail-soft placeholder, not a genuine zero. Flag it so
+    // the /metrics handler does not pin this bogus snapshot for the full edge TTL.
+    metrics.degraded = true;
   }
   return metrics;
 }

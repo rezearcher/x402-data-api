@@ -411,22 +411,34 @@ app.get("/metrics", async (c) => {
   // or be unbound — never break the aggregate the daily reconcile ledger needs.
   let net_external: unknown = null;
   let net_external_paid_calls: number | null = null;
+  let net_external_degraded = false;
   if (c.env.TRAFFIC_LOG) {
     try {
       const stub = c.env.TRAFFIC_LOG.get(c.env.TRAFFIC_LOG.idFromName("default"));
       const ne = await stub.getNetExternalPaid(2592000);
       net_external = ne;
       net_external_paid_calls = ne.external_calls;
-    } catch (e) {
-      net_external = { error: "traffic_read_failed", detail: e instanceof Error ? e.message : String(e) };
+    } catch {
+      // Degraded read (e.g. CF free-tier DO budget exhausted). Do NOT leak the raw
+      // internal error string onto the public trust surface, and do NOT long-cache
+      // it (see below). Present a neutral, honest status instead.
+      net_external = { status: "temporarily_unavailable" };
+      net_external_degraded = true;
     }
   }
   const res = c.json({ ...metrics, net_external_paid_calls, net_external });
-  // Only cache a well-formed read (net_external is null only when the binding is
-  // absent, which is fine to cache; a throw-path sets net_external.error — still
-  // cacheable, just a transient blip for <=60s). Response must carry Cache-Control
-  // for caches.default to store it.
-  res.headers.set("Cache-Control", "public, max-age=3600");
+  // Degraded snapshot = the counter read threw (metrics.degraded) OR the
+  // net-external read threw. Both produce bogus zeros / an unavailable block. A 1h
+  // edge cache PINS that degraded body for the whole hour on a public endpoint
+  // buyers use to evaluate us — a live trust/conversion-killer observed 2026-10-21
+  // (cached at 22:46 with total_paid_calls:0 + a raw DO-budget error, served until
+  // ~23:46). Fix: only long-cache (3600s) a HEALTHY snapshot; a degraded one gets a
+  // 60s TTL so it self-heals within a minute of the UTC budget reset instead of
+  // being pinned for an hour. Short-TTL still caches (bounds crawler DO re-reads to
+  // ~1440/day, each throwing early on the exhausted budget). Math: do_budget_check.py.
+  const degraded = metrics.degraded === true || net_external_degraded;
+  const maxAge = degraded ? 60 : 3600;
+  res.headers.set("Cache-Control", `public, max-age=${maxAge}`);
   if (cache) fireAndForget(c, cache.put(cacheKey, res.clone()));
   return res;
 });
