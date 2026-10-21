@@ -696,6 +696,13 @@ app.get("/internal/traffic-stats", async (c) => {
   // authed caller instead so it stays actionable.
   try {
     if (c.req.query("paid") === "1") return c.json({ ok: true, window_hours: hours, paid: await stub.getPaid(hours * 3600) });
+    if (c.req.query("ref_stats") === "1") {
+      // Per-referral reconciliation: which ?ref= tags drove settled paid calls,
+      // split into external (real buyers) vs self (our tests). Answers a pilot
+      // partner's "prove my tag converted" from our own store + on-chain txs.
+      const refs = await stub.getRefStats(hours * 3600);
+      return c.json({ ok: true, window_hours: hours, ref_count: refs.length, refs, timestamp: Math.floor(Date.now() / 1000) });
+    }
     if (c.req.query("settlements") === "1") {
       // Self-documenting on-chain settlements (payer, path, txHash) for the window.
       // Buildable basescan link per row; answers a trust-ask from our own store.
@@ -3071,6 +3078,18 @@ export class TrafficLog extends DurableObject<Env> {
       } catch {
         /* column already exists on this DO instance — expected after first run */
       }
+      // Additive migration: a `ref` column so a settled PAID row records the
+      // referral tag (?ref=<partner>) that drove it. A referral partner (e.g. an
+      // MCP-client reseller featuring our tools) wires ?ref=<theirs> into the call
+      // URL; the tag rides through the 402→sign→retry unchanged, so the settled
+      // request carries it. This turns a pilot's calls into a *traced* sale we can
+      // reconcile per-partner (what DopamineDesk asked for: "tagged links to
+      // measure referrals"). Same ADD COLUMN IF NOT EXISTS workaround as `tx`.
+      try {
+        ctx.storage.sql.exec("ALTER TABLE hits ADD COLUMN ref TEXT");
+      } catch {
+        /* column already exists on this DO instance — expected after first run */
+      }
     });
   }
 
@@ -3086,10 +3105,10 @@ export class TrafficLog extends DurableObject<Env> {
   // preserved because every non-paid path is sampled at the same rate.
   static readonly NONPAID_SAMPLE = 0.01;
 
-  async logHit(path: string, method: string, ua: string, tx: string = ""): Promise<void> {
+  async logHit(path: string, method: string, ua: string, tx: string = "", ref: string = ""): Promise<void> {
     // Always persist PAID; sample everything else to protect the write budget.
     if (method !== "PAID" && Math.random() >= TrafficLog.NONPAID_SAMPLE) return;
-    await this.ctx.storage.sql.exec("INSERT INTO hits (ts, path, method, ua, tx) VALUES (?, ?, ?, ?, ?)", Math.floor(Date.now() / 1000), path, method, ua, tx);
+    await this.ctx.storage.sql.exec("INSERT INTO hits (ts, path, method, ua, tx, ref) VALUES (?, ?, ?, ?, ?, ?)", Math.floor(Date.now() / 1000), path, method, ua, tx, ref);
     // Opportunistic prune: ~0.1% of writes trigger a small bounded delete of
     // old rows. Each deleted row also drops its hits_ts index entry, so a
     // LIMIT-100 prune costs up to 200 rows_written; at p=0.001 that averages
@@ -3140,6 +3159,41 @@ export class TrafficLog extends DurableObject<Env> {
       if (out.length >= 500) break;
     }
     return out;
+  }
+
+  // Our own infrastructure wallets — a settlement FROM one of these is a self/test
+  // call, not external demand (the goal's no-self-dealing rule). Fixed on-chain
+  // addresses (public, also in scripts/*.py and the loop spec), not a behavioral
+  // list. Used to split referral-attributed paid calls into real-buyer vs self.
+  static readonly SELF_PAYERS = new Set<string>([
+    "0x5765ae06a52dc7a0bb71c36a11db512c7ea9ed10", // receiving (PAY_TO)
+    "0xc4852c26498d3187dec2ce1b19e840710e302d1e", // buyer/test funder
+    "0x95e6a9761522e9533d74bbebe47e1c5ad8e3c685", // secondary self wallet
+  ]);
+
+  // Per-referral reconciliation: aggregate settled PAID rows by their ?ref= tag,
+  // splitting distinct payers into external (real demand) vs self (our own test
+  // calls). Answers a referral partner's "how many buyers did my tag drive, and
+  // can you prove it on-chain?" — the measurement a reseller wants before (and
+  // after) featuring us. Plain indexed scan on hits_ts (rows_read only), aggregate
+  // in JS — same write-budget discipline as getPaid/getSettlements.
+  async getRefStats(windowSeconds: number = 2592000): Promise<Array<{ ref: string; paid_calls: number; distinct_payers: number; distinct_external_payers: number; external_calls: number; txs: string[] }>> {
+    const cursor = await this.ctx.storage.sql.exec("SELECT ua, ref, tx FROM hits WHERE method = 'PAID' AND ref IS NOT NULL AND ref != '' AND ts > ? ORDER BY ts DESC LIMIT ?", Math.floor(Date.now() / 1000) - windowSeconds, TrafficLog.SCAN_CAP);
+    const agg = new Map<string, { ref: string; paid_calls: number; external_calls: number; payers: Set<string>; ext: Set<string>; txs: Set<string> }>();
+    for (const row of cursor.raw()) {
+      const payer = String(row[0]).toLowerCase(), ref = String(row[1]), tx = String(row[2] ?? "");
+      let e = agg.get(ref);
+      if (!e) { e = { ref, paid_calls: 0, external_calls: 0, payers: new Set(), ext: new Set(), txs: new Set() }; agg.set(ref, e); }
+      e.paid_calls++;
+      e.payers.add(payer);
+      const isExternal = payer !== "unknown" && !TrafficLog.SELF_PAYERS.has(payer);
+      if (isExternal) { e.external_calls++; e.ext.add(payer); }
+      if (tx) e.txs.add(tx);
+    }
+    return Array.from(agg.values())
+      .map((e) => ({ ref: e.ref, paid_calls: e.paid_calls, distinct_payers: e.payers.size, distinct_external_payers: e.ext.size, external_calls: e.external_calls, txs: Array.from(e.txs).slice(0, 20) }))
+      .sort((a, b) => b.paid_calls - a.paid_calls)
+      .slice(0, 200);
   }
 
   async getStats(windowSeconds: number = 86400): Promise<Array<{ path: string; count: number }>> {
@@ -3625,10 +3679,17 @@ app.use(async (c, next) => {
           if (pr?.payer) payer = String(pr.payer).toLowerCase();
         }
       } catch { /* settle header absent/undecodable — log payer-only, never break the paid response */ }
+      // Referral attribution: a partner featuring our endpoints wires ?ref=<tag>
+      // into the call URL (survives the 402→sign→retry round-trip since the retry
+      // re-requests the same URL). Sanitised to a short opaque slug so it can't be
+      // used to smuggle data into the log. Lets a pilot's settled calls be
+      // reconciled per-partner (traced sale), which is what referral partners ask
+      // for before they feature a seller. Empty when absent — fully backward-compat.
+      const ref = (c.req.query("ref") ?? "").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 40);
       // Workers Logs line survives the TrafficLog DO daily-limit outage.
-      console.log(JSON.stringify({ evt: "PAID", path: c.req.path, payer, tx }));
+      console.log(JSON.stringify({ evt: "PAID", path: c.req.path, payer, tx, ref }));
       const stub = c.env.TRAFFIC_LOG.get(c.env.TRAFFIC_LOG.idFromName("default"));
-      fireAndForget(c, stub.logHit(c.req.path, "PAID", payer, tx).catch(() => {}));
+      fireAndForget(c, stub.logHit(c.req.path, "PAID", payer, tx, ref).catch(() => {}));
     }
   } catch { /* telemetry must never break a paid response */ }
   // x402 v2 carries the challenge only in the payment-required header and sends
