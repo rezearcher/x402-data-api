@@ -43,6 +43,7 @@ emits status!=ok rather than a silent empty list.
 Usage: python3 -I scripts/buyer_intent_scanner.py [--json]
 Requires: `gh` authenticated (token via `gh auth token`).
 """
+import base64
 import datetime
 import json
 import os
@@ -153,6 +154,61 @@ def infer_network(repo_meta, body):
     return "unknown"
 
 
+# Ground-truth chain-fit lives in the repo's x402 DEPENDENCY GRAPH, not the issue prose.
+# A buyer who ships @coinbase/x402 / @circle-fin / eip155:8453 signs a Base EIP-3009 USDC
+# authorization and CAN convert; one shipping @solana/web3.js / @mysten/sui / xrpl cannot.
+# These are derived from the actual package manifests at runtime (no hardcoded repo roster).
+BASE_DEP = re.compile(
+    r"@coinbase/x402|@circle-fin|@x402/evm|x402-fetch|eip155:\s*8453|base-sepolia"
+    r"|[\"']base[\"']\s*:|network[\"']?\s*[:=]\s*[\"']base",
+    re.I,
+)
+OTHER_DEP = re.compile(
+    r"@solana/web3\.js|@mysten/sui|@mysten/wallet|stellar-sdk|@stellar/|\bxrpl\b|xrpl\.js"
+    r"|@aptos-labs|near-api-js|@injectivelabs|@x402/(sui|solana|stellar|xrp)",
+    re.I,
+)
+
+
+def enrich_network_from_repo(repo, current_net):
+    """When text inference is unconfirmed, resolve chain-fit from the repo's package
+    manifests (the ground-truth signal). Bounded: 1 tree call + <=3 manifest fetches.
+    Degrades open — any failure or no dependency signal returns ``current_net``."""
+    if current_net not in ("unknown", "multi-or-ambiguous"):
+        return current_net, None
+    tree = api_json(["repos/" + repo + "/git/trees/HEAD", "-X", "GET",
+                     "-f", "recursive=1", "--jq",
+                     "[.tree[] | select(.type==\"blob\") | .path]"])
+    if not tree:
+        return current_net, None
+    manifests = [p for p in tree if p.rsplit("/", 1)[-1] == "package.json"]
+    # root-most first, cap at 3 to stay inside the core-API budget
+    manifests.sort(key=lambda p: p.count("/"))
+    blob = ""
+    for path in manifests[:3]:
+        # Fetch the full contents object (valid JSON); `--jq .content` would emit the
+        # base64 as a raw multi-line string that json.loads can't parse.
+        obj = api_json(["repos/" + repo + "/contents/" + path])
+        content = (obj or {}).get("content") if isinstance(obj, dict) else None
+        if not content:
+            continue
+        try:
+            blob += base64.b64decode(content).decode("utf-8", "replace") + "\n"
+        except Exception:
+            continue
+    if not blob:
+        return current_net, None
+    base = bool(BASE_DEP.search(blob))
+    other = bool(OTHER_DEP.search(blob))
+    if base and not other:
+        return "base-evm", "deps"
+    if other and not base:
+        return "other-chain", "deps"
+    if base and other:
+        return "multi-or-ambiguous", "deps"
+    return current_net, None
+
+
 def main():
     want_json = "--json" in sys.argv
     seen = {}
@@ -195,6 +251,8 @@ def main():
             except Exception:
                 pass
         net = infer_network(meta, it.get("body", ""))
+        # Prose was unconfirmed — resolve from the repo's x402 dependency graph (ground truth).
+        net, net_src = enrich_network_from_repo(repo, net)
         contacted = already_contacted(repo, num)
         active = age_days is not None and age_days <= 45
         # Chain-fit is the PROVEN replied->paid conversion killer. Measured against the
@@ -240,7 +298,8 @@ def main():
         targets.append({
             "repo": repo, "issue": num, "url": f"https://github.com/{repo}/issues/{num}",
             "title": it["title"], "author": it["user"], "assoc": assoc, "created": it["created"],
-            "network": net, "age_days": age_days, "stars": meta.get("stargazers_count"),
+            "network": net, "net_src": net_src or "text", "age_days": age_days,
+            "stars": meta.get("stargazers_count"),
             "lang": meta.get("language"), "contacted": contacted, "tier": tier,
         })
 
@@ -272,7 +331,8 @@ def main():
             continue  # genuine Base-serviceable demand only in the human view; full set in JSON
         flag = flags[t["tier"]]
         age = f"{t['age_days']}d" if t["age_days"] is not None else "?"
-        print(f"  [{flag} {t['tier']:9}] {t['repo']}#{t['issue']}  by={t['assoc']:12} net={t['network']:18} "
+        nsrc = "·deps" if t.get("net_src") == "deps" else ""
+        print(f"  [{flag} {t['tier']:9}] {t['repo']}#{t['issue']}  by={t['assoc']:12} net={t['network']:14}{nsrc:5} "
               f"age={age:>5} ★{t['stars']}  :: {t['title'][:60]}")
     print(f"\nwrote {OUT}")
     if hot:
