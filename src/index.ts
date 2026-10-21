@@ -2921,18 +2921,24 @@ export class TrafficLog extends DurableObject<Env> {
   // counts are therefore ~1/rate of true volume; getStats() reports the scale
   // factor so a reader can multiply back. Relative ranking across paths is
   // preserved because every non-paid path is sampled at the same rate.
-  static readonly NONPAID_SAMPLE = 0.05;
+  static readonly NONPAID_SAMPLE = 0.01;
 
   async logHit(path: string, method: string, ua: string): Promise<void> {
     // Always persist PAID; sample everything else to protect the write budget.
     if (method !== "PAID" && Math.random() >= TrafficLog.NONPAID_SAMPLE) return;
     await this.ctx.storage.sql.exec("INSERT INTO hits (ts, path, method, ua) VALUES (?, ?, ?, ?)", Math.floor(Date.now() / 1000), path, method, ua);
-    // Opportunistic prune: ~0.2% of writes trigger a small bounded delete of
-    // old rows. Averages <1 extra write per logHit (vs 5000/wake before), so the
-    // table stays bounded without exhausting the free-tier rows-written budget.
-    if (Math.random() < 0.002) {
+    // Opportunistic prune: ~0.1% of writes trigger a small bounded delete of
+    // old rows. Each deleted row also drops its hits_ts index entry, so a
+    // LIMIT-100 prune costs up to 200 rows_written; at p=0.001 that averages
+    // ~0.2 extra writes per insert. Combined with the 1% non-paid sample this
+    // keeps total rows_written well under the DO free-tier 100k/day cap (a
+    // single global "default" DO funnels every request, and on 2026-10-21 the
+    // prior 5% sample + LIMIT-200 prune @ p=0.002 blew that budget before UTC
+    // midnight — which breaks logHit for the rest of the day and blinds the
+    // demand sensor; see getStats below).
+    if (Math.random() < 0.001) {
       try {
-        this.ctx.storage.sql.exec("DELETE FROM hits WHERE rowid IN (SELECT rowid FROM hits WHERE ts < ? LIMIT 200)", Math.floor(Date.now() / 1000) - 7 * 86400);
+        this.ctx.storage.sql.exec("DELETE FROM hits WHERE rowid IN (SELECT rowid FROM hits WHERE ts < ? LIMIT 100)", Math.floor(Date.now() / 1000) - 7 * 86400);
       } catch {
         /* prune is best-effort; never fail a log on it */
       }
