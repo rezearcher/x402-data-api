@@ -84,6 +84,9 @@ export type Env = {
 // ---------------------------------------------------------------------------
 
 const NETWORK = "eip155:8453" as const; // Base mainnet
+// Native USDC on Base (the x402 settlement asset). 6 decimals — published in the
+// 402 offer's `extra` so a buyer can render the human amount without guessing.
+const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 // Non-custodial facilitator — no Coinbase/CDP API key needed.
 const FACILITATOR_URL = "https://facilitator.xpay.sh";
 // CDP hosted facilitator — settlements through this get catalogued in the x402 Bazaar.
@@ -3338,10 +3341,30 @@ app.use(async (c, next) => {
     if (hdr) {
       try {
         const decoded = new TextDecoder().decode(Uint8Array.from(atob(hdr), (ch) => ch.charCodeAt(0)));
+        // Enrich each offer's `extra` with the asset decimals. The exact-EVM
+        // scheme emits extra={name,version} (the EIP-712 domain) but omits
+        // `decimals`, so a conformance decoder (e.g. x402-pilot's decode_402)
+        // flags "no explicit decimals — never assume 6 or 18". USDC on Base is
+        // 6 decimals; publish it so a buyer can render the human amount without
+        // guessing. Purely additive metadata — does not touch the EIP-712
+        // domain (name/version) the client signs over, so settlement is
+        // unaffected. Fail-open: any parse error falls through to raw `decoded`.
+        let body = decoded;
+        try {
+          const pr = JSON.parse(decoded) as { accepts?: Array<{ asset?: string; extra?: Record<string, unknown> }> };
+          if (Array.isArray(pr.accepts)) {
+            for (const offer of pr.accepts) {
+              if (String(offer.asset ?? "").toLowerCase() === USDC_BASE.toLowerCase()) {
+                offer.extra = { ...(offer.extra ?? {}), decimals: 6 };
+              }
+            }
+            body = JSON.stringify(pr);
+          }
+        } catch { /* keep raw decoded body */ }
         const headers = new Headers(res402.headers);
         headers.set("content-type", "application/json");
         headers.delete("content-length");
-        return new Response(decoded, { status: 402, headers });
+        return new Response(body, { status: 402, headers });
       } catch {
         // fall through with the original response
       }
