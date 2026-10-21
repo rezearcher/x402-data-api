@@ -286,7 +286,25 @@ app.get("/status", (c) => {
 // data, no PAY_TO, no keys. Never x402-gated: FREE_PATHS in the middleware.
 app.get("/metrics", async (c) => {
   const metrics = await getMetrics(makeUsageCounter(c.env));
-  return c.json(metrics);
+  // Augment the GROSS counter with a payer-aware net-external block from
+  // TrafficLog. total_paid_calls includes our own self/test settlements and
+  // unknown bot dust, so the revenue goal-gate must read net_external_paid_calls
+  // for the true replied->paid funnel stage (else it mis-routes to cold
+  // outreach). Fail-soft: a TrafficLog read can throw on the DO free-tier budget
+  // or be unbound — never break the aggregate the daily reconcile ledger needs.
+  let net_external: unknown = null;
+  let net_external_paid_calls: number | null = null;
+  if (c.env.TRAFFIC_LOG) {
+    try {
+      const stub = c.env.TRAFFIC_LOG.get(c.env.TRAFFIC_LOG.idFromName("default"));
+      const ne = await stub.getNetExternalPaid(2592000);
+      net_external = ne;
+      net_external_paid_calls = ne.external_calls;
+    } catch (e) {
+      net_external = { error: "traffic_read_failed", detail: e instanceof Error ? e.message : String(e) };
+    }
+  }
+  return c.json({ ...metrics, net_external_paid_calls, net_external });
 });
 
 // ---------------------------------------------------------------------------
@@ -3229,6 +3247,30 @@ export class TrafficLog extends DurableObject<Env> {
       .map((e) => ({ ref: e.ref, paid_calls: e.paid_calls, distinct_payers: e.payers.size, distinct_external_payers: e.ext.size, external_calls: e.external_calls, txs: Array.from(e.txs).slice(0, 20) }))
       .sort((a, b) => b.paid_calls - a.paid_calls)
       .slice(0, 200);
+  }
+
+  // Net-external paid calls — the goal's TRUE replied->paid signal. /metrics'
+  // total_paid_calls is GROSS: it counts our own self/test settlements and
+  // unknown-payer bot dust alongside any real buyer, so the revenue goal-gate
+  // reads an inflated "paid" stage and keeps mis-routing to cold outreach when
+  // real external demand is actually 0. This splits PAID rows by payer using the
+  // same SELF_PAYERS exclusion getRefStats uses, so the gate (and any indexer)
+  // can read real external demand directly. Plain indexed scan on hits_ts
+  // (rows_read only), aggregate in JS — same write-budget discipline as
+  // getPaid/getRefStats. Window default 30d: a trailing count, not all-time, but
+  // the only honest replied->paid measure (>0 ever = real demand exists).
+  async getNetExternalPaid(windowSeconds: number = 2592000): Promise<{ window_seconds: number; total_paid_rows: number; external_calls: number; self_calls: number; unknown_calls: number; distinct_external_payers: number; external_payers: string[] }> {
+    const cursor = await this.ctx.storage.sql.exec("SELECT ua FROM hits WHERE method = 'PAID' AND ts > ? ORDER BY ts DESC LIMIT ?", Math.floor(Date.now() / 1000) - windowSeconds, TrafficLog.SCAN_CAP);
+    let external_calls = 0, self_calls = 0, unknown_calls = 0, total = 0;
+    const ext = new Set<string>();
+    for (const row of cursor.raw()) {
+      total++;
+      const payer = String(row[0] ?? "").toLowerCase();
+      if (payer === "" || payer === "unknown") { unknown_calls++; continue; }
+      if (TrafficLog.SELF_PAYERS.has(payer)) { self_calls++; continue; }
+      external_calls++; ext.add(payer);
+    }
+    return { window_seconds: windowSeconds, total_paid_rows: total, external_calls, self_calls, unknown_calls, distinct_external_payers: ext.size, external_payers: Array.from(ext).slice(0, 50) };
   }
 
   async getStats(windowSeconds: number = 86400): Promise<Array<{ path: string; count: number }>> {
