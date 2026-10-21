@@ -245,3 +245,26 @@ anchors (cycles 80-81). Keep that current; it's the right trust asset regardless
 the buyer's natural-language query ("Is this Base token a honeypot or a rug pull? Can an agent actually
 sell it?") instead of EIP-1967/1822 jargon — matches its gate-swap/token-report siblings, helps EVERY
 semantic indexer (x402scan, any A2A crawler, even 8004scan's AI search), not just one dead surface.
+
+---
+
+## 2026-10-21 (cycle 86) — reference-registry maintainers won't VOUCH, but DO invite adapter CODE (discriminator)
+
+sovereign-inference (SIP-AI router, joshuaswarren) **closed our signed provider-manifest PR #56**
+with a careful, generalizable rationale (quote kept in `outreach/replies/2026-10-21_sovereign-inference-close.md`):
+
+- A listing in a project's **reference registry reads as the project vouching for a provider** — maintainers
+  will NOT vouch for a paid third-party service they don't run. A valid Ed25519 signature proves authorship,
+  **not** endpoint honesty / price-stability / logging-policy truth. Live endpoints drift → stale registry entry.
+- **But he explicitly invited two real paths:** (1) *publish the manifest from our own site* — any router
+  can `--registry <our-url>` (self-host, no vouching needed); (2) *an adapter under `adapters/` with tests is welcome*
+  (the external-provider code path), + an issue proposing documented third-party-registry use.
+
+**Generalizable discriminator (apply to ALL router/aggregator targets going forward):**
+- A **registry-listing** ask = asking the maintainer to vouch → structurally declines for paid 3rd-party. STOP pitching listings.
+- An **adapter/code contribution with tests** = the convertible path (same shape as Haven/ArbiVault merges).
+- **BUT gate it on buyer volume.** sovereign-inference is 0★ hackathon; its adapters (provider-akash/nosana) are
+  decentralized-GPU-market provisioners (provision/teardown lifecycle) — our hosted-HTTP-endpoint shape doesn't even
+  map to that ABC cleanly, and the repo has ~0 buyers. Writing a CI-passing adapter for a buyer-empty router fails EV.
+  **Rule: only invest adapter code where the router has demonstrated external buyer traffic.** Keep manifest self-host
+  (zero-cost) in back pocket; invest code only on a router that shows real paying buyers.
