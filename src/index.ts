@@ -1610,6 +1610,18 @@ app.get("/openapi.json", (c) => {
         description: p.desc,
       })),
       "x-payment-info": { protocols: ["x402"], price: { mode: "fixed", currency: "USD", amount: price } },
+      // Flat per-operation extensions read by generic OpenAPI->x402 buyer adapters
+      // (e.g. the DopamineDesk `mcp-server-aidatamarketplace` npm client: it treats an
+      // operation as a billable product only when x-billable===true, x-availability
+      // ==="operational", and reads x-price-usdc as a flat number). Mirrors the nested
+      // x-payment-info above so both the rich and the flat convention agree. This makes
+      // the already-published adapter buy from Grey Ridge by only pointing MARKETPLACE_URL
+      // here — no code change on the buyer side. Degrades open: adapters that don't read
+      // these fields simply ignore them.
+      "x-billable": true,
+      "x-availability": "operational",
+      "x-price-usdc": Number(price),
+      "x-data-mode": "live",
       responses: {
         "200": { description: "Success — JSON data" },
         "402": { description: `Payment required ($${price} USDC via x402)` },
@@ -3692,6 +3704,19 @@ app.use(async (c, next) => {
   const FREE_PATHS = new Set(["/", "/health", "/status", "/terms", "/token-safety", "/stripe/webhook", "/metrics"]);
   if (FREE_PATHS.has(c.req.path)) return next();
   if (c.req.path.startsWith("/.well-known/")) return next();
+
+  // Adapter-friendly preview: generic x402 buyer clients (e.g. the DopamineDesk
+  // `mcp-server-aidatamarketplace` adapter) request the free contract proof as
+  // `?preview=true` on the PAID path, not at `${path}/preview`. Redirect GET requests
+  // for a route that actually exposes a preview to our existing free handler (same
+  // response shape, no payment). Degrades open: only PREVIEW_ROUTES are redirected;
+  // any other path falls through to the x402 402 gate exactly as before.
+  if (c.req.method === "GET" && c.req.query("preview") === "true" && PREVIEW_ROUTES.has(c.req.path)) {
+    const u = new URL(c.req.url);
+    u.pathname = `${c.req.path}/preview`;
+    u.searchParams.delete("preview");
+    return c.redirect(`${u.pathname}${u.search}`, 302);
+  }
 
   // RapidAPI bypass for paid endpoints.
   // RapidAPI already collected money from the buyer before proxying this request, so a
