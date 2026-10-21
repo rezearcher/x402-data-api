@@ -1,0 +1,1 @@
+2026-10-21 PR BlockRunAI/ClawRouter#503 — Grey Ridge token-safety gate added to Market-data PARTNER_SERVICES (wire-PR; sharper than silently-closed issue #477, hits their real extension point). Live x402 Base proof in body. Ball-in-court: BlockRun maps proxyPath->our host server-side.
