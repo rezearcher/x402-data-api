@@ -61,3 +61,16 @@ Sluzen; Solana/NEAR: svalin) or "we don't take third-party paid providers" (poli
 - Cold outbound pitches to seller-saturated agent frameworks (§2, §4; 144 pulls).
 - On-chain buyer deanon (web3.bio: no contact records; §1).
 - The coinbase/x402 ecosystem "add us" PRs (0/15+ ever merged).
+
+## Compute lane (added 2026-10-21zn)
+We run a REAL live OpenAI-compatible LLM endpoint `/v1/chat/completions` ($0.002/call,
+Llama-3.3-70b-instruct-fp8-fast, free-preview at `/preview`, in `.well-known/x402`).
+This is a **distinct lane from token-safety/data** — the ONLY warm pitch-reply to date
+(0xcuy/adexto "Agent Compute") lives here, not token-safety. Open wire-PR adexto#5
+(MERGEABLE/CLEAN) is the single best Base-compatible conversion path.
+- Compute lane is ALSO seller-dominated: mapleai-gateway (sells own GPT/Claude over x402),
+  openzoo (Solana-rail proxy) are SELLERS, not buyers. Pitched mapleai in error — now the
+  buyer_intent_scanner COMPUTE_SELLER discriminator filters them (commit 94c1d99).
+- Do-not-repeat: don't pitch compute SELLERS (own-models LLM gateways/inference providers);
+  don't pitch Solana-rail proxies (openzoo). Genuine compute BUYER = routes LLM calls, wants
+  cheap/fallback provider, Base-x402-capable, non-seller (adexto is ~the whole set today).
