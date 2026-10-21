@@ -81,7 +81,7 @@ CREATED_AFTER = (datetime.datetime.utcnow() - datetime.timedelta(days=60)).strft
 
 # Network inference keyword sets (derived signal). Base/EVM = we can serve.
 BASE_EVM = re.compile(r"\b(base|evm|ethereum|usdc on base|base usdc|erc-?20|cdp|coinbase)\b", re.I)
-OTHER_CHAIN = re.compile(r"\b(stellar|soroban|solana|aptos|sui|\bbnb\b|bsc|xrp|polygon only|near)\b", re.I)
+OTHER_CHAIN = re.compile(r"\b(stellar|soroban|solana|aptos|sui|\bbnb\b|bsc|xrp|polygon only|near|celo|wcop|rootstock|\brsk\b)\b", re.I)
 
 # Analyst/observatory discriminator (derived signal). A repo-team issue about x402
 # "market data" is NOT a buyer when it is a census/collector/observatory doing demand
