@@ -907,9 +907,28 @@ app.get("/.well-known/x402", (c) => {
         raw_samples: "https://github.com/rezearcher/x402-data-api/blob/main/data/uptime_samples.jsonl",
         note: STATUS_SNAPSHOT.note,
       },
+      // Provenance / trust anchors — the fields an auto-indexer or a trust-sensitive
+      // buyer-agent checks before calling a seller it has never seen: open-source
+      // license, public source repo, machine-readable docs, and a real contact.
+      // Every value points to a real artifact (MIT LICENSE in-repo, public GitHub,
+      // live OpenAPI, published evidence pack) — no vaporware. Added so discovery
+      // surfaces that score sellers on licence/repository signals read them here
+      // instead of flagging "unknown".
+      provenance: {
+        license: "MIT",
+        license_url: "https://github.com/rezearcher/x402-data-api/blob/main/LICENSE",
+        source_repository: "https://github.com/rezearcher/x402-data-api",
+        documentation: `${BASE}/openapi.json`,
+        evidence: "https://github.com/rezearcher/x402-data-api/blob/main/docs/EVIDENCE.md",
+        contact: "contact@greyridgesignals.ai",
+      },
     },
     name: "Grey Ridge Signals",
     provider: "Grey Ridge Signals Group LLC",
+    license: "MIT",
+    contact: "contact@greyridgesignals.ai",
+    documentation: `${BASE}/openapi.json`,
+    source_repository: "https://github.com/rezearcher/x402-data-api",
     x402Version: 2,
     network: NETWORK,
     networks: [NETWORK],
@@ -1509,6 +1528,12 @@ app.get("/openapi.json", (c) => {
       description: "Agent-native pay-per-call data on Base (USDC via x402). No API keys, no signup. Discovery: /.well-known/x402",
       "x-guidance": "Pay-per-call Base (USDC, x402) data for agents: /defi/yields (top lending/LP APY + IL risk, $0.001), /crypto/funding (cross-venue funding + arb spread, $0.004), /crypto/prices ($0.001), /pm/markets (Polymarket, $0.005), and 20+ Base RPC/chain reads — plus a pre-trade safety gate: /gate/swap (GO/HOLD/BLOCK, $0.008) and /chain/token-report (SAFE/CAUTION/AVOID, $0.01). Free samples: /defi/yields/preview and /crypto/funding/preview.",
       contact: { name: "Grey Ridge Signals", email: "contact@greyridgesignals.ai", url: "https://x402-data-api.sigrunner.workers.dev" },
+      // Open-source licence + terms link — standard OpenAPI trust fields that
+      // importers (RapidAPI, OpenDexter, directory crawlers) surface to buyers.
+      // MIT matches the in-repo LICENSE and package.json; termsOfService points at
+      // the public source so the legal/provenance trail is one click away.
+      license: { name: "MIT", url: "https://github.com/rezearcher/x402-data-api/blob/main/LICENSE" },
+      termsOfService: "https://github.com/rezearcher/x402-data-api/blob/main/README.md",
     },
     // Custom domain FIRST — an importer takes servers[0] as the base URL, and the
     // marketplace listing should point at the zone we control DNS for. The workers.dev
