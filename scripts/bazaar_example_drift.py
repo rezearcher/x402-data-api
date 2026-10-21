@@ -77,9 +77,15 @@ def main():
         except Exception as e:  # noqa: BLE001
             print(f"[warn] {name}: could not fetch live preview ({e})")
             continue
-        # Ignore the free-preview-only `note` disclaimer when comparing; it's a preview marker.
-        adv_keys = key_paths(adv)
-        live_keys = key_paths(live)
+        # The advertised example is the PAID output shape. The free preview deliberately
+        # appends CTA-only markers that never appear in paid output: `note` (disclaimer)
+        # and the whole `upgrade.*` subtree (the pay-to-upgrade CTA, src/index.ts upgradeCTA).
+        # Drop those preview-only keys from the live side so we only flag genuine schema drift.
+        PREVIEW_ONLY = {"note", "upgrade"}
+        def _strip(keys):
+            return {p for p in keys if p.split(".", 1)[0] not in PREVIEW_ONLY}
+        adv_keys = _strip(key_paths(adv))
+        live_keys = _strip(key_paths(live))
         missing_in_adv = sorted(live_keys - adv_keys)
         extra_in_adv = sorted(adv_keys - live_keys)
         if missing_in_adv or extra_in_adv:
