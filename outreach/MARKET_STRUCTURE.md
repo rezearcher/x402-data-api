@@ -55,6 +55,28 @@ Sluzen; Solana/NEAR: svalin) or "we don't take third-party paid providers" (poli
 3. **Inbound wire-PRs to repos already calling OUR URL** — the only pattern that ever
    merged (Haven, ArbiVault). Code-search is currently saturated (0 new), but a *new*
    referencing repo is the highest-converting target when one appears.
+4. **PR into a discovery surface's public catalog data file** — like X402blockchains,
+   but for curated marketplaces whose listing data lives in a public repo. Done 2026-10-21:
+   **edgeandnode/ampersend-sdk PR #149** adds us to `example-services.md` (the ampersend
+   agent's hand-picked "first-try" service list; filled the missing token-safety category).
+   Ampersend = buyer-facing agent-wallet marketplace by The Graph; Base-USDC, `exact` scheme.
+
+## Ecosystem-directory census (2026-10-21 — the full coinbase/x402 README list, do not re-scan)
+The official coinbase/x402 README names exactly 5 community directories. Status of each:
+- **x402scan.com** — listed (61 routes re-registered each run). JS-rendered; tRPC API,
+  procedure names not guessable. Rank is quality(paid-activity)-gated like Bazaar.
+- **Agentic.Market** — listed (unenriched, per memory).
+- **x402-list.com** — submitted (per memory). 402-handshake monitored directory.
+- **pay.sh** — **Solana-centric**, no documented submission path, gateway-spec YAML loaded
+  by your own gateway. Chain-mismatch, low fit. Skip.
+- **app.ampersend.ai/discover** — buyer-facing agent-wallet marketplace (The Graph /
+  edgeandnode). 3 listing sources: `catalog` (hand-curated, server-side — no self-serve
+  form/PR), `bazaar` (= CDP Bazaar, txn-gated/dead), `registry` (ERC-8004). Self-serve
+  "Hosted Endpoint" path needs an **ampersend account login** AND reroutes settlement
+  through their proxy wallet (not our payTo) → account atom, undesirable routing. BUT the
+  SDK repo's `example-services.md` IS a public PR-able data file → PR #149 (above).
+Conclusion: no NEW zero-capital self-serve buyer-facing registry exists beyond what we're
+already on. The ampersend account-listing path is the one remaining Rez-atom option.
 
 ## Do-not-repeat (proven $0)
 - CDP Bazaar rank / serviceName / desc tuning / re-index (transaction-gated, §3).
