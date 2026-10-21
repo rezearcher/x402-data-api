@@ -94,3 +94,21 @@ hypothesis with authoritative evidence from the *installed* `@x402/core` schema:
   `/chain/tx` only; a researcher/measurer, not a buyer. Do NOT pitch (measurers don't pay).
 - **Do-not-repeat:** don't re-investigate manifest/402 field shape as a conversion cause.
   The blocker is demand (buyer-empty tiny lane), not discovery-shape or signability.
+
+## Self-serve-safety is a 3rd structural non-buyer class (2026-10-21, cycle 55)
+Six fresh replies in one batch, all NOs. Beyond chain-mismatch (fly.ai=Robinhood, pokter=BNB)
+and seller-saturation, a distinct non-buyer class emerged on the **token-safety lane**:
+- **self-serve / no-paid-third-party**: the team already screens tokens itself and won't
+  outsource it. agent-firewall ("local and rule-based ... no tool data sent to a third
+  party"), polyrob ("do not plan to add a paid third-party provider to the token-safety
+  path"), fly.ai ("we already use GoPlus across the chains we trade").
+- Root cause: token-safety is a **commodity buyers get free** (GoPlus) or self-host (local
+  rules). There is ~no willingness-to-pay for hosted token-safety among agents that have
+  already solved it. This is why token-safety replies NO even when Base-fit.
+- **Implication:** the lane with real willingness-to-pay is **compute** (cheap LLM fallback)
+  — self-hosting inference is expensive, so a per-call x402 fallback is worth paying for.
+  Our one non-close lead (adexto, "leaving open, will evaluate") lives here, not token-safety.
+- **Shipped:** `SELF_SAFETY` regex + `SELF_SERVE` tier in scripts/buyer_intent_scanner.py
+  demote self-serve-safety repos so future cycles don't burn pitches on this shape.
+- **Do-not-repeat:** don't pitch token-safety to firewall/screening/agent-safety projects
+  or to teams that name GoPlus/local-rules — they are the self-serve class, EV ~$0.

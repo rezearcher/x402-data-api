@@ -128,6 +128,26 @@ COMPUTE_SELLER = re.compile(
     re.I,
 )
 
+# Self-serve-safety discriminator (added 2026-10-21, grounded in 3 same-day NOs on the
+# token-safety lane). A repo whose own text says it already handles token-safety/screening
+# itself — local/rule-based firewall, "no tool data to a third party", "we already use
+# GoPlus", or explicitly "no paid third-party provider on the safety path" — is NOT a
+# convertible buyer of our /gate/swap: it either self-hosts the check (GoPlus is free) or
+# refuses paid third-party screening by design. Distinct from chain-mismatch and from
+# seller: the reason-code is "we solved safety ourselves / won't outsource it". Measured
+# 2026-10-21: agent-firewall ("local and rule-based ... no tool data sent to a third
+# party"), polyrob ("do not plan to add a paid third-party provider to the token-safety
+# path"), fly.ai ("we already use GoPlus across the chains we trade"). Keys on the repo's
+# own self-description/issue text; degrades open (no match = unchanged, still surfaced).
+SELF_SAFETY = re.compile(
+    r"(local|rule-?based|on-?device|offline)[\s\w]{0,25}(firewall|guard|screen|safety|filter)"
+    r"|no (tool data|requests?|calls?)[\s\w]{0,20}(sent to|to) (a )?third[- ]party"
+    r"|\b(we|already)[\s\w]{0,15}(use|run|rely on) goplus\b|goplus[\s\w]{0,20}(across|for) (the )?chains?"
+    r"|(no|not|don'?t|won'?t|do not|won't)[\s\w]{0,30}(paid )?third[- ]party[\s\w]{0,30}(provider|service|api|safety|screen|token|gate)"
+    r"|(own|in-?house|self-?host)[\s\w]{0,20}(token[- ]?safety|screening|honeypot|safety check)",
+    re.I,
+)
+
 
 def gh(args):
     tok = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True).stdout.strip()
@@ -340,6 +360,11 @@ def main():
         body = it.get("body", "")
         text = (it.get("title", "") + "\n" + body)
         research = bool(NO_PAY.search(text) or ANALYST.search(text) or PARKED.search(text))
+        # Self-serve-safety: team already handles token-safety itself (GoPlus/local rules)
+        # or refuses paid third-party screening — a non-buyer of /gate/swap by design
+        # (3 same-day NOs 2026-10-21: agent-firewall, polyrob, fly.ai). Checked on desc+text.
+        self_safety = bool(SELF_SAFETY.search(meta.get("description") or "")
+                           or SELF_SAFETY.search(text))
         # Seller intent from EITHER the repo description (what it IS) or the issue text
         # (what this epic BUILDS — a paid surface to sell). The issue-text signal catches
         # @coinbase/x402 producers the dep-role check can't (ambiguous package).
@@ -380,6 +405,8 @@ def main():
             tier = "SELLER_PITCH"  # outsider pitching, OR an insider repo that sells/exposes its own 402 service (by description or dep role) — a rival, not demand
         elif research:
             tier = "RESEARCH"  # census/collector/observatory or forbids paid requests — never a payer
+        elif self_safety:
+            tier = "SELF_SERVE"  # self-hosts token-safety (GoPlus/local rules) or refuses paid 3rd-party screening — non-buyer of /gate/swap
         elif net == "other-chain":
             tier = "COLD"  # their x402 client policy would refuse a Base challenge
         elif strong_base and active:
@@ -399,7 +426,7 @@ def main():
             "lang": meta.get("language"), "contacted": contacted, "tier": tier,
         })
 
-    rank = {"HOT": 0, "WARM": 1, "COLD": 2, "RESEARCH": 3, "SELLER_PITCH": 4, "CONTACTED": 5}
+    rank = {"HOT": 0, "WARM": 1, "COLD": 2, "RESEARCH": 3, "SELF_SERVE": 4, "SELLER_PITCH": 5, "CONTACTED": 6}
     targets.sort(key=lambda t: (rank[t["tier"]], t["age_days"] if t["age_days"] is not None else 9999))
 
     out = {
@@ -421,9 +448,9 @@ def main():
     print(f"=== buyer-intent scanner ({out['status']}) — {len(targets)} open buyer-build issues since {CREATED_AFTER} ===")
     hot = out["hot"]
     print(f"HOT (Base-compatible + active + un-contacted): {len(hot)}")
-    flags = {"HOT": "✦", "WARM": "~", "COLD": "·", "RESEARCH": "?", "SELLER_PITCH": "$", "CONTACTED": "✓"}
+    flags = {"HOT": "✦", "WARM": "~", "COLD": "·", "RESEARCH": "?", "SELF_SERVE": "=", "SELLER_PITCH": "$", "CONTACTED": "✓"}
     for t in targets:
-        if t["tier"] in ("RESEARCH", "SELLER_PITCH", "CONTACTED"):
+        if t["tier"] in ("RESEARCH", "SELF_SERVE", "SELLER_PITCH", "CONTACTED"):
             continue  # genuine Base-serviceable demand only in the human view; full set in JSON
         flag = flags[t["tier"]]
         age = f"{t['age_days']}d" if t["age_days"] is not None else "?"
