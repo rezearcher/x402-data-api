@@ -732,7 +732,13 @@ app.get("/internal/find-settlement", async (c) => {
   const TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
   const pad = (a: string) => "0x" + a.toLowerCase().replace(/^0x/, "").padStart(64, "0");
   const from = c.req.query("from"); // payer address; omit to match any sender
-  const to = c.env.PAY_TO; // always our receiving wallet
+  // Receiver to scan. Defaults to OUR wallet. A validated `to` lets the demand
+  // sensor measure incoming settlements to a COMPETITOR payTo from Cloudflare
+  // egress (Blockscout 403s datacenter IPs but not CF) — read-only public-chain
+  // data, same secret gate. Reject anything that isn't a 20-byte hex address so
+  // this can't be abused as an arbitrary-URL fetch proxy.
+  const toParam = (c.req.query("to") ?? "").toLowerCase();
+  const to = /^0x[0-9a-f]{40}$/.test(toParam) ? toParam : c.env.PAY_TO;
   const token = (c.req.query("token") ?? USDC).toLowerCase();
   // Public Base RPCs reject wide eth_getLogs ranges; ~800 blocks is accepted by
   // most providers in the rotation, so default there for a usable out-of-box scan.
