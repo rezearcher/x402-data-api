@@ -770,33 +770,33 @@ app.get("/.well-known/x402", (c) => {
       mk("/pm/markets", "GET", "0.005", "5000", "Live Polymarket prediction markets — question, outcomes, bestBid/bestAsk/spread, volume24hr/volume1wk, oneDayPriceChange, clobTokenIds, conditionId, category tags, liquidity, end date. Ranked by volume24hr; filter by keyword.", ["prediction-markets", "polymarket", "markets", "crypto", "data"]),
       mk("/crypto/funding", "GET", "0.004", "4000", "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, premium/basis, annualized_hl/annualized_okx, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices, open interest.", ["crypto", "funding", "perps", "hyperliquid", "okx", "dydx", "arbitrage", "defi", "data"]),
       mk("/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, pool id, APY breakdown + 1d/7d/30d APY trend, IL risk (incl. il7d), exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL. Filter by project, chain, or stablecoin-only; sort by TVL or risk-adjusted APY.", ["defi", "yield", "lending", "apy", "tvl", "data"]),
-      mk("/crypto/prices", "GET", "0.004", "4000", "Spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/change_24h/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "defi", "data"]),
+      mk("/crypto/prices", "GET", "0.001", "1000", "Spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/change_24h/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "defi", "data"]),
       mk("/scan/mcp", "GET", "0.05", "50000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score + verdict (clear/review/block).", ["security", "mcp", "audit", "prompt-injection"]),
       mk("/enrich/tech-risk", "GET", "0.01", "10000", "Tech-stack fingerprint -> CVE (NVD) + EPSS + CISA-KEV attack-surface risk + verdict (clear/review/block) for a domain.", ["security", "cve", "risk"]),
       mk("/enrich/domain", "GET", "0.01", "10000", "Firmographic + tech-stack enrichment for a domain, incl. full subdomain enumeration via certificate-transparency logs (crt.sh, RDAP, DoH, HTTP fingerprint) + verdict (clear/review/block, based on domain age).", ["data", "domain", "enrichment"]),
-      mk("/chain/block-number", "GET", "0.01", "10000", "Current Base mainnet block number.", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/gas-price", "GET", "0.01", "10000", "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, and gas_price_usd — no price oracle on ETH-only competitors.", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/balance", "GET", "0.01", "10000", "ETH balance of a Base mainnet address, incl. balance_usd (internal ETH price cross-call).", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/token-balance", "GET", "0.01", "10000", "ERC-20 token balance of a Base mainnet address, incl. symbol, decimals, balance_formatted.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/block-number", "GET", "0.002", "2000", "Current Base mainnet block number.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/gas-price", "GET", "0.002", "2000", "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, and gas_price_usd — no price oracle on ETH-only competitors.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/balance", "GET", "0.002", "2000", "ETH balance of a Base mainnet address, incl. balance_usd (internal ETH price cross-call).", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/token-balance", "GET", "0.002", "2000", "ERC-20 token balance of a Base mainnet address, incl. symbol, decimals, balance_formatted.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/tx", "GET", "0.005", "5000", "Transaction details by hash on Base mainnet.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/receipt", "GET", "0.005", "5000", "Transaction receipt by hash on Base mainnet — status, gas used, full logs, and the L1 fee breakdown (l1_fee_wei, l1_gas_price_wei, l1_gas_used, effective_gas_price_wei) + l1_fee_usd/total_fee_usd an ETH-only competitor can't offer.", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/code", "GET", "0.01", "10000", "Contract-code check for a Base mainnet address (is_contract + code size + EIP-7702 delegated-EOA detection).", ["rpc", "base", "onchain", "blockchain", "data"]),
-      mk("/chain/erc20-meta", "GET", "0.01", "10000", "ERC-20 metadata on Base: name, symbol, decimals, totalSupply for any token contract.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
-      mk("/chain/nonce", "GET", "0.01", "10000", "Transaction count (nonce) for a Base address, latest and pending.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/code", "GET", "0.002", "2000", "Contract-code check for a Base mainnet address (is_contract + code size + EIP-7702 delegated-EOA detection).", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/erc20-meta", "GET", "0.002", "2000", "ERC-20 metadata on Base: name, symbol, decimals, totalSupply for any token contract.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
+      mk("/chain/nonce", "GET", "0.002", "2000", "Transaction count (nonce) for a Base address, latest and pending.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/is-contract", "GET", "0.002", "2000", "Is a Base address a smart contract or an EOA (is_contract + bytecode size).", ["rpc", "base", "onchain", "contract", "data"]),
-      mk("/chain/fee-estimate", "GET", "0.003", "3000", "Base EIP-1559 fee estimate: base fee, suggested priority fee, max-fee tiers (slow/standard/fast) in gwei and a 21k-gas transfer cost.", ["rpc", "base", "onchain", "gas", "fees", "data"]),
-      mk("/chain/network-status", "GET", "0.003", "3000", "Base network status snapshot: chain id, latest block, block age, gas used ratio and tx count.", ["rpc", "base", "onchain", "status", "health", "data"]),
-      mk("/chain/l1-base-fee", "GET", "0.003", "3000", "Ethereum L1 base fee as seen by Base's GasPriceOracle (wei/gwei) plus estimated L1 data fee for a simple transfer.", ["rpc", "base", "onchain", "gas", "l1", "fees", "data"]),
-      mk("/chain/fee-history", "GET", "0.003", "3000", "Base fee history for the last 10 blocks: base fee per block (gwei), gas-used ratios and a min/max/avg summary. Use when an agent times transactions around cheap blocks.", ["rpc", "base", "onchain", "gas", "fees", "history", "data"]),
-      mk("/chain/blob-base-fee", "GET", "0.003", "3000", "Base EIP-4844 blob base fee from the GasPriceOracle (wei/gwei). Use when an agent estimates L1 data-availability cost for Base batches.", ["rpc", "base", "onchain", "gas", "blob", "fees", "data"]),
-      mk("/chain/eth-usd", "GET", "0.003", "3000", "Base ETH/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain ETH price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]),
-      mk("/chain/btc-usd", "GET", "0.003", "3000", "Base BTC/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain BTC price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]),
-      mk("/chain/prices", "GET", "0.005", "5000", "Base crypto price snapshot in one call: BTC, ETH, LINK and SOL USD spot from Chainlink aggregators with per-feed staleness. Use when an agent needs a multi-asset trusted on-chain price board.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "snapshot", "data"]),
-      mk("/chain/sol-usd", "GET", "0.003", "3000", "Base SOL/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain SOL price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]),
-      mk("/chain/link-usd", "GET", "0.003", "3000", "Base LINK/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain LINK price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]),
-      mk("/chain/total-supply", "GET", "0.003", "3000", "ERC-20 total supply on Base (raw + formatted, with symbol and decimals).", ["rpc", "base", "onchain", "token", "erc20", "data"]),
+      mk("/chain/fee-estimate", "GET", "0.002", "2000", "Base EIP-1559 fee estimate: base fee, suggested priority fee, max-fee tiers (slow/standard/fast) in gwei and a 21k-gas transfer cost.", ["rpc", "base", "onchain", "gas", "fees", "data"]),
+      mk("/chain/network-status", "GET", "0.002", "2000", "Base network status snapshot: chain id, latest block, block age, gas used ratio and tx count.", ["rpc", "base", "onchain", "status", "health", "data"]),
+      mk("/chain/l1-base-fee", "GET", "0.002", "2000", "Ethereum L1 base fee as seen by Base's GasPriceOracle (wei/gwei) plus estimated L1 data fee for a simple transfer.", ["rpc", "base", "onchain", "gas", "l1", "fees", "data"]),
+      mk("/chain/fee-history", "GET", "0.002", "2000", "Base fee history for the last 10 blocks: base fee per block (gwei), gas-used ratios and a min/max/avg summary. Use when an agent times transactions around cheap blocks.", ["rpc", "base", "onchain", "gas", "fees", "history", "data"]),
+      mk("/chain/blob-base-fee", "GET", "0.002", "2000", "Base EIP-4844 blob base fee from the GasPriceOracle (wei/gwei). Use when an agent estimates L1 data-availability cost for Base batches.", ["rpc", "base", "onchain", "gas", "blob", "fees", "data"]),
+      mk("/chain/eth-usd", "GET", "0.001", "1000", "Base ETH/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain ETH price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]),
+      mk("/chain/btc-usd", "GET", "0.001", "1000", "Base BTC/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain BTC price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]),
+      mk("/chain/prices", "GET", "0.001", "1000", "Base crypto price snapshot in one call: BTC, ETH, LINK and SOL USD spot from Chainlink aggregators with per-feed staleness. Use when an agent needs a multi-asset trusted on-chain price board.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "snapshot", "data"]),
+      mk("/chain/sol-usd", "GET", "0.001", "1000", "Base SOL/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain SOL price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]),
+      mk("/chain/link-usd", "GET", "0.001", "1000", "Base LINK/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain LINK price.", ["rpc", "base", "onchain", "price", "chainlink", "oracle", "data"]),
+      mk("/chain/total-supply", "GET", "0.002", "2000", "ERC-20 total supply on Base (raw + formatted, with symbol and decimals).", ["rpc", "base", "onchain", "token", "erc20", "data"]),
       mk("/chain/storage-at", "GET", "0.002", "2000", "Raw storage slot read (eth_getStorageAt) for any Base contract; slot defaults to 0x0. Use when an agent needs proxy implementation/admin slots or raw contract state.", ["rpc", "base", "onchain", "contract", "data"]),
-      mk("/chain/proxy-info", "GET", "0.003", "3000", "EIP-1967 proxy resolver for a Base contract: returns implementation, admin and beacon addresses (read from the standard storage slots) plus is_proxy flag. Use when an agent must know what code actually runs behind a proxy before trusting or calling it.", ["rpc", "base", "onchain", "contract", "proxy", "security", "data"]),
+      mk("/chain/proxy-info", "GET", "0.002", "2000", "EIP-1967 proxy resolver for a Base contract: returns implementation, admin and beacon addresses (read from the standard storage slots) plus is_proxy flag. Use when an agent must know what code actually runs behind a proxy before trusting or calling it.", ["rpc", "base", "onchain", "contract", "proxy", "security", "data"]),
       mk("/chain/allowance", "GET", "0.002", "2000", "ERC-20 allowance(owner, spender) on Base, raw + formatted, flags unlimited approvals.", ["rpc", "base", "onchain", "token", "erc20", "data"]),
       mk("/defi/chains-tvl", "GET", "0.003", "3000", "Top blockchains ranked by total DeFi TVL (DefiLlama): name, TVL USD, gas token. No params. Use when an agent needs a quick map of where DeFi capital sits.", ["defi", "tvl", "chains", "data"]),
       mk("/crypto/stablecoins", "GET", "0.003", "3000", "Top stablecoins by circulating supply (DefiLlama): name, symbol, price, peg type, circulating USD. No params. Use when an agent needs stablecoin supply and depeg checks.", ["crypto", "stablecoins", "depeg", "supply", "data"]),
@@ -822,7 +822,7 @@ app.get("/.well-known/x402", (c) => {
       mk("/ai/extract", "GET", "0.005", "5000", "Text-to-JSON extraction (Llama 3.2 3B): ?text=<up to 1500 chars>&fields=<comma-separated field names> returns a strict JSON object with exactly those keys (null when absent). Use when an agent needs messy text turned into typed structured data.", ["ai", "llm", "extraction", "json", "structured", "data"]),
       mk("/v1/chat/completions", "POST", "0.002", "2000", "OpenAI-compatible chat completions (Llama 3.3 70B fp8 on Workers AI; set model=llama-3.2-3b-instruct for the small model): POST {messages:[{role,content}]} returns choices[0].message. Drop-in for chat-completions clients, pay-per-call, no API key.", ["ai", "llm", "chat", "completions", "openai", "inference"]),
       mk("/ai/ask", "GET", "0.002", "2000", "Cheap LLM answer (Llama 3.2 3B on Workers AI): ?q=<prompt up to 500 chars>, returns concise text. Pay-per-call, no API key.", ["ai", "llm", "inference", "chat", "data"]),
-      mk("/chain/block", "GET", "0.005", "5000", "Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.", ["rpc", "base", "onchain", "blockchain", "data"]),
+      mk("/chain/block", "GET", "0.002", "2000", "Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.", ["rpc", "base", "onchain", "blockchain", "data"]),
       mk("/chain/wallet", "GET", "0.003", "3000", "Wallet screening bundle (balance, activity, contract vs EOA check): ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]),
       mk("/chain/token-report", "GET", "0.01", "10000", "Is this Base token safe to buy? One call returns a trade-safety verdict — SAFE | CAUTION | AVOID — with risk_score (0-100) and reasons: honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, measured transfer tax, symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade before an agent buys a Base ERC-20.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "verdict", "trading", "data"]),
       mk("/gate/swap", "GET", "0.008", "8000", "Is this Base token safe to swap right now? GO / HOLD / BLOCK pre-trade safety gate for autonomous trading agents: is it a honeypot, can you sell it, and is your trade too big for the pool? Honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your notional — one decision + reason in one fast call.", ["security", "base", "onchain", "trading", "gate", "agents", "token", "honeypot", "data"]),
@@ -1856,7 +1856,7 @@ function makeRoutes(payTo: string) {
     "GET /crypto/prices": {
       accepts: {
         scheme: "exact" as const,
-        price: "$0.004",
+        price: "$0.001",
         network: NETWORK,
         payTo,
       },
@@ -1880,7 +1880,7 @@ function makeRoutes(payTo: string) {
     "GET /chain/block-number": {
       accepts: {
         scheme: "exact" as const,
-        price: "$0.01",
+        price: "$0.002",
         network: NETWORK,
         payTo,
       },
@@ -1898,7 +1898,7 @@ function makeRoutes(payTo: string) {
     "GET /chain/gas-price": {
       accepts: {
         scheme: "exact" as const,
-        price: "$0.01",
+        price: "$0.002",
         network: NETWORK,
         payTo,
       },
@@ -1923,7 +1923,7 @@ function makeRoutes(payTo: string) {
     "GET /chain/balance": {
       accepts: {
         scheme: "exact" as const,
-        price: "$0.01",
+        price: "$0.002",
         network: NETWORK,
         payTo,
       },
@@ -1952,7 +1952,7 @@ function makeRoutes(payTo: string) {
     "GET /chain/token-balance": {
       accepts: {
         scheme: "exact" as const,
-        price: "$0.01",
+        price: "$0.002",
         network: NETWORK,
         payTo,
       },
@@ -2039,7 +2039,7 @@ function makeRoutes(payTo: string) {
     "GET /chain/code": {
       accepts: {
         scheme: "exact" as const,
-        price: "$0.01",
+        price: "$0.002",
         network: NETWORK,
         payTo,
       },
@@ -2060,7 +2060,7 @@ function makeRoutes(payTo: string) {
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /chain/erc20-meta": {
-      accepts: { scheme: "exact" as const, price: "$0.01", network: NETWORK, payTo },
+      accepts: { scheme: "exact" as const, price: "$0.002", network: NETWORK, payTo },
       description: "ERC-20 metadata on Base: name, symbol, decimals, totalSupply (raw + formatted) for any token contract.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
@@ -2071,7 +2071,7 @@ function makeRoutes(payTo: string) {
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /chain/nonce": {
-      accepts: { scheme: "exact" as const, price: "$0.01", network: NETWORK, payTo },
+      accepts: { scheme: "exact" as const, price: "$0.002", network: NETWORK, payTo },
       description: "Transaction count (nonce) for a Base address, latest and pending. Use when an agent needs the next nonce for a Base address before signing a transaction.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
@@ -2093,7 +2093,7 @@ function makeRoutes(payTo: string) {
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /chain/fee-estimate": {
-      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      accepts: { scheme: "exact" as const, price: "$0.002", network: NETWORK, payTo },
       description: "Base EIP-1559 fee estimate: current base fee, suggested priority fee and slow/standard/fast max-fee tiers in gwei. Use when an agent must set maxFeePerGas before sending a Base transaction.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
@@ -2104,7 +2104,7 @@ function makeRoutes(payTo: string) {
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /chain/network-status": {
-      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      accepts: { scheme: "exact" as const, price: "$0.002", network: NETWORK, payTo },
       description: "Base network status snapshot: chain id, latest block number, block age in seconds, gas utilisation ratio and tx count. Use when an agent needs a liveness/congestion check before sending a Base transaction.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
@@ -2115,7 +2115,7 @@ function makeRoutes(payTo: string) {
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /chain/l1-base-fee": {
-      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      accepts: { scheme: "exact" as const, price: "$0.002", network: NETWORK, payTo },
       description: "Ethereum L1 base fee as reported by Base's GasPriceOracle, in wei and gwei, plus an estimated L1 data fee for a simple transfer. Use when an agent prices the L1 component of Base transaction costs.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
@@ -2125,7 +2125,7 @@ function makeRoutes(payTo: string) {
         output: { example: { l1_base_fee_wei: "210000000", l1_base_fee_gwei: 0.21, est_l1_data_fee_eth_simple_transfer: 2.0e-8, chain: "base" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },    "GET /chain/blob-base-fee": {
-      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      accepts: { scheme: "exact" as const, price: "$0.002", network: NETWORK, payTo },
       description: "Base EIP-4844 blob base fee from the GasPriceOracle (wei/gwei). Use when an agent estimates L1 data-availability cost for Base batches.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
@@ -2135,7 +2135,7 @@ function makeRoutes(payTo: string) {
         output: { example: { chain: "base" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },    "GET /chain/eth-usd": {
-      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      accepts: { scheme: "exact" as const, price: "$0.001", network: NETWORK, payTo },
       description: "Base ETH/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain ETH price.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
@@ -2145,7 +2145,7 @@ function makeRoutes(payTo: string) {
         output: { example: { price_usd: 3500.12, chain: "base" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },    "GET /chain/btc-usd": {
-      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      accepts: { scheme: "exact" as const, price: "$0.001", network: NETWORK, payTo },
       description: "Base BTC/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain BTC price.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
@@ -2155,7 +2155,7 @@ function makeRoutes(payTo: string) {
         output: { example: { price_usd: 100000.5, chain: "base" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },    "GET /chain/prices": {
-      accepts: { scheme: "exact" as const, price: "$0.005", network: NETWORK, payTo },
+      accepts: { scheme: "exact" as const, price: "$0.001", network: NETWORK, payTo },
       description: "Base crypto price snapshot in one call: BTC, ETH, LINK and SOL USD spot from Chainlink aggregators with per-feed staleness. Use when an agent needs a multi-asset trusted on-chain price board.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
@@ -2165,7 +2165,7 @@ function makeRoutes(payTo: string) {
         output: { example: { prices: { BTC: 100000.5, ETH: 3500.1, LINK: 12.5, SOL: 104.2 }, chain: "base" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },    "GET /chain/sol-usd": {
-      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      accepts: { scheme: "exact" as const, price: "$0.001", network: NETWORK, payTo },
       description: "Base SOL/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain SOL price.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
@@ -2175,7 +2175,7 @@ function makeRoutes(payTo: string) {
         output: { example: { price_usd: 104.2, chain: "base" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },    "GET /chain/link-usd": {
-      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      accepts: { scheme: "exact" as const, price: "$0.001", network: NETWORK, payTo },
       description: "Base LINK/USD spot price from the Chainlink aggregator (price, round, updatedAt, staleness). Use when an agent needs a trusted on-chain LINK price.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
@@ -2185,7 +2185,7 @@ function makeRoutes(payTo: string) {
         output: { example: { price_usd: 12.5, chain: "base" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },    "GET /chain/fee-history": {
-      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      accepts: { scheme: "exact" as const, price: "$0.002", network: NETWORK, payTo },
       description: "Base fee history for the last 10 blocks: base fee per block (gwei), gas-used ratios and a min/max/avg summary. Use when an agent times transactions around cheap blocks.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
@@ -2198,7 +2198,7 @@ function makeRoutes(payTo: string) {
 
 
     "GET /chain/total-supply": {
-      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      accepts: { scheme: "exact" as const, price: "$0.002", network: NETWORK, payTo },
       description: "ERC-20 total supply on Base, raw + formatted with decimals and symbol. Use when an agent needs a token's circulating-supply base for market-cap or dilution math.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
@@ -2220,7 +2220,7 @@ function makeRoutes(payTo: string) {
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /chain/proxy-info": {
-      accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
+      accepts: { scheme: "exact" as const, price: "$0.002", network: NETWORK, payTo },
       description: "EIP-1967 proxy resolver for a Base contract: implementation, admin, beacon addresses + is_proxy. Use when an agent must know what code actually runs behind a proxy before trusting or calling it.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
@@ -2507,7 +2507,7 @@ function makeRoutes(payTo: string) {
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /chain/block": {
-      accepts: { scheme: "exact" as const, price: "$0.005", network: NETWORK, payTo },
+      accepts: { scheme: "exact" as const, price: "$0.002", network: NETWORK, payTo },
       description: "Base block summary by number or 'latest': hash, timestamp, tx count, gas used/limit, base fee.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({

@@ -28,10 +28,20 @@ custom_domain = true
 PAY_TO = "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10"
 FACILITATOR_URL = "https://facilitator.xpay.sh"
 NETWORK = "eip155:8453"
-# Live settlements go through xpay (proven, no ajv-on-Workers issue). CDP is used
-# ONLY for the one-time Bazaar catalog seed via /internal/cdp-settle-raw (which
-# bypasses the @x402 resource server). Setting this to "cdp" would break settle on
-# DECLARED routes (ajv new Function blocked in Workers) — keep it "xpay".
+# Settlements route through the Coinbase CDP facilitator so that EVERY real
+# external payment re-catalogues the paying route in the CDP x402 Bazaar
+# (serviceName/tags/description + freshness + on-chain payer depth — the exact
+# signals buyers and automated probers like agentpay rank on). Keep this "cdp":
+# flipping to "xpay" silently removes us from Bazaar discovery, our main channel.
+#
+# c118 CODE TRACE (2026-10-21) retracts the old "cdp breaks settle on DECLARED
+# routes" warning as STALE FUD: ajv.compile (the only `new Function` path, which
+# IS blocked in Workers) runs ONLY in @x402/extensions declaration/validation
+# (validateDiscoveryExtension, try/caught → returns {valid:false}, never throws),
+# NOT in the settle path. @x402/core settle() (chunk-YSNRPV3S.mjs:917) is a plain
+# fetch(`${facilitator}/settle`) with JWT auth — no ajv, no schema compile. Live
+# /health confirms facilitator:"cdp" and declared-route 402s + bazaar extension
+# serve fine. $0 external revenue is a demand/discovery problem, not a settle bug.
 FACILITATOR_MODE = "cdp"
 
 # === REQUIRED Worker secrets (set via `wrangler secret put <NAME>`) ===
