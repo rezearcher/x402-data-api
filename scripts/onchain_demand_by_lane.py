@@ -137,7 +137,11 @@ def our_route_for(lane, catalogue):
 
 def scan_payto(addr, secret):
     """Incoming USDC settlements to a competitor payTo, via our CF-egress worker."""
-    url = f"{BASE}/internal/find-settlement?to={addr}&all=1&secret={urllib.parse.quote(secret)}"
+    # all=1 (every match in window), modest max_chunks to keep per-call latency
+    # bounded — Blockscout 403s from CF lately so this always hits the getLogs
+    # fallback; ~15*800 blocks ~= recent window, enough for a live demand signal.
+    url = (f"{BASE}/internal/find-settlement?to={addr}&all=1&max_chunks=15"
+           f"&secret={urllib.parse.quote(secret)}")
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "greyridge-demand/1.0"})
         d = json.load(urllib.request.urlopen(req, timeout=40))
