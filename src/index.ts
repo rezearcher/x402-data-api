@@ -880,6 +880,20 @@ app.get("/.well-known/x402", (c) => {
     }
     return compact;
   };
+  // Routes that expose a free, key-less /preview path (same response shape as the
+  // paid call, no payment). Mirrors the `${p}/preview` handlers registered in this
+  // file — kept as an explicit data set so the machine-readable manifest can tell a
+  // marketplace/reseller auto-wiring our catalog to offer buyers a free trial before
+  // the paid call (a buyer evaluating us via a catalog shouldn't have to pay blind).
+  // Degrades open: a route missing from this set simply omits preview_url (never a
+  // broken link or a false claim). Every entry here is a real, live-probed handler.
+  const PREVIEW_ROUTES = new Set<string>([
+    "/gate/swap", "/chain/token-report", "/chain/token-security", "/crypto/prices",
+    "/crypto/funding", "/defi/yields", "/pm/markets", "/chain/gas-price",
+    "/chain/block-number", "/chain/token-balance", "/defi/protocol-risk",
+    "/defi/safe-yields", "/enrich/tech-risk", "/scan/mcp", "/ai/ask", "/ai/extract",
+    "/v1/chat/completions",
+  ]);
   const mk = (p: string, method: string, price: string, units: string, desc: string, tags: string[]) => ({
     x402Version: 2,
     type: "http",
@@ -892,6 +906,8 @@ app.get("/.well-known/x402", (c) => {
     scheme: "exact",
     payTo,
     price_usdc: price,
+    // Free try-before-pay path for auto-wirers that honor it (same shape as paid).
+    ...(PREVIEW_ROUTES.has(p) ? { preview_url: `${BASE}${p}/preview` } : {}),
     ...(sampleOf(p) !== undefined ? { outputExample: sampleOf(p) } : {}),
     tags,
     accepts: [{
@@ -947,6 +963,19 @@ app.get("/.well-known/x402", (c) => {
     contact: "contact@greyridgesignals.ai",
     documentation: `${BASE}/openapi.json`,
     source_repository: "https://github.com/rezearcher/x402-data-api",
+    // Reseller / marketplace attribution — machine-readable so a catalog or router
+    // listing our endpoints can auto-tag its referred buyer volume without asking.
+    // Append the `ref` param (e.g. ?ref=yourname) to any call URL; the tag rides the
+    // x402 402->sign->retry and is recorded on the settled on-chain call, so referred
+    // volume is measurable per-tag (real: backed by the TrafficLog `ref` column +
+    // getRefStats reconciler). This is the human-readable llms.txt reseller note made
+    // machine-readable for auto-wiring marketplaces (e.g. ones ingesting this manifest).
+    reseller: {
+      attribution_param: "ref",
+      example: `${BASE}/gate/swap?token=aero&ref=yourname`,
+      note: "Append ?ref=<your-tag> to any call URL to tag referred buyer volume; attributed per-tag on the settled on-chain call.",
+      reconcile_contact: "contact@greyridgesignals.ai",
+    },
     x402Version: 2,
     network: NETWORK,
     networks: [NETWORK],
