@@ -31,3 +31,18 @@ If a 2nd on-chain buyer appears OR 0xec2abd repeats, ship an additive `/chain/ac
 batched route (balance+nonce+code+token-balance in one paid call) — converts a 7-call evaluator
 into a 1-call repeat customer at higher per-call value. Held this cycle per the ground rule
 (new endpoint wants confirmed repeat demand, not one data point).
+
+---
+
+## CORRECTION 2026-10-20 (cycle f): 0xec2abd is a SCORER BOT, not a buyer
+
+`gh search code 0xec2abd3eda89bed90124736e317e847d5fb6d034` resolves this payer to
+**Lumière PayCheck's `lumiere-paycheck-prober/1.0`** (x402 endpoint scorer). Proof:
+`auzroz/badhttp` LEDGER.md and `cipherwebllc/openpay` lib/externalPurchases.ts both
+record the same address paying ~$0.01 **once** to score their endpoints. It swept
+our 7 /chain/* routes at exactly 1 call each to grade us — not usage.
+
+Action taken: rewrote `scripts/buyer_demand_intel.py` to classify catalog-sweep /
+spread-thin payers as `probe/scorer-bot` (score 0) vs depth-driven real integrators
+(commit 27206b9). Live census now reports `real_candidate_integrators=0`. Do NOT
+pitch or "upsell" this address — there is no human/product behind it.
