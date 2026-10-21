@@ -11,7 +11,10 @@
 # NOTE: the DO runs on the CF free tier. If it returns
 #   "Exceeded allowed rows written in Durable Objects free tier"
 # the daily write budget is spent; it resets at UTC midnight. The per-wake prune
-# amplification that used to burn the budget was fixed 2026-10-20 (commit ad28e19).
+# amplification was first cut 2026-10-20 (ad28e19) but the 5% sample + LIMIT-200
+# prune still blew the 100k/day cap on 2026-10-21; now 1% sample + LIMIT-100 prune
+# (commit 5443f51) projects ~16k rows_written/day. nonpaid_scale is read live from
+# the API, so this reader stays correct across sample-rate changes.
 set -euo pipefail
 B="https://x402-data-api.sigrunner.workers.dev"
 HOURS="${1:-168}"
