@@ -134,3 +134,34 @@ and seller-saturation, a distinct non-buyer class emerged on the **token-safety 
   demote self-serve-safety repos so future cycles don't burn pitches on this shape.
 - **Do-not-repeat:** don't pitch token-safety to firewall/screening/agent-safety projects
   or to teams that name GoPlus/local-rules — they are the self-serve class, EV ~$0.
+
+## x402 AGGREGATOR/ROUTER listings are near-zero EV — measured (2026-10-21, cycle 72)
+Swept the fresh crop of x402 inference/tool routers for a self-serve path that routes real
+BUYER traffic to a listed external endpoint. Ran discriminating traffic checks, not vibes:
+- **Toll402** (toll402.dev, "OpenRouter for AI-agent tools", Base USDC x402, 285 curated +
+  2,800 proxied): self-serve paid listing exists (`POST /v1/listings`, $1/30d basic, verified
+  our `/gate/swap` live — pulled full token-safety desc, amount 8000, correct payTo). BUT the
+  catalog's **40 externally-listed x402 endpoints (`kind:external`) have 0 calls in 7 days,
+  every single one.** All 1,303 calls/7d go to Toll402's OWN `forged`/`builtin` tools
+  (cui_ro_validate 580, jsonld_extract 418). Even curated `provider` vendors (finnhub, tiingo)
+  = 0 except one openrouter judge (20). **→ a $1 external listing buys ~0 buyer calls. DEAD
+  lever; do NOT spend the $1.** (The only Toll402 path with traffic is `/v1/forge` — Toll402
+  HOSTS a generated tool, creator earns 70% — but it's $0.25, not our endpoint, no strategic fit.)
+- **Router402** (router402.xyz): HackMoney hackathon gateway, providers HARDCODED to
+  Anthropic+Google; "more providers" is an unchecked roadmap item. No self-onboarding. DEAD.
+- **surp-router** (ivcained): routes only to the **Surplus Intelligence** marketplace; provider
+  listing = Surplus (already emailed support@surplusintelligence.ai cycle 70, PENDING). Not a
+  separate surface.
+- **Zero.xyz** (142,684 indexed APIs, auto-crawls x402 sellers, real search API
+  `POST api.zero.xyz/v1/search`): we ARE indexed (61 services on workers.dev host) and rank
+  **#1 of 12** for "is this Base token safe to swap honeypot sellability gate" — flagship
+  extracted perfectly. api.greyridgesignals.ai NOT indexed (403s Zero's crawler — expected).
+  BUT every host incl. competitors (onchainexpat, agentdata-api, x402-gateway) =
+  `state:unrated, successRate:0.00, activations:0`. The "unknown/unrated" status is
+  **ecosystem-wide**, not a fixable leak on our end — nobody has activations because ~nobody
+  buys through these routers. We are already optimally placed on Zero; nothing to ship there.
+- **ROOT:** aggregator/router listings don't convert because the x402 data/tool buyer market
+  has ~0 real call volume (de-washed data lane ~$37/day, see market-sizing). Discovery was
+  never the leak; demand is. **Do-not-repeat:** don't list on / pitch x402 routers/aggregators
+  expecting buyer calls, and don't spend capital on a directory listing. The only channels that
+  convert are DIRECT integrations a dev wires (Miles/LiquidLogicX ball-in-court; merged wire-PRs).
