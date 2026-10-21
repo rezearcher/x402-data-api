@@ -1,8 +1,12 @@
+https://github.com/theselfruleorg/polyrob/issues/27
+https://github.com/X402blockchains/x402-registry/issues/16
+https://github.com/shivanagendrakore/agent-firewall/issues/1
+https://github.com/0xcuy/adexto/issues/4
+https://github.com/NousResearch/hermes-agent/issues/141825
+https://github.com/romudille-bit/agentpay/issues/11
 https://github.com/d85rcrcy27-creator/ArbiVault/issues/40
 https://github.com/DrVelvetFog/x402-pilot/issues/13
 https://github.com/successaje/pokter/issues/213
-https://github.com/0xcuy/adexto/issues/4
-https://github.com/NousResearch/hermes-agent/issues/141825
 https://github.com/gelu22/x402-gateway-omarchy/issues/3
 https://github.com/HelpCode-ai/anythingmcp/issues/1174
 https://github.com/Agorean/claude-plugin/issues/1
@@ -27,7 +31,6 @@ https://github.com/BofAI/x402/issues/109
 https://github.com/MikeyPetrillo/Agent402/issues/1673
 https://github.com/6ixtyy/switchbord/issues/1
 https://github.com/Pranavms09/decentralization_DI05_/issues/16
-https://github.com/romudille-bit/agentpay/issues/11
 https://github.com/imokokok/Insight/issues/245
 https://github.com/Bitterbot-AI/bitterbot-desktop/issues/279
 https://github.com/alsk1992/CloddsBot/issues/154
@@ -39,10 +42,12 @@ https://github.com/xpaysh/awesome-x402/issues/868
 https://github.com/Haustorium12/gold-402/issues/38
 https://github.com/punkpeye/awesome-mcp-servers/issues/10353
 https://github.com/Br0ski777/x402-agent-tools/issues/7
+https://github.com/X402blockchains/x402-registry/issues/16
+https://github.com/0xcuy/adexto/issues/4
+https://github.com/romudille-bit/agentpay/issues/11
 https://github.com/d85rcrcy27-creator/ArbiVault/issues/40
 https://github.com/DrVelvetFog/x402-pilot/issues/13
 https://github.com/successaje/pokter/issues/213
-https://github.com/0xcuy/adexto/issues/4
 https://github.com/Agorean/claude-plugin/issues/1
 https://github.com/d-hinders/Haven-AI/issues/4107
 https://github.com/basitalisandhu/mcp-egress/issues/19
