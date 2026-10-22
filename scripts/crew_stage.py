@@ -259,7 +259,20 @@ def _oracle_external_dollar():
     except Exception:
         floor = 1.0
     try:
+        max_age_h = float(os.environ.get("X402_REVENUE_MAX_AGE_H", "24"))
+    except Exception:
+        max_age_h = 24.0
+    try:
         d = _j.load(open(os.path.join(rev, "latest.json")))
+        # Freshness: a stale sensor (cron is q30min) is a broken signal — fail CLOSED, never
+        # pass the money gate on data we can't trust to be current.
+        import datetime as _dt
+        fa = d.get("fetched_at")
+        if fa:
+            ts = _dt.datetime.fromisoformat(str(fa).replace("Z", "+00:00"))
+            age_h = (_dt.datetime.now(_dt.timezone.utc) - ts).total_seconds() / 3600.0
+            if age_h > max_age_h:
+                return False
         return float(d.get("total_external_usdc", 0) or 0) >= floor
     except Exception:
         return False
