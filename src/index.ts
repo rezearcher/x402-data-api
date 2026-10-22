@@ -1529,11 +1529,21 @@ app.get("/sitemap.xml", (c) => {
     { path: "/terms", priority: "0.7", changefreq: "monthly" },
     { path: "/token-safety", priority: "0.8", changefreq: "daily" },
     { path: "/check", priority: "0.8", changefreq: "weekly" },
+    { path: "/partners", priority: "0.8", changefreq: "weekly" },
+    { path: "/scan/badge-gen", priority: "0.8", changefreq: "weekly" },
+    { path: "/scan/directory", priority: "0.9", changefreq: "daily" },
   ];
+  // Each seeded MCP server also gets its own crawlable report page — list them so
+  // crawlers discover the per-server trust pages the directory links to.
+  const reportPages = MCP_DIRECTORY_SEED.map((s) => ({
+    path: `/scan/report?url=${encodeURIComponent(s.url)}`,
+    priority: "0.6",
+    changefreq: "weekly",
+  }));
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${pages.map((p) => `  <url>
-    <loc>${BASE}${p.path}</loc>
+${[...pages, ...reportPages].map((p) => `  <url>
+    <loc>${BASE}${p.path.replace(/&/g, "&amp;")}</loc>
     <lastmod>${lastmod}</lastmod>
     <changefreq>${p.changefreq}</changefreq>
     <priority>${p.priority}</priority>
@@ -8249,7 +8259,7 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
   <p class=muted style="margin:.8rem 0 0;font-size:.82rem">Prefer per-call with no account? Agents pay inline over x402 at $0.05/scan — the free badge above keeps re-scanning every six hours regardless.</p>
 </div>
 
-<footer>Grey Ridge Signals Group LLC · Static MCP tool-metadata analysis. The scanner reads advertised tool descriptions and schemas; it never invokes a tool. <a href="/">greyridgesignals.ai</a></footer>
+<footer>Grey Ridge Signals Group LLC · Static MCP tool-metadata analysis. The scanner reads advertised tool descriptions and schemas; it never invokes a tool. <a href="/scan/directory">MCP security directory</a> · <a href="/">greyridgesignals.ai</a></footer>
 
 <script>
 var ORIGIN=location.origin;
@@ -8362,6 +8372,120 @@ var o=location.origin;var p=document.getElementById("prev");if(p)p.textContent=o
   return c.html(html);
 });
 
+// Seed set for the public MCP security directory. This is CONTENT (a starter list of
+// public streamable-HTTP MCP servers), not a decision gate — the page degrades open:
+// each server is scanned live and any that is unreachable is simply dropped, so a stale
+// or renamed entry fails quietly without breaking the page. Editable without touching
+// logic; extend as new public servers appear. Verified reachable 2026-10-21.
+const MCP_DIRECTORY_SEED: { url: string; label: string }[] = [
+  { url: "https://mcp.deepwiki.com/mcp", label: "DeepWiki" },
+  { url: "https://mcp.context7.com/mcp", label: "Context7" },
+  { url: "https://huggingface.co/mcp", label: "Hugging Face" },
+  { url: "https://gitmcp.io/docs", label: "GitMCP" },
+];
+
+// Public MCP security directory — a crawlable index of independent scans of popular
+// public MCP servers (the Socket.dev / Snyk-Advisor organic-acquisition pattern: rank
+// for "is <server> MCP safe" searches, no outbound needed). Internally links every
+// per-server /scan/report page so crawlers discover them and they accrue ranking signal.
+// Scans run live but the whole page is edge-cached 6h (matches the badge re-scan cadence)
+// so external load is bounded to once per edge per window regardless of traffic.
+app.get("/scan/directory", async (c) => {
+  const esc = (s: string) =>
+    String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m] as string);
+  const ORIGIN = new URL(c.req.url).origin;
+
+  const cache = (caches as unknown as { default: Cache }).default;
+  const cacheKey = new Request(`${ORIGIN}/scan/directory`, { method: "GET" });
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+
+  // Scan the seed in parallel; drop anything unreachable (degrade open). Each scan is
+  // one outbound round trip; a bounded timeout keeps a slow server from hanging the page.
+  const withTimeout = <T,>(p: Promise<T>, ms: number): Promise<T> =>
+    Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
+  const scans = await Promise.allSettled(
+    MCP_DIRECTORY_SEED.map(async (s) => {
+      const r = await withTimeout(scanMcpServer(s.url), 12000);
+      return { seed: s, result: r };
+    }),
+  );
+  type Row = { label: string; url: string; host: string; verdict: string; vClass: string; tools: number; issues: number; risk: number };
+  const rows: Row[] = [];
+  for (const sc of scans) {
+    if (sc.status !== "fulfilled") continue;
+    const { seed, result } = sc.value;
+    if (!result.tools_scanned && result.verdict !== "clear") continue; // unreachable / empty
+    let host = seed.url;
+    try { host = new URL(seed.url).host; } catch { /* keep raw */ }
+    const vClass = ({ clear: "clear", review: "review", block: "block" } as Record<string, string>)[result.verdict as string] || "unknown";
+    rows.push({ label: seed.label, url: seed.url, host, verdict: result.verdict as string, vClass, tools: result.tools_scanned, issues: result.findings.length, risk: result.risk_score });
+  }
+  // Most actionable first: block > review > clear, then by risk.
+  const order: Record<string, number> = { block: 0, review: 1, clear: 2, unknown: 3 };
+  rows.sort((a, b) => (order[a.vClass] - order[b.vClass]) || (b.risk - a.risk));
+
+  const clean = rows.filter((r) => r.vClass === "clear").length;
+  const flagged = rows.length - clean;
+  const rowsHtml = rows.length === 0
+    ? `<div class=card><p class=summary>Live scans are warming up — check back shortly, or <a href="/scan/badge-gen">scan any server yourself</a>.</p></div>`
+    : `<table><thead><tr><th>MCP server</th><th>Verdict</th><th>Tools</th><th>Issues</th><th>Report</th></tr></thead><tbody>
+${rows.map((r) => `<tr><td><strong>${esc(r.label)}</strong><br><span class=muted>${esc(r.host)}</span></td><td><span class="pill ${r.vClass}">${esc(r.verdict)}</span></td><td>${r.tools}</td><td>${r.issues}</td><td><a href="/scan/report?url=${encodeURIComponent(r.url)}">View report →</a></td></tr>`).join("\n")}
+</tbody></table>`;
+
+  const metaDesc = `Independent prompt-injection and tool-poisoning scans of ${rows.length} popular public MCP servers. See which Model Context Protocol servers are safe before you connect an agent.`;
+  const html = `<!doctype html><html lang=en><meta charset=utf-8>
+<title>MCP Server Security Directory — Grey Ridge Signals</title>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=description content="${esc(metaDesc)}">
+<meta property="og:title" content="MCP Server Security Directory — Grey Ridge Signals">
+<meta property="og:description" content="${esc(metaDesc)}">
+<meta property="og:type" content="website">
+<link rel=canonical href="${esc(ORIGIN)}/scan/directory">
+<style>
+:root{--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#0f766e;--bg:#fafafa}
+*{box-sizing:border-box}
+body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.55;max-width:820px;margin:0 auto;padding:2.5rem 1.25rem}
+h1{font-size:1.6rem;margin:0 0 .3rem}
+.sub{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+h2{font-size:1.1rem;margin:2.2rem 0 .6rem}
+.pill{display:inline-block;padding:.22rem .6rem;border-radius:999px;font-weight:700;font-size:.78rem;letter-spacing:.02em;text-transform:uppercase}
+.clear{background:#dcfce7;color:#15803d}.review{background:#fef9c3;color:#a16207}.block{background:#fee2e2;color:#b91c1c}.unknown{background:#f1f5f9;color:#475569}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:1.1rem 1.2rem;margin:1rem 0}
+.summary{font-size:1rem;margin:0}
+table{width:100%;border-collapse:collapse;margin:.6rem 0 0;font-size:.9rem;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+th,td{text-align:left;padding:.65rem .7rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);background:#f8fafc}
+tr:last-child td{border-bottom:0}
+.muted{color:var(--muted);font-size:.86rem}
+a{color:var(--accent)}
+button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:.6rem 1.1rem;font-size:.95rem;font-weight:600;cursor:pointer}
+footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);color:var(--muted);font-size:.82rem}
+.lead{font-size:1.02rem;margin:0 0 1rem}
+</style>
+<body>
+<h1>MCP Server Security Directory</h1>
+<p class=sub>Independent prompt-injection &amp; tool-poisoning scans of popular public MCP servers · ${clean} clear · ${flagged} flagged</p>
+<p class=lead>Before you connect an AI agent to a Model Context Protocol server, you are trusting every tool that server advertises — its descriptions and schemas run inside your model's context, where a poisoned or injection-laden tool can quietly redirect the agent. Grey Ridge scans each server's advertised tools for prompt-injection, tool-poisoning, data-exfiltration and hidden-unicode patterns (OWASP LLM01/LLM08) without ever invoking a tool. Results below are refreshed automatically.</p>
+${rowsHtml}
+<h2>Scan your own server</h2>
+<div class=card>
+  <p style="margin:0 0 .8rem">Run a free report for any MCP server and get a live README badge that re-scans every six hours — or gate your CI on the verdict with continuous monitoring.</p>
+  <div style="display:flex;gap:.8rem;flex-wrap:wrap">
+    <a href="/scan/badge-gen"><button>Scan a server — free</button></a>
+    <a href="/scan/badge-gen" class=muted style="align-self:center">Get a badge &amp; continuous monitoring →</a>
+  </div>
+</div>
+<footer>Grey Ridge Signals Group LLC · Static MCP tool-metadata analysis (OWASP LLM01/LLM08) — the scanner reads advertised tool descriptions and schemas; it never invokes a tool. Listing is informational, refreshed periodically, and is not an endorsement. <a href="/">greyridgesignals.ai</a></footer>`;
+
+  const res = new Response(html, {
+    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=21600" },
+  });
+  // Cache a clone for 6h so repeat traffic never re-triggers the live scans.
+  c.executionCtx.waitUntil(cache.put(cacheKey, res.clone()));
+  return res;
+});
+
 // Public per-server security report. Server-rendered (crawlable) so each scanned MCP
 // server gets its own indexable trust page; the badge README markdown links here, so
 // every embed is a backlink that brings the server's own audience to Grey Ridge. The
@@ -8407,7 +8531,7 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
 </style>
 <body>
 ${bodyInner}
-<footer>Grey Ridge Signals Group LLC · Static MCP tool-metadata analysis (OWASP LLM01/LLM08). The scanner reads advertised tool descriptions and schemas; it never invokes a tool. <a href="/scan/badge-gen">Generate a badge for your server</a> · <a href="/">greyridgesignals.ai</a></footer>`);
+<footer>Grey Ridge Signals Group LLC · Static MCP tool-metadata analysis (OWASP LLM01/LLM08). The scanner reads advertised tool descriptions and schemas; it never invokes a tool. <a href="/scan/directory">MCP security directory</a> · <a href="/scan/badge-gen">Generate a badge for your server</a> · <a href="/">greyridgesignals.ai</a></footer>`);
 
   if (!/^https?:\/\//i.test(target)) {
     return page("MCP security report", "Scan any MCP server for prompt-injection and tool-poisoning in its advertised tools.",
