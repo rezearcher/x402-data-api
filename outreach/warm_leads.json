@@ -1,7 +1,18 @@
 {
  "_doc": "Ground-truth warm-lead state. The SIGNAL for 'may I nudge?' is the real thread last-sender, NOT a file mtime. A cycle may send ONLY when last_dir=='them' AND now>do_not_send_until. last_dir=='us' => ball-in-court on THEM => DO NOT SEND. Missing lead => review manually (degrade open), never auto-send. Update last_dir/last_at/do_not_send_until whenever you read a thread or send. Dates ISO-8601 UTC.",
- "updated_at": "2026-10-22T00:30:00Z",
+ "updated_at": "2026-10-22T00:50:00Z",
  "leads": [
+  {
+   "lead": "X402blockchains / x402-registry (PR #19)",
+   "channel": "github",
+   "thread_id": "X402blockchains/x402-registry#19",
+   "last_dir": "us",
+   "last_at": "2026-10-22T00:49:00Z",
+   "their_last_at": "2026-10-21T16:48:22Z",
+   "status": "ball-in-court",
+   "do_not_send_until": "2026-10-25",
+   "note": "Actively-maintained community x402 registry that INDEPENDENTLY VERIFIES submissions (confirmed our settlement tx on-chain). Listing PR OPEN/MERGEABLE. They asked for 2 items before approval: (1) delivered resource result distinct from payment evidence; (2) corrected retry/recovery guidance. BOTH pushed in commit dd0656e + replied (comment 6329949640) 2026-10-22. Approval = live listing on a verifying registry = real organic discoverability (NOT a dead registry). DO NOT re-ping; watch PR #19 for recheck/approval."
+  },
   {
    "lead": "DrVelvetFog / x402-pilot (PR #14)",
    "channel": "github",
