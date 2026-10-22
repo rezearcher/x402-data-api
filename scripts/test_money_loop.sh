@@ -17,9 +17,21 @@ ok()  { echo "  PASS: $*"; pass=$((pass+1)); }
 bad() { echo "  FAIL: $*" >&2; fail=$((fail+1)); }
 
 echo "== 1. substrate selftests =="
-for s in winner_registry customer_need_registry money_research_queue; do
+for s in winner_registry customer_need_registry money_research_queue crew_stage; do
   if python3 -I "scripts/$s.py" selftest >/dev/null 2>&1; then ok "$s selftest"; else bad "$s selftest (exit $?)"; fi
 done
+
+echo "== 1b. stage machine: loop-in-place (HOLD until judge passes, then ADVANCE) =="
+export CREW_PIPELINE_STORE="$TMP/pipeline.jsonl"
+python3 -I scripts/crew_stage.py new '{"id":"t","name":"t","source":"s","resells":"r","audience_hypothesis":"a"}' >/dev/null 2>&1
+python3 -I scripts/crew_stage.py advance t >/dev/null 2>&1
+[ $? -eq 0 ] && ok "scout judge passes with required fields (ADVANCED)" || bad "scout stage should ADVANCE (exit 0)"
+python3 -I scripts/crew_stage.py advance t >/dev/null 2>&1
+[ $? -eq 1 ] && ok "economist HOLDs when econ fields missing (loop in place)" || bad "economist should HOLD (exit 1) with no econ"
+python3 -I scripts/crew_stage.py set t '{"econ":{"spread_usd":0.5,"computed_note":"x"}}' >/dev/null 2>&1
+python3 -I scripts/crew_stage.py advance t >/dev/null 2>&1
+[ $? -eq 0 ] && ok "economist ADVANCEs once econ computed" || bad "economist should ADVANCE (exit 0) once econ set"
+unset CREW_PIPELINE_STORE
 
 echo "== 2. send-gate decision table (fixture ledger, date-independent) =="
 LED="$TMP/leads.json"
