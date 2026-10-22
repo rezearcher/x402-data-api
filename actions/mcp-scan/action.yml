@@ -22,6 +22,14 @@ inputs:
     description: 'Scanner base URL.'
     required: false
     default: 'https://x402-data-api.sigrunner.workers.dev'
+  sarif:
+    description: 'Upload results to GitHub code scanning (Security tab) as SARIF 2.1.0. Requires "security-events: write" on the job and a public repo or GitHub Advanced Security.'
+    required: false
+    default: 'false'
+  github-token:
+    description: 'Token used to upload SARIF to the code-scanning REST API. Defaults to the job token.'
+    required: false
+    default: ${{ github.token }}
 outputs:
   verdict:
     description: 'clear | review | block'
@@ -29,6 +37,9 @@ outputs:
   risk-score:
     description: '0-100'
     value: ${{ steps.scan.outputs.risk }}
+  sarif-file:
+    description: 'Path to the generated SARIF file (when sarif=true).'
+    value: ${{ steps.scan.outputs.sarif_file }}
   directory-ready:
     description: 'true | false — passes the published Claude Connector Directory criteria on static checks (only when directory=true)'
     value: ${{ steps.scan.outputs.dir_ready }}
@@ -45,6 +56,8 @@ runs:
         IN_FILE: ${{ inputs.tools-file }}
         FAIL_ON: ${{ inputs.fail-on }}
         WANT_DIR: ${{ inputs.directory }}
+        WANT_SARIF: ${{ inputs.sarif }}
+        GH_TOKEN: ${{ inputs.github-token }}
         EP: ${{ inputs.endpoint }}
       run: |
         set -euo pipefail
@@ -81,6 +94,27 @@ runs:
               echo "The directory review queue runs ~20 days, so a rejection is expensive. This teaser hides WHICH criteria fail — get the itemized blocker list + remediation: \`POST $EP/scan/mcp {\"directory\":true}\` (zero egress, \$0.05 USDC on Base)."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ "$WANT_SARIF" = "true" ]; then
+          target="${IN_URL:-${IN_FILE:-mcp-server}}"
+          SCAN_JSON="$out" SARIF_TARGET="$target" python3 "$GITHUB_ACTION_PATH/sarif.py" > greyridge-mcp.sarif
+          echo "sarif_file=greyridge-mcp.sarif" >> "$GITHUB_OUTPUT"
+          echo "::notice::SARIF written to greyridge-mcp.sarif ($(wc -c < greyridge-mcp.sarif) bytes)"
+          if [ -n "${GH_TOKEN:-}" ] && [ -n "${GITHUB_REPOSITORY:-}" ]; then
+            b64=$(gzip -c greyridge-mcp.sarif | base64 -w0)
+            payload=$(SARIF_B64="$b64" python3 -c 'import json,os;print(json.dumps({"commit_sha":os.environ["GITHUB_SHA"],"ref":os.environ["GITHUB_REF"],"sarif":os.environ["SARIF_B64"]}))')
+            code=$(curl -sS -o /tmp/grg_sarif_resp.json -w '%{http_code}' -X POST \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/code-scanning/sarifs" \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -d "$payload" || echo "000")
+            if [ "$code" = "202" ]; then
+              echo "::notice::Uploaded SARIF to code scanning — findings will appear in the repo Security tab."
+            else
+              echo "::warning::SARIF upload returned HTTP $code (needs 'security-events: write' on the job plus a public repo or GitHub Advanced Security). The CI gate still works; see the step summary above."
+            fi
+          fi
         fi
         case "$FAIL_ON" in
           never) exit 0;;

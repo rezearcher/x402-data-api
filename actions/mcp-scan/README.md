@@ -9,6 +9,26 @@ Scan an MCP server's advertised tools for tool poisoning, hidden unicode and pro
     fail-on: block                    # block | review | never
 ```
 
+## Results in your Security tab (SARIF / code scanning)
+
+Set `sarif: true` to upload the verdict to GitHub code scanning, so findings land in your repository's **Security → Code scanning** tab and persist across runs instead of only showing in the job log. The job needs `security-events: write`; code scanning is free on public repositories (private repos need GitHub Advanced Security).
+
+```yaml
+jobs:
+  mcp-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write          # required to upload SARIF
+    steps:
+      - uses: rezearcher/x402-data-api/actions/mcp-scan@main
+        with:
+          url: https://your-host/mcp
+          fail-on: block
+          sarif: true                   # publish to the Security tab
+```
+
+The free tier publishes one aggregate alert per severity with the verdict and risk score; the itemized findings (which tool, the evidence, OWASP mapping) remain the paid x402 scan. Upload failures never break the build — the `fail-on` exit code is what gates CI.
+
 ## Submitting to the Claude Connector Directory?
 
 Anthropic runs a **mandatory** automated security/policy review on every connector submitted to the Claude Connector Directory, and the queue runs ~20 days — a rejection is expensive. Set `directory: true` to also check your tools against Anthropic's [published review criteria](https://claude.com/docs/connectors/building/review-criteria) **before** you submit, every release:
