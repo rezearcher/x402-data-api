@@ -1544,6 +1544,9 @@ Proof pack for integrators (a real settled Base-mainnet x402 tx + decoded receip
 ## Resellers / referral partners
 Featuring these endpoints in your MCP client, router, or agent? Append &ref=<your-tag> to any call URL (e.g. ${BASE}/gate/swap?token=aero&ref=yourname). The tag rides through the x402 402→sign→retry and is recorded on the settled on-chain call, so your referred volume is measurable and attributable — we can reconcile exactly how many settled calls (and distinct buyers) your integration drove, with Base txHashes. Ask contact@greyridgesignals.ai for a reconcile report on your tag.
 
+## Referenced by (third-party integrations)
+- x402-pilot (DrVelvetFog) — an x402 verification/review toolkit for agents. Its reference live Base-mainnet (EVM) "exact" verify target points at this endpoint, so the project's verify flow exercises a real x402 v2 seller end to end. See examples/live-evm-verify-target.md in https://github.com/DrVelvetFog/x402-pilot (merged). The safety verdicts are Grey Ridge Signals' own analysis; x402-pilot references the endpoint as a live target and does not vouch for the verdicts.
+
 ## Where to buy (marketplaces / MCP buyer-adapters)
 These third-party x402 buyer tools let agents discover and purchase pay-per-call APIs (including ours) with Base USDC — useful if you want a ready-made buyer client instead of wiring x402-fetch yourself:
 - DopamineDesk x402 Marketplace (by Blaz Algo Systems) — plain-language product discovery, free previews, and capped Base-USDC purchases through one MCP adapter. Repo: https://github.com/jblaz6335/mcp-server-aidatamarketplace — integration partner; our token-safety gate (/gate/swap) and token report (/chain/token-report) pair with their token-audit and transaction-preflight tools.
@@ -8867,8 +8870,9 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
 <h2>How attribution works</h2>
 <p>The <code>?ref=</code> tag rides through the x402 402&rarr;sign&rarr;retry and is recorded on the settled on-chain call &mdash; so referred volume is measurable from our own store and verifiable against Base txHashes. Nothing to install, no pixel, no cookie. The machine-readable catalog lives at <code><a href="/.well-known/agent-capabilities.json">/.well-known/agent-capabilities.json</a></code> if your platform wants to discover and wire our routes automatically.</p>
 
-<h2>A live partner</h2>
+<h2>Live partners &amp; integrations</h2>
 <p>The <strong>DopamineDesk x402 Marketplace</strong> (by Blaz Algo Systems) resells our token-safety gate and token report through one MCP adapter &mdash; plain-language discovery, free previews, and capped Base-USDC purchases. That's the model: their audience, our verdict, their price.</p>
+<p><strong>x402-pilot</strong> (an x402 verification/review toolkit for agents) uses this endpoint as its reference live Base-mainnet <code>exact</code> verify target, so its flow exercises a real x402 v2 seller end to end &mdash; see <a href="https://github.com/DrVelvetFog/x402-pilot">github.com/DrVelvetFog/x402-pilot</a>. The verdicts are our own analysis; the project references the endpoint as a live target and doesn't vouch for them.</p>
 
 <a class=cta href="/partners/report">Open your live report &rarr;</a>
 <p class=muted style="font-size:.85rem">No sign-up and no waiting: pick a tag, start calling with <code>?ref=</code>, and the report above fills in on its own. Questions? <a href="mailto:contact@greyridgesignals.ai">contact@greyridgesignals.ai</a>.</p>
