@@ -148,6 +148,24 @@ export function analyzeMcpTool(name: string, description: string, schemaText: st
       " — a covert channel that can hide instructions from a human reviewer or inject into terminal output/logs (Trail of Bits line-jumping / ANSI; CVE-2026-6494).",
       /\u001b/.test(inName ? name : text) ? "ESC (0x1b) escape sequence" : "non-printable control char");
   }
+  // 5c. CSS / passive-resource-fetch exfiltration channel. A 2026 concealment class
+  // distinct from the natural-language exfil matcher (rule 2): instead of instructing
+  // the model in prose to "send X to Y", the attacker embeds a PASSIVE resource fetch
+  // in a tool NAME or description — a CSS @font-face/@import or any url() pointing at a
+  // remote (http/https/protocol-relative) or data: destination. Many agent chat UIs
+  // render Markdown/HTML in tool descriptions, so the fetch fires automatically on
+  // render and smuggles data out via the request URL, bypassing the image-sanitization
+  // and CSP defenses that block <img>-based exfil and the text-based exfil regex above
+  // (kayssel "Poisoning the Tools Your AI Trusts" CSS @font-face exfiltration research,
+  // 2026). Legitimate tool text is plain prose and never ships a CSS url()/@font-face,
+  // so precision is high — note the regex requires url( immediately followed by a
+  // scheme, so prose like "the URL (https://…)" with a space does not match.
+  const cssExfil = /(@font-face\b|url\(\s*['"]?\s*(?:https?:|data:|\/\/))/i;
+  const cssExfilHit = text.match(cssExfil) || name.match(cssExfil);
+  if (cssExfilHit) add("high", "css-resource-exfil",
+    "CSS @font-face/@import or url() pointing at a remote/data destination in the tool text — a passive resource-fetch exfiltration channel that fires when the description renders and bypasses image-sanitization/CSP (CSS @font-face exfil, 2026).",
+    cssExfilHit[0].slice(0, 48));
+
   if (/[A-Za-z0-9+/]{120,}={0,2}/.test(text))
     add("medium", "opaque-blob", "Long base64-like blob embedded in tool text — possible hidden payload.", "…base64…");
 
