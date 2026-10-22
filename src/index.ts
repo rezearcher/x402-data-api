@@ -8237,6 +8237,16 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
 <p class=muted><strong style="color:#16a34a">clear</strong> — no injection/poisoning patterns in any advertised tool. <strong style="color:#ca8a04">review</strong> — suspicious metadata worth a human look. <strong style="color:#dc2626">block</strong> — do not admit this server until resolved.</p>
 <p class=muted>Want the itemized findings — which tool, the injected text, the OWASP mapping (LLM01/LLM08) and remediation? That's the full audit: <code>GET /scan/mcp?url=…</code> ($0.05 USDC via x402), or zero-egress <code>POST /scan/mcp</code> with your <code>tools/list</code> for private servers.</p>
 
+<h2>Run it in your CI</h2>
+<div class=card>
+  <p style="margin:0 0 .7rem">Gate every build on the verdict. A subscription gives you an API key with <strong>100 scans / month</strong> across any Grey Ridge endpoint — call <code>GET /scan/mcp?url=…</code> (or POST your <code>tools/list</code> for private servers) from your pipeline and fail the build on <code>block</code>. Pay by card — no wallet, no crypto.</p>
+  <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+    <button id=sub>Subscribe — $9.99/mo</button>
+    <span class=muted style="font-size:.85rem">100 credits, 1 per call, valid 30 days. Cancel anytime.</span>
+  </div>
+  <p class=muted style="margin:.8rem 0 0;font-size:.82rem">Prefer per-call with no account? Agents pay inline over x402 at $0.05/scan — the free badge above keeps re-scanning every six hours regardless.</p>
+</div>
+
 <footer>Grey Ridge Signals Group LLC · Static MCP tool-metadata analysis. The scanner reads advertised tool descriptions and schemas; it never invokes a tool. <a href="/">greyridgesignals.ai</a></footer>
 
 <script>
@@ -8251,6 +8261,8 @@ md.textContent="[![MCP scan]("+src+")]("+ORIGIN+"/scan/badge-gen)";}
 document.getElementById("b").onclick=go;
 document.getElementById("u").addEventListener("keydown",function(e){if(e.key==="Enter")go();});
 document.getElementById("copy").onclick=function(){navigator.clipboard&&navigator.clipboard.writeText(md.textContent);this.textContent="Copied";var b=this;setTimeout(function(){b.textContent="Copy";},1400);};
+var sub=document.getElementById("sub");
+if(sub)sub.onclick=async function(){sub.disabled=true;var o=sub.textContent;sub.textContent="Opening checkout…";try{var r=await fetch("/stripe/create-checkout-session",{method:"POST"});var j=await r.json();if(j.url){window.location.href=j.url;return;}alert("Could not start checkout: "+(j.error||"unknown"));}catch(e){alert("Could not start checkout: "+e);}sub.disabled=false;sub.textContent=o;};
 </script>`;
   return c.html(html);
 });
