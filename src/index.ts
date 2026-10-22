@@ -39,7 +39,7 @@ import { z } from "zod/v4";
 import { keccak256, stringToHex } from "viem";
 import { DurableObject } from "cloudflare:workers";
 import { createCdpFacilitator } from "./facilitator";
-import { trackPaidRequest, getMetrics, type Rail } from "./usage.ts";
+import { trackPaidRequest, getMetrics, type Rail, type Route } from "./usage.ts";
 import { makeUsageCounter, type UsageCounter } from "./usage_counter.ts";
 
 // ---------------------------------------------------------------------------
@@ -197,8 +197,8 @@ const ROUTE_CATALOG: Array<[string, string, string, string, string, string[]]> =
   ["/ai/ask", "GET", "0.002", "2000", "Cheap LLM answer (Llama 3.2 3B on Workers AI): ?q=<prompt up to 500 chars>, returns concise text. Pay-per-call, no API key.", ["ai", "llm", "inference", "chat", "data"]],
   ["/chain/block", "GET", "0.002", "2000", "Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.", ["rpc", "base", "onchain", "blockchain", "data"]],
   ["/chain/wallet", "GET", "0.003", "3000", "Wallet screening bundle (balance, activity, contract vs EOA check): ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]],
-  ["/dns/{domain}", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", ["dns", "domain", "data", "recon"]],
-  ["/whois/{domain}", "GET", "0.01", "10000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", ["whois", "rdap", "domain", "data", "recon"]],
+  ["/dns", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH. Pass ?domain=stripe.com.", ["dns", "domain", "data", "recon"]],
+  ["/whois", "GET", "0.01", "10000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain. Pass ?domain=cloudflare.com.", ["whois", "rdap", "domain", "data", "recon"]],
 ];
 
 /** GET /chain/block-number 200: handler always returns numeric block_number and chain "base". Preview may add `note`. */
@@ -1379,7 +1379,7 @@ app.get("/.well-known/agent-card.json", (c) => {
           "Domain intelligence: firmographic + tech-stack enrichment with full subdomain enumeration via certificate-transparency logs " +
           "(crt.sh, RDAP, DoH, HTTP fingerprint) + verdict based on domain age. " +
           "Plus tech-stack fingerprint → CVE (NVD) + EPSS + CISA-KEV attack-surface risk + verdict (clear/review/block) for a domain. " +
-          "Routes: GET /enrich/domain, GET /enrich/tech-risk, GET /dns/:domain, GET /whois/:domain. " +
+          "Routes: GET /enrich/domain, GET /enrich/tech-risk, GET /dns?domain=, GET /whois?domain=. " +
           "Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. " +
           "Price: $0.01-$0.05 per call. " +
           "Machine-readable payment manifest: /.well-known/x402.",
@@ -1387,8 +1387,8 @@ app.get("/.well-known/agent-card.json", (c) => {
         examples: [
           "GET /enrich/domain?domain=example.com",
           "GET /enrich/tech-risk?domain=example.com",
-          "GET /dns/example.com",
-          "GET /whois/example.com",
+          "GET /dns?domain=example.com",
+          "GET /whois?domain=example.com",
         ],
       },
     ].map((s: any) => {
@@ -1625,6 +1625,7 @@ function tagFor(path: string): string {
     return "Markets";
   }
   if (
+    path === "/dns" || path === "/whois" ||
     path.startsWith("/dns/") || path.startsWith("/whois/") ||
     path.startsWith("/enrich/") || path.startsWith("/scan/")
   ) {
@@ -1663,8 +1664,8 @@ function canonicalOperationId(path: string, method: string): string {
   const m = method.toLowerCase();
   const flagship = FLAGSHIP_OPERATION_IDS[path];
   if (flagship && (m === "get" || path === "/v1/chat/completions")) return flagship;
-  if (path.startsWith("/dns/")) return "dns_lookup";
-  if (path.startsWith("/whois/")) return "domain_whois";
+  if (path === "/dns" || path.startsWith("/dns/")) return "dns_lookup";
+  if (path === "/whois" || path.startsWith("/whois/")) return "domain_whois";
   if (ROUTER_SLUG_ALIASES[path]) return ROUTER_SLUG_ALIASES[path];
   const words = path
     .split("/")
@@ -1889,8 +1890,8 @@ app.get("/openapi.json", (c) => {
       "/gate/swap/preview": { get: { summary: "FREE live sample of /gate/swap (no payment).", description: "Free go/hold/block sample for a demo token (?token=degen) OR any real Base 0x address, 3 free real-token checks per IP per day. Paid /gate/swap accepts ANY Base ERC-20 ($0.008). Honors side and notional_usd.", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-report/preview": { get: { summary: "FREE live sample of /chain/token-report (no payment).", description: "Free full trade-safety report for a demo token. Try ?token=aero. Paid /chain/token-report accepts ANY Base ERC-20 ($0.01).", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-security": paid("Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.", "0.009", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
-      "/dns/{domain}": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "path", example: "stripe.com" }]),
-      "/whois/{domain}": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.01", [{ name: "domain", desc: "domain name to look up", in: "path", example: "cloudflare.com" }]),
+      "/dns": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "query", required: true, example: "stripe.com" }]),
+      "/whois": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.01", [{ name: "domain", desc: "domain name to look up", in: "query", required: true, example: "cloudflare.com" }]),
     })),
   });
 });
@@ -2167,6 +2168,35 @@ function makeRoutes(payTo: string) {
         },
       }),
     },
+    "GET /dns": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.01",
+        network: NETWORK,
+        payTo,
+      },
+      description: "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain. Pass ?domain=",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        queryParams: { domain: "example.com" },
+        queryParamsSchema: {
+          properties: {
+            domain: { type: "string", description: "Domain name to resolve" },
+          },
+          required: ["domain"],
+        },
+        output: {
+          example: {
+            domain: "example.com",
+            A: ["93.184.216.34"],
+            AAAA: [],
+            MX: ["0 ."],
+            NS: ["a.iana-servers.net.", "b.iana-servers.net."],
+            TXT: ["v=spf1 -all"],
+          },
+        },
+      }),
+    },
     "GET /dns/:domain": {
       accepts: {
         scheme: "exact" as const,
@@ -2191,6 +2221,36 @@ function makeRoutes(payTo: string) {
             MX: ["0 ."],
             NS: ["a.iana-servers.net.", "b.iana-servers.net."],
             TXT: ["v=spf1 -all"],
+          },
+        },
+      }),
+    },
+    "GET /whois": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.01",
+        network: NETWORK,
+        payTo,
+      },
+      description:
+        "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain. Pass ?domain=",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        queryParams: { domain: "example.com" },
+        queryParamsSchema: {
+          properties: {
+            domain: { type: "string", description: "Domain name to look up" },
+          },
+          required: ["domain"],
+        },
+        output: {
+          example: {
+            domain: "example.com",
+            registrar: "RESERVED-Internet Assigned Numbers Authority",
+            created: "1995-08-14T04:00:00Z",
+            expiry: "2025-08-13T04:00:00Z",
+            registrant: null,
+            status: ["client delete prohibited"],
           },
         },
       }),
@@ -4158,8 +4218,7 @@ function fireAndForget(c: { executionCtx?: { waitUntil(p: Promise<void>): void }
 // DNS enrichment endpoint  ($0.01)
 // ---------------------------------------------------------------------------
 
-app.get("/dns/:domain", async (c) => {
-  const domain = c.req.param("domain");
+async function resolveDns(c: any, domain: string, endpoint: string) {
   const types = ["A", "AAAA", "MX", "NS", "TXT"] as const;
 
   const results: Record<string, string[]> = {};
@@ -4182,24 +4241,37 @@ app.get("/dns/:domain", async (c) => {
   console.log(
     JSON.stringify({
       event: "paid_request",
-      endpoint: "/dns/:domain",
+      endpoint,
       domain,
       ts: new Date().toISOString(),
     }),
   );
   const rail = c.get("rail") ?? "x402-paid";
-  fireAndForget(c, trackPaidRequest("GET /dns/:domain", rail, makeUsageCounter(c.env)));
+  fireAndForget(c, trackPaidRequest(`GET ${endpoint}` as Route, rail, makeUsageCounter(c.env)));
 
   return c.json({ domain, ...results });
+}
+
+// Query-param form (?domain=) is the advertised contract: agent routers (agent402)
+// can fill a query parameter but classify a /:domain path template as un-dispatchable
+// ("url_template"). The path-param form stays wired for backward-compatible callers.
+app.get("/dns", async (c) => {
+  const domain = c.req.query("domain");
+  if (!domain) {
+    return c.json({ error: "missing required query parameter: domain", example: "/dns?domain=stripe.com" }, { status: 400 });
+  }
+  return resolveDns(c, domain, "/dns");
+});
+
+app.get("/dns/:domain", async (c) => {
+  return resolveDns(c, c.req.param("domain"), "/dns/:domain");
 });
 
 // ---------------------------------------------------------------------------
 // WHOIS / RDAP endpoint  ($0.02)
 // ---------------------------------------------------------------------------
 
-app.get("/whois/:domain", async (c) => {
-  const domain = c.req.param("domain");
-
+async function resolveWhois(c: any, domain: string, endpoint: string) {
   const res = await rdapFetch(domain);
 
   if (!res.ok) {
@@ -4234,13 +4306,13 @@ app.get("/whois/:domain", async (c) => {
   console.log(
     JSON.stringify({
       event: "paid_request",
-      endpoint: "/whois/:domain",
+      endpoint,
       domain,
       ts: new Date().toISOString(),
     }),
   );
   const rail = c.get("rail") ?? "x402-paid";
-  fireAndForget(c, trackPaidRequest("GET /whois/:domain", rail, makeUsageCounter(c.env)));
+  fireAndForget(c, trackPaidRequest(`GET ${endpoint}` as Route, rail, makeUsageCounter(c.env)));
 
   return c.json({
     domain: raw.ldhName ?? domain,
@@ -4250,6 +4322,20 @@ app.get("/whois/:domain", async (c) => {
     registrant,
     status: raw.status ?? [],
   });
+}
+
+// Query-param form (?domain=) is the advertised, router-dispatchable contract; the
+// path-param form stays wired for backward-compatible callers. See /dns note above.
+app.get("/whois", async (c) => {
+  const domain = c.req.query("domain");
+  if (!domain) {
+    return c.json({ error: "missing required query parameter: domain", example: "/whois?domain=cloudflare.com" }, { status: 400 });
+  }
+  return resolveWhois(c, domain, "/whois");
+});
+
+app.get("/whois/:domain", async (c) => {
+  return resolveWhois(c, c.req.param("domain"), "/whois/:domain");
 });
 
 // ---------------------------------------------------------------------------
