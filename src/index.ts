@@ -4365,6 +4365,20 @@ function verdictFromScore(score: number): Verdict {
   return "clear";
 }
 
+// Letter grade (A–F) for an MCP scan, on the familiar SSL Labs / securityheaders.com
+// convention — a recognizable, screenshot-worthy band buyers already read at a glance.
+// Derived purely from OUR own risk_score + critical count; the bands line up with the
+// verdict so the two never disagree (F = block, C/D = review, A/B = clear). This is the
+// Grey Ridge Signals grade, not an external certification — label it as ours wherever
+// it is shown, never imply a third-party standard endorsed it.
+function mcpGrade(risk_score: number, hasCritical: boolean): "A" | "B" | "C" | "D" | "F" {
+  if (hasCritical || risk_score >= 70) return "F";
+  if (risk_score >= 50) return "D";
+  if (risk_score >= 30) return "C";
+  if (risk_score >= 10) return "B";
+  return "A";
+}
+
 // MCP-scan verdict + summary, shared by every scan site (GET/POST, paid + preview)
 // so the hosted engine and the offline CLI (`mcpscan --from-egress`) stay in lockstep.
 // A `critical` finding is exclusively tool-poisoning:hidden-instructions — a
@@ -8397,7 +8411,8 @@ app.get("/scan/mcp", async (c) => {
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /scan/mcp", rail, makeUsageCounter(c.env)));
     const { tools: _rawTools, ...publicResult } = result;
-    return c.json(publicResult);
+    const grade = mcpGrade(result.risk_score, result.findings.some((f) => f.severity === "critical"));
+    return c.json({ ...publicResult, grade });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
@@ -8423,7 +8438,7 @@ app.post("/scan/mcp", async (c) => {
   const weight = { critical: 40, high: 20, medium: 8, low: 3 } as const;
   const risk_score = Math.min(100, findings.reduce((s, x) => s + weight[x.severity], 0));
   const { verdict, risk_summary } = mcpScanVerdict(findings, tools.length, risk_score);
-  const result: Record<string, unknown> = { target: "(pasted tools/list)", tools_scanned: tools.length, findings, risk_score, verdict, risk_summary, scanned_at: new Date().toISOString() };
+  const result: Record<string, unknown> = { target: "(pasted tools/list)", tools_scanned: tools.length, findings, risk_score, grade: mcpGrade(risk_score, findings.some((f) => f.severity === "critical")), verdict, risk_summary, scanned_at: new Date().toISOString() };
 
   // OPT-IN Claude Connector Directory readiness check. Off by default so the
   // census / security scan output (and its carefully-tuned clean corpus) are
@@ -8488,12 +8503,15 @@ function previewOf(
     r.findings.length === 0
       ? "Clean on static checks today. Keep it safe as it changes — continuous monitoring + drift alerts, $9.99/mo at /pricing. Full itemized report for this scan: GET /scan/mcp?url= or zero-egress POST /scan/mcp ($0.05 via x402)."
       : `${r.findings.length} issue(s) found${by.critical ? `, ${by.critical} CRITICAL` : ""}. This preview hides WHICH tools and the evidence. Get full itemized findings + remediation now: paste-mode POST /scan/mcp (zero egress) or GET /scan/mcp?url= ($0.05). Or monitor this server continuously with drift alerts — $9.99/mo at /pricing.`;
+  const grade = mcpGrade(r.risk_score, by.critical > 0);
   const out: Record<string, unknown> = {
     target: r.target,
     tools_scanned: r.tools_scanned,
     issue_count: r.findings.length,
     severity_breakdown: by,
     risk_score: r.risk_score,
+    grade,
+    grade_scale: "Grey Ridge Signals MCP security grade (A best – F worst), from our risk_score: A 0–9, B 10–29, C 30–49, D 50–69, F 70+ or any critical finding. Our grade, not a third-party certification.",
     verdict: r.verdict,
     risk_summary: r.risk_summary,
     upsell,
@@ -8540,7 +8558,8 @@ app.get("/scan/mcp/badge", async (c) => {
   try {
     const r = await scanMcpServer(target);
     const color = ({ clear: "brightgreen", review: "yellow", block: "red" } as Record<string, string>)[r.verdict] ?? "lightgrey";
-    return c.json({ ...base, message: `${r.verdict} (${r.tools_scanned} tools, ${r.findings.length} issues)`, color });
+    const grade = mcpGrade(r.risk_score, r.findings.some((f) => f.severity === "critical"));
+    return c.json({ ...base, message: `${grade} · ${r.verdict} (${r.tools_scanned} tools, ${r.findings.length} issues)`, color });
   } catch {
     return c.json({ ...base, message: "unreachable", color: "lightgrey" });
   }
@@ -9517,6 +9536,7 @@ ${ctaBlock}${scriptBlock}`);
 
   const v = result.verdict as string;
   const vClass = ({ clear: "clear", review: "review", block: "block" } as Record<string, string>)[v] || "unknown";
+  const grade = mcpGrade(result.risk_score, result.findings.some((f) => f.severity === "critical"));
 
   // Point-in-time safety is only half the picture: a manifest that scans clear today can be
   // silently re-poisoned tomorrow. Dominion Observatory (dominionobservatory.com) watches MCP
@@ -9564,9 +9584,10 @@ ${ctaBlock}${scriptBlock}`);
 </div>`;
 
   return page(host,
-    `${host} MCP server: ${v} — ${result.findings.length} issue(s) across ${result.tools_scanned} advertised tool(s), scanned by Grey Ridge Signals.`,
+    `${host} MCP server: grade ${grade} (${v}) — ${result.findings.length} issue(s) across ${result.tools_scanned} advertised tool(s), scanned by Grey Ridge Signals.`,
     `<h1>${esc(host)}</h1>
-<p class=sub>MCP security report · <span class="pill ${vClass}">${esc(v)}</span> · risk ${result.risk_score}/100 · ${result.tools_scanned} tool(s) · scanned ${esc(result.scanned_at)}</p>
+<p class=sub>MCP security report · <span class="pill ${vClass}">grade ${grade} · ${esc(v)}</span> · risk ${result.risk_score}/100 · ${result.tools_scanned} tool(s) · scanned ${esc(result.scanned_at)}</p>
+<p class=muted style="margin:-1rem 0 1.6rem;font-size:.82rem">Grade on the familiar A (best) – F (worst) scale, from our risk_score — the Grey Ridge Signals grade, not a third-party certification. A 0–9 · B 10–29 · C 30–49 · D 50–69 · F 70+ or any critical finding.</p>
 ${findingsBlock}
 ${driftBlock}
 ${badgeBlock}
