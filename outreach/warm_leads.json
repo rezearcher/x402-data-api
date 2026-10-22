@@ -1,6 +1,6 @@
 {
   "_doc": "Ground-truth warm-lead state. The SIGNAL for 'may I nudge?' is the real thread last-sender, NOT a file mtime. A cycle may send ONLY when last_dir=='them' AND now>do_not_send_until. last_dir=='us' => ball-in-court on THEM => DO NOT SEND. Missing lead => review manually (degrade open), never auto-send. Update last_dir/last_at/do_not_send_until whenever you read a thread or send. Dates ISO-8601 UTC.",
-  "updated_at": "2026-10-22T01:16:00Z",
+  "updated_at": "2026-10-22T07:50:00Z",
   "leads": [
     {
       "lead": "chadi0x / TheBigBrother (issue #9)",
@@ -76,6 +76,17 @@
       "emails": [
         "gwizdala.kr@gmail.com"
       ]
+    },
+    {
+      "lead": "Dominion Observatory / vdineshk (issue #3)",
+      "channel": "github",
+      "thread_id": "rezearcher/x402-data-api#3",
+      "last_dir": "us",
+      "last_at": "2026-10-22T07:50:00Z",
+      "their_last_at": "2026-10-22T07:44:55Z",
+      "status": "ball-in-court",
+      "do_not_send_until": "2026-10-29",
+      "note": "Adjacent MCP-operator (live manifest-drift monitoring, dominionobservatory.com). Delivered a baseline on our /mcp (26 tools) + exposed a FREE stable unauth drift API: GET /api/drift?server=<url>. RECIPROCATED FIRST: integrated their live drift read into every Grey Ridge /scan/report (commit b9fa259, deployed version 862b68e8) crediting them + backlink; verified live on deepwiki+context7 reports. Raised cross-reference w/ their team (ball-in-court on them). OWED: ping issue #3 with next release's tools/list for their CHANGED/UNCHANGED diff. DO NOT re-ping; only act on their reply OR when a release ships."
     }
   ]
 }
