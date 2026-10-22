@@ -1741,6 +1741,31 @@ app.get("/openapi.json", (c) => {
       },
     },
   });
+  // ROUTE_CATALOG is the single source of truth for price (it generates the live 402
+  // challenge amount the buyer is actually charged). The paid() entries above still
+  // pass a price arg for readability, but a drifted arg (e.g. "0.01" on a route the
+  // 402 charges "0.002" for) is an advertised-vs-charged mismatch — a Claims-Law/trust
+  // bug. Force every documented price back to the catalog so the OpenAPI can never
+  // disagree with the challenge. Paths not in the catalog are left as authored.
+  const CANONICAL_USDC: Record<string, string> = Object.fromEntries(
+    ROUTE_CATALOG.map(([p, , usd]) => [p, usd]),
+  );
+  const reconcilePaidPrices = <T extends Record<string, any>>(paths: T): T => {
+    for (const [p, def] of Object.entries(paths)) {
+      const usd = CANONICAL_USDC[p];
+      const op = def?.get;
+      if (!usd || !op) continue;
+      if (typeof op.description === "string") {
+        op.description = op.description.replace(/Price: \$[0-9.]+\./, `Price: $${usd}.`);
+      }
+      if (op["x-payment-info"]?.price) op["x-payment-info"].price.amount = usd;
+      op["x-price-usdc"] = Number(usd);
+      if (op.responses?.["402"]) {
+        op.responses["402"].description = `Payment required ($${usd} USDC via x402)`;
+      }
+    }
+    return paths;
+  };
   return c.json({
     // 3.0.0 exactly. RapidAPI accepts swagger 2.0 and openapi 3.0.0/3.0.1/3.0.2 ONLY —
     // 3.0.3 and 3.1.x are rejected on upload (docs.rapidapi.com/docs/add-an-api-basics),
@@ -1766,7 +1791,7 @@ app.get("/openapi.json", (c) => {
     // Same-origin only: OpenDexter/x402gle rejects specs whose servers[] name a different
     // origin than the one fetched. The first entry is whichever host served the request.
     servers: [{ url: new URL(c.req.url).origin }],
-    paths: withOperationIds({
+    paths: reconcilePaidPrices(withOperationIds({
       "/": {
         get: {
           summary: "Landing page (HTML, free).",
@@ -1844,7 +1869,7 @@ app.get("/openapi.json", (c) => {
       "/chain/token-security": paid("Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.", "0.009", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
       "/dns/{domain}": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "path", example: "stripe.com" }]),
       "/whois/{domain}": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.01", [{ name: "domain", desc: "domain name to look up", in: "path", example: "cloudflare.com" }]),
-    }),
+    })),
   });
 });
 
@@ -5479,7 +5504,7 @@ app.get("/chain/block-number/preview", async (c) => {
     return c.json({
       block_number: parseBlockNumber(hex),
       chain: "base",
-      note: "Free live sample — identical to the paid route. Full: GET /chain/block-number ($0.01), keyless x402 on Base.",
+      note: "Free live sample — identical to the paid route. Full: GET /chain/block-number ($0.002), keyless x402 on Base.",
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -5540,7 +5565,7 @@ app.get("/chain/gas-price/preview", async (c) => {
     ]);
     return c.json({
       ...gasSuccess(hex, feeHistory, ethUsd),
-      note: "Free live sample — identical to the paid route. Full: GET /chain/gas-price ($0.01), keyless x402 on Base.",
+      note: "Free live sample — identical to the paid route. Full: GET /chain/gas-price ($0.002), keyless x402 on Base.",
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -5672,7 +5697,7 @@ app.get("/chain/token-balance/preview", async (c) => {
   try {
     return c.json({
       ...(await buildTokenBalance(address, token)),
-      note: "Free live sample — identical to the paid route. Full: GET /chain/token-balance ($0.005), keyless x402 on Base.",
+      note: "Free live sample — identical to the paid route. Full: GET /chain/token-balance ($0.002), keyless x402 on Base.",
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
