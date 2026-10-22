@@ -74,7 +74,25 @@ export type Env = {
   //   wrangler secret put RAPIDAPI_PROXY_SECRET
   // and paste the same value into the RapidAPI listing's secret header field.
   // Unset = the bypass is inert and every request still pays x402 (fail closed).
+  //
+  // PRIVILEGE NOTE: this secret is HANDED TO RAPIDAPI (a third party pastes it into
+  // their listing config). It must therefore grant the LOW-privilege x402 bypass ONLY
+  // — never anything that spends our money. The high-privilege internal CDP endpoints
+  // (/internal/cdp-probe, /internal/cdp-settle-raw) are authed by CDP_INTERNAL_SECRET
+  // below, NOT this one, so a RapidAPI-side leak cannot relay settlements at our expense.
   RAPIDAPI_PROXY_SECRET?: string;
+  // Dedicated secret for the high-privilege internal CDP endpoints (/internal/cdp-probe
+  // mints a CDP JWT; /internal/cdp-settle-raw relays settlements at CDP's expense). Split
+  // out from RAPIDAPI_PROXY_SECRET (which is shared with RapidAPI) so that handing the
+  // RapidAPI rail its secret never also grants settlement authority. Set via:
+  //   wrangler secret put CDP_INTERNAL_SECRET
+  // and pass it in the X-CDP-Internal-Secret header from the settlement/refresh scripts.
+  // BACKWARD-COMPAT: while this is UNSET, the CDP endpoints fall back to the legacy shared
+  // RAPIDAPI_PROXY_SECRET + X-RapidAPI-Proxy-Secret header (current behavior) so nothing
+  // breaks on deploy. Once set, ONLY the dedicated secret/header is accepted. MUST be set
+  // (and the scripts migrated to X-CDP-Internal-Secret) BEFORE the RapidAPI listing is
+  // published — see docs/RAPIDAPI_LISTING.md "Security gate".
+  CDP_INTERNAL_SECRET?: string;
   // Durable Object SQLite traffic log (t_9e3fec95); replaces dead AE binding.
   TRAFFIC_LOG?: DurableObjectNamespace<TrafficLog>;
   // Atomic paid-usage counters (audit F-05, mirrored from x402-cve-triage):
@@ -782,15 +800,31 @@ ${provisionMeta}
 // These two routes are registered ABOVE the payment gate (§4), so before this
 // fix any unauthenticated caller could mint a CDP JWT from Worker secrets
 // (cdp-probe) or relay caller-supplied settlements at CDP's expense
-// (cdp-settle-raw). Both now require the shared RAPIDAPI_PROXY_SECRET in the
-// X-RapidAPI-Proxy-Secret header — the same constant-time compare the RapidAPI
-// bypass rail uses below — and FAIL CLOSED: no configured secret, absent
-// header, or mismatched header => 401 before any handler logic runs.
+// (cdp-settle-raw). Both require the DEDICATED CDP_INTERNAL_SECRET in the
+// X-CDP-Internal-Secret header (see cdpInternalAuthOk) — split out 2026-10-22 from
+// the RapidAPI-shared secret so a third-party RapidAPI leak cannot relay settlements —
+// and FAIL CLOSED: no configured secret, absent header, or mismatched header => 401
+// before any handler logic runs. Pre-migration it falls back to the legacy shared secret.
 function cdpInternalAuthOk(c: { env: Env; req: { header(n: string): string | undefined } }): boolean {
-  // SECURITY TODO: one shared RAPIDAPI_PROXY_SECRET guards both RapidAPI bypass and CDP relay; split + rotate secrets.
-  const configured = c.env.RAPIDAPI_PROXY_SECRET;
+  // Secret split (2026-10-22): the high-privilege CDP endpoints are authed by the
+  // DEDICATED CDP_INTERNAL_SECRET, never the RapidAPI-shared secret. This matters because
+  // RAPIDAPI_PROXY_SECRET is pasted into RapidAPI's listing config (a third party holds
+  // it); if it also unlocked /internal/cdp-settle-raw, a RapidAPI-side leak could relay
+  // settlements at our CDP expense. Fails closed.
+  const dedicated = c.env.CDP_INTERNAL_SECRET;
+  if (dedicated) {
+    // Dedicated secret configured => ONLY the dedicated header is accepted; the legacy
+    // shared secret no longer grants CDP authority (this is the post-migration state).
+    const presented = c.req.header("X-CDP-Internal-Secret") ?? "";
+    return presented !== "" && timingSafeEqual(presented, dedicated);
+  }
+  // BACKWARD-COMPAT (pre-migration): no dedicated secret yet => fall back to the legacy
+  // shared RAPIDAPI_PROXY_SECRET + X-RapidAPI-Proxy-Secret header so existing settlement/
+  // refresh scripts keep working until CDP_INTERNAL_SECRET is set. MUST set the dedicated
+  // secret before publishing the RapidAPI listing (docs/RAPIDAPI_LISTING.md "Security gate").
+  const legacy = c.env.RAPIDAPI_PROXY_SECRET;
   const presented = c.req.header("X-RapidAPI-Proxy-Secret") ?? "";
-  return !!configured && presented !== "" && timingSafeEqual(presented, configured);
+  return !!legacy && presented !== "" && timingSafeEqual(presented, legacy);
 }
 
 // Staged CDP-auth probe (temporary): confirms we can mint a CDP JWT from Worker
@@ -4016,7 +4050,9 @@ app.use(async (c, next) => {
   // request carrying the correct proxy secret is ALREADY PAID and must not be x402-gated.
   // Fails closed three ways: no configured secret => no bypass; empty header => no bypass;
   // constant-time compare so a wrong secret leaks nothing through response timing.
-  // SECURITY TODO: shared RAPIDAPI_PROXY_SECRET bypass; split from CDP relay secret and rotate.
+  // This secret grants the x402 bypass ONLY — the high-privilege CDP endpoints are authed
+  // by the dedicated CDP_INTERNAL_SECRET (split 2026-10-22), so handing this to RapidAPI
+  // never grants settlement authority.
   const rapidSecret = c.env.RAPIDAPI_PROXY_SECRET;
   if (rapidSecret) {
     const presented = c.req.header("X-RapidAPI-Proxy-Secret") ?? "";

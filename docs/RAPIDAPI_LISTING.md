@@ -29,6 +29,43 @@ Verified live against production, all three cases, not assumed:
 
 ---
 
+## 🔒 SECURITY GATE — do this BEFORE publishing the listing (added 2026-10-22)
+
+**Do not publish the listing until the secret split is deployed.** The listing instructs
+pasting `RAPIDAPI_PROXY_SECRET` into RapidAPI's config (Step 3.4). Until 2026-10-22 that
+*same* secret also authorized the high-privilege internal endpoints `/internal/cdp-probe`
+(mints a CDP JWT from Worker secrets) and `/internal/cdp-settle-raw` (relays settlements
+**at our CDP expense**). Handing that shared secret to RapidAPI — a third party — would let
+a RapidAPI-side leak or insider relay settlements and drain CDP funds. That is an unbounded
+downside and is forbidden.
+
+**Fix (code shipped, deploy pending):** `cdpInternalAuthOk` now authorizes the CDP
+endpoints with a *dedicated* `CDP_INTERNAL_SECRET` (header `X-CDP-Internal-Secret`), split
+from the RapidAPI secret. It is backward-compatible: while `CDP_INTERNAL_SECRET` is unset
+it falls back to the legacy shared secret, so deploying the code alone changes nothing.
+
+**Launch runbook — run in order, verify each step:**
+
+1. Generate a fresh dedicated secret and set it:
+   `openssl rand -hex 32 | wrangler secret put CDP_INTERNAL_SECRET`
+2. Migrate the settlement/refresh scripts to the new header + secret (they currently send
+   `X-RapidAPI-Proxy-Secret`). Affected callers:
+   - `scripts/verify_settleable.sh` (line ~47)
+   - `scripts/refresh_bazaar_catalog.js`
+   - `seed_batch_cdp.js`
+   - `~/.hermes/scripts/x402_bazaar_refresh.sh`
+   Point each at `X-CDP-Internal-Secret: $CDP_INTERNAL_SECRET`.
+3. **Rotate `RAPIDAPI_PROXY_SECRET`** to a brand-new value (`wrangler secret put
+   RAPIDAPI_PROXY_SECRET`) so the value about to be handed to RapidAPI has never also been a
+   CDP credential.
+4. Verify: `curl` `/internal/cdp-settle-raw` with the OLD `X-RapidAPI-Proxy-Secret` value →
+   must now 401 (proves the CDP endpoints no longer accept the RapidAPI secret). Verify a
+   normal paid route with the new `X-RapidAPI-Proxy-Secret` → 200 (bypass still works).
+5. Only then proceed to Step 3 below and paste the (rotated) `RAPIDAPI_PROXY_SECRET` into
+   the RapidAPI listing.
+
+---
+
 ## Prerequisites
 
 - A live x402 instance deployed to Cloudflare Workers (e.g., `https://x402-data-api.sigrunner.workers.dev`)
