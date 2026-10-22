@@ -8487,8 +8487,12 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
 <li>Pick a tag &mdash; your product name is fine. Append <code>?ref=&lt;your-tag&gt;</code> to any call URL.</li>
 <li>Try it free: <code id=prev>…/gate/swap/preview?token=degen</code> returns a live verdict (3 free/day/IP) so you can see the shape before you wire it.</li>
 <li>Wire the paid call into your product. Agents pay inline in USDC over x402 &mdash; no account, no key. Prefer card billing or a monthly key? <a href="/scan/badge-gen">Start a Pro plan</a> and call with a key instead.</li>
-<li>Email us your tag. We reconcile your referred volume against settled on-chain transactions and send you the count, distinct buyers, and Base txHashes &mdash; proof your integration converts.</li>
+<li>Check your own numbers any time at <code><a id=rep href="/partners/report">/partners/report?ref=&lt;your-tag&gt;</a></code> &mdash; a live, self-serve reconcile: settled calls, distinct external buyers, and the Base txHashes behind them. Nothing to request, no waiting on us.</li>
 </ol>
+<form onsubmit="location.href='/partners/report?ref='+encodeURIComponent(this.r.value.trim())+'&format=html';return false" style="margin:.2rem 0 .4rem;display:flex;gap:.5rem;flex-wrap:wrap">
+<input name=r placeholder="your tag" aria-label="your ref tag" style="flex:1;min-width:180px;padding:.55rem .7rem;border:1px solid #cbd5e1;border-radius:8px;font-size:.95rem">
+<button class=cta style="border:0;cursor:pointer" type=submit>View my report &rarr;</button>
+</form>
 
 <h2>What you're embedding</h2>
 <div class=card>
@@ -8502,13 +8506,104 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
 <h2>A live partner</h2>
 <p>The <strong>DopamineDesk x402 Marketplace</strong> (by Blaz Algo Systems) resells our token-safety gate and token report through one MCP adapter &mdash; plain-language discovery, free previews, and capped Base-USDC purchases. That's the model: their audience, our verdict, their price.</p>
 
-<a class=cta href="mailto:contact@greyridgesignals.ai?subject=Partner%20program%20%E2%80%94%20my%20ref%20tag">Email us your tag &rarr;</a>
-<p class=muted style="font-size:.85rem">Questions first? Same address: <a href="mailto:contact@greyridgesignals.ai">contact@greyridgesignals.ai</a>. We'll set up a reconcile report on your tag before you commit to anything.</p>
+<a class=cta href="/partners/report">Open your live report &rarr;</a>
+<p class=muted style="font-size:.85rem">No sign-up and no waiting: pick a tag, start calling with <code>?ref=</code>, and the report above fills in on its own. Questions? <a href="mailto:contact@greyridgesignals.ai">contact@greyridgesignals.ai</a>.</p>
 
 <footer>Grey Ridge Signals Group LLC &middot; Pay-per-call safety and market-data APIs on Base. Prices are USDC per call and current as of this page. <a href="https://greyridgesignals.ai">greyridgesignals.ai</a> &middot; <a href="/">API home</a></footer>
 <script>
 var o=location.origin;var p=document.getElementById("prev");if(p)p.textContent=o+"/gate/swap/preview?token=degen";
 </script>`;
+  return c.html(html);
+});
+
+// Self-serve referral reconcile — the public counterpart of /internal/traffic-stats
+// ?ref_stats=1. A reseller picks a tag, appends ?ref=<tag> to their calls, and checks
+// their own settled volume here any time: paid calls, distinct external buyers, and the
+// Base txHashes behind them — computed from our own TrafficLog store, verifiable on-chain.
+// This removes the one human handshake the partner funnel still had ("email us your tag"),
+// so the whole reseller path is self-serve end to end. Scoped by design: a request returns
+// ONLY the single tag asked for (server-side filter over getRefStats), never the full tag
+// list, so one partner can't enumerate another's. A tag with no settled calls yet returns
+// a valid zero report (not a 404) so a partner can verify wiring before any traffic lands.
+app.get("/partners/report", async (c) => {
+  const esc = (s: string) =>
+    String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m] as string);
+  const refRaw = (c.req.query("ref") ?? "").trim();
+  const wantsJson = c.req.query("format") === "json" || !(c.req.header("accept") ?? "").includes("text/html");
+  // A ref tag is a short opaque label the partner chooses; keep it to URL-safe chars so
+  // it can't be used to smuggle markup or blow up the SQL LIKE. Not found => zero report.
+  const ref = /^[A-Za-z0-9_.\-]{1,64}$/.test(refRaw) ? refRaw : "";
+  if (!ref) {
+    const msg = "Pass a ref tag: /partners/report?ref=<your-tag>. Tags are 1-64 chars of letters, digits, dot, dash or underscore.";
+    if (wantsJson) return c.json({ ok: false, error: "missing_or_invalid_ref", hint: msg }, 400);
+    return c.html(`<!doctype html><meta charset=utf-8><title>Partner report</title><body style="font:16px system-ui;max-width:40rem;margin:3rem auto;padding:0 1rem"><h1>Partner report</h1><p>${esc(msg)}</p><p><a href="/partners">&larr; Partner program</a></p>`, 400);
+  }
+  const hours = Math.min(Math.max(parseInt(c.req.query("window_hours") ?? "720") || 720, 1), 720);
+  if (!c.env.TRAFFIC_LOG) {
+    if (wantsJson) return c.json({ ok: false, error: "traffic logging not configured" }, 503);
+    return c.html(`<!doctype html><meta charset=utf-8><body style="font:16px system-ui;margin:3rem auto;max-width:40rem;padding:0 1rem"><p>Reporting is temporarily unavailable. Try again shortly.</p>`, 503);
+  }
+  const stub = c.env.TRAFFIC_LOG.get(c.env.TRAFFIC_LOG.idFromName("default"));
+  let entry: { ref: string; paid_calls: number; distinct_payers: number; distinct_external_payers: number; external_calls: number; txs: string[] } | undefined;
+  try {
+    const refs = await stub.getRefStats(hours * 3600);
+    const lc = ref.toLowerCase();
+    entry = refs.find((r) => r.ref === ref) ?? refs.find((r) => r.ref.toLowerCase() === lc);
+  } catch (e) {
+    if (wantsJson) return c.json({ ok: false, ref, error: "traffic_read_failed", detail: e instanceof Error ? e.message : String(e) }, 500);
+    return c.html(`<!doctype html><meta charset=utf-8><body style="font:16px system-ui;margin:3rem auto;max-width:40rem;padding:0 1rem"><p>Report read failed; this is usually transient. Try again shortly.</p>`, 500);
+  }
+  const paid_calls = entry?.paid_calls ?? 0;
+  const external_calls = entry?.external_calls ?? 0;
+  const distinct_external_payers = entry?.distinct_external_payers ?? 0;
+  const txs = (entry?.txs ?? []).slice(0, 20);
+  const report = {
+    ok: true,
+    ref,
+    window_hours: hours,
+    paid_calls,
+    external_calls,
+    distinct_external_payers,
+    txs: txs.map((t) => ({ tx: t, basescan: `https://basescan.org/tx/${t}` })),
+    note: paid_calls === 0
+      ? "No settled calls recorded for this tag yet. Append ?ref=" + ref + " to your paid call URLs; settled volume appears here, verifiable on Base."
+      : "External calls exclude our own test wallets; counts are a trailing window from our store and provable against the Base txHashes.",
+    timestamp: Math.floor(Date.now() / 1000),
+  };
+  if (wantsJson) return c.json(report);
+  const days = Math.round(hours / 24);
+  const txRows = txs.length
+    ? txs.map((t) => `<li><a href="https://basescan.org/tx/${esc(t)}" rel="nofollow">${esc(t.slice(0, 18))}&hellip;</a></li>`).join("")
+    : `<li class=muted>None yet &mdash; settled calls will appear here.</li>`;
+  const html = `<!doctype html><html lang=en><meta charset=utf-8>
+<title>Partner report &middot; ${esc(ref)} &middot; Grey Ridge Signals</title>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=robots content="noindex">
+<style>
+body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827;background:#fafafa;line-height:1.6;max-width:640px;margin:0 auto;padding:2.5rem 1.25rem}
+h1{font-size:1.5rem;margin:0 0 .2rem}.sub{color:#6b7280;margin:0 0 1.6rem}
+.grid{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0}
+.stat{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:1rem 1.2rem;flex:1;min-width:150px}
+.stat .n{font-size:1.9rem;font-weight:700;font-variant-numeric:tabular-nums}
+.stat .l{color:#6b7280;font-size:.85rem}
+ul{padding-left:1.1rem}.muted{color:#9ca3af}a{color:#0f766e}
+code{background:#eef2f7;padding:.1rem .35rem;border-radius:4px;font-size:.88em}
+.note{background:#f0fdfa;border:1px solid #99f6e4;border-radius:12px;padding:.9rem 1.1rem;margin:1.2rem 0;font-size:.95rem}
+footer{margin-top:2.5rem;padding-top:1rem;border-top:1px solid #e5e7eb;color:#6b7280;font-size:.82rem}
+</style>
+<body>
+<h1>Referral report</h1>
+<p class=sub>Tag <code>${esc(ref)}</code> &middot; trailing ${days}-day window</p>
+<div class=grid>
+<div class=stat><div class=n>${paid_calls}</div><div class=l>settled paid calls</div></div>
+<div class=stat><div class=n>${external_calls}</div><div class=l>external (real-buyer) calls</div></div>
+<div class=stat><div class=n>${distinct_external_payers}</div><div class=l>distinct external buyers</div></div>
+</div>
+<div class=note>${esc(report.note)}</div>
+<h2 style="font-size:1.05rem">On-chain settlements</h2>
+<ul>${txRows}</ul>
+<p style="font-size:.9rem">Machine-readable: <a href="/partners/report?ref=${esc(ref)}&format=json">same report as JSON</a>. Raw catalog: <a href="/.well-known/agent-capabilities.json">/.well-known/agent-capabilities.json</a>.</p>
+<footer>Grey Ridge Signals Group LLC &middot; External counts exclude our own test wallets and are verifiable against the Base transaction hashes above. <a href="/partners">&larr; Partner program</a></footer>`;
   return c.html(html);
 });
 
