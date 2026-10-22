@@ -88,3 +88,27 @@ off a candidate before Builder spends a cycle on it; Judge rules on money.
    (keep the oracle + send-gate).
 3. Seed the first margin-play candidate (the BlockRun-for-our-vertical hypothesis) into the queue
    with explicit charters, and let the crew prove or kill it.
+
+## SETTLED — inference economics (Economist, 2026-10-21; do not re-litigate)
+Computed in code from live market rates (secondary aggregators, flagged):
+- Our `/v1/chat/completions` = **flat $0.002/call**, Llama 3.3 70B fp8 on Cloudflare Workers AI.
+  COGS (Workers AI) = $0.293/1M input, $2.25/1M output tokens.
+- Effective rate at normal call shapes: **$1–$5 / 1M tokens**.
+- Retail for the SAME model: Together Turbo $0.88/1M, DeepInfra $0.26/1M blended.
+
+**Finding 1 — the reback-raw-inference arbitrage is DEAD.** x402 inference is **2.3×–19×
+MORE expensive** than retail; x402 adds a settlement layer, not a cost advantage. You cannot
+"buy cheap inference on x402 and resell." Rebacking an existing wrapper's inference *raises*
+its cost. (This killed queue items 2c5a2cdac9 + 4f49c6942f.)
+
+**Finding 2 — our own route is barbell-safe but a structural trickle.** Deployed caps (input
+≤8000 chars ≈2000 tok, output ≤400 tok, ≤400 calls/day) make worst-case margin **+26%**
+(typical +64%). But the 400-call/day ceiling caps the whole route at **$0.80/day** — it can
+never reach $1k/day. Inference is a $0-standby *fallback* feature, not the revenue lever. Keep
+marketing it as "additive x402 fallback provider (pay $0 until your primary fails)," never as "cheap."
+
+**Where the spread actually lives:** the packaged-**OUTCOME** layer — proprietary data
+(token-safety verdict, funding-arb signal, MCP-injection scan report) where our x402 data COGS
+is ~$0.002–0.005/call of *our own* routes and **retail has no commodity price floor** to undercut
+us. The hunt reframes to: which packaged SKU has a named human/SMB audience that pays fiat?
+(queue item 9b7a5cee4b).
