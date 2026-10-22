@@ -140,6 +140,72 @@ amplify. Human atom = Rez authorizes the account(s) + grants API access.
 
 ---
 
+## 6. AutoVideo.v1 teardown — keep the realism, drop the traps
+
+Inspected `rezearcher/AutoVideo.v1` (GitHub, last pushed 2025-06, "AI-driven automated video
+generation pipeline"; 132 files / 70 Python; a successor `hermes-serenity` also exists). It
+was a real, production-deployed end-to-end engine: topic → story (GPT) → scene-split → Veo
+video → concat → **YouTube upload w/ metadata**, on GCP Cloud Run + Vertex, with monitoring,
+quota guard, automatic rollback. The realism is real; so are the traps.
+
+**KEEP (the realism / good instincts):**
+- **It closed the loop to PUBLISH** — not a demo, it actually shipped videos out the door. Our
+  engine must publish, not generate-and-stop.
+- **It simplified over time** — the "Veo-Only Pipeline" collapsed separate image/TTS/assembly
+  stages into Story→scene-split→Veo→concat→upload (85% smaller, sub-4-min). Fewer bespoke
+  stages = right direction.
+- **Reusable patterns already there**: `veo_adapter` (adapter/swappable backend), `topic_manager`
+  (the idea/topic queue = "feed the environment"), `prompt_cache` + `prompt_enhancer`,
+  `quota_guard`, `timing_metrics`. These concepts carry over.
+
+**DROP (the hardcoded/old-model-degradation traps — what Rez flagged):**
+- **Self-hosted GPU infrastructure** — Vertex GPU containers, L4/T4, preemptible-GPU manager,
+  9-tier multi-region fallback, GPU-quota email templates. This was most of the codebase and
+  in 2026 it's *one API call* (fal / Veo / Kling / Runway). We already own a swappable
+  `video_gen` provider ABC in `hermes-agent/plugins/video_gen/` (fal/deepinfra/xai/openrouter)
+  — ADOPT that, never rebuild the GPU stack.
+- **GCP Cloud Run + Vertex + cloudbuild** heavy footprint — our stack is the CF Worker +
+  python3; no GCP needed.
+- **Per-stage model wiring frozen to 2025 models** (GPT story, early Veo) — this is where the
+  dated look comes from. Swappable backends + pinned-version evals fix it.
+- **YouTube-narrative centric** — our channels are short-form social + data-report graphics for
+  Farcaster/X/dev, not long YouTube stories.
+- **Fixed/hardcoded scene assembly** — replace with LLM-authored scene-spec (JSON) rendered by
+  composable primitives.
+
+## 7. The 2026 rebuild architecture (how we don't repeat the mistakes)
+
+From the tooling research — the method matters more than any single model:
+- **Fixed skeleton, LLM-authored content as DATA.** Stages fixed (ingest → ideate → draft →
+  critique → assemble → gate → publish → measure); the LLM emits a schema-validated *scene
+  spec*, not a filled hardcoded template. New formats = new spec/primitive, not a rewrite.
+- **Render layer: adopt Remotion** (React/TS — matches our stack; has Claude-Code agent skills
+  + `@remotion/captions` + whisper.cpp captions). A dated look is fixed by asking the agent to
+  redo the composition, not by hand-editing a template. ffmpeg for trivial cuts.
+- **Swappable model backends behind one interface**, chosen from config — reuse hermes-agent's
+  `video_gen` provider ABC. Voice: ElevenLabs (hero) / Gemini TTS (bulk). Video: fal/Veo/Kling
+  via the adapter. **Nightly canary per backend** (the Sora-shutdown lesson: OpenAI killed the
+  Videos API in 2026 — never hard-depend on one vendor).
+- **Anti-slop (what keeps it from looking like the old output):** proprietary data (our scan
+  results) in every piece = strongest lever + our moat; a separate critic/editor pass with a
+  rubric (fact-count, 2-sec hook, one claim, banned-phrase + claim-verification); a
+  deterministic banned-phrase lint in editable config; a novelty check (embed drafts, reject if
+  too close to the last N); and the **human-review gate** before publish (per §2).
+- **Anti-decay:** a golden-set eval harness re-run on every model/prompt change (regression
+  testing for content); pinned model versions + vendor-deprecation watch; analytics feedback →
+  top performers become retrieved few-shot examples.
+- **Adopt vs build:** adopt Remotion + agent skills + whisper.cpp + an AI-gateway SDK + our
+  existing video_gen ABC. Build only the thin spec-driven orchestrator + critic + lint + eval
+  harness + analytics loop (that's the part the faceless-video frameworks — ShortGPT,
+  MoneyPrinterTurbo (MIT, study-only), MoneyPrinterV2 (AGPL — do NOT adopt) — don't solve;
+  they're stage-layout references, not adopts). Stack stays TS/python3, **no PHP** (standing
+  rule), security-reviewed per the Security Officer lens.
+
+**Net:** AutoVideo proved the loop can run end-to-end; we keep that ambition and the
+adapter/topic-queue/metrics instincts, and we delete the entire self-hosted-GPU/GCP apparatus
+in favor of API backends + Remotion + an eval-gated, critic-passed, human-reviewed, data-rich
+content spec. That is the "better tools and methods" answer.
+
 ## Honest gaps (flagged by the threads)
 No clean 2025-26 first-100-customer dataset for our exact category; crypto/web3 funnel
 benchmarks essentially absent; Farcaster 2026 metrics unverified (treat the mini-app as a
