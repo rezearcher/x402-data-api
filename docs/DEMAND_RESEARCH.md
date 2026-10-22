@@ -5,6 +5,18 @@
 
 ---
 
+## 0. 2026-10-22 ground-truth addendum — what actually gets paid for (from our own `/metrics`)
+
+Source: live `GET /metrics` on the production Worker, 2026-10-22, numbers computed in code (not estimates).
+
+- **The MCP-security scan lane has 0 paid calls, ever.** `GET /scan/mcp` = 0, `POST /scan/mcp` = 0 all-time. We invested ~15 build cycles positioning this lane (scanner, badge, Action, interactive scanner, census, learn page, cross-referral). Paid pull to date: **zero**.
+- **Total external demand across all 45 routes = 0.3 calls/day.** Clean 30-day window: 9 external paid calls, 3 distinct external payer wallets, $0.77 total. x402 pay-per-call is a dust market for *every* lane we run, not just ours.
+- **The paying audience pays fiat, not per-call x402.** Humans *do* buy MCP scanning — MCPSafe sells it at $19–149/mo via login + subscription. That audience wants a **fiat subscription**, which is precisely why an agent-native `/scan/mcp` x402 endpoint has never been paid: we built for the wrong rail/buyer.
+- **Implication (recorded in `customer_need_registry: mcp-scan-paid-pull-is-zero`):** stop building agent-native MCP-scan surfaces — the money is a fiat monitoring subscription ($9.99/mo Stripe rail is already live) sold to *human* MCP operators, with x402 invisible on the backend. The single remaining gate is human discovery of that product — identity-gated community seeding (Rez) or slow organic SEO. More surfaces for the x402-agent audience add $0.
+- **Discovery channels checked this pass:** PulseMCP is paused for new submissions (as of 2026-09-03) but auto-ingests from the Official MCP Registry, where we are already published — so no action and no blocker there.
+
+---
+
 ## 1. Executive Summary
 
 **x402 data market is real but narrow.** $50M cumulative volume, 165M+ transactions, 69K active agents. But the revenue concentrates in a handful of categories (web search, crypto onchain-RPC, prediction markets) and the CDP Bazaar discovery layer is structurally broken for new listings. The MCP ecosystem is the opposite: huge developer interest (5,800+ servers across platforms), <5% monetized — meaning first-mover advantage for anyone who ships a paid MCP server before the category saturates.
