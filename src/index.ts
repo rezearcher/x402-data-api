@@ -1407,10 +1407,18 @@ app.get("/.well-known/agent-card.json", (c) => {
 app.get("/aa3ee6fa313780532656391c0c73664f.txt", (c) => c.text("aa3ee6fa313780532656391c0c73664f"));
 app.get("/llms.txt", (c) => {
   const BASE = "https://x402-data-api.sigrunner.workers.dev";
-  return c.text(`# Grey Ridge Signals — x402 Data & Security APIs
+  return c.text(`# Grey Ridge Signals — MCP security scanning & on-chain data APIs
 
-> Agent-native, pay-per-call data on Base (USDC via x402). No account, no API key — agents pay inline.
-> Landing page: ${BASE}/  |  Discovery: ${BASE}/.well-known/x402  |  OpenAPI: ${BASE}/openapi.json  |  Listed on the Coinbase CDP x402 Bazaar.
+> Two ways to use us. HUMANS & TEAMS: scan any MCP server for prompt-injection / tool-poisoning (OWASP LLM01/LLM08) in your browser — free, read-only — and subscribe by card ($9.99/mo) to gate CI and get continuous re-scans. No wallet, no crypto. AGENTS: the same endpoints are agent-native, pay-per-call on Base (USDC via x402) — no account, no API key, pay inline.
+> Scan a server (free): ${BASE}/scan/mcp-scanner  |  Subscribe (card): ${BASE}/pricing  |  Landing: ${BASE}/  |  Agent discovery: ${BASE}/.well-known/x402  |  OpenAPI: ${BASE}/openapi.json
+
+## For humans & teams — scan your MCP server, pay by card (no wallet)
+If you build, ship, or operate MCP servers and tools, this is the fast path — no crypto required.
+- Scan free, in your browser: ${BASE}/scan/mcp-scanner — paste your server's \`tools/list\` (private/local servers never leave your side) or scan a public server by URL. Instant verdict: clear | review | block, with the exact injected text and which tool carries it.
+- Per-server trust report (shareable, crawlable): ${BASE}/scan/report?url=<your-mcp-server> — point-in-time injection verdict plus a live manifest-drift read, one page.
+- Subscribe by card — $9.99/mo: ${BASE}/pricing. Gives you an API key for 100 scans/month across any Grey Ridge endpoint, so you can gate your CI (fail the build on \`block\`) and re-scan continuously. Card only — no wallet, no USDC, no on-chain anything. Checkout is Stripe; your key is shown on the success page and at ${BASE}/api-key.
+- CI gate (GitHub Action): \`uses: rezearcher/x402-data-api/actions/mcp-scan@main\` — runs the scan on every push and fails the build on a \`block\` verdict.
+- Why this and not a free token checker: token-safety has free multi-chain scanners; MCP tool-poisoning / prompt-injection detection does not. This is the differentiated, paid-worthy lane.
 
 ## How to pay — first paid call in ~8 lines (copy-paste, verified)
 Each paid GET returns HTTP 402 with an x402 v2 challenge (network eip155:8453 / Base, asset USDC, 6 decimals). The standard x402-fetch client signs + retries for you — no account, no API key. Your wallet needs a little USDC on Base; no gas ETH (the exact scheme is EIP-3009 gasless — the facilitator submits). The 2nd arg to wrapFetchWithPayment is a viem WalletClient, not a bare account.
@@ -1558,6 +1566,7 @@ app.get("/sitemap.xml", (c) => {
     { path: "/token-safety", priority: "0.8", changefreq: "daily" },
     { path: "/check", priority: "0.8", changefreq: "weekly" },
     { path: "/partners", priority: "0.8", changefreq: "weekly" },
+    { path: "/pricing", priority: "0.9", changefreq: "weekly" },
     { path: "/scan/mcp-scanner", priority: "0.9", changefreq: "weekly" },
     { path: "/scan/badge-gen", priority: "0.8", changefreq: "weekly" },
     { path: "/scan/directory", priority: "0.9", changefreq: "daily" },
@@ -8279,6 +8288,113 @@ md.textContent="[![MCP security]("+src+")]("+reportUrl(t)+")";}
 document.getElementById("b").onclick=go;
 document.getElementById("u").addEventListener("keydown",function(e){if(e.key==="Enter")go();});
 document.getElementById("copy").onclick=function(){navigator.clipboard&&navigator.clipboard.writeText(md.textContent);this.textContent="Copied";var b=this;setTimeout(function(){b.textContent="Copy";},1400);};
+var sub=document.getElementById("sub");
+if(sub)sub.onclick=async function(){sub.disabled=true;var o=sub.textContent;sub.textContent="Opening checkout…";try{var r=await fetch("/stripe/create-checkout-session",{method:"POST"});var j=await r.json();if(j.url){window.location.href=j.url;return;}alert("Could not start checkout: "+(j.error||"unknown"));}catch(e){alert("Could not start checkout: "+e);}sub.disabled=false;sub.textContent=o;};
+</script>`;
+  return c.html(html);
+});
+
+// Pricing — the canonical commerce page. A real company has one and AI answer-engines
+// cite it for "how much does Grey Ridge cost"; it is also the honest target for the
+// human/fiat section of /llms.txt. One plan (Pro, $9.99/mo, card via Stripe), the agent
+// pay-per-call rail noted as the no-account alternative. Subscribe wires to the live
+// /stripe/create-checkout-session; the key is delivered on the success landing + /api-key.
+app.get("/pricing", (c) => {
+  const ORIGIN = new URL(c.req.url).origin;
+  const title = "Pricing — Grey Ridge MCP security scanning";
+  const metaDesc =
+    "Scan any MCP server for prompt injection and tool poisoning free in your browser. Subscribe for $9.99/month to gate CI and get 100 scans across every endpoint — pay by card, no wallet, cancel anytime. Agents can pay per call over x402 with no account.";
+  const offerJsonLd = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: "Grey Ridge MCP Security — Pro",
+    description: metaDesc,
+    url: `${ORIGIN}/pricing`,
+    brand: { "@type": "Brand", name: "Grey Ridge Signals" },
+    offers: {
+      "@type": "Offer",
+      price: "9.99",
+      priceCurrency: "USD",
+      availability: "https://schema.org/InStock",
+      url: `${ORIGIN}/pricing`,
+    },
+  });
+  const html = `<!doctype html><html lang=en><meta charset=utf-8>
+<title>${title} — Grey Ridge Signals</title>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=description content="${metaDesc}">
+<meta property="og:title" content="Grey Ridge — Pricing">
+<meta property="og:description" content="${metaDesc}">
+<meta property="og:type" content="website">
+<link rel=canonical href="${ORIGIN}/pricing">
+<script type="application/ld+json">${offerJsonLd}</script>
+<style>
+:root{--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#0f766e;--bg:#fafafa;--ok:#16a34a}
+*{box-sizing:border-box}
+body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.55;max-width:760px;margin:0 auto;padding:2.5rem 1.25rem}
+h1{font-size:1.9rem;margin:0 0 .35rem;line-height:1.2}
+.sub{color:var(--muted);margin:0 0 1.8rem;font-size:1.05rem}
+h2{font-size:1.1rem;margin:2rem 0 .6rem}
+p{margin:.6rem 0}
+.plans{display:flex;gap:1.1rem;flex-wrap:wrap;margin:1.2rem 0}
+.plan{flex:1 1 300px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:1.5rem 1.6rem}
+.plan.feature{border:2px solid var(--accent)}
+.plan h3{margin:0 0 .2rem;font-size:1.15rem}
+.price{font-size:2.4rem;font-weight:800;line-height:1;margin:.3rem 0 .1rem}
+.price small{font-size:.95rem;font-weight:500;color:var(--muted)}
+.tag{color:var(--muted);font-size:.9rem;margin:0 0 1rem}
+ul{margin:.6rem 0 1.2rem;padding-left:1.15rem}
+li{margin:.35rem 0;font-size:.93rem}
+button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:.7rem 1.3rem;font-size:1rem;font-weight:700;cursor:pointer;width:100%}
+button:disabled{opacity:.6;cursor:default}
+.muted{color:var(--muted);font-size:.9rem}
+code{background:#eef2f7;padding:.1rem .35rem;border-radius:4px;font-size:.85em;word-break:break-all}
+a{color:var(--accent)}
+footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);color:var(--muted);font-size:.82rem}
+</style>
+<body>
+<h1>Simple pricing for MCP security</h1>
+<p class=sub>Scan any MCP server for prompt injection and tool poisoning free. Subscribe when you want to gate CI and watch your servers continuously.</p>
+
+<div class=plans>
+  <div class=plan>
+    <h3>Free</h3>
+    <div class=price>$0</div>
+    <p class=tag>No signup</p>
+    <ul>
+      <li>Scan any server in your browser — paste <code>tools/list</code> (private/local stays private) or scan a public URL</li>
+      <li>Verdict: clear · review · block, with risk score and severity counts</li>
+      <li>Live README badge that re-scans every six hours</li>
+      <li>Per-server trust reports you can share and link</li>
+    </ul>
+    <a href="/scan/mcp-scanner"><button>Scan a server free</button></a>
+  </div>
+  <div class="plan feature">
+    <h3>Pro</h3>
+    <div class=price>$9.99<small> /month</small></div>
+    <p class=tag>Pay by card · cancel anytime</p>
+    <ul>
+      <li>API key with <strong>100 scans / month</strong> across every Grey Ridge endpoint</li>
+      <li>Full audit detail: which tool, the exact injected text, OWASP LLM01/LLM08 mapping and remediation</li>
+      <li>Gate CI on the verdict — the GitHub Action fails the build on <code>block</code></li>
+      <li>Continuous re-scans so a server that was clean can't drift to poisoned unnoticed</li>
+      <li>No wallet, no crypto — Stripe checkout, key shown on the success page and at <code>/api-key</code></li>
+    </ul>
+    <button id=sub>Subscribe — $9.99/mo</button>
+  </div>
+</div>
+
+<h2>Prefer no account at all?</h2>
+<p class=muted>Agents pay per call over x402 (USDC on Base) with no signup and no API key — <code>$0.05</code> per MCP scan, <code>$0.001–$0.01</code> for the on-chain data and token-safety routes. See the <a href="/llms.txt">machine-readable catalog</a> or the <a href="/">full endpoint list</a>.</p>
+
+<h2>Questions</h2>
+<p class=muted><strong>Is my server data stored?</strong> No. The scanner reads only the advertised tool metadata you give it, once, against a read-only endpoint — it never invokes a tool and never stores the input, so private and localhost servers stay private.</p>
+<p class=muted><strong>What exactly does a scan catch?</strong> Concealed instructions (including contraction-phrased "don't tell the user" variants), data-exfiltration hints, dangerous capabilities, cross-tool shadowing, and invisible-unicode payloads — the <a href="/learn/mcp-tool-poisoning">tool-poisoning</a> attack class.</p>
+<p class=muted><strong>Can I cancel?</strong> Yes, anytime; the key stays valid through the paid period.</p>
+
+<footer>Grey Ridge Signals Group LLC · <a href="/scan/mcp-scanner">Free scanner</a> · <a href="/scan/directory">MCP security directory</a> · <a href="/">greyridgesignals.ai</a></footer>
+
+<script>
 var sub=document.getElementById("sub");
 if(sub)sub.onclick=async function(){sub.disabled=true;var o=sub.textContent;sub.textContent="Opening checkout…";try{var r=await fetch("/stripe/create-checkout-session",{method:"POST"});var j=await r.json();if(j.url){window.location.href=j.url;return;}alert("Could not start checkout: "+(j.error||"unknown"));}catch(e){alert("Could not start checkout: "+e);}sub.disabled=false;sub.textContent=o;};
 </script>`;
