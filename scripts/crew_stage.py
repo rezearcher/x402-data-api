@@ -271,7 +271,7 @@ def _oracle_external_dollar():
         if fa:
             ts = _dt.datetime.fromisoformat(str(fa).replace("Z", "+00:00"))
             age_h = (_dt.datetime.now(_dt.timezone.utc) - ts).total_seconds() / 3600.0
-            if age_h > max_age_h:
+            if age_h > max_age_h or age_h < -0.1:   # stale OR future-dated (clock-skew) => fail closed
                 return False
         return float(d.get("total_external_usdc", 0) or 0) >= floor
     except Exception:
