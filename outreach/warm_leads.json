@@ -1,0 +1,39 @@
+{
+  "_doc": "Ground-truth warm-lead state. The SIGNAL for 'may I nudge?' is the real thread last-sender, NOT a file mtime. A cycle may send ONLY when last_dir=='them' AND now>do_not_send_until. last_dir=='us' => ball-in-court on THEM => DO NOT SEND. Missing lead => review manually (degrade open), never auto-send. Update last_dir/last_at/do_not_send_until whenever you read a thread or send. Dates ISO-8601 UTC.",
+  "updated_at": "2026-10-21T23:58:00Z",
+  "leads": [
+    {
+      "lead": "DopamineDesk / Joshua Hernandez",
+      "channel": "email",
+      "thread_id": "1a152b620cf6f611",
+      "last_dir": "us",
+      "last_at": "2026-10-21T21:43:44Z",
+      "their_last_at": "2026-10-21T17:04:15Z",
+      "status": "ball-in-court",
+      "do_not_send_until": "2026-10-25",
+      "note": "Warmest lead. We answered his 2026-10-21 reply THREE times (snippet+prices+attribution, then EVIDENCE.md accuracy/paid-delivery, then a terse status self-send). He must review previews + send a token list for the free bounded test. DO NOT send again until he replies."
+    },
+    {
+      "lead": "LiquidLogicX / Miles",
+      "channel": "email",
+      "thread_id": "1a157c9da1e86694",
+      "last_dir": "them",
+      "last_at": "2026-10-21T04:36:22Z",
+      "their_last_at": "2026-10-21T04:36:22Z",
+      "status": "self-committed",
+      "do_not_send_until": "2026-10-27",
+      "note": "Miles said his team will pull tools/list and run the free paste-mode preview THIS WEEK, then take the itemized paid run if useful. Explicit ball-in-court on him. Do not nudge before end of week (2026-10-27)."
+    },
+    {
+      "lead": "agenticpay / Krystian Gwizdala",
+      "channel": "email",
+      "thread_id": "1a1524ad2b0d4f85",
+      "last_dir": "us",
+      "last_at": "2026-10-21T00:00:00Z",
+      "their_last_at": "2026-10-19T18:39:18Z",
+      "status": "ball-in-court",
+      "do_not_send_until": "2026-10-26",
+      "note": "He asked latency/uptime/free-tier for /chain/token-report as a pre-trade gate. We answered with measured latency + 99.86% uptime + free preview, plus 5 follow-ups already. DO NOT re-ping."
+    }
+  ]
+}
