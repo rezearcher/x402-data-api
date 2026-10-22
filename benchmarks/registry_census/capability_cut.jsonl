@@ -1,0 +1,109 @@
+{"url": "https://afmr.ai/api/rpc", "n_tools": 4, "classes": [], "hits": []}
+{"url": "https://afmr.ai/mcp", "n_tools": 4, "classes": [], "hits": []}
+{"url": "https://actwise.ai/ideation/mcp/v1", "n_tools": 2, "classes": [], "hits": []}
+{"url": "https://agenlify.ai/mcp", "n_tools": 3, "classes": [], "hits": []}
+{"url": "https://afg.ai/mcp", "error": "fetch-error:HTTPError"}
+{"url": "https://agentberg.ai/mcp", "error": "fetch-error:HTTPError"}
+{"url": "https://agent.autoposter.ai/mcp", "n_tools": 14, "classes": ["credential-access"], "hits": [{"tool": "autoposter_draft_post", "classes": ["credential-access"]}, {"tool": "autoposter_publish_draft", "classes": ["credential-access"]}, {"tool": "get_profile", "classes": ["credential-access"]}]}
+{"url": "https://advisorsai.ai/store-readiness-mcp", "n_tools": 1, "classes": ["credential-access"], "hits": [{"tool": "advisors_store_readiness_check", "classes": ["credential-access"]}]}
+{"url": "https://agentroam.ai/api/mcp", "n_tools": 11, "classes": [], "hits": []}
+{"url": "https://agentxray.ai/api/mcp", "error": "fetch-error:HTTPError"}
+{"url": "https://ai-akari.ai/mcp", "n_tools": 5, "classes": [], "hits": []}
+{"url": "https://ai-akari.ai/mcp-trust", "n_tools": 2, "classes": [], "hits": []}
+{"url": "https://agentsindex.ai/mcp", "n_tools": 12, "classes": ["credential-access"], "hits": [{"tool": "create_order", "classes": ["credential-access"]}]}
+{"url": "https://alcock.ai/api/mcp", "n_tools": 9, "classes": ["credential-access"], "hits": [{"tool": "register", "classes": ["credential-access"]}, {"tool": "submit_forecasts", "classes": ["credential-access"]}, {"tool": "my_report", "classes": ["credential-access"]}, {"tool": "start_exam", "classes": ["credential-access"]}, {"tool": "submit_exam", "classes": ["credential-access"]}, {"tool": "publish_rules", "classes": ["credential-access"]}]}
+{"url": "https://alpix.alpic.ai", "error": "fetch-error:HTTPError"}
+{"url": "https://agents.alphaquantlabs.ai/v1/mcp", "n_tools": 2, "classes": ["credential-access"], "hits": [{"tool": "get_full_report", "classes": ["credential-access"]}]}
+{"url": "https://apexai.academy/mcp", "error": "fetch-error:URLError"}
+{"url": "https://analyticslegends.ai/mcp", "n_tools": 22, "classes": ["credential-access"], "hits": [{"tool": "get_concept_card", "classes": ["credential-access"]}, {"tool": "get_study", "classes": ["credential-access"]}, {"tool": "get_academy_module", "classes": ["credential-access"]}, {"tool": "find_sap_clients", "classes": ["credential-access"]}, {"tool": "get_sap_client_profile", "classes": ["credential-access"]}, {"tool": "get_expansion_brief", "classes": ["credential-access"]}, {"tool": "find_partner_candidates", "classes": ["credential-access"]}, {"tool": "get_firm_intel", "classes": ["credential-access"]}]}
+{"url": "https://api.aislabs.ai/recorder/mcp", "n_tools": 5, "classes": [], "hits": []}
+{"url": "https://api.aislabs.ai/cve/mcp", "n_tools": 4, "classes": [], "hits": []}
+{"url": "https://api.aislabs.ai/mcp", "n_tools": 3, "classes": [], "hits": []}
+{"url": "https://api.alphabazaar.ai/mcp", "n_tools": 24, "classes": ["credential-access"], "hits": [{"tool": "publish_signal", "classes": ["credential-access"]}, {"tool": "register_agent", "classes": ["credential-access"]}, {"tool": "rotate_api_key", "classes": ["credential-access"]}]}
+{"url": "https://api.askmiles.ai/mcp", "n_tools": 5, "classes": [], "hits": []}
+{"url": "https://api.atako.ai/mcp/public", "n_tools": 4, "classes": [], "hits": []}
+{"url": "https://api.betslipdoctor.ai/api/mcp", "n_tools": 82, "classes": ["credential-access", "file-write"], "hits": [{"tool": "revise_tracked_slip", "classes": ["file-write"]}, {"tool": "connect_sportsbook", "classes": ["credential-access"]}, {"tool": "list_api_keys", "classes": ["credential-access"]}, {"tool": "create_api_key", "classes": ["credential-access"]}, {"tool": "revoke_api_key", "classes": ["credential-access"]}]}
+{"url": "https://api.bowmark.ai/mcp", "n_tools": 16, "classes": ["credential-access"], "hits": [{"tool": "request_secret", "classes": ["credential-access"]}, {"tool": "get_secret_link", "classes": ["credential-access"]}, {"tool": "add_connection", "classes": ["credential-access"]}]}
+{"url": "https://api.bowmark.ai/mcp/registry", "n_tools": 16, "classes": ["credential-access"], "hits": [{"tool": "request_secret", "classes": ["credential-access"]}, {"tool": "get_secret_link", "classes": ["credential-access"]}, {"tool": "add_connection", "classes": ["credential-access"]}]}
+{"url": "https://api.bowmark.ai/mcp?s=r", "n_tools": 16, "classes": ["credential-access"], "hits": [{"tool": "request_secret", "classes": ["credential-access"]}, {"tool": "get_secret_link", "classes": ["credential-access"]}, {"tool": "add_connection", "classes": ["credential-access"]}]}
+{"url": "https://app.aeviamodeler.ai/api/v1/connector/mcp", "error": "fetch-error:HTTPError"}
+{"url": "https://apir.ai/api/mcp", "n_tools": 3, "classes": ["credential-access"], "hits": [{"tool": "verify_agent", "classes": ["credential-access"]}, {"tool": "check_authority", "classes": ["credential-access"]}, {"tool": "get_verification_keys", "classes": ["credential-access"]}]}
+{"url": "https://app.aqta.ai/api/mcp", "n_tools": 10, "classes": [], "hits": []}
+{"url": "https://app.augenix.ai/api/mcp/public", "n_tools": 3, "classes": [], "hits": []}
+{"url": "https://app.bezal.ai/api/mcp", "n_tools": 13, "classes": [], "hits": []}
+{"url": "https://arabickeyboard.ai/mcp", "n_tools": 1, "classes": [], "hits": []}
+{"url": "https://app.inside.ad/api/mcp", "n_tools": 3, "classes": [], "hits": []}
+{"url": "https://app.bitroad.ai/api/v1/mcp", "error": "fetch-error:HTTPError"}
+{"url": "https://artidrop.ai/mcp", "n_tools": 4, "classes": [], "hits": []}
+{"url": "https://arclan.ai/mcp", "n_tools": 4, "classes": [], "hits": []}
+{"url": "https://app.annsa.ai/mcp", "n_tools": 8, "classes": [], "hits": []}
+{"url": "https://auteng.ai/mcp/docs", "n_tools": 6, "classes": [], "hits": []}
+{"url": "https://asrm.ai/mcp", "n_tools": 4, "classes": [], "hits": []}
+{"url": "https://auteng.ai/mcp", "error": "fetch-error:HTTPError"}
+{"url": "https://awardcast.ai/mcp", "n_tools": 8, "classes": [], "hits": []}
+{"url": "https://b4-index.vercel.app/mcp", "n_tools": 5, "classes": [], "hits": []}
+{"url": "https://bankrolled.ai/mcp", "n_tools": 4, "classes": [], "hits": []}
+{"url": "https://benchgecko.ai/api/mcp", "n_tools": 9, "classes": [], "hits": []}
+{"url": "https://aviado.ai/api/mcp", "n_tools": 11, "classes": [], "hits": []}
+{"url": "https://betterpost.ai/mcp", "n_tools": 23, "classes": [], "hits": []}
+{"url": "https://beevr.ai/mcp", "n_tools": 8, "classes": [], "hits": []}
+{"url": "https://autoblogging.ai/mcp", "n_tools": 6, "classes": [], "hits": []}
+{"url": "https://bizmoon.ai/api/mcp", "n_tools": 5, "classes": [], "hits": []}
+{"url": "https://blast-radius.ai/mcp", "n_tools": 9, "classes": [], "hits": []}
+{"url": "https://bidclub.ai/api/mcp", "n_tools": 6, "classes": [], "hits": []}
+{"url": "https://business-contact-finder-mcp.ottobot2025.workers.dev/mcp", "n_tools": 1, "classes": [], "hits": []}
+{"url": "https://contractors.agentlookups.ai/mcp", "n_tools": 1, "classes": ["credential-access"], "hits": [{"tool": "check_contractor", "classes": ["credential-access"]}]}
+{"url": "https://env.agentlookups.ai/mcp", "n_tools": 4, "classes": [], "hits": []}
+{"url": "https://docs.bithuman.ai/docs-mcp", "n_tools": 2, "classes": [], "hits": []}
+{"url": "https://easyvoice.ae/api/mcp", "n_tools": 7, "classes": ["credential-access"], "hits": [{"tool": "get_usage", "classes": ["credential-access"]}]}
+{"url": "https://events.aero/mcp/events", "n_tools": 5, "classes": [], "hits": []}
+{"url": "https://food.agentlookups.ai/mcp", "n_tools": 6, "classes": [], "hits": []}
+{"url": "https://fenlight.waggle.ae/mcp", "n_tools": 8, "classes": [], "hits": []}
+{"url": "https://house-painters-mcp.ottobot2025.workers.dev/mcp", "n_tools": 3, "classes": [], "hits": []}
+{"url": "https://house-painters.ottobot.agency/mcp", "n_tools": 3, "classes": [], "hits": []}
+{"url": "https://justidea.agency/mcp", "n_tools": 8, "classes": [], "hits": []}
+{"url": "https://genosys.ae/mcp", "n_tools": 11, "classes": [], "hits": []}
+{"url": "https://license-changes-mcp.ottobot2025.workers.dev/mcp", "n_tools": 2, "classes": [], "hits": []}
+{"url": "https://law.agentlookups.ai/mcp", "n_tools": 4, "classes": [], "hits": []}
+{"url": "https://mcp.adoraads.ai/beauty", "n_tools": 6, "classes": [], "hits": []}
+{"url": "https://mcp-server-295985738387.europe-west1.run.app/mcp", "n_tools": 20, "classes": ["credential-access"], "hits": [{"tool": "finnhub_stock_quote", "classes": ["credential-access"]}, {"tool": "open_banking_transactions", "classes": ["credential-access"]}, {"tool": "bank_accounts", "classes": ["credential-access"]}, {"tool": "crypto_fx_rates", "classes": ["credential-access"]}, {"tool": "web_news_headlines", "classes": ["credential-access"]}, {"tool": "stripe_payment_records", "classes": ["credential-access"]}]}
+{"url": "https://mcp.agenticterminal.ai/mcp", "n_tools": 6, "classes": ["credential-access"], "hits": [{"tool": "get_merchant", "classes": ["credential-access"]}, {"tool": "whoami", "classes": ["credential-access"]}]}
+{"url": "https://mcp.airshelf.ai/mcp", "n_tools": 8, "classes": [], "hits": []}
+{"url": "https://mcp.alphacreek.ai/mcp", "n_tools": 5, "classes": [], "hits": []}
+{"url": "https://mcp.aivikings.ai/mcp", "error": "fetch-error:HTTPError"}
+{"url": "https://mcp.aivonic.ai", "error": "fetch-error:HTTPError"}
+{"url": "https://mcp.alpic.ai", "error": "fetch-error:HTTPError"}
+{"url": "https://mcp.arvx.ai/mcp", "n_tools": 3, "classes": [], "hits": []}
+{"url": "https://mcp.askwatch.ai/gsc", "n_tools": 11, "classes": [], "hits": []}
+{"url": "https://mcp.askyouraudience.ai/mcp", "error": "fetch-error:HTTPError"}
+{"url": "https://mcp.auralogs.ai/mcp", "n_tools": 7, "classes": [], "hits": []}
+{"url": "https://mcp.bassethound.ai/mcp", "error": "fetch-error:HTTPError"}
+{"url": "https://mcp.bcited.ai/public", "n_tools": 6, "classes": [], "hits": []}
+{"url": "https://mcp.bev-buyer.ai/mcp", "n_tools": 9, "classes": [], "hits": []}
+{"url": "https://mcp.bithuman.ai/mcp", "n_tools": 3, "classes": [], "hits": []}
+{"url": "https://mcp.botinfo.ai/mcp", "n_tools": 4, "classes": [], "hits": []}
+{"url": "https://mcp.goji.agency/mcp", "n_tools": 9, "classes": [], "hits": []}
+{"url": "https://mcp.getle.ad/mcp", "n_tools": 35, "classes": ["credential-access"], "hits": [{"tool": "list_mailboxes", "classes": ["credential-access"]}, {"tool": "preview_b2b_leads", "classes": ["credential-access"]}]}
+{"url": "https://mcp.projectory.ae/mcp", "n_tools": 5, "classes": [], "hits": []}
+{"url": "https://mcp.datadubai.ae/mcp", "n_tools": 6, "classes": [], "hits": []}
+{"url": "https://overassessed.agentlookups.ai/mcp", "n_tools": 1, "classes": [], "hits": []}
+{"url": "https://platform.ankra.app/api/v1/mcp", "error": "fetch-error:HTTPError"}
+{"url": "https://plantguide.ae/mcp", "n_tools": 15, "classes": [], "hits": []}
+{"url": "https://rx.agentlookups.ai/mcp", "n_tools": 1, "classes": [], "hits": []}
+{"url": "https://propick.ae/mcp", "n_tools": 8, "classes": [], "hits": []}
+{"url": "https://scan.agenticplug.ai/mcp", "n_tools": 2, "classes": [], "hits": []}
+{"url": "https://mcp.grovisor.ae/", "n_tools": 8, "classes": [], "hits": []}
+{"url": "https://prices.brainy.ae/mcp", "n_tools": 19, "classes": [], "hits": []}
+{"url": "https://solar.agentlookups.ai/mcp", "n_tools": 2, "classes": [], "hits": []}
+{"url": "https://sh.inference.ac", "error": "fetch-error:HTTPError"}
+{"url": "https://prices.brainy.ae/mcp/v2", "n_tools": 26, "classes": [], "hits": []}
+{"url": "https://supershopping-mcp.atdev.ai/mcp", "error": "fetch-error:HTTPError"}
+{"url": "https://thebureauoflostcontext.agency/mcp", "n_tools": 5, "classes": [], "hits": []}
+{"url": "https://tandem.ac/mcp", "n_tools": 13, "classes": [], "hits": []}
+{"url": "https://www.agentboard.ai/mcp", "n_tools": 35, "classes": ["credential-access"], "hits": [{"tool": "delete_account", "classes": ["credential-access"]}, {"tool": "read_replies", "classes": ["credential-access"]}, {"tool": "find_needs", "classes": ["credential-access"]}, {"tool": "find_offers", "classes": ["credential-access"]}, {"tool": "find_launches", "classes": ["credential-access"]}, {"tool": "find_agents", "classes": ["credential-access"]}, {"tool": "list_publications", "classes": ["credential-access"]}, {"tool": "follow_agent", "classes": ["credential-access"]}, {"tool": "unfollow_agent", "classes": ["credential-access"]}, {"tool": "following_posts", "classes": ["credential-access"]}, {"tool": "register_agent", "classes": ["credential-access"]}, {"tool": "post_thread", "classes": ["credential-access"]}, {"tool": "reply", "classes": ["credential-access"]}, {"tool": "update_supply", "classes": ["credential-access"]}, {"tool": "report", "classes": ["credential-access"]}, {"tool": "whoami", "classes": ["credential-access"]}, {"tool": "update_profile", "classes": ["credential-access"]}, {"tool": "rotate_credential", "classes": ["credential-access"]}, {"tool": "my_activity", "classes": ["credential-access"]}, {"tool": "make_claim", "classes": ["credential-access"]}, {"tool": "check_claim", "classes": ["credential-access"]}, {"tool": "correct_claim", "classes": ["credential-access"]}, {"tool": "credit_check", "classes": ["credential-access"]}, {"tool": "list_claims", "classes": ["credential-access"]}, {"tool": "list_unchecked_claims", "classes": ["credential-access"]}]}
+{"url": "https://www.arcreport.ai/api/ask", "n_tools": 16, "classes": [], "hits": []}
+{"url": "https://www.arcreport.ai/api/mcp", "n_tools": 19, "classes": [], "hits": []}
+{"url": "https://vera.waggle.ae/v1/mcp", "n_tools": 16, "classes": [], "hits": []}
+{"url": "https://www.hood.ag/api/mcp", "n_tools": 5, "classes": [], "hits": []}
+{"url": "https://www.bordet.ai/api/mcp/mcp", "n_tools": 11, "classes": [], "hits": []}
+{"url": "https://www.ai-portal.ai/mcp", "n_tools": 4, "classes": [], "hits": []}

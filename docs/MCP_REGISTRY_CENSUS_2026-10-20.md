@@ -22,6 +22,24 @@ A point-in-time scan of a registry server almost always returns **CLEAR** — th
 
 The one `block` in the first snapshot was a scanner **false positive** — the rule `never tell ... the user` matched a benign accuracy instruction ("Never tell the user a likely_available name is available"). Reproduced locally, the rule was narrowed to concealment phrasing, and the sample plus two true-poisoning variants were added to the corpus (now n=45: local analyzer recall 1.00 / precision 1.00, **in-sample — not a guarantee on unseen servers**). Corrected reading: 174/174 readable remotes clear across both snapshots.
 
+## What's behind the open tool surface — a second cut
+
+A follow-up pass re-queried `tools/list` on every server from the first snapshot that had answered unauthenticated, to look past the *count* of readable servers and at *what* they expose. Of the 109, **93 re-answered on 2026-10-22** (the other 16 had since churned, gone credential-gated, or returned errors), advertising 833 tools in total.
+
+**The readable registry skews benign-public.** About **four in five of the re-probed servers (75 of 93) advertise only read-only lookup tools** — search, `get_*`, `list_*`, directory and catalogue endpoints. That is the expected shape of a public registry and it is consistent with the 0% poisoning rate: most servers that answer anonymously are *meant* to.
+
+**But a real minority expose a sensitive tool surface to anonymous callers.** A high-precision pass for state-changing or credential-scoped tools flagged a handful of servers whose advertised surface — the names, descriptions and JSON schemas any anonymous client can read before trusting them — includes operations like these (verified live, quoting each server's own tool descriptions):
+
+- **A secrets manager** advertises `request_secret`, `get_secret_link` ("answer *where is my Acme password?* with somewhere to go") and `add_connection` (sign-in links for third-party sites).
+- **An API-key console** advertises `create_api_key` (issues `…_live_…` keys with scopes), `revoke_api_key` and `connect_sportsbook` account-linking.
+- **An open-banking server** advertises `open_banking_transactions` ("bank account balances and transaction history via PSD2 Open Banking, 300+ UK and European banks"), `bank_accounts` and `stripe_payment_records`.
+- **A social/identity server** advertises `delete_account` ("permanently delete the identity belonging to this credential").
+
+A crucial, honest boundary: a readable `tools/list` means the **surface** is anonymous — anyone can enumerate that a server offers banking, secret-vault, key-issuance or account-deletion capabilities and read the exact schema an LLM will act on. It does **not** prove those actions execute without a credential (most are scoped to "this account"). The exposure is recon and prompt-injection surface, not proof of unauthenticated execution. That is still the live risk: the surface is attacker-*visible* and attacker-*mutable* on every deploy.
+
+This is what sharpens the product. The 81% read-only majority rarely needs more than a point-in-time CLEAR. The servers that matter are this sensitive minority — where an open, drifting tool surface describing money movement, credentials or destructive actions is exactly the thing worth watching on every connect. Method and the per-server matches are reproducible from `scripts/census_capability_cut.py`.
+
+
 ## Check your own MCP server (free, no account)
 
 ```bash
@@ -32,3 +50,4 @@ curl -s -X POST https://x402-data-api.sigrunner.workers.dev/scan/mcp/preview \
 ```
 
 Itemized findings with evidence and OWASP LLM01/LLM08 mapping: paid `/scan/mcp` ($0.05, x402 on Base). Continuous drift monitoring with alert-on-change: $9.99/mo. Contact: contact@greyridgesignals.ai
+
