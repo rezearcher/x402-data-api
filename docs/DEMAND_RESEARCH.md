@@ -15,6 +15,22 @@ Source: live `GET /metrics` on the production Worker, 2026-10-22, numbers comput
 - **Implication (recorded in `customer_need_registry: mcp-scan-paid-pull-is-zero`):** stop building agent-native MCP-scan surfaces — the money is a fiat monitoring subscription ($9.99/mo Stripe rail is already live) sold to *human* MCP operators, with x402 invisible on the backend. The single remaining gate is human discovery of that product — identity-gated community seeding (Rez) or slow organic SEO. More surfaces for the x402-agent audience add $0.
 - **Discovery channels checked this pass:** PulseMCP is paused for new submissions (as of 2026-09-03) but auto-ingests from the Official MCP Registry, where we are already published — so no action and no blocker there.
 
+### 0b. 2026-10-22 route-level trace — what the 3 external payers actually bought (economist Q 58df05cc5f)
+
+§0 established *how much* external demand exists ($0.77/30d across 3 wallets). This traces *which route each wallet bought and whether any came back* — the only distinction that separates a real recurring need from catalog-walking bots. Source: `GET /internal/traffic-stats?paid=1` (the `getPaid` path+payer aggregate), joined to `ROUTE_CATALOG` prices in code. Reproducible every cycle via **`scripts/external_payer_routes.py`**.
+
+| Payer | Calls | Distinct routes | 30d USDC | Repeat buyer? |
+|-------|-------|-----------------|----------|---------------|
+| `0xec2abd3e…` | 7 | 7 (`/chain/tx`, `/chain/token-balance`, `/chain/receipt`, `/chain/gas-price`, `/chain/code`, `/chain/block-number`, `/chain/balance`) | $0.0200 | No — each route hit exactly once |
+| `0xfb4d74c8…` | 1 | 1 (`/crypto/prices`) | $0.0010 | No |
+| `0xa19f6215…` | 1 | 1 (`/defi/yields`) | $0.0010 | No |
+
+**Total genuine external demand = $0.0220 / 30d = $0.00073/day. Zero repeat purchases across every wallet.** (Note the per-metrics $0.77 figure counts a wider settlement window incl. amounts the paid-row store didn't price; the route-priced floor here is $0.022 — either way, dust.)
+
+- `0xec2abd3e…` is a textbook **catalog-enumeration sweep bot**: it walked seven *different* cheap chain-read endpoints, one call each, and never returned. The other two each poked a single $0.001 route once.
+- **No route — not the "popular" ones, not the differentiated scan/MCP lanes — shows a second purchase by any external wallet.** The scan/token-safety/MCP lanes received **0** external calls; the only external money touched the cheapest generic RPC/data routes, once, by bots.
+- **Decision (evidence over opinion):** this closes the route-tuning question for good. There is no route to optimize *into* demand on the agent rail, because the demand is enumeration, not purchase intent. The paid product is a **human fiat subscription** (MCPSafe model, our $9.99/mo Stripe rail already live); x402 stays an invisible backend supply. `scripts/external_payer_routes.py` is now the x402-rail demand sensor — the only new-lead signal it can surface is a *new* external wallet or a *repeat* purchase of the same route; until it prints `repeat-buyer seen: True`, the rail is dust.
+
 ---
 
 ## 1. Executive Summary
