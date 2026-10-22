@@ -32,6 +32,7 @@ if [ -z "$KEY" ]; then
   KEY="$(op read op://Division/STRIPE_API_KEY/credential 2>/dev/null || true)"
 fi
 [ -n "$KEY" ] || die "no Stripe key (pass as arg, set STRIPE_API_KEY, or store op://Division/STRIPE_API_KEY/credential)"
+KEY="$(printf '%s' "$KEY" | tr -d '[:space:]')"   # strip any stray newline/space from paste
 case "$KEY" in
   sk_live_*|rk_live_*) MODE="LIVE" ;;
   sk_test_*|rk_test_*) MODE="TEST" ;;
@@ -45,8 +46,13 @@ sapi() { # sapi METHOD /path [curl args...]
 }
 
 # --- validate the key actually works before touching anything ---
-ACCT="$(sapi GET /account 2>/dev/null)" || die "key rejected by Stripe /account — is it valid and not revoked?"
-echo "  account: $(echo "$ACCT" | python3 -c 'import sys,json;a=json.load(sys.stdin);print(a.get("id"),"|",a.get("business_profile",{}).get("name") or a.get("email") or "(no name)")')"
+# Validate against a scope we actually granted (Prices: read via write). A restricted
+# key does NOT get /v1/account unless the "Account" scope is granted, which we don't need.
+sapi GET "/prices?limit=1" >/dev/null 2>&1 \
+  || die "key rejected by Stripe — invalid/revoked, OR missing 'Prices' (Billing) Write scope. Re-check the 6 scopes."
+# Best-effort account label (won't fail if the Account scope isn't granted)
+ACCT="$(sapi GET /account 2>/dev/null || true)"
+[ -n "$ACCT" ] && echo "  account: $(echo "$ACCT" | python3 -c 'import sys,json;a=json.load(sys.stdin);print(a.get("id"),"|",a.get("business_profile",{}).get("name") or a.get("email") or "(no name)")' 2>/dev/null)" || echo "  key valid (account label not exposed to this restricted key — fine)"
 
 # --- 1. Price: reuse by lookup_key, else create a $9.99/mo recurring price ---
 say "Price ($9.99/mo recurring)"

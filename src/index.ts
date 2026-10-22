@@ -8186,15 +8186,72 @@ app.get("/scan/mcp/badge", async (c) => {
 });
 
 // Self-serve badge generator page: paste an MCP URL, see the live verdict, copy README markdown.
+// The adoption surface for the free hook — renders a working live demo on load (external public
+// server) so a visitor sees proof the scan works before pasting their own URL.
 app.get("/scan/badge-gen", (c) => {
-  const html = `<!doctype html><meta charset=utf-8><title>MCP scan badge</title><meta name=viewport content="width=device-width,initial-scale=1">
-<body style="font-family:system-ui;max-width:640px;margin:2rem auto;padding:0 1rem"><h1>MCP scan badge</h1>
-<p>Paste your MCP server URL. We statically scan its advertised tool metadata (never call tools) and give you a live README badge.</p>
-<input id=u placeholder="https://your-server.example/mcp" style="width:100%;padding:.5rem"><p><button id=b>Generate</button></p>
-<p id=img></p><pre id=md style="white-space:pre-wrap;word-break:break-all"></pre>
-<p>Itemized findings + OWASP mapping: paid <code>GET /scan/mcp</code> ($0.05 USDC via x402).</p>
-<script>b.onclick=()=>{const u=encodeURIComponent(location.origin+"/scan/mcp/badge?url="+encodeURIComponent(document.getElementById("u").value));
-const src="https://img.shields.io/endpoint?url="+u;img.innerHTML='<img src="'+src+'">';md.textContent="![mcp-scan]("+src+")"}</script>`;
+  const html = `<!doctype html><html lang=en><meta charset=utf-8>
+<title>MCP server security badge — Grey Ridge Signals</title>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=description content="A live README badge showing your MCP server is free of prompt-injection and tool-poisoning. Scanned by Grey Ridge Signals.">
+<style>
+:root{--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#0f766e;--bg:#fafafa}
+*{box-sizing:border-box}
+body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.55;max-width:720px;margin:0 auto;padding:2.5rem 1.25rem}
+h1{font-size:1.6rem;margin:0 0 .35rem}
+.sub{color:var(--muted);margin:0 0 2rem}
+h2{font-size:1.05rem;margin:2rem 0 .6rem}
+label{font-weight:600;font-size:.9rem;display:block;margin:0 0 .4rem}
+input{width:100%;padding:.6rem .7rem;font-size:1rem;border:1px solid var(--line);border-radius:8px}
+button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:.6rem 1.1rem;font-size:.95rem;font-weight:600;cursor:pointer;margin-top:.7rem}
+button.ghost{background:#fff;color:var(--accent);border:1px solid var(--accent);padding:.35rem .7rem;font-size:.82rem;margin:0}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:1.1rem 1.2rem;margin:1rem 0}
+.badge-row{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;min-height:28px}
+pre{background:#0b1021;color:#e6edf3;padding:.8rem;border-radius:8px;overflow:auto;font-size:.82rem;white-space:pre-wrap;word-break:break-all;margin:.6rem 0 0}
+code{background:#eef2f7;padding:.1rem .35rem;border-radius:4px;font-size:.85em}
+.muted{color:var(--muted);font-size:.9rem}
+a{color:var(--accent)}
+footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);color:var(--muted);font-size:.82rem}
+</style>
+<body>
+<h1>MCP server security badge</h1>
+<p class=sub>Show the agents and developers who connect to your MCP server that its advertised tools are free of prompt-injection and tool-poisoning. The badge re-scans every six hours and links to the full audit.</p>
+
+<h2>Live example</h2>
+<p class=muted>A real public MCP server, scanned right now (static metadata only — we never call its tools):</p>
+<div class=card>
+  <div class=badge-row id=demo><span class=muted>loading…</span></div>
+  <p class=muted style="margin:.6rem 0 0"><code>https://mcp.deepwiki.com/mcp</code></p>
+</div>
+
+<h2>Generate your badge</h2>
+<label for=u>Your MCP server URL</label>
+<input id=u placeholder="https://your-server.example/mcp" autocomplete=off>
+<button id=b>Scan &amp; generate badge</button>
+<div class=card id=out style="display:none">
+  <div class=badge-row id=img></div>
+  <div style="display:flex;align-items:center;gap:.6rem;margin:.8rem 0 0"><strong style="font-size:.85rem">README markdown</strong><button class=ghost id=copy>Copy</button></div>
+  <pre id=md></pre>
+</div>
+
+<h2>What the verdict means</h2>
+<p class=muted><strong style="color:#16a34a">clear</strong> — no injection/poisoning patterns in any advertised tool. <strong style="color:#ca8a04">review</strong> — suspicious metadata worth a human look. <strong style="color:#dc2626">block</strong> — do not admit this server until resolved.</p>
+<p class=muted>Want the itemized findings — which tool, the injected text, the OWASP mapping (LLM01/LLM08) and remediation? That's the full audit: <code>GET /scan/mcp?url=…</code> ($0.05 USDC via x402), or zero-egress <code>POST /scan/mcp</code> with your <code>tools/list</code> for private servers.</p>
+
+<footer>Grey Ridge Signals Group LLC · Static MCP tool-metadata analysis. The scanner reads advertised tool descriptions and schemas; it never invokes a tool. <a href="/">greyridgesignals.ai</a></footer>
+
+<script>
+var ORIGIN=location.origin;
+function badgeSrc(target){return "https://img.shields.io/endpoint?url="+encodeURIComponent(ORIGIN+"/scan/mcp/badge?url="+encodeURIComponent(target))+"&style=flat-square";}
+function render(el,target,withLink){var src=badgeSrc(target);var img='<img alt="MCP scan verdict" src="'+src+'">';el.innerHTML=withLink?'<a href="'+ORIGIN+'/scan/badge-gen">'+img+'</a>':img;return src;}
+render(document.getElementById("demo"),"https://mcp.deepwiki.com/mcp",false);
+var md=document.getElementById("md"),out=document.getElementById("out");
+function go(){var t=document.getElementById("u").value.trim();if(!/^https?:\\/\\//.test(t)){document.getElementById("u").focus();return;}
+out.style.display="block";var src=render(document.getElementById("img"),t,false);
+md.textContent="[![MCP scan]("+src+")]("+ORIGIN+"/scan/badge-gen)";}
+document.getElementById("b").onclick=go;
+document.getElementById("u").addEventListener("keydown",function(e){if(e.key==="Enter")go();});
+document.getElementById("copy").onclick=function(){navigator.clipboard&&navigator.clipboard.writeText(md.textContent);this.textContent="Copied";var b=this;setTimeout(function(){b.textContent="Copy";},1400);};
+</script>`;
   return c.html(html);
 });
 
