@@ -1401,11 +1401,21 @@ Runnable version: https://github.com/rezearcher/x402-data-api/blob/main/examples
 
 Already run a generic x402 buyer adapter? This API is wire-compatible with OpenAPI-driven x402 MCP clients: our /openapi.json tags every billable route with x-billable/x-availability/x-price-usdc and honors ?preview=true on the paid path, and /.well-known/agent-capabilities.json?q=&limit=N returns ranked products whose operation_id resolves straight back to the OpenAPI operation. e.g. point the npm MCP adapter dopaminedesk-ai-data-marketplace-mcp at us with one env var — MARKETPLACE_URL=${BASE} — to discover, preview, and buy Grey Ridge routes with no code change.
 
-## Start here — pre-trade safety gate for Base trading agents (flagship)
-- GET ${BASE}/gate/swap?token=<0x…>&side=buy&notional_usd=500 — $0.008 — ONE decision GO|HOLD|BLOCK sized to your trade (honeypot/sellability + liquidity price impact). Free try: ${BASE}/gate/swap/preview?token=usdc|weth|cbbtc|aero|degen (any real Base 0x address: 3 free/day/IP).
+## Start here — two flagships (what agents actually pay us for)
+
+### 1. MCP server security scan — prompt-injection / tool-poisoning audit (unique; no free equivalent)
+Before your agent trusts an MCP server's tools, scan them for hidden-instruction / tool-poisoning attacks (OWASP LLM01/LLM08). Zero-egress by design: for private or OAuth-gated servers you POST only the tools/list JSON — nothing else leaves your side. Unlike token-safety (where free multi-chain scanners exist), there is no free equivalent for this.
+- POST ${BASE}/scan/mcp — $0.05 — itemized findings (which tool, the injected text, remediation) + risk score + verdict clear|review|block. Body: {"tools":[…]} from your server's tools/list (or GET ?url=<public-mcp-server>).
+- Free preview: POST ${BASE}/scan/mcp/preview with {"tools":[…]} → counts + severity + risk score + verdict (detail withheld). One-liner that pulls an auth'd server's tools/list over Streamable-HTTP: https://github.com/rezearcher/x402-data-api/blob/main/examples/mcp-scan-preview.sh
+- CI gate: uses: rezearcher/x402-data-api/actions/mcp-scan@main — runs the scan in CI and fails the build on a block verdict.
+
+### 2. Pre-trade decision gate for Base trading agents — a decision, not raw flags
+Raw honeypot-flag APIs make your agent interpret the flags; this returns ONE decision sized to YOUR trade. Base-native (Base ERC-20s) — if you trade other chains, keep your multi-chain scanner and use this where you're on Base.
+- GET ${BASE}/gate/swap?token=<0x…>&side=buy&notional_usd=500 — $0.008 — GO|HOLD|BLOCK (honeypot/sellability + liquidity price impact vs your trade size). Free try: ${BASE}/gate/swap/preview?token=usdc|weth|cbbtc|aero|degen (any real Base 0x address: 3 free/day/IP).
 - GET ${BASE}/chain/token-report?token=<0x…> — $0.01 — SAFE|CAUTION|AVOID + risk_score 0-100 + reasons. Free try: ${BASE}/chain/token-report/preview?token=aero
-- Measured uptime/latency of these (not an SLA): GET ${BASE}/status (live machine-readable JSON) or https://github.com/rezearcher/x402-data-api/blob/main/docs/STATUS.md
-- Proof pack for integrators (a real settled Base-mainnet x402 tx + decoded receipt, measured reliability, and accuracy stated honestly incl. what we have NOT yet benchmarked): https://github.com/rezearcher/x402-data-api/blob/main/docs/EVIDENCE.md
+
+Measured uptime/latency of these (not an SLA): GET ${BASE}/status (live machine-readable JSON) or https://github.com/rezearcher/x402-data-api/blob/main/docs/STATUS.md
+Proof pack for integrators (a real settled Base-mainnet x402 tx + decoded receipt, measured reliability, and accuracy stated honestly incl. what we have NOT yet benchmarked): https://github.com/rezearcher/x402-data-api/blob/main/docs/EVIDENCE.md
 
 ## Endpoints
 - Human/agent try-it page: ${BASE}/check?token=<0x… Base ERC-20> — free verdict card (3/day/IP).

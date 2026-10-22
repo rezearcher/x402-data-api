@@ -15,6 +15,15 @@ can taste the payload before paying.
 
 ---
 
+## Two flagships — what agents actually pay for
+
+1. **MCP server security scan** (`/scan/mcp`, $0.05) — a prompt-injection / tool-poisoning audit of an MCP server's tools (OWASP LLM01/LLM08). **Zero-egress**: for private/OAuth-gated servers you POST only the `tools/list` JSON — nothing else leaves your side. *There is no free equivalent for this* (unlike token-safety, where free multi-chain scanners exist). Free preview: `POST /scan/mcp/preview`. CI gate: `uses: rezearcher/x402-data-api/actions/mcp-scan@main`.
+2. **Pre-trade decision gate** (`/gate/swap`, $0.008 · `/chain/token-report`, $0.01) — a *decision* (GO/HOLD/BLOCK, SAFE/CAUTION/AVOID) sized to your trade, not raw flags your agent has to interpret. **Base-native**; if you trade other chains, keep your multi-chain scanner and use this on Base.
+
+Everything below is the full catalog (crypto/DeFi data, on-chain reads, LLM, enrichment). Measured reliability at [`/status`](https://x402-data-api.sigrunner.workers.dev/status) (not an SLA).
+
+---
+
 ## Endpoints
 
 ### Crypto & DeFi data
