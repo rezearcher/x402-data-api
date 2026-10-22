@@ -14,17 +14,27 @@ account (custody key). Everything else is done.
 - Valid `fc:miniapp` + legacy `fc:frame` embed meta tags (verified live).
 - Upsell: humans → /pricing ($9.99/mo, card); agents → x402 /gate/swap ($0.008/call).
 
-## The one action (≈2 min)
-1. Open the embed preview tool to confirm the card renders:
-   https://farcaster.xyz/~/developers/mini-apps/embed  (paste the /miniapp URL)
-2. Cast from the Grey Ridge (or your) Farcaster account. Suggested copy:
+## The one action — now ONE CLICK (pick whichever account you have)
+
+The copy + embed are pre-filled. Open the link on the device logged into the
+account, review, tap **Cast** / **Post**. That's the whole atom.
+
+**Warpcast (Farcaster — best: renders the interactive Mini App card in-feed):**
+
+    https://warpcast.com/~/compose?text=Aping%20a%20new%20Base%20token%3F%20Paste%20the%20contract%20and%20get%20GO%20%2F%20HOLD%20%2F%20BLOCK%20before%20you%20sign%20%E2%80%94%20honeypot%2C%20sell-tax%20and%20liquidity%20checks%20in%20one%20tap.%20Free%2C%20no%20wallet%20connect%2C%20no%20login.%0A%0ABase%20Token%20Gate%20%F0%9F%91%87&embeds[]=https%3A%2F%2Fx402-data-api.sigrunner.workers.dev%2Fminiapp
+
+**X / Twitter (shows the card image + link):**
+
+    https://twitter.com/intent/tweet?text=Aping%20a%20new%20Base%20token%3F%20Paste%20the%20contract%2C%20get%20GO%20%2F%20HOLD%20%2F%20BLOCK%20before%20you%20sign%20%E2%80%94%20honeypot%2C%20sell-tax%20%26%20liquidity%20checks%20in%20one%20tap.%20Free%2C%20no%20wallet%20connect%3A&url=https%3A%2F%2Fx402-data-api.sigrunner.workers.dev%2Fminiapp
+
+Fallback if you'd rather write it yourself — raw copy:
 
    > Before you ape into a Base token: paste the contract and get GO / HOLD / BLOCK —
    > honeypot + sellability sim, admin-control checks, and your trade size vs pool
    > liquidity. One answer, free. 👇
    > https://x402-data-api.sigrunner.workers.dev/miniapp
 
-3. (Optional, to LIST in the Farcaster app store — not needed to share): publish a
+(Optional, to LIST in the Farcaster app store — not needed to share): publish a
    signed domain-association at `/.well-known/farcaster.json`. This needs your
    custody key; generate via the Farcaster developer tools and paste the JSON back
    to the loop and it will add the route.
