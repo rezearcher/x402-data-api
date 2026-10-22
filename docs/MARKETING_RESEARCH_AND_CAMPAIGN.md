@@ -206,6 +206,51 @@ adapter/topic-queue/metrics instincts, and we delete the entire self-hosted-GPU/
 in favor of API backends + Remotion + an eval-gated, critic-passed, human-reviewed, data-rich
 content spec. That is the "better tools and methods" answer.
 
+## 8. The marketing agent + its pre-built skill library (the committed design)
+
+Decision (Rez): the agent has JUDGMENT (reads the environment, decides the next asset +
+format — meme / short video / article / data-report / thread); the pipelines are PRE-BUILT,
+reproducible SKILLS it *calls*. It never invents a pipeline mid-cycle (that's the AutoVideo
+trap). Skills = design-time + reused; judgment = runtime. Three hard constraints on every
+pipeline: **free, reproducible, AND high quality.**
+
+**The quality barbell (resolves "free" vs "high quality"):** free + local + reproducible is
+the DEFAULT floor; a small, capped paid spend is allowed ONLY where it demonstrably lifts
+quality (hero voice, an occasional hero video clip). Quality is enforced by METHOD, not spend:
+proprietary data in every asset, real product screen-capture over generic stock, accurate
+SVG/HTML charts over image-model charts, a critic pass, the `humanizer` skill to strip AI
+tells, and a human-review gate. The critic + golden-set eval hold the bar no matter which tool
+rendered the asset.
+
+**Asset-pipeline map — ADOPT existing skills first (most formats already covered):**
+
+| Format | Skill to call (adopt) | Free/reproducible pipeline | Quality lever |
+|---|---|---|---|
+| Meme / reaction image | `meme-generation` (Pillow, local, $0) | template + caption render | timing + real-moment caption; `humanizer` |
+| Data-report graphic / chart | `dataviz` + `frontend-design` | our scan data → SVG/HTML → screenshot ($0, accurate) | proprietary numbers = unfakeable |
+| Infographic | `baoyu-infographic` (canvas; API key optional) | HTML/canvas render | one clear finding, our data |
+| Article / teardown | Claude draft + `baoyu-article-illustrator` | markdown → our site ($0) | real findings + `humanizer` + human gate |
+| Comic / explainer strip | `baoyu-comic` | panel render | on-brand, novel angle |
+| Short video (the hard one) | NEW gap skill `greyridge-shortvid` → Remotion + whisper.cpp captions + screen-capture b-roll; TTS ElevenLabs(hero)/Gemini(bulk) | self-render ($0 render; small TTS spend) | screen-cap of our real product > generic stock; critic pass |
+| Social post / thread | Claude draft + card image (`/miniapp/card.svg` pattern) | $0 | one claim, 2-sec hook, `humanizer` |
+| Scheduling/calendar | `social-media-content-calendar` | plan cadence | avoid spam pacing |
+
+**Gaps to author (only these — everything else adopts):** `greyridge-shortvid` (the Remotion +
+captions + screen-capture short-form pipeline, the one real build) and a thin `greyridge-asset-critic`
+(the rubric/lint/novelty + human-gate pass every asset runs through). Both free + reproducible.
+
+**The agent shape (`marketing-director`, its own capped driver — NOT a makemoney-loop fan-out):**
+pre-phase reads the environment (new rug/exploit, CVE, our fresh scan results, what converted
+last cycle) → decides the ONE next asset + format for THIS cycle → calls the matching skill to
+produce it → runs it through `greyridge-asset-critic` + human-review gate → publishes via the
+channel adapter with UTM/`?ref=` → records what converted (feeds next cycle's pick). Grey Ridge/
+Rez byline, disclosed automation, no fabricated news (per §2). Capped cadence + budget (barbell).
+
+**Build order (gated on §4 first-test proving a channel):** (1) `greyridge-asset-critic` (quality
+gate — needed by everything), (2) one data-report graphic via `dataviz` on real scan data (the
+cheapest, highest-trust, $0 asset — pairs with the §4 scan-of-top-N report), (3) `greyridge-shortvid`
+only once a channel is proven. Don't build the video pipeline before we know video converts.
+
 ## Honest gaps (flagged by the threads)
 No clean 2025-26 first-100-customer dataset for our exact category; crypto/web3 funnel
 benchmarks essentially absent; Farcaster 2026 metrics unverified (treat the mini-app as a
