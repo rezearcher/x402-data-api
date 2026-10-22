@@ -1,14 +1,16 @@
+https://github.com/furkan3152/Kletia/issues/3
+https://github.com/DrVelvetFog/x402-pilot/issues/14
+https://github.com/HoudiniSwap/houdiniswap-agent/issues/28
+https://github.com/BlockRunAI/ClawRouter/issues/503
 https://github.com/Chain-Love/chain-love/issues/4745
 https://github.com/JonasFuchss/x402-trust-mcp/issues/1
 https://github.com/d85rcrcy27-creator/ArbiVault/issues/44
 https://github.com/chadi0x/TheBigBrother/issues/9
 https://github.com/X402blockchains/x402-registry/issues/19
-https://github.com/DrVelvetFog/x402-pilot/issues/14
 https://github.com/ondraulehla/mcpcost/issues/3
 https://github.com/BiscayneDev/shipyard-inference/issues/34
 https://github.com/joshuaswarren/sovereign-inference/issues/56
 https://github.com/Echolonius/the-penniless-agent/issues/6
-https://github.com/BlockRunAI/ClawRouter/issues/503
 https://github.com/bytesbrains/16ane/issues/81
 https://github.com/alextitonis/fly.ai/issues/14
 https://github.com/d-hinders/Haven-AI/issues/4188
@@ -57,6 +59,8 @@ https://github.com/xpaysh/awesome-x402/issues/868
 https://github.com/Haustorium12/gold-402/issues/38
 https://github.com/punkpeye/awesome-mcp-servers/issues/10353
 https://github.com/Br0ski777/x402-agent-tools/issues/7
+https://github.com/DrVelvetFog/x402-pilot/issues/14
+https://github.com/BlockRunAI/ClawRouter/issues/503
 https://github.com/JonasFuchss/x402-trust-mcp/issues/1
 https://github.com/chadi0x/TheBigBrother/issues/9
 https://github.com/ondraulehla/mcpcost/issues/3

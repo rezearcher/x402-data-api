@@ -36,3 +36,14 @@ TOP DEMAND LANE: None
 === payers (candidate integrators first, probe bots demoted) ===
 
 wrote /home/rez/.hermes/data/x402-demand/buyer_intel_latest.json
+op_run_launcher: 1Password read quota exhausted/low or unreachable (resets: 9 hours from now) — degrading OPEN, running with existing env
+1Password service account not configured yet (Rez atom pending) — falling back to existing env
+WARN: could not read TrafficLog secret: [Errno 2] No such file or directory: 'op'
+=== buyer-demand intel (window 336h) ===
+census rows: 3910 | distinct payers: 0 | real candidate integrators: 0 | probe/scorer bots filtered: 0
+demand by lane (our paid calls): {}
+TOP DEMAND LANE: None
+
+=== payers (candidate integrators first, probe bots demoted) ===
+
+wrote /home/rez/.hermes/data/x402-demand/buyer_intel_latest.json
