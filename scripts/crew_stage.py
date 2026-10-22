@@ -231,6 +231,10 @@ def set_(cid, js):
     if r is None:
         print("id not found")
         return 1
+    # The money flag is never hand-writable — only advance() sets it from the revenue sensor.
+    if isinstance(d.get("judge"), dict) and "external_usdc_confirmed" in d["judge"]:
+        del d["judge"]["external_usdc_confirmed"]
+        print("NOTE: ignored judge.external_usdc_confirmed — it is set only from the oracle, never by hand")
     protected = {k: r.get(k) for k in ("id", "stage", "status")}
     merge(r, d)
     r.update({k: v for k, v in protected.items() if v is not None})
@@ -238,6 +242,27 @@ def set_(cid, js):
     save(rows)
     print("updated %s (stage=%s, missing: %s)" % (cid, stage_of(r), ", ".join(missing(r)) or "none"))
     return 0
+
+
+def _oracle_external_dollar():
+    """The ungameable money gate: external USDC per the revenue sensor (keyless on-chain,
+    external-vs-self classified) ABOVE a real-money floor — NOT a hand-written flag, and NOT
+    the first_external_dollar marker (already tripped by sub-dollar bot dust). Pass only when
+    total_external_usdc >= floor ($1 default, i.e. real money beyond the ~$0.77 dust baseline).
+    Fails CLOSED: a missing/unreadable sensor returns False — never wave a candidate through the
+    final judge without real external money. X402_REVENUE_DIR / X402_EXTERNAL_USDC_FLOOR override
+    for tests."""
+    import json as _j
+    rev = os.path.expanduser(os.environ.get("X402_REVENUE_DIR", "~/.hermes/data/x402-revenue"))
+    try:
+        floor = float(os.environ.get("X402_EXTERNAL_USDC_FLOOR", "1.0"))
+    except Exception:
+        floor = 1.0
+    try:
+        d = _j.load(open(os.path.join(rev, "latest.json")))
+        return float(d.get("total_external_usdc", 0) or 0) >= floor
+    except Exception:
+        return False
 
 
 def advance(cid):
@@ -250,6 +275,12 @@ def advance(cid):
         print("HOLD at %s: candidate is %s" % (stage_of(r), r.get("status")))
         return 1
     st = stage_of(r)
+    if st == ORDER[-1]:
+        # Re-derive the money flag from the oracle at judge time — a hand-set value is
+        # overwritten by the revenue sensor's reality, so the final judge can't be gamed.
+        r.setdefault("judge", {})
+        if isinstance(r["judge"], dict):
+            r["judge"]["external_usdc_confirmed"] = _oracle_external_dollar()
     if killed(r):
         r["status"] = "parked"
         r["parked_why"] = str(get(r, STAGES[st]["kill_why"]) or "killed at " + st)
@@ -376,9 +407,17 @@ def selftest():
         assert set_(cid, '{"builder": {"artifacts": ["scripts/tool.py", "docs/x.md"]}}') == 0
         assert find(load(), cid)["builder"]["artifacts"] == ["scripts/tool.py", "docs/x.md"], "lists union"
         assert advance(cid) == 0 and stage_of(find(load(), cid)) == "judge"
-        assert advance(cid) == 1, "judge without confirmed USDC must HOLD"
+        import tempfile as _tf
+        _rev = _tf.mkdtemp()
+        os.environ["X402_REVENUE_DIR"] = _rev
+        open(os.path.join(_rev, "latest.json"), "w").write('{"total_external_usdc": 0.1}')
+        assert advance(cid) == 1, "judge below the real-money floor must HOLD"
+        # the money flag is NOT hand-writable — set strips it; only the oracle sets it
         assert set_(cid, '{"judge": {"external_usdc_confirmed": true, "note": "oracle"}}') == 0
-        assert advance(cid) == 0 and find(load(), cid)["status"] == "won"
+        assert advance(cid) == 1, "a hand-set money flag must be ignored — still HOLD"
+        open(os.path.join(os.environ["X402_REVENUE_DIR"], "latest.json"), "w").write('{"total_external_usdc": 5.0}')
+        assert advance(cid) == 0 and find(load(), cid)["status"] == "won", "oracle above floor must WIN"
+        os.environ.pop("X402_REVENUE_DIR", None)
         assert stage_of(find(load(), cid)) == "judge", "never advance past judge"
         # kill path
         assert new('{"name": "Doomed", "source": "s", "resells": "r", "audience_hypothesis": "a"}') == 0
