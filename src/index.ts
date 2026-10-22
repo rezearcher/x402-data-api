@@ -3361,13 +3361,20 @@ function makeRoutes(payTo: string) {
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
   };
-  // Stamp every route with the service brand + searchable tags so the CDP Bazaar
-  // catalogs us with discoverable metadata (was serviceName:null / tags:null).
+  // Stamp every route with the service brand + searchable tags + icon so the CDP
+  // Bazaar catalogs us with discoverable metadata (was serviceName:null / tags:null
+  // / iconUrl:null). agentic.market (the Coinbase-operated x402 directory, 480k+
+  // transacting agents) reads resource.iconUrl from the Bazaar entry to enrich a
+  // service into a browsable card with a logo; without it we index as the bare
+  // workers.dev domain with enriched:false and never surface in browse. The URL is
+  // an absolute https image (isValidIconUrl: no loopback / IP / userinfo), ≤2048.
+  const ICON_URL = "https://x402-data-api.sigrunner.workers.dev/miniapp/icon.png";
   for (const key of Object.keys(routes)) {
     const rc = routes[key];
     if (rc && typeof rc === "object") {
       if (rc.serviceName === undefined) rc.serviceName = bazaarServiceNameFor(key);
       if (rc.tags === undefined) rc.tags = bazaarTagsFor(key);
+      if (rc.iconUrl === undefined) rc.iconUrl = ICON_URL;
     }
   }
   return routes;
