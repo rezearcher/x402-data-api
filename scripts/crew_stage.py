@@ -268,11 +268,12 @@ def _oracle_external_dollar():
         # pass the money gate on data we can't trust to be current.
         import datetime as _dt
         fa = d.get("fetched_at")
-        if fa:
-            ts = _dt.datetime.fromisoformat(str(fa).replace("Z", "+00:00"))
-            age_h = (_dt.datetime.now(_dt.timezone.utc) - ts).total_seconds() / 3600.0
-            if age_h > max_age_h or age_h < -0.1:   # stale OR future-dated (clock-skew) => fail closed
-                return False
+        if not fa:
+            return False   # no freshness stamp => untrustworthy => fail closed
+        ts = _dt.datetime.fromisoformat(str(fa).replace("Z", "+00:00"))
+        age_h = (_dt.datetime.now(_dt.timezone.utc) - ts).total_seconds() / 3600.0
+        if age_h > max_age_h or age_h < -0.1:   # stale OR future-dated (clock-skew) => fail closed
+            return False
         return float(d.get("total_external_usdc", 0) or 0) >= floor
     except Exception:
         return False
@@ -423,12 +424,14 @@ def selftest():
         import tempfile as _tf
         _rev = _tf.mkdtemp()
         os.environ["X402_REVENUE_DIR"] = _rev
-        open(os.path.join(_rev, "latest.json"), "w").write('{"total_external_usdc": 0.1}')
+        import datetime as _dt2
+        _fresh = _dt2.datetime.now(_dt2.timezone.utc).isoformat()
+        open(os.path.join(_rev, "latest.json"), "w").write('{"total_external_usdc": 0.1, "fetched_at": "%s"}' % _fresh)
         assert advance(cid) == 1, "judge below the real-money floor must HOLD"
         # the money flag is NOT hand-writable — set strips it; only the oracle sets it
         assert set_(cid, '{"judge": {"external_usdc_confirmed": true, "note": "oracle"}}') == 0
         assert advance(cid) == 1, "a hand-set money flag must be ignored — still HOLD"
-        open(os.path.join(os.environ["X402_REVENUE_DIR"], "latest.json"), "w").write('{"total_external_usdc": 5.0}')
+        open(os.path.join(os.environ["X402_REVENUE_DIR"], "latest.json"), "w").write('{"total_external_usdc": 5.0, "fetched_at": "%s"}' % _dt2.datetime.now(_dt2.timezone.utc).isoformat())
         assert advance(cid) == 0 and find(load(), cid)["status"] == "won", "oracle above floor must WIN"
         os.environ.pop("X402_REVENUE_DIR", None)
         assert stage_of(find(load(), cid)) == "judge", "never advance past judge"

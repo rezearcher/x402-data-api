@@ -93,17 +93,33 @@ def main():
         return 0
 
     now = datetime.datetime.now(datetime.timezone.utc)
-    for lead in data.get("leads", []):
-        if not _match(lead, a.to, a.thread, a.lead):
-            continue
-        dns = _parse_dt(lead.get("do_not_send_until"))
-        if dns is not None and now < dns:
-            print(f"BLOCK: '{lead.get('lead')}' is in an agreed quiet window until "
-                  f"{lead.get('do_not_send_until')} (status={lead.get('status')}). "
-                  f"Do NOT send an unsolicited nudge. If they just replied, re-run with --reply.")
-            return 10
-        print(f"ALLOW: '{lead.get('lead')}' matched; quiet window passed "
-              f"(do_not_send_until={lead.get('do_not_send_until')}).")
+    leads = data.get("leads") if isinstance(data, dict) else None
+    if not isinstance(leads, list):
+        # Valid JSON but wrong shape (no 'leads' list) disables the guard — be LOUD, degrade open.
+        print(f"WARN: warm-lead ledger has an unexpected shape (no 'leads' list) — guard "
+              f"DISABLED until {a.ledger} is fixed", file=sys.stderr)
+        print("ALLOW: warm-lead ledger malformed (degrade-open; see WARN on stderr)")
+        return 0
+    try:
+        for lead in leads:
+            if not isinstance(lead, dict):
+                continue
+            if not _match(lead, a.to, a.thread, a.lead):
+                continue
+            dns = _parse_dt(lead.get("do_not_send_until"))
+            if dns is not None and now < dns:
+                print(f"BLOCK: '{lead.get('lead')}' is in an agreed quiet window until "
+                      f"{lead.get('do_not_send_until')} (status={lead.get('status')}). "
+                      f"Do NOT send an unsolicited nudge. If they just replied, re-run with --reply.")
+                return 10
+            print(f"ALLOW: '{lead.get('lead')}' matched; quiet window passed "
+                  f"(do_not_send_until={lead.get('do_not_send_until')}).")
+            return 0
+    except Exception as e:
+        # Honor the contract: any internal error degrades OPEN (never a hard crash), but loudly.
+        print(f"WARN: warm-lead ledger entry unreadable ({type(e).__name__}: {e}) — "
+              f"guard degraded open", file=sys.stderr)
+        print("ALLOW: warm-lead ledger entry malformed (degrade-open; see WARN on stderr)")
         return 0
 
     print("ALLOW: recipient is not a tracked warm lead (degrade-open)")

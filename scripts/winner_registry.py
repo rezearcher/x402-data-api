@@ -64,7 +64,7 @@ def norm(rec):
 def load(path):
     recs = {}
     try:
-        with open(path) as f:
+        with open(path, encoding="utf-8", errors="replace") as f:
             for line in f:
                 try:
                     r = json.loads(line)
