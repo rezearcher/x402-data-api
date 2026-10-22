@@ -84,6 +84,14 @@ export type Env = {
   USAGE_COUNTER?: DurableObjectNamespace<UsageCounter>;
   // Secret gate for GET /internal/traffic-stats (constant-time compare).
   TRAFFIC_STATS_SECRET?: string;
+  // Signed Farcaster/Base domain-ownership proof for the Mini App manifest
+  // (/.well-known/farcaster.json). JSON string: {header,payload,signature}.
+  // Produced once in Warpcast → Settings → Developer → Manifest (or the Base.dev
+  // manifest tool) by the account that owns the app; it cannot be synthesized
+  // server-side. Set via `wrangler secret put MINIAPP_ACCOUNT_ASSOCIATION`.
+  // Absent => the manifest still serves valid app metadata (renders when cast),
+  // but the app will not appear in Farcaster search / the Base.dev catalog.
+  MINIAPP_ACCOUNT_ASSOCIATION?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -7936,6 +7944,64 @@ app.get("/miniapp/card.svg", (c) => {
 <text x="80" y="710" fill="#8b949e" font-family="system-ui,sans-serif" font-size="34">Grey Ridge Signals · free check · tap to run it on any Base token</text>
 </svg>`;
   return c.body(svg, 200, { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+});
+
+// 512x512 branded PNG app icon for the Mini App manifest. Farcaster/Base catalog
+// discovery wants a PNG icon (SVG is not reliably accepted); inlined base64 keeps
+// this zero-dependency and edge-renderable.
+const MINIAPP_ICON_PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAIAAAB7GkOtAAAbCElEQVR42u3dd3xV9d3A8RsyGRGiQhDZILIcyHAUBQWLUrSKpbgrohbRSqvWx9ejT/VVJzirAk7o48JVB6WgorgQZQ9F9oZAWBJWQm5Cnj/oUyl1APckufee97t/VX2dJOf+ft/POfcm96ZExveJABA+VZwCAAEAQAAAEAAABAAAAQBAAAAQAAAEAAABAEAAABAAAAQAAAEAQAAAEAAABAAAAQBAAAAQAAD2S0p2Tq6zAOAOAAABAEAAABAAAAQAAAEAQAAAEAAABAAAAQBAAAAQAAAEAAABAEAAABAAAAQAAAEAQAAAEAAABAAAAQBAAAAEAAABAEAAABAAAAQAAAEAQAAAEAAABAAAAQBAAAAQAAAEAAABAEAAABAAAAQAAAEAQAAAEAAABAAAAQBAAAAEAAABAEAAABAAAAQAAAEAQAAAEAAABAAAAQBAAAAQAAAEAAABAEAAACgvaU4B5Xh9UaVK40YNGzdqlFu3Tt3c3Lq5uXXr1snJycnKzMzM+uf/MjMydu/eHY1Go9FocTS6Y8fOgoKCgoKtW7Zs2bhpU17e2jV5a/Py1q5avXr79h1OKQQoJTsn11kgQA0b1O/YoX3r1i3btG7V8ugWVatWDerIeWvXLVq0eOGiRfPmL5g5a05e3lpnGwSASpaRkdGpQ/sup3XuclrnRo0aVswXXb9+w8xZs6dOm/7pxEkrVqws7y/3zZzpqakV8ZRpSUlJNBqNlpQUFxdv37a9YOvWgoKt3367Ze26dWvW5K3Jy1u2fIX4IQBUvjZtWvXtc0GvnmdVr169Er+NlatWf/rZxA8nfDx5ytTS0t0JHYD9sXXr1nnzF3w9d96Xk6dMnTajsLDQUkQAqCBZWZnnnXvOr/v0btO6VVx9Yxs3bXr3vfFj/vHuzFmzkzgAe4tGo9Omzxwzdtx773+wbdt2ixMBoLykpaX1ueC8gQOuqVOndjx/n0uWLhv1ymtvjx4T1EyM2wD8y65dxePeff+Z50YuXrLUQkUACHStpKSce07P3103oEH9+onyPRcWFd14860TPvokDAHYo6ys7P0PJtw/5CGvE/CT/B0A+6VB/frPj3xmyH13J9D0j0QiVbOy6h1xRNg63ePMbmP//mb/fpenpKRYuggAMQ2USy7q+/e3X+vUsb2zkUDlu+XmPwx74pHKfXEeASCB1apVc+SzT/7p9lsD/HV+KswZXbu8+tJfc3JqORUIAAemaZPGr7/y4skndXIqEtdRRzV/7qlhNWq4D0AA2G+dTzn5tVEvNGxQ36lIdG3atBp8713OAwLAful5do+nn3wiO7uGU5Ecunc7vc+vznceEAB+whmnd3lw8D0J8SuP7L9bbv7DIYcc4jwgAPygn51y0l8eHpKamupUJJlDsrOv7n+F84AA8P3atGk19PFHMjIynIqkdOnFff02F3vzeQB8d4X42MMPVM3KKtevEo1GFyxc9NVXcxcvWbp23bq1a9dt2ry5qGhXUVFhNFqSmZGx51MCatY8pE6d2nXq1MmtU7tZs6Ytmjdr0qRxenq6hykW1apV6/Hzbm+/M8apQAD4TkpKyuD77qpf/8hyOn5+/voPJ3z84YSPJ0+dFo1Gf+g/KywqKiwqikQK1uXnL1i4aO9/lZqa2rxZ044d2ndo365D+xNq1z7co3YQzunVUwAQAP5N/36Xn3F6l/I48pSp059/8eUPJ3y8e3dM79JcWlq6YOGiBQsXvfjyK5FIpOXRLbqd0bXbGV3j7e1If8RLo1798933/+BWTEurXr169erVatWs2axZ06OaNzuh3fEd2rcL9u0c2p/QLi0traSkxJpHAIhEIpGGDeoP+t3AwA8795t5997/4LTpM8rje56/YOH8BQuHDn+6Xr0jzv/lOeefd05ivUnRfyopKSkoKCgoKMjLW/vNvPl7/mFubp0Lzv/lNVdfGdRTc1Wzso5p2ybw98omQXkRmMjt//1fwb7wW1S068677v1V30vLafrvLS9v7dDhT5951rmXXXHVP8a+V1pamkwPTX7++mFPPtPznN4zZ80J6pht27Sy5hEAIpFI5IzTu3Q5rXOAB1yydNmvLrx01Cuvx/iczwEpKyubMnX6jX+8tXuPXiP++kKSfXx8Xt7aawZcv8+LIjHc8DWw7BEAImlpaf99680BHnDGzFl9L7580aLFlTYr164b/MDDXbr1eHzok8n08Vhbt227+b9uKysri/1Q9RscaeUjAER+0bNHgE+dT/pi8pVXXRsPY3f79h1PDHvqjJ//4ulnR+7cuTM5HqyFCxeNe/f92I+TU6uWlc8/LwGdgjC78orLAxxP1w+6qbCoKI6umrdufeiRx5Lp8Roz9t2eZ/eI8SD+Fgx3AEQ6n3Jyy6NbBHKozZu//e3AG3bs2OGslqupU6fH/sqKACAARK74zaVBHerOP9+Tt3adU1ru9zTbtq3Jy4v1KEG8kIAAkMBycmqdcvJJgRxq7Lj33hv/oVNaMbZsKYjxCLt27XIaEYBQ+3n3boG84XNxcfHgBx5xPhMoAFsKtjqNCECo9fh590CO88qrb6zLz3c+K0zs79S9fsMGpxEBCK+aNWuedGLH2I9TWlr69HMjnc+Kfexi/VCXlStXOY0IQHid2LFDIB/5MuGjTzZs2Oh8VqRDD82J8QgLK+/P9BAAKt/xxx8byHHeePNtJ7MiHX7YYUfUrRvjQWbO9E5w/JM/BAtlAI47JvaDbN++Y+LnX8Tzj5naOLAPkCldHo2Hn6hjx/YxHmHFipVes0EAQvyQp6W1ad069uN88eXkeHhb+QCn/E98lZTKf+x6n3dujEd49/0PbAEEILxaHNU8Kysz9uN8NnFSso77+HTsMW1PO/VnsRyhrKzsndE+DgwBCLGGDYN5N+DZc74y8SvMoYfmPDjk3tibvWTpMicTAQiv+kfWi/0g0Wh08ZKlhv4BSck+yN+5aNSo4SMP3t8otnKXlZU9PvRJ6x8BCLUj6wUQgMVLlgb7AkBIrvT3/jH354XlevWO6HPB+Vdd+ZvYP7Lt7dFj5nz1tfWPAIQ7AEHcAaxavdrcD+pn31OCtLS0atWq1aherVatWs2aNW1xVPMO7du1O/64QD4Ufl1+/r33PWDxIwBhl5tbJ/aD5OfH9HYCe8/96y65+rqLr66AH3zcp+NvGnxbJZ75i3v1ubhXn4r/ukVFu66/4aat27ZZ/AhA2FWrVi32g6xfv971fkIoKSm58Y+3fvX1XKcCASBSNSsr9oMc0HtSmvuVpbCw8A833frRJ586FQgAkUgkkhVEAIr24z3lzf3KtXr1musH3TRv/gKnAgHg/+8AqgYQgB//UBGjv3KVlZW98be37xvykA/pRAD4TkpKSlpaAA96tDhq9MenmbPm3D/kwVmzv3IqEAD2vTYsLS2N/b2g09PTzP14e2Q//+LLESOf/3zSl84GAsD3KywsqlGjeowHycjMNPrjxLJly8e++/47o8es8EkvCAA/rqgogABkZWUa/XEiNTO1Wm616tWrOxUcKB8IE747gKLC2A+S0zjHmYwTDes16Nf70rfeGPXs/w5t26a1E4IA8IN27gwgAHUOre1MxptTO5zy2isv3HTHoPR0N2cIAN8nP3997Aepc5gAxKPUKlWu+fUVL70y4rBjDnc2EAD2tWZNXuwHObLOEc5k3DquZdsXH3ymfscGTgUCwL8HIG9t7Adp3qhplRSLJ341rd/4mbsfy2l7qNfqEQD2DkAAdwBZmVmNjnSBGe8NeOz2Ielp6amN02WA7+XXQENnxcqVgRznmBZtlq1eEftxhr70zNCXntmf/3LEPUNPOr6jR3D/dTqm/Y39rhv8zKOR//+Ljf35FBoEgKS1cOHi4uLi2D9h6pR2nUZPGOt87r+Xx7x+9/B9P5UlMyOjRrUaNbMPad6oWeumLU7r+LOWTVsE+EUv/+VFn06d9MWsKXv+b2rjdA3gXzwFFDrRaPSbeQG8Q+Qp7U50MmO3q7h405bNS1ctf3/ih48+P7z37y49d+CFYz5+L6jjp6Sk3HfTHdnVs//1TzwjhACE2uzZc2I/yOE5h7VrdayTGbjFK5be8sD/XHrLNes25AdywDqH1v79b67d5x9qAAIQUrPmBPNWked17+VklpMZc2f1vbHf0lXLAzla3569WzU7+j8bIAMCQOh8OXlKaenu2I9z9mlnVs2q6nyWkw2bN/a/7br8jQH84V6VlCr/M/CW7/1XGiAAhMvmzd9OnzEj9uPUqFb9ol/8yvksP/mbNvzunluiJQG8bHt8y2O6n9xVAxCAsEttnP7+tI8COdSVF1yalZnllJafrxd+8/gLTwVyqBsuG/BDf77n6SABICzTPxKJjJ/0UVlZWexHO7Rmzm/79nNWy9WIv704d/H82I/TvFHTXqef9ZNrAwEgmad/JBLZsHnjlDnTAzlm/wsua9G4uXNbfnaX7f7z0MGBBPu6S67+8c+D0wABIDlH/z57+/l3RgVy5LS0tPtuvCMrI9NJLj9fLZz7jyD+OKBB3SPP6XrWgS4VBIBkuPDf28dTJi5fE8zbQrRqdvSfB93uPJerx198qrS0NPbjDLjwytQqVQ5uzSAAJMP0j0QiZWVl//v2y0F9lV5de9xw2QBnu/ysWrfmrQ/GxH6chvUa/OKnbgI0QABI5um/xzsf/CN/04agvtaAC6/8/W8GOufl5+lXRwZyE/Dbvv328928NUAASNTR/5O7t6h410MjHgvwi17z6yvu+cOfvB5QTlbn543+aFzsx2lSv1HPLmcGuJAQABLmwn9vYz5+b8bcWQF+6fO79xr18MhmDZt4FMrDU6+OLN0dwF9xD7iw/wF9pI8GCADJNv33uPvJB3eX7Q7wGzi6SfO3Hn/pj/0HVa9azcMRrJV5q8Z+EsCvAzVt0LjHqd3KdV0hAMT79I9EIvOXLnz29eeD/TbS0tL69b7kg5GjB11+7eE5h3lcAvTkKyMCCfa1F/ZPSUnRAAEgvNN/j8dfeDLYJ4L2qJl9yG/79vvwr6OH3fHw+d171cqueRAHqZpV9axTu//ltsEntDnOQxyJRJatXjHu0/GxH6d5o6Zn/uyMCltjxCGfCGb6RyKRSOnu3TcNuf2tJ146uBn949LT0rt26ty1U+eysrLla1bOXvD1gqWL1uTn5a1ft2nLpsJdRUW7dpWUlGRkZGRmZGRlZtXOOazu4bl1a+e2aNz8mBatmzdqtj+/tx62m4CzTzvzgJ7E/14DL+o//vMJB/o3xj5WTABInum/R/7G9bc88Kfhdzz8428VEIuUlJQm9Rs1qd8o0s0jFpMlK5eN//yjHp1jPY8tGjfvfnLX8ZM+Ooj1pgFJwIWV6f+didO/uO3RuwJ5zxnK2/BRzwXySF170QG/EhDsqkMAqPzpv8foCWPvfeohZzX+LVy++MMvP4n9OC2btjj9xNPiYe0hAFT+Dnzp7689+vxw5zb+DXv52UCOM/Di/nG1AhEAKnPvPf3qyDsevzeQdx2g/MxfuvCjyZ/FfpzWzVp27dRZAwQA0/+fXn/37QF3/n77zh1OdTwbPiqgm4CLrorn1YgAUNH77fMZky+5+apVa1c74XHr60XzPps2KfbjtG3R+tQOp2iAAGD6f2fRiiXnXX/Ja+PeTILzVhZJzt9uGhbQTcB1F1+VQCsTATD9K0JhUeGdT9x/zZ8Grd+8IUFP2obNG//y/PC7hz2QlEti9vyvJ82cHPtxjj26becTTtIAAcD039fE6V+cM+DCEX97YVdxcQKdsbmL59/60J3d+p371Ksjt2wrSNaFEdSvA10b802ABggAyTb999i2Y9uDIx4/6+reb43/eyDvSFx+vt265cXRr15ww2V9Bl0+esLYkpKS5F4bM76ZPXnO9NiP067VsScf30kDwsNbQXBg8jeuv+3Ru55744VLzv31OaefXaNa9fj53nYU7vxs2qSxn7z/8dSJST/09zH85WdPPLZ97Me57uKrvpg1xToXAFz+/6Clq5ffNWzIQyOf6NX1rAt79m7ZtEUlfjPrN2/4eMrED7/45MtZU6MlIX2DmilfTZ/29cwObdvFeJwT2hx/4rHtY7+f8GZBAkByTv9/2Vm487Vxb7427s3GRzY8/cRTu3Tq3L718eX3XnJ727Rl89SvZkyeM23qnBlLVy+3SCKRyLBRz464Z2jsxxl48dWBPKGkAfEvJTsn11kw/YOSXT37pOM6tG3Ruk3zlm2at6qZfUggh91dtjt/4/r5SxfNW7pg3pIF85YszFu/1tpICBogAIRi+v+n+rn1mjZsUvfw3CNq59Y9PPeIOrk5h9TKysjMzMysmpmVmZGZnpZeUlpSHI0WR4ujJdGdhYVbthV8W/DttwVbNm/dkr9x/ap1a1atXb16XV5on9vRAARAAEAACJhfAzX9wUoWAOwZsJ4FALsFrGoBAEAAcKEE1rYAYIeAFS4A2BtgnQsAAAKAyyKw2gUA+wGseQEAQABwKYSV7yQIgD0A1j8CAIAAuPwBuwABAEAAXPiAvYAAACAALnnAjkAArHWwLxAAAATAZQ5J7rj7O9gdCACEdPonRwMQAJf/cDDX/knQAHtEAICD74FbAQTApQ3huvzfn39upyAAkMzTPwkagAC4/IeY5nviNsB+qRgp2Tm5zoIFTfJN/73NvnVawv2MpcujHmh3AKY/VHQw7BoBAJJnmntJAAGA8F7LawD78BqAO1lCMf33lkAvCXglwB0AEI8hQQBw+U/iTe1EaYAdJABg+ndIiGOSWLwG4OKFME7/vcX/SwJeCXAHAKZ/on4JBAAIb2YQgBDx/A+JNZfjuQF2UznxGoAli+n/b+LzJQEvA7gDANM/1LcCCIDLf0z/0DXAnhIAoCIk4ttHIwDg8t/0RwDcq2L621kIAJj+Lv8RADD9TX8EwF0qJNr0t78EAFz+u/ZHAMD0BwFwf4rpH4bLf7tMAMD0D+P0RwAA0x8BAJf/pj8CUOk8NUkCTX97DQGAkE5/l/8IAISR6Y8AQBgv/01/BCBgnpQkIaa/HYcAQEinv8t/BABMfxAACAfTHwGAMF7+m/4IQHnxehTxPP3tOwQAQjr9Xf4jAGD6gwBAOJj+CACE8fLf9EcAIIzTHwSgIvhVBOJw+ofk8t/uEwAw/cM4/REAwPRHACD0l/+mPwIAYZz+IAAQ0unv8h8BANMfBADCwfRHACCMl/+mPwJQOfwdiunvJNiDAgCmv8t/BAAw/REAcPlv+iMAYPqDAIDp7/IfAcB89NOZ/ggAyTMfPUNi+iMAhPfaPykb4IVfBAD2azgmWQPc1iAAcADDMWmGpqf+EQA44OGYBA0w/REAOMjh6MkT0x8BIIzTP9Eb4IVfBABinYyJ2AD3LggABDMZE2ueeuofAYAgJ2OiNMD0RwAg+MnoeRXTHwEgjNM/IRrghV8EAMpxLMZtA9ygIABQ7mMxDketp/4RAKigsRhXDTD9EQCo0LHoKRfTHwEgjNM/fhrghV8EACpnJlbu/HUXggBwwEqXR03/RJ/Cnvq3BwUAzGLTHwHA9A/NV/fUPwIAcXQNXmHfg6f+EQCIu4FYAd+Jp/5BAIjTeVSuA9r0BwEgvA1wnkEACF0DvPALAkAYG+CFXxCAwCTr36EkZQM89W/3IQCEsQGmPwgAYb8PcDJBAAhRA7zwCwJAGBvghV8QAMLYAE/9gwCUo5D8KkIiNsD0t+8QAMJ+H+CMgQAQogZ44RcEgDA2wAu/IACEsQGe+gcBqDghfD0qbhtg+ttxCABhvw9wWuDHpWTn5DoLgUhtnB7OH9yz7aa/OwB3ABh5gAC4JNEA5wF7TQAw+5wBEABMQD87CADmICAAycRTk+FsgOzZZQIAYRyIpj8CAGEci6Y/AoD70zAOR9Pf/hIAMCJBACA0DdA2BAB3qWGclaa/nSUAEMaJafojABDGuWn6IwC4VzU9sacEAELTAAFDACCMY9T0RwBwxxrGYWr6200CAGEcqaY/AgAGKwgA7ltD0wCVso8EAMI4YU1/BAAXL2Gcs6a/HSQAEMZpa/ojALiEMXOxdwQAQtMAKUIAIIzD1/RHAHAnG8YRbPrbNQIAYb8PAAHA5UyIGqA69osAQBgbYPojALioCWMDTH87RQAgjA0w/REAXNqE/T4Ae0QAIEQNkBYEABc4YWyA6W93hFxKdk6us1DBUhunOwkH7bj7Oxj9AoAAaIAMGP2mPwfPU0DWekI6uDlu+tsRuANwExC6WwGjXwAQAA0IVwnMfdMfARAAEAD25TUA6x7sAgEAQABw+QPWvwBgD4CVLwAACAAuhcCaFwDsB7DaBQAAAcBlEVjnAoC9AVa4AGCHYG0jAAAIAC6UsKoRAOwWrGcEAHsGKxkBAEAAXDqBNYwA2D9g9SIAdhFYtwiAvQRWLAIAgAC4pAJrFQGwr8AqRQDsLrA+BQB7DKxMAcBOA2tSALDfwGoUAOw6sA4FAHsPrEABwA7E2kMAsA+x6hAA7EasNwQAexIrDQHAzsQaQwCwP7G6EADsUqwrBAB7FSuKCpXmFCT3jk1tnO5UYPTjDsDuBesHAbCHwcoRAKfATgZrJpy8BhCu/ewlAYx+3AHY22CFCAB2OFgboeQpoPDuc08HYfS7A8Cex0pAALDzsQYIDU8B2f+eDjL6cQeAWYBHHHcAuBXA6McdAKYDHl/cAeBWAKMfAUAGMPoRAGQAo5+E5DUAzBGPGu4AwK2A0Y8AgAwY/QgAyIDRjwCADBj9CADIgNGPAMB3k0gJzH0EADcEGP0IADKA0Y8AEM6ZpQTmPgKAEiiBuY8AoASY+wgASuBsOAkIAEpg7oMAEOJpmMQxMPQRAAhRDAx9BAACmJ4J0QMTHwGAipitlZ4E4x4BgLibvwG2wZRHACBJ2gBEfCYwgAAAIAAACAAAAgCAAAAgAAAIAAACAIAAACAAAAgAAAIAgAAAIAAACAAAAgCAAAAgAAAIAAACAIAAACAAAAgAgAAAIAAACAAAAgCAAAAgAAAIAAACAIAAACAAAAgAAAIAgAAAIAAACAAAAgCAAAAgAAAIAAACAIAAACAAAAgAAAIAIAAACAAAAgCAAAAgAAAIAAACAIAAACAAAAgAAAIAgAAAIAAACAAAAgCAAAAgAAAIAAACAIAAACAAAAgAAAIAIAAACAAAAgCAAAAgAAAIAAACAIAAACAAAAgAAAIAgAAAIAAACAAAAgCAAAAgAAAIAAACAIAAACAAAAgAAAIAwP8B13nfqk5E4yIAAAAASUVORK5CYII=";
+function b64ToBytes(b64: string): ArrayBuffer {
+  const bin = atob(b64);
+  const buf = new ArrayBuffer(bin.length);
+  const out = new Uint8Array(buf);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return buf;
+}
+app.get("/miniapp/icon.png", (c) =>
+  c.body(b64ToBytes(MINIAPP_ICON_PNG_B64), 200, {
+    "Content-Type": "image/png",
+    "Cache-Control": "public, max-age=86400",
+  }),
+);
+
+// Farcaster / Base Mini App manifest. The `miniapp` block is the discovery
+// metadata that Farcaster search and the Base.dev catalog/leaderboard read to
+// LIST and rank the app — the "automatic distribution" path to Base App + Warpcast
+// users (retail Base traders), which needs no cast. It is complete and valid on
+// its own. `accountAssociation` is the one-time signed proof that this domain
+// belongs to a Farcaster/Base account; it is produced in Warpcast → Developer →
+// Manifest (or the Base.dev manifest tool) and dropped in as the
+// MINIAPP_ACCOUNT_ASSOCIATION secret — no code change. Until it is set, the app
+// renders when cast but will not appear in search/catalog.
+app.get("/.well-known/farcaster.json", (c) => {
+  let accountAssociation: unknown = undefined;
+  if (c.env.MINIAPP_ACCOUNT_ASSOCIATION) {
+    try { accountAssociation = JSON.parse(c.env.MINIAPP_ACCOUNT_ASSOCIATION); } catch { /* malformed secret: omit, serve metadata-only */ }
+  }
+  const miniapp = {
+    version: "1",
+    name: "Base Token Gate",
+    homeUrl: `${MINIAPP_HOST}/miniapp`,
+    iconUrl: `${MINIAPP_HOST}/miniapp/icon.png`,
+    imageUrl: `${MINIAPP_HOST}/miniapp/card.svg`,
+    buttonTitle: "Check a Base token",
+    splashImageUrl: `${MINIAPP_HOST}/miniapp/card.svg`,
+    splashBackgroundColor: "#0d1117",
+    subtitle: "Honeypot check before you swap",
+    description:
+      "Paste a Base token address and get one answer — GO / HOLD / BLOCK — before you swap. Honeypot and sellability simulation, owner-control checks, and liquidity sized to your trade. Free.",
+    tagline: "GO / HOLD / BLOCK before you swap",
+    primaryCategory: "finance",
+    tags: ["base", "defi", "trading", "safety", "honeypot"],
+    heroImageUrl: `${MINIAPP_HOST}/miniapp/card.svg`,
+    ogTitle: "Base Token Gate",
+    ogDescription: "Honeypot and liquidity check before you swap on Base. Free.",
+    ogImageUrl: `${MINIAPP_HOST}/miniapp/card.svg`,
+    castShareUrl: `${MINIAPP_HOST}/miniapp`,
+  };
+  const body: Record<string, unknown> = { miniapp, frame: miniapp };
+  if (accountAssociation) body.accountAssociation = accountAssociation;
+  return c.json(body, 200, { "Cache-Control": "public, max-age=300" });
 });
 
 // The mini app itself: interactive GO/HOLD/BLOCK gate over the free /gate/swap/preview,
