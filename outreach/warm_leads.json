@@ -1,7 +1,18 @@
 {
  "_doc": "Ground-truth warm-lead state. The SIGNAL for 'may I nudge?' is the real thread last-sender, NOT a file mtime. A cycle may send ONLY when last_dir=='them' AND now>do_not_send_until. last_dir=='us' => ball-in-court on THEM => DO NOT SEND. Missing lead => review manually (degrade open), never auto-send. Update last_dir/last_at/do_not_send_until whenever you read a thread or send. Dates ISO-8601 UTC.",
- "updated_at": "2026-10-22T00:50:00Z",
+ "updated_at": "2026-10-22T01:16:00Z",
  "leads": [
+  {
+   "lead": "chadi0x / TheBigBrother (issue #9)",
+   "channel": "github",
+   "thread_id": "chadi0x/TheBigBrother#9",
+   "last_dir": "us",
+   "last_at": "2026-10-22T01:16:00Z",
+   "their_last_at": "2026-10-21T10:45:32Z",
+   "status": "ball-in-court",
+   "do_not_send_until": "2026-10-28",
+   "note": "OSINT platform (Python) w/ crypto-wallet-analysis. Replied interested but closed issue 'future version'. Converted the brush-off: posted (comment 6330281302) a self-contained stdlib drop-in token_safety() provider (free preview by default, one flag to paid) + exact fit = flag honeypot/scam holdings in wallet reports + offer to open a PR. Ball-in-court on them. DO NOT re-ping; only act if they reply."
+  }
   {
    "lead": "X402blockchains / x402-registry (PR #19)",
    "channel": "github",
