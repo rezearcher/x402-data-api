@@ -8,14 +8,18 @@ latency. Every requested adjustment from these leads is already shipped (see eac
 Ranked by closeness to the first real external USDC.
 
 ## 1. DrVelvetFog / x402-pilot (PR #14) — CLOSEST to first dollar
-- **State:** Ran the full free leg (previews + 402 + manifest + x402scan all verified). Asked for 2 edits
-  before merge — (a) attribute verdicts to Grey Ridge / state x402-pilot doesn't vouch; (b) reword the
-  CDP Bazaar claim to verifiable-only. **Both pushed** to branch `live-evm-verify-target`. Paste-ready
-  x402-fetch paid-call snippet already sent.
-- **Their next move:** a single **$0.01 paid settle from a throwaway wallet** → PR merges → real external USDC.
-- **Our instant response when it lands:** confirm the settle on the revenue sensor / PR #14, thank them,
-  and ask to feature x402-pilot in our docs with attribution (reciprocal). Watch `latest.json`
-  `first_external_tx` + PR #14 for the settle. Nothing to send until then.
+- **State (2026-10-22):** PR #14 **MERGED** by DrVelvetFog at 11:11Z — both requested edits accepted.
+  Reciprocal done: x402-pilot now featured under "Live partners & integrations" on /partners + the
+  llms.txt catalog (commit ca6b13d). Posted a gracious thank-you + standing-open settle door on the
+  merged PR (issuecomment-6345528864).
+  **The $0.01 paid settle did NOT happen** — they merged the docs integration but the wallet is flat
+  (33.01824, no delta). Their own words: the paid call "from a throwaway wallet to confirm settle end
+  to end" is still remaining on their side. So the merge = integration + reciprocal backlink, NOT yet
+  the first dollar.
+- **Their next move:** the **$0.01 paid settle from a throwaway wallet** → first real external USDC.
+- **Our instant response when it lands:** confirm on the revenue sensor / wallet scoreboard, thank them.
+  Do NOT re-nudge the settle — it's offered and paste-ready; respond only if they message again (--reply).
+  Watch `latest.json` `first_external_tx` + wallet delta.
 
 ## 2. DopamineDesk / Joshua Hernandez (jblaz6335@gmail.com, thread 1a152b620cf6f611)
 - **State:** Agreed to a bounded 2-way pilot w/ attribution. We sent prices, tool-defs, delivery proof
