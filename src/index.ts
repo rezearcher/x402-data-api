@@ -2027,8 +2027,8 @@ function makeRoutes(payTo: string) {
               { tool: "read_file", severity: "critical", rule: "tool-poisoning:hidden-instructions", detail: "…", evidence: "…" },
             ],
             risk_score: 40,
-            verdict: "review",
-            risk_summary: "1 issue across 3 tools, 1 CRITICAL (tool-poisoning). Risk 40/100.",
+            verdict: "block",
+            risk_summary: "1 issue(s) across 3 tool(s), 1 CRITICAL (tool-poisoning) — do not admit this server until resolved. Risk 40/100.",
           },
         },
       }),
@@ -2058,8 +2058,8 @@ function makeRoutes(payTo: string) {
               { tool: "read_file", severity: "critical", rule: "tool-poisoning:hidden-instructions", detail: "…", evidence: "…" },
             ],
             risk_score: 40,
-            verdict: "review",
-            risk_summary: "1 issue across 3 tools, 1 CRITICAL (tool-poisoning). Risk 40/100.",
+            verdict: "block",
+            risk_summary: "1 issue(s) across 3 tool(s), 1 CRITICAL (tool-poisoning) — do not admit this server until resolved. Risk 40/100.",
           },
         },
       }),
@@ -4171,6 +4171,24 @@ function verdictFromScore(score: number): Verdict {
   if (score >= 70) return "block";
   if (score >= 30) return "review";
   return "clear";
+}
+
+// MCP-scan verdict + summary, shared by every scan site (GET/POST, paid + preview)
+// so the hosted engine and the offline CLI (`mcpscan --from-egress`) stay in lockstep.
+// A `critical` finding is exclusively tool-poisoning:hidden-instructions — a
+// high-confidence, admission-disqualifying pattern — so ANY critical forces `block`
+// (exit 2) regardless of the aggregate score. This makes the documented CI-gate
+// contract ("exit 2 on block") actually hold on a textbook poisoned server, instead
+// of a single critical (weight 40) only reaching "review"/exit 1.
+function mcpScanVerdict(findings: ScanFinding[], toolCount: number, risk_score: number): { verdict: Verdict; risk_summary: string } {
+  const crit = findings.filter((x) => x.severity === "critical").length;
+  const verdict: Verdict = crit > 0 ? "block" : verdictFromScore(risk_score);
+  const risk_summary = findings.length === 0
+    ? `No tool-poisoning/injection patterns detected across ${toolCount} tool(s). Clean on static checks.`
+    : crit > 0
+      ? `${findings.length} issue(s) across ${toolCount} tool(s), ${crit} CRITICAL (tool-poisoning) — do not admit this server until resolved. Risk ${risk_score}/100.`
+      : `${findings.length} issue(s) across ${toolCount} tool(s). Risk ${risk_score}/100. Review flagged tools before trusting this server.`;
+  return { verdict, risk_summary };
 }
 
 // Reject anything that isn't a bare public hostname — blocks SSRF/proxy abuse
@@ -8056,12 +8074,9 @@ async function scanMcpServer(target: string): Promise<McpScanResult> {
   }
   const weight = { critical: 40, high: 20, medium: 8, low: 3 } as const;
   const risk_score = Math.min(100, findings.reduce((s, x) => s + weight[x.severity], 0));
-  const crit = findings.filter((x) => x.severity === "critical").length;
-  const risk_summary = findings.length === 0
-    ? `No tool-poisoning/injection patterns detected across ${tools.length} tool(s). Clean on static checks.`
-    : `${findings.length} issue(s) across ${tools.length} tool(s)${crit ? `, ${crit} CRITICAL (tool-poisoning)` : ""}. Risk ${risk_score}/100. Review flagged tools before trusting this server.`;
+  const { verdict, risk_summary } = mcpScanVerdict(findings, tools.length, risk_score);
 
-  return { target, tools_scanned: tools.length, findings, risk_score, verdict: verdictFromScore(risk_score), risk_summary, scanned_at };
+  return { target, tools_scanned: tools.length, findings, risk_score, verdict, risk_summary, scanned_at };
 }
 
 app.get("/scan/mcp", async (c) => {
@@ -8099,11 +8114,8 @@ app.post("/scan/mcp", async (c) => {
   for (const t of tools) findings.push(...analyzeMcpTool(t?.name ?? "(unnamed)", t?.description ?? "", JSON.stringify(t?.inputSchema ?? {})));
   const weight = { critical: 40, high: 20, medium: 8, low: 3 } as const;
   const risk_score = Math.min(100, findings.reduce((s, x) => s + weight[x.severity], 0));
-  const crit = findings.filter((x) => x.severity === "critical").length;
-  const risk_summary = findings.length === 0
-    ? `No tool-poisoning/injection patterns detected across ${tools.length} tool(s). Clean on static checks.`
-    : `${findings.length} issue(s) across ${tools.length} tool(s)${crit ? `, ${crit} CRITICAL (tool-poisoning)` : ""}. Risk ${risk_score}/100. Review flagged tools before trusting this server.`;
-  const result = { target: "(pasted tools/list)", tools_scanned: tools.length, findings, risk_score, verdict: verdictFromScore(risk_score), risk_summary, scanned_at: new Date().toISOString() };
+  const { verdict, risk_summary } = mcpScanVerdict(findings, tools.length, risk_score);
+  const result = { target: "(pasted tools/list)", tools_scanned: tools.length, findings, risk_score, verdict, risk_summary, scanned_at: new Date().toISOString() };
   console.log(JSON.stringify({ event: "paid_request", endpoint: "POST /scan/mcp", target: "(paste)", findings: findings.length, ts: result.scanned_at }));
   const rail = c.get("rail") ?? "x402-paid";
   fireAndForget(c, trackPaidRequest("POST /scan/mcp", rail, makeUsageCounter(c.env)));
@@ -8194,11 +8206,8 @@ app.post("/scan/mcp/preview", async (c) => {
   for (const t of tools) findings.push(...analyzeMcpTool(t?.name ?? "(unnamed)", t?.description ?? "", JSON.stringify(t?.inputSchema ?? {})));
   const weight = { critical: 40, high: 20, medium: 8, low: 3 } as const;
   const risk_score = Math.min(100, findings.reduce((s, x) => s + weight[x.severity], 0));
-  const crit = findings.filter((x) => x.severity === "critical").length;
-  const risk_summary = findings.length === 0
-    ? `No tool-poisoning/injection patterns detected across ${tools.length} tool(s). Clean on static checks.`
-    : `${findings.length} issue(s) across ${tools.length} tool(s)${crit ? `, ${crit} CRITICAL (tool-poisoning)` : ""}. Risk ${risk_score}/100.`;
-  return c.json(previewOf({ target: "(pasted tools/list)", tools_scanned: tools.length, findings, risk_score, verdict: verdictFromScore(risk_score), risk_summary, scanned_at: new Date().toISOString() }));
+  const { verdict, risk_summary } = mcpScanVerdict(findings, tools.length, risk_score);
+  return c.json(previewOf({ target: "(pasted tools/list)", tools_scanned: tools.length, findings, risk_score, verdict, risk_summary, scanned_at: new Date().toISOString() }));
 });
 
 // ---------------------------------------------------------------------------
