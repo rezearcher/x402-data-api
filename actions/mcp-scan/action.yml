@@ -14,6 +14,10 @@ inputs:
     description: 'Verdict that fails the job: block (default), review, or never.'
     required: false
     default: 'block'
+  directory:
+    description: 'Also check readiness for the Anthropic Claude Connector Directory published review criteria (free teaser: ready + blocker count). Set to "true" for connector authors submitting to the directory.'
+    required: false
+    default: 'false'
   endpoint:
     description: 'Scanner base URL.'
     required: false
@@ -25,6 +29,12 @@ outputs:
   risk-score:
     description: '0-100'
     value: ${{ steps.scan.outputs.risk }}
+  directory-ready:
+    description: 'true | false — passes the published Claude Connector Directory criteria on static checks (only when directory=true)'
+    value: ${{ steps.scan.outputs.dir_ready }}
+  directory-blockers:
+    description: 'Count of published-criteria blockers (only when directory=true)'
+    value: ${{ steps.scan.outputs.dir_blockers }}
 runs:
   using: composite
   steps:
@@ -34,14 +44,16 @@ runs:
         IN_URL: ${{ inputs.url }}
         IN_FILE: ${{ inputs.tools-file }}
         FAIL_ON: ${{ inputs.fail-on }}
+        WANT_DIR: ${{ inputs.directory }}
         EP: ${{ inputs.endpoint }}
       run: |
         set -euo pipefail
+        dir_q=""; [ "$WANT_DIR" = "true" ] && dir_q="&directory=true"
         if [ -n "$IN_FILE" ]; then
-          body=$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));print(json.dumps({"tools":d.get("tools",d) if isinstance(d,dict) else d}))' "$IN_FILE")
+          body=$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));t=d.get("tools",d) if isinstance(d,dict) else d;want=sys.argv[2]=="true";print(json.dumps({"tools":t,"directory":True} if want else {"tools":t}))' "$IN_FILE" "$WANT_DIR")
           out=$(curl -sS -m 60 -X POST "$EP/scan/mcp/preview" -H 'content-type: application/json' -d "$body")
         elif [ -n "$IN_URL" ]; then
-          out=$(curl -sS -m 60 -G "$EP/scan/mcp/preview" --data-urlencode "url=$IN_URL")
+          out=$(curl -sS -m 60 -G "$EP/scan/mcp/preview" --data-urlencode "url=$IN_URL" ${dir_q:+--data-urlencode "directory=true"})
         else
           echo "::error::set either url or tools-file"; exit 2
         fi
@@ -54,6 +66,22 @@ runs:
           echo ""
           echo "Itemized findings with evidence and OWASP mapping: x402 \`GET $EP/scan/mcp?url=...\` (\$0.05 USDC on Base). Measured accuracy and corpus size: https://github.com/rezearcher/x402-data-api/tree/main/benchmarks"
         } >> "$GITHUB_STEP_SUMMARY"
+        if [ "$WANT_DIR" = "true" ]; then
+          dir_ready=$(python3 -c 'import json,sys;d=json.loads(sys.argv[1]).get("directory_readiness",{});print(str(d.get("ready","")).lower())' "$out")
+          dir_blk=$(python3 -c 'import json,sys;d=json.loads(sys.argv[1]).get("directory_readiness",{});print(d.get("blocker_count",-1))' "$out")
+          echo "dir_ready=$dir_ready" >> "$GITHUB_OUTPUT"; echo "dir_blockers=$dir_blk" >> "$GITHUB_OUTPUT"
+          {
+            if [ "$dir_ready" = "true" ]; then
+              echo "### Claude Connector Directory: **ready** (0 blockers on published criteria)"
+              echo ""
+              echo "No structural blockers against the published review criteria on static checks. Not checked here: privacy policy, OAuth 2.0, DNS ownership."
+            else
+              echo "### Claude Connector Directory: **${dir_blk} blocker(s)** would likely fail review"
+              echo ""
+              echo "The directory review queue runs ~20 days, so a rejection is expensive. This teaser hides WHICH criteria fail — get the itemized blocker list + remediation: \`POST $EP/scan/mcp {\"directory\":true}\` (zero egress, \$0.05 USDC on Base)."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+        fi
         case "$FAIL_ON" in
           never) exit 0;;
           review) [ "$verdict" = "clear" ] || { echo "::error::MCP scan verdict $verdict"; exit 1; };;

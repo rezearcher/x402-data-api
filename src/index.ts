@@ -7991,6 +7991,10 @@ interface McpScanResult {
   verdict: Verdict;
   risk_summary: string;
   scanned_at: string;
+  // Raw advertised tool metadata (name/description/inputSchema/annotations) kept
+  // so the Claude Directory readiness check can run against it without a re-fetch.
+  // Not serialized in the public scan response.
+  tools?: { name?: string; description?: string; inputSchema?: unknown; annotations?: unknown }[];
 }
 
 interface McpRpcResponse {
@@ -8110,7 +8114,7 @@ async function scanMcpServer(target: string): Promise<McpScanResult> {
   const risk_score = Math.min(100, findings.reduce((s, x) => s + weight[x.severity], 0));
   const { verdict, risk_summary } = mcpScanVerdict(findings, tools.length, risk_score);
 
-  return { target, tools_scanned: tools.length, findings, risk_score, verdict, risk_summary, scanned_at };
+  return { target, tools_scanned: tools.length, findings, risk_score, verdict, risk_summary, scanned_at, tools };
 }
 
 app.get("/scan/mcp", async (c) => {
@@ -8123,7 +8127,8 @@ app.get("/scan/mcp", async (c) => {
     console.log(JSON.stringify({ event: "paid_request", endpoint: "/scan/mcp", target, findings: result.findings.length, ts: result.scanned_at }));
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /scan/mcp", rail, makeUsageCounter(c.env)));
-    return c.json(result);
+    const { tools: _rawTools, ...publicResult } = result;
+    return c.json(publicResult);
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
@@ -8161,19 +8166,7 @@ app.post("/scan/mcp", async (c) => {
   // those into the readiness blocker list too. Claims law: PUBLISHED criteria
   // only — this does not reproduce Anthropic's private scan or guarantee acceptance.
   if (body?.directory === true || body?.mode === "directory") {
-    const dirFindings: ScanFinding[] = [];
-    for (const t of tools) {
-      dirFindings.push(...analyzeDirectoryReadiness({
-        name: t?.name, description: t?.description, inputSchema: t?.inputSchema,
-        annotations: (t as { annotations?: { title?: string; readOnlyHint?: boolean; destructiveHint?: boolean } })?.annotations ?? undefined,
-      }));
-    }
-    // Injection-class security findings that Anthropic also rejects on.
-    const injectionRejects = findings.filter((x) =>
-      x.rule.startsWith("tool-poisoning") || x.rule === "exfiltration-hint" ||
-      x.rule === "cross-tool-shadowing" || x.rule === "invisible-unicode");
-    const blockers = [...dirFindings, ...injectionRejects];
-    const ready = blockers.length === 0;
+    const { ready, blockers } = computeDirectoryReadiness(tools, findings);
     result.directory_readiness = {
       ready,
       checked_against: "Anthropic Claude Connector Directory published review criteria (claude.com/docs/connectors/building/review-criteria)",
@@ -8194,14 +8187,39 @@ app.post("/scan/mcp", async (c) => {
 // (counts + severity + risk score) but withholds WHICH tools and the evidence.
 // A self-scanning agent that sees "2 CRITICAL tool-poisoning issues" must pay
 // the full scan to learn where they are and how to fix them.
-function previewOf(r: McpScanResult) {
+// Shared Claude Connector Directory readiness computation — used by the PAID
+// POST /scan/mcp (full itemized blockers) and the FREE preview (count-only teaser).
+// Keeping one source means the free count and the paid list can never diverge.
+function computeDirectoryReadiness(
+  tools: { name?: string; description?: string; inputSchema?: unknown; annotations?: unknown }[],
+  findings: ScanFinding[],
+) {
+  const dirFindings: ScanFinding[] = [];
+  for (const t of tools) {
+    dirFindings.push(...analyzeDirectoryReadiness({
+      name: t?.name, description: t?.description, inputSchema: t?.inputSchema,
+      annotations: (t as { annotations?: { title?: string; readOnlyHint?: boolean; destructiveHint?: boolean } })?.annotations ?? undefined,
+    }));
+  }
+  // Injection-class security findings that Anthropic also rejects on.
+  const injectionRejects = findings.filter((x) =>
+    x.rule.startsWith("tool-poisoning") || x.rule === "exfiltration-hint" ||
+    x.rule === "cross-tool-shadowing" || x.rule === "invisible-unicode");
+  const blockers = [...dirFindings, ...injectionRejects];
+  return { ready: blockers.length === 0, blocker_count: blockers.length, blockers };
+}
+
+function previewOf(
+  r: McpScanResult,
+  dir?: { ready: boolean; blocker_count: number },
+) {
   const by = { critical: 0, high: 0, medium: 0, low: 0 } as Record<string, number>;
   for (const f of r.findings) by[f.severity]++;
   const upsell =
     r.findings.length === 0
       ? "Clean on static checks today. Keep it safe as it changes — continuous monitoring + drift alerts, $9.99/mo at /pricing. Full itemized report for this scan: GET /scan/mcp?url= or zero-egress POST /scan/mcp ($0.05 via x402)."
       : `${r.findings.length} issue(s) found${by.critical ? `, ${by.critical} CRITICAL` : ""}. This preview hides WHICH tools and the evidence. Get full itemized findings + remediation now: paste-mode POST /scan/mcp (zero egress) or GET /scan/mcp?url= ($0.05). Or monitor this server continuously with drift alerts — $9.99/mo at /pricing.`;
-  return {
+  const out: Record<string, unknown> = {
     target: r.target,
     tools_scanned: r.tools_scanned,
     issue_count: r.findings.length,
@@ -8212,6 +8230,20 @@ function previewOf(r: McpScanResult) {
     upsell,
     scanned_at: r.scanned_at,
   };
+  // FREE Claude Connector Directory readiness TEASER — count + ready only.
+  // Withholds WHICH criteria fail and the remediation (that is the paid product),
+  // but tells a connector author whether they would pass BEFORE a ~20-day review.
+  if (dir) {
+    out.directory_readiness = {
+      ready: dir.ready,
+      blocker_count: dir.blocker_count,
+      checked_against: "Anthropic Claude Connector Directory published review criteria",
+      upsell: dir.ready
+        ? "No structural blockers against the PUBLISHED criteria on static checks. This teaser checks published rules only and cannot guarantee acceptance (privacy policy, OAuth 2.0 and DNS ownership are not checked here). Keep it compliant as tools change — continuous per-release monitoring at /pricing."
+        : `${dir.blocker_count} issue(s) would likely FAIL Claude Directory review — the queue runs ~20 days, so a rejection is expensive. This teaser hides WHICH criteria fail and how to fix them: get the itemized blocker list + remediation now — POST /scan/mcp {"directory":true} (zero egress, $0.05 via x402).`,
+    };
+  }
+  return out;
 }
 
 app.get("/scan/mcp/preview", async (c) => {
@@ -8222,7 +8254,9 @@ app.get("/scan/mcp/preview", async (c) => {
   try {
     const result = await scanMcpServer(target);
     console.log(JSON.stringify({ event: "free_preview", endpoint: "/scan/mcp/preview", target, issues: result.findings.length, ts: result.scanned_at }));
-    return c.json(previewOf(result));
+    const wantDir = c.req.query("directory") === "true" || c.req.query("mode") === "directory";
+    const dir = wantDir ? computeDirectoryReadiness(result.tools ?? [], result.findings) : undefined;
+    return c.json(previewOf(result, dir));
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
@@ -9286,7 +9320,9 @@ app.post("/scan/mcp/preview", async (c) => {
   const weight = { critical: 40, high: 20, medium: 8, low: 3 } as const;
   const risk_score = Math.min(100, findings.reduce((s, x) => s + weight[x.severity], 0));
   const { verdict, risk_summary } = mcpScanVerdict(findings, tools.length, risk_score);
-  return c.json(previewOf({ target: "(pasted tools/list)", tools_scanned: tools.length, findings, risk_score, verdict, risk_summary, scanned_at: new Date().toISOString() }));
+  const wantDir = body?.directory === true || body?.mode === "directory";
+  const dir = wantDir ? computeDirectoryReadiness(tools, findings) : undefined;
+  return c.json(previewOf({ target: "(pasted tools/list)", tools_scanned: tools.length, findings, risk_score, verdict, risk_summary, scanned_at: new Date().toISOString() }, dir));
 });
 
 // ---------------------------------------------------------------------------
