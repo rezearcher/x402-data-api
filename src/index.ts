@@ -8229,6 +8229,7 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
 <button id=b>Scan &amp; generate badge</button>
 <div class=card id=out style="display:none">
   <div class=badge-row id=img></div>
+  <p style="margin:.6rem 0 0"><a id=rep href="#" target=_blank rel=noopener>View this server's full report &rarr;</a></p>
   <div style="display:flex;align-items:center;gap:.6rem;margin:.8rem 0 0"><strong style="font-size:.85rem">README markdown</strong><button class=ghost id=copy>Copy</button></div>
   <pre id=md></pre>
 </div>
@@ -8252,12 +8253,14 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
 <script>
 var ORIGIN=location.origin;
 function badgeSrc(target){return "https://img.shields.io/endpoint?url="+encodeURIComponent(ORIGIN+"/scan/mcp/badge?url="+encodeURIComponent(target))+"&style=flat-square";}
-function render(el,target,withLink){var src=badgeSrc(target);var img='<img alt="MCP scan verdict" src="'+src+'">';el.innerHTML=withLink?'<a href="'+ORIGIN+'/scan/badge-gen">'+img+'</a>':img;return src;}
-render(document.getElementById("demo"),"https://mcp.deepwiki.com/mcp",false);
+function reportUrl(target){return ORIGIN+"/scan/report?url="+encodeURIComponent(target);}
+function render(el,target,withLink){var src=badgeSrc(target);var img='<img alt="MCP scan verdict" src="'+src+'">';el.innerHTML=withLink?'<a href="'+reportUrl(target)+'">'+img+'</a>':img;return src;}
+render(document.getElementById("demo"),"https://mcp.deepwiki.com/mcp",true);
 var md=document.getElementById("md"),out=document.getElementById("out");
 function go(){var t=document.getElementById("u").value.trim();if(!/^https?:\\/\\//.test(t)){document.getElementById("u").focus();return;}
-out.style.display="block";var src=render(document.getElementById("img"),t,false);
-md.textContent="[![MCP scan]("+src+")]("+ORIGIN+"/scan/badge-gen)";}
+out.style.display="block";var src=render(document.getElementById("img"),t,true);
+var rep=document.getElementById("rep");if(rep)rep.href=reportUrl(t);
+md.textContent="[![MCP security]("+src+")]("+reportUrl(t)+")";}
 document.getElementById("b").onclick=go;
 document.getElementById("u").addEventListener("keydown",function(e){if(e.key==="Enter")go();});
 document.getElementById("copy").onclick=function(){navigator.clipboard&&navigator.clipboard.writeText(md.textContent);this.textContent="Copied";var b=this;setTimeout(function(){b.textContent="Copy";},1400);};
@@ -8265,6 +8268,118 @@ var sub=document.getElementById("sub");
 if(sub)sub.onclick=async function(){sub.disabled=true;var o=sub.textContent;sub.textContent="Opening checkout…";try{var r=await fetch("/stripe/create-checkout-session",{method:"POST"});var j=await r.json();if(j.url){window.location.href=j.url;return;}alert("Could not start checkout: "+(j.error||"unknown"));}catch(e){alert("Could not start checkout: "+e);}sub.disabled=false;sub.textContent=o;};
 </script>`;
   return c.html(html);
+});
+
+// Public per-server security report. Server-rendered (crawlable) so each scanned MCP
+// server gets its own indexable trust page; the badge README markdown links here, so
+// every embed is a backlink that brings the server's own audience to Grey Ridge. The
+// scanned server's tool text and the url query are attacker-controllable — everything
+// reflected into the page is HTML-escaped. Carries the continuous-monitoring CTA.
+app.get("/scan/report", async (c) => {
+  const esc = (s: string) =>
+    String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m] as string);
+  const ORIGIN = new URL(c.req.url).origin;
+  const target = c.req.query("url") || "";
+  const page = (titleHost: string, metaDesc: string, bodyInner: string) =>
+    c.html(`<!doctype html><html lang=en><meta charset=utf-8>
+<title>${esc(titleHost)} — MCP security report · Grey Ridge Signals</title>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=description content="${esc(metaDesc)}">
+<meta property="og:title" content="${esc(titleHost)} — MCP security report">
+<meta property="og:description" content="${esc(metaDesc)}">
+<meta property="og:type" content="website">
+<style>
+:root{--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#0f766e;--bg:#fafafa}
+*{box-sizing:border-box}
+body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.55;max-width:760px;margin:0 auto;padding:2.5rem 1.25rem}
+h1{font-size:1.5rem;margin:0 0 .3rem;word-break:break-all}
+.sub{color:var(--muted);margin:0 0 1.6rem;font-size:.9rem}
+h2{font-size:1.05rem;margin:2rem 0 .6rem}
+.pill{display:inline-block;padding:.25rem .7rem;border-radius:999px;font-weight:700;font-size:.85rem;letter-spacing:.02em;text-transform:uppercase}
+.clear{background:#dcfce7;color:#15803d}.review{background:#fef9c3;color:#a16207}.block{background:#fee2e2;color:#b91c1c}.unknown{background:#f1f5f9;color:#475569}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:1.1rem 1.2rem;margin:1rem 0}
+.summary{font-size:1rem;margin:.6rem 0 0}
+table{width:100%;border-collapse:collapse;margin:.4rem 0 0;font-size:.88rem}
+th,td{text-align:left;padding:.5rem .55rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+.sev{font-weight:700;white-space:nowrap}
+.sev-critical{color:#b91c1c}.sev-high{color:#c2410c}.sev-medium{color:#a16207}.sev-low{color:#475569}
+.badge-row{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;min-height:28px;margin:.2rem 0}
+pre{background:#0b1021;color:#e6edf3;padding:.8rem;border-radius:8px;overflow:auto;font-size:.82rem;white-space:pre-wrap;word-break:break-all;margin:.5rem 0 0}
+code{background:#eef2f7;padding:.1rem .35rem;border-radius:4px;font-size:.85em;word-break:break-all}
+.muted{color:var(--muted);font-size:.9rem}
+a{color:var(--accent)}
+button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:.6rem 1.1rem;font-size:.95rem;font-weight:600;cursor:pointer}
+button.ghost{background:#fff;color:var(--accent);border:1px solid var(--accent);padding:.35rem .7rem;font-size:.82rem}
+footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);color:var(--muted);font-size:.82rem}
+</style>
+<body>
+${bodyInner}
+<footer>Grey Ridge Signals Group LLC · Static MCP tool-metadata analysis (OWASP LLM01/LLM08). The scanner reads advertised tool descriptions and schemas; it never invokes a tool. <a href="/scan/badge-gen">Generate a badge for your server</a> · <a href="/">greyridgesignals.ai</a></footer>`);
+
+  if (!/^https?:\/\//i.test(target)) {
+    return page("MCP security report", "Scan any MCP server for prompt-injection and tool-poisoning in its advertised tools.",
+      `<h1>MCP security report</h1>
+<p class=sub>No server specified.</p>
+<div class=card><p style="margin:0">Enter an MCP server URL on the <a href="/scan/badge-gen">badge generator</a> to produce its public report, or request a report directly: <code>${esc(ORIGIN)}/scan/report?url=https://your-server.example/mcp</code></p></div>`);
+  }
+
+  let host = target;
+  try { host = new URL(target).host; } catch { /* keep raw */ }
+  const badgeImg = `https://img.shields.io/endpoint?url=${encodeURIComponent(ORIGIN + "/scan/mcp/badge?url=" + encodeURIComponent(target))}&style=flat-square`;
+  const reportUrl = `${ORIGIN}/scan/report?url=${encodeURIComponent(target)}`;
+  const mdSnippet = `[![MCP security](${badgeImg})](${reportUrl})`;
+  const badgeBlock = `<h2>Embed this badge</h2>
+<div class=card>
+  <div class=badge-row><img alt="MCP scan verdict" src="${esc(badgeImg)}"></div>
+  <p class=muted style="margin:.6rem 0 .3rem">Re-scans every six hours and links back to this report. Paste into your README:</p>
+  <pre id=md>${esc(mdSnippet)}</pre>
+  <button class=ghost id=copy style="margin-top:.6rem">Copy markdown</button>
+</div>`;
+  const ctaBlock = `<h2>Keep it verified on every change</h2>
+<div class=card>
+  <p style="margin:0 0 .7rem">Continuous monitoring re-audits <code>${esc(host)}</code> and gates your CI on the verdict — a subscription gives you an API key for <strong>100 scans / month</strong> across any Grey Ridge endpoint. Call the scan from your pipeline and fail the build on <code>block</code>. Pay by card — no wallet, no crypto.</p>
+  <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+    <button id=sub>Monitor continuously — $9.99/mo</button>
+    <span class=muted style="font-size:.85rem">100 credits, 1 per call, valid 30 days. Cancel anytime.</span>
+  </div>
+</div>`;
+  const scriptBlock = `<script>
+var c=document.getElementById("copy");if(c)c.onclick=function(){var t=document.getElementById("md").textContent;navigator.clipboard&&navigator.clipboard.writeText(t);this.textContent="Copied";var b=this;setTimeout(function(){b.textContent="Copy markdown";},1400);};
+var s=document.getElementById("sub");if(s)s.onclick=async function(){s.disabled=true;var o=s.textContent;s.textContent="Opening checkout…";try{var r=await fetch("/stripe/create-checkout-session",{method:"POST"});var j=await r.json();if(j.url){window.location.href=j.url;return;}alert("Could not start checkout: "+(j.error||"unknown"));}catch(e){alert("Could not start checkout: "+e);}s.disabled=false;s.textContent=o;};
+</script>`;
+
+  let result: McpScanResult;
+  try {
+    result = await scanMcpServer(target);
+  } catch {
+    return page(host, `Grey Ridge could not reach ${host} to scan its MCP tools.`,
+      `<h1>${esc(host)}</h1>
+<p class=sub>MCP security report · <span class=pill unknown>unreachable</span></p>
+<div class=card><p class=summary>Grey Ridge could not reach <code>${esc(target)}</code> to read its advertised tools. For OAuth-gated or private servers, paste your <code>tools/list</code> into the <a href="/scan/badge-gen">badge generator</a> instead — nothing leaves your side.</p></div>
+${ctaBlock}${scriptBlock}`);
+  }
+
+  const v = result.verdict as string;
+  const vClass = ({ clear: "clear", review: "review", block: "block" } as Record<string, string>)[v] || "unknown";
+  const findingsBlock = result.findings.length === 0
+    ? `<div class=card><p class=summary>No prompt-injection or tool-poisoning patterns were found in any of the ${result.tools_scanned} advertised tool(s). ${esc(result.risk_summary)}</p></div>`
+    : `<div class=card>
+  <p class=summary>${esc(result.risk_summary)}</p>
+  <table><thead><tr><th>Tool</th><th>Severity</th><th>Finding</th></tr></thead><tbody>
+  ${result.findings.map((f) => `<tr><td><code>${esc(f.tool)}</code></td><td class="sev sev-${esc(f.severity)}">${esc(f.severity)}</td><td><strong>${esc(f.rule)}</strong><br><span class=muted>${esc(f.detail)}</span>${f.evidence ? `<br><code>${esc(f.evidence)}</code>` : ""}</td></tr>`).join("")}
+  </tbody></table>
+</div>`;
+
+  return page(host,
+    `${host} MCP server: ${v} — ${result.findings.length} issue(s) across ${result.tools_scanned} advertised tool(s), scanned by Grey Ridge Signals.`,
+    `<h1>${esc(host)}</h1>
+<p class=sub>MCP security report · <span class="pill ${vClass}">${esc(v)}</span> · risk ${result.risk_score}/100 · ${result.tools_scanned} tool(s) · scanned ${esc(result.scanned_at)}</p>
+${findingsBlock}
+${badgeBlock}
+${ctaBlock}
+<p class=muted style="margin:1.2rem 0 0">Full machine-readable audit (itemized findings + OWASP mapping + remediation): <code>GET ${esc(ORIGIN)}/scan/mcp?url=…</code> ($0.05 USDC via x402), or zero-egress <code>POST /scan/mcp</code> with your <code>tools/list</code> for private servers.</p>
+${scriptBlock}`);
 });
 
 // Paste-mode preview for servers we can't reach (OAuth-gated / private): POST the
