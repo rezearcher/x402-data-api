@@ -205,12 +205,25 @@ def refresh_landscape():
         print("landscape fresh: %dd old (fetched_at=%s)" % (age, fa))
 
 
+def _num(v):
+    """Coerce a revenue field to a float, or None. Tolerates prose strings written
+    into the numeric slot (a recurring upsert mistake) so the feed never crashes."""
+    if isinstance(v, (int, float)):
+        return v
+    if isinstance(v, str):
+        m = re.search(r"-?\d+(?:\.\d+)?", v.replace(",", ""))
+        if m:
+            return float(m.group())
+    return None
+
+
 def render(recs):
-    rows = sorted(recs.values(), key=lambda r: (r["monthly_revenue_est"] is None,
-                                                -(r["monthly_revenue_est"] or 0), r["name"]))
+    rows = sorted(recs.values(), key=lambda r: (_num(r.get("monthly_revenue_est")) is None,
+                                                -(_num(r.get("monthly_revenue_est")) or 0), r["name"]))
     print("%-24s %-18s %-8s %-9s %-6s %s" % ("NAME", "LANE", "PRICE", "REV/MO", "F/P", "DISTRIBUTION"))
     for r in rows:
-        rev = "" if r["monthly_revenue_est"] is None else "$%g" % r["monthly_revenue_est"]
+        mre = _num(r.get("monthly_revenue_est"))
+        rev = "" if mre is None else "$%g" % mre
         print("%-24s %-18s %-8s %-9s %-6s %s" % (str(r["name"])[:24], str(r["lane"])[:18],
               str(r["price"])[:8], rev, str(r["free_or_paid"])[:6],
               str(r["distribution_channel"])[:50]))
