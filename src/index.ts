@@ -187,6 +187,17 @@ const ROUTE_CATALOG: Array<[string, string, string, string, string, string[]]> =
   ["/dns/{domain}", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", ["dns", "domain", "data", "recon"]],
   ["/whois/{domain}", "GET", "0.01", "10000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", ["whois", "rdap", "domain", "data", "recon"]],
 ];
+
+/** GET /chain/block-number 200: handler always returns numeric block_number and chain "base". Preview may add `note`. */
+const BLOCK_NUMBER_SUCCESS_SCHEMA = {
+  type: "object",
+  required: ["block_number", "chain"],
+  additionalProperties: true,
+  properties: {
+    block_number: { type: "integer", minimum: 0 },
+    chain: { type: "string", enum: ["base"] },
+  },
+} as const;
 // Non-custodial facilitator — no Coinbase/CDP API key needed.
 const FACILITATOR_URL = "https://facilitator.xpay.sh";
 // CDP hosted facilitator — settlements through this get catalogued in the x402 Bazaar.
@@ -338,6 +349,17 @@ async function baseRpc(method: string, params: unknown[]): Promise<any> {
     }
   }
   throw new Error(`Base RPC unavailable (all providers): ${lastErr}`);
+}
+
+function parseBlockNumber(value: unknown): number {
+  if (typeof value !== "string" || !/^0x[0-9a-f]+$/i.test(value)) {
+    throw new Error("Invalid eth_blockNumber result");
+  }
+  const blockNumber = Number.parseInt(value.slice(2), 16);
+  if (!Number.isSafeInteger(blockNumber) || blockNumber < 0) {
+    throw new Error("Invalid eth_blockNumber result");
+  }
+  return blockNumber;
 }
 
 // ---------------------------------------------------------------------------
@@ -1632,7 +1654,14 @@ function withOperationIds<T extends Record<string, Record<string, any>>>(paths: 
       if (!op.tags) op.tags = [tagFor(path)];
       const example = RESPONSE_EXAMPLES[path];
       const ok = op.responses?.["200"];
-      if (example !== undefined && ok && !ok.content) {
+      if (path === "/chain/block-number" && ok) {
+        ok.content = {
+          "application/json": {
+            schema: BLOCK_NUMBER_SUCCESS_SCHEMA,
+            example: example ?? { block_number: 0, chain: "base" },
+          },
+        };
+      } else if (example !== undefined && ok && !ok.content) {
         ok.content = {
           "application/json": { schema: { type: "object" }, example },
         };
@@ -2405,6 +2434,7 @@ function makeRoutes(payTo: string) {
         inputSchema: { type: "object", properties: {} },
         output: {
           example: { block_number: 27738421, chain: "base" },
+          schema: BLOCK_NUMBER_SUCCESS_SCHEMA,
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
@@ -5412,7 +5442,7 @@ async function getTokenUsd(contract: string): Promise<number | null> {
 app.get("/chain/block-number", async (c) => {
   try {
     const hex = (await baseRpc("eth_blockNumber", [])) as string;
-    const result = { block_number: parseInt(hex, 16), chain: "base" };
+    const result = { block_number: parseBlockNumber(hex), chain: "base" };
 
     console.log(
       JSON.stringify({ event: "paid_request", endpoint: "/chain/block-number", ts: new Date().toISOString() }),
@@ -5433,7 +5463,7 @@ app.get("/chain/block-number/preview", async (c) => {
   try {
     const hex = (await baseRpc("eth_blockNumber", [])) as string;
     return c.json({
-      block_number: parseInt(hex, 16),
+      block_number: parseBlockNumber(hex),
       chain: "base",
       note: "Free live sample — identical to the paid route. Full: GET /chain/block-number ($0.01), keyless x402 on Base.",
     });
