@@ -55,7 +55,7 @@ ACCT="$(sapi GET /account 2>/dev/null || true)"
 [ -n "$ACCT" ] && echo "  account: $(echo "$ACCT" | python3 -c 'import sys,json;a=json.load(sys.stdin);print(a.get("id"),"|",a.get("business_profile",{}).get("name") or a.get("email") or "(no name)")' 2>/dev/null)" || echo "  key valid (account label not exposed to this restricted key — fine)"
 
 # --- 1. Price: reuse by lookup_key, else create a $9.99/mo recurring price ---
-say "Price ($9.99/mo recurring)"
+say 'Price (9.99/mo recurring)'
 PRICE_ID="$(sapi GET "/prices?lookup_keys[]=${PRICE_LOOKUP_KEY}&limit=1&active=true" \
   | python3 -c 'import sys,json;d=json.load(sys.stdin)["data"];print(d[0]["id"] if d else "")')"
 if [ -z "$PRICE_ID" ]; then
