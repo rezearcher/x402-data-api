@@ -9280,7 +9280,7 @@ const mcpHandler = createMcpHandler(() => {
   return server;
 });
 
-app.all("/mcp", async (c) => {
+const mcpRouteHandler = async (c: any) => {
   // Parse JSON body for the MCP handler (same pattern as createMcpHonoApp)
   let parsedBody: unknown;
   const ct = c.req.header("content-type") ?? "";
@@ -9310,7 +9310,17 @@ app.all("/mcp", async (c) => {
     fireAndForget(c, trackPaidRequest("POST /mcp", rail, makeUsageCounter(c.env)));
   }
   return res;
-});
+};
+
+// Primary MCP endpoint plus a workers.dev-reachable alias. The alias exists so a
+// second registry record (the DNS-branded ai.greyridgesignals namespace) can
+// advertise a distinct remote URL that resolves the same handler. The custom
+// domain api.greyridgesignals.ai sits behind zone-level bot protection that
+// challenges datacenter health-checkers (e.g. directory crawlers like Glama),
+// which marks that record Unhealthy even though the Worker itself is fine; the
+// workers.dev host is not zone-protected, so the alias passes those checks.
+app.all("/mcp", mcpRouteHandler);
+app.all("/sse", mcpRouteHandler);
 
 
 // ---------------------------------------------------------------------------
