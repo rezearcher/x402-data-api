@@ -3343,16 +3343,27 @@ export class TrafficLog extends DurableObject<Env> {
   // counts are therefore ~1/rate of true volume; getStats() reports the scale
   // factor so a reader can multiply back. Relative ranking across paths is
   // preserved because every non-paid path is sampled at the same rate.
-  static readonly NONPAID_SAMPLE = 0.01;
+  // Effective non-paid KEEP rate. This is the SINGLE source of truth: the
+  // middleware (see app.use below) gates the DO RPC on exactly this probability,
+  // so a non-paid hit that reaches logHit is already sampled-in and we persist
+  // it unconditionally. Sampling at the call site (not here) means we only pay a
+  // DO *operation* for rows we keep — previously the middleware fired a DO RPC on
+  // 10% of ALL traffic and logHit then dropped 99% of those internally (net keep
+  // 0.1%), so we burned ~100x the DO operations per retained row and tripped the
+  // free-tier daily DO-operation limit (CF alerts 2026-10-19/-21, both DOs
+  // knocked offline). getStats multiplies counts by 1/NONPAID_SAMPLE for a true-
+  // volume estimate; with the old split gate that scale (100) under-reported real
+  // non-paid volume 10x (true effective rate was 0.001, not 0.01).
+  static readonly NONPAID_SAMPLE = 0.001;
 
   async logHit(path: string, method: string, ua: string, tx: string = "", ref: string = ""): Promise<void> {
-    // Always persist PAID; sample everything else to protect the write budget.
-    if (method !== "PAID" && Math.random() >= TrafficLog.NONPAID_SAMPLE) return;
+    // No sampling here: PAID always persists; non-paid is already sampled at the
+    // call site (middleware gates on NONPAID_SAMPLE before taking the DO RPC).
     await this.ctx.storage.sql.exec("INSERT INTO hits (ts, path, method, ua, tx, ref) VALUES (?, ?, ?, ?, ?, ?)", Math.floor(Date.now() / 1000), path, method, ua, tx, ref);
     // Opportunistic prune: ~0.1% of writes trigger a small bounded delete of
     // old rows. Each deleted row also drops its hits_ts index entry, so a
     // LIMIT-100 prune costs up to 200 rows_written; at p=0.001 that averages
-    // ~0.2 extra writes per insert. Combined with the 1% non-paid sample this
+    // ~0.2 extra writes per insert. Combined with the 0.1% non-paid sample this
     // keeps total rows_written well under the DO free-tier 100k/day cap (a
     // single global "default" DO funnels every request, and on 2026-10-21 the
     // prior 5% sample + LIMIT-200 prune @ p=0.002 blew that budget before UTC
@@ -3789,9 +3800,12 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 app.use(async (c, next) => {
   // Fire-and-forget traffic logging (t_9e3fec95): waitUntil + catch, fail open.
-  // Sampled 1-in-10 and /mcp skipped: unsampled logging exhausted the free-plan DO daily
-  // request limit (CF alert 2026-10-19). PAID rows below stay unsampled.
-  if (c.env.TRAFFIC_LOG && c.req.path !== "/mcp" && Math.random() < 0.1) {
+  // /mcp skipped; non-paid sampled at TrafficLog.NONPAID_SAMPLE HERE so the DO RPC
+  // only fires for rows we keep. A split gate (10% here + 1% inside logHit) paid a
+  // DO operation per 10 hits but kept 1 in 1000 — ~100x wasted DO ops that tripped
+  // the free-tier daily DO-operation limit and knocked both DOs offline (CF alerts
+  // 2026-10-19/-21). PAID rows (below) bypass this and are always logged.
+  if (c.env.TRAFFIC_LOG && c.req.path !== "/mcp" && Math.random() < TrafficLog.NONPAID_SAMPLE) {
     const stub = c.env.TRAFFIC_LOG.get(c.env.TRAFFIC_LOG.idFromName("default"));
     c.executionCtx.waitUntil(stub.logHit(c.req.path, c.req.method, c.req.header("User-Agent") ?? "unknown").catch(() => {}));
   }
