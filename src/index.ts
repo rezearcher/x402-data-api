@@ -728,6 +728,7 @@ ${provisionMeta}
     <li><a href="/.well-known/x402">/.well-known/x402</a></li>
     <li><a href="/.well-known/agent-card.json">A2A Agent Card</a></li>
     <li><a href="/mcp">/mcp</a></li>
+    <li><a href="/partners">Partner program &mdash; resell our verdicts</a></li>
   </ul>
 
   <footer>Grey Ridge Signals Group LLC &middot; Base mainnet (eip155:8453), USDC via x402</footer>
@@ -8266,6 +8267,97 @@ document.getElementById("u").addEventListener("keydown",function(e){if(e.key==="
 document.getElementById("copy").onclick=function(){navigator.clipboard&&navigator.clipboard.writeText(md.textContent);this.textContent="Copied";var b=this;setTimeout(function(){b.textContent="Copy";},1400);};
 var sub=document.getElementById("sub");
 if(sub)sub.onclick=async function(){sub.disabled=true;var o=sub.textContent;sub.textContent="Opening checkout…";try{var r=await fetch("/stripe/create-checkout-session",{method:"POST"});var j=await r.json();if(j.url){window.location.href=j.url;return;}alert("Could not start checkout: "+(j.error||"unknown"));}catch(e){alert("Could not start checkout: "+e);}sub.disabled=false;sub.textContent=o;};
+</script>`;
+  return c.html(html);
+});
+
+// Reseller / partner front door. The ?ref= attribution, on-chain per-tag reconcile,
+// and the agent-capabilities federation manifest already exist in the API — but a human
+// deciding whether to embed our verdicts had nowhere to land. This is that page: the
+// plain-language offer + the 2-minute start + the measured economics. Static HTML, no
+// reflected input. Deployable without a GitHub push; it is the self-serve path that lets
+// partner #2..N onboard without us hand-recruiting each one.
+app.get("/partners", (c) => {
+  const html = `<!doctype html><html lang=en><meta charset=utf-8>
+<title>Partner program — resell Grey Ridge safety verdicts | Grey Ridge Signals</title>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=description content="Embed Grey Ridge's token-safety and MCP-security verdicts in your wallet, trading bot, agent or marketplace. You set the retail price and keep the margin; we meter the backend on-chain. Free to start.">
+<meta property="og:title" content="Resell Grey Ridge safety verdicts — partner program">
+<meta property="og:description" content="Wholesale pre-trade token-safety and MCP-security verdicts at $0.008/call. Set your own retail price, keep the spread, prove your volume on-chain.">
+<meta property="og:type" content="website">
+<style>
+:root{--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#0f766e;--bg:#fafafa}
+*{box-sizing:border-box}
+body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6;max-width:760px;margin:0 auto;padding:2.5rem 1.25rem}
+h1{font-size:1.75rem;margin:0 0 .4rem}
+.sub{color:var(--muted);margin:0 0 2rem;font-size:1.05rem}
+h2{font-size:1.1rem;margin:2.2rem 0 .6rem}
+p{margin:.6rem 0}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:1.2rem 1.3rem;margin:1.1rem 0}
+table{border-collapse:collapse;width:100%;margin:.6rem 0;font-size:.92rem}
+th,td{text-align:left;padding:.5rem .6rem;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:600}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+pre{background:#0b1021;color:#e6edf3;padding:.85rem;border-radius:8px;overflow:auto;font-size:.84rem;white-space:pre-wrap;word-break:break-all;margin:.5rem 0}
+code{background:#eef2f7;padding:.1rem .35rem;border-radius:4px;font-size:.88em}
+a{color:var(--accent)}
+.lead{background:#f0fdfa;border:1px solid #99f6e4;border-radius:12px;padding:1rem 1.2rem}
+.steps{counter-reset:s;list-style:none;padding:0}
+.steps li{counter-increment:s;position:relative;padding:.3rem 0 .3rem 2.2rem;margin:.5rem 0}
+.steps li:before{content:counter(s);position:absolute;left:0;top:.2rem;width:1.5rem;height:1.5rem;background:var(--accent);color:#fff;border-radius:50%;text-align:center;line-height:1.5rem;font-size:.85rem;font-weight:700}
+.cta{background:var(--accent);color:#fff;text-decoration:none;display:inline-block;padding:.65rem 1.2rem;border-radius:8px;font-weight:600;margin:.4rem 0}
+footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);color:var(--muted);font-size:.82rem}
+</style>
+<body>
+<h1>Resell our safety verdicts. Keep the margin.</h1>
+<p class=sub>Your product already has the users. We have the pre-trade token-safety and MCP-security checks they need. Wire ours into yours, charge what you like, and we meter the backend by the call &mdash; priced so the spread is yours.</p>
+
+<div class=lead>
+<strong>The deal in one line:</strong> you pay <strong>$0.008</strong> for a GO/HOLD/BLOCK token-safety verdict (or an MCP-security scan), you charge your users whatever fits your product, and every referred call is tagged and reconciled to you on-chain so your volume is provable. No contract, no minimum, free to start.
+</div>
+
+<h2>Who this is for</h2>
+<p>Wallets and portfolio apps that want a honeypot check before a swap. Trading bots and Telegram bots that gate a buy on sellability and pool depth. Autonomous agents and MCP clients that need one clean decision instead of raw flags. Marketplaces and routers reselling data to downstream buyers. If your users touch Base tokens or connect to MCP servers, the verdict is a feature you can ship today without building the pipeline behind it.</p>
+
+<h2>The economics</h2>
+<p>You pay the wholesale call price. You set retail. The spread is yours &mdash; our price does not move with it.</p>
+<div class=card>
+<table>
+<tr><th>Your retail / call</th><th>Our wholesale</th><th class=n>You keep</th><th class=n>Your margin</th></tr>
+<tr><td>$0.02</td><td>$0.008</td><td class=n>$0.012</td><td class=n>60%</td></tr>
+<tr><td>$0.05</td><td>$0.008</td><td class=n>$0.042</td><td class=n>84%</td></tr>
+<tr><td>$0.10</td><td>$0.008</td><td class=n>$0.092</td><td class=n>92%</td></tr>
+<tr><td>Bundled (free to user)</td><td>$0.008</td><td class=n>&mdash;</td><td class=n>retention / trust</td></tr>
+</table>
+<p class=muted style="margin:.4rem 0 0;font-size:.85rem">Flagship route <code>/gate/swap</code> is $0.008/call; <code>/chain/token-report</code> $0.01; the full <code>/scan/mcp</code> audit $0.05. Rival Base token-safety APIs charge up to $0.25 for the raw flags &mdash; you resell a finished decision for a fraction of that and still keep most of it.</p>
+</div>
+
+<h2>Start in two minutes</h2>
+<ol class=steps>
+<li>Pick a tag &mdash; your product name is fine. Append <code>?ref=&lt;your-tag&gt;</code> to any call URL.</li>
+<li>Try it free: <code id=prev>…/gate/swap/preview?token=degen</code> returns a live verdict (3 free/day/IP) so you can see the shape before you wire it.</li>
+<li>Wire the paid call into your product. Agents pay inline in USDC over x402 &mdash; no account, no key. Prefer card billing or a monthly key? <a href="/scan/badge-gen">Start a Pro plan</a> and call with a key instead.</li>
+<li>Email us your tag. We reconcile your referred volume against settled on-chain transactions and send you the count, distinct buyers, and Base txHashes &mdash; proof your integration converts.</li>
+</ol>
+
+<h2>What you're embedding</h2>
+<div class=card>
+<p style="margin:0 0 .5rem"><strong>Token-safety gate</strong> &mdash; <code>GET /gate/swap?token=0x…&amp;side=buy&amp;notional_usd=500</code> returns <strong>GO / HOLD / BLOCK</strong> sized to the trade: honeypot and sellability simulation, admin-control checks, and Uniswap v3 liquidity vs. the user's notional &mdash; one decision and a reason in one fast call.</p>
+<p style="margin:0"><strong>MCP-security scan</strong> &mdash; <code>GET /scan/mcp?url=…</code> audits every advertised tool for prompt-injection, tool-poisoning, exfiltration and hidden-unicode (OWASP LLM01/LLM08) and returns findings + risk score + verdict. A free <a href="/scan/badge-gen">live README badge</a> re-scans every six hours.</p>
+</div>
+
+<h2>How attribution works</h2>
+<p>The <code>?ref=</code> tag rides through the x402 402&rarr;sign&rarr;retry and is recorded on the settled on-chain call &mdash; so referred volume is measurable from our own store and verifiable against Base txHashes. Nothing to install, no pixel, no cookie. The machine-readable catalog lives at <code><a href="/.well-known/agent-capabilities.json">/.well-known/agent-capabilities.json</a></code> if your platform wants to discover and wire our routes automatically.</p>
+
+<h2>A live partner</h2>
+<p>The <strong>DopamineDesk x402 Marketplace</strong> (by Blaz Algo Systems) resells our token-safety gate and token report through one MCP adapter &mdash; plain-language discovery, free previews, and capped Base-USDC purchases. That's the model: their audience, our verdict, their price.</p>
+
+<a class=cta href="mailto:contact@greyridgesignals.ai?subject=Partner%20program%20%E2%80%94%20my%20ref%20tag">Email us your tag &rarr;</a>
+<p class=muted style="font-size:.85rem">Questions first? Same address: <a href="mailto:contact@greyridgesignals.ai">contact@greyridgesignals.ai</a>. We'll set up a reconcile report on your tag before you commit to anything.</p>
+
+<footer>Grey Ridge Signals Group LLC &middot; Pay-per-call safety and market-data APIs on Base. Prices are USDC per call and current as of this page. <a href="https://greyridgesignals.ai">greyridgesignals.ai</a> &middot; <a href="/">API home</a></footer>
+<script>
+var o=location.origin;var p=document.getElementById("prev");if(p)p.textContent=o+"/gate/swap/preview?token=degen";
 </script>`;
   return c.html(html);
 });
