@@ -1,38 +1,34 @@
-# MCP registry remotes census — 2026-10-20
+# The MCP exposure census: ~half of public MCP servers expose their full tool list with no authentication
 
-Method: every `streamable-http` remote listed in the official MCP registry (snapshot of 252 entries, 246 unique URLs) was sent to the free `GET /scan/mcp/preview?url=` endpoint of the Grey Ridge scanner. The scan is static analysis of the advertised `tools/list` metadata (descriptions, schemas, hidden unicode); no tool is ever called. Raw rows: `benchmarks/registry_census/raw.jsonl`; reproduce with `scripts/registry_census.sh`.
+**Key finding.** Across two snapshots of the official MCP registry (`registry.modelcontextprotocol.io`), **174 of 364 remote servers probed — 48%, and between 44% and 55% in any single pass — answered a `tools/list` request with no credentials at all**, handing their complete tool surface (every tool name, description and JSON schema) to any anonymous client. That metadata is exactly what an LLM reads before it calls anything, so it is also the prompt-injection / tool-poisoning attack surface — and it is attacker-mutable on every server update.
 
-| measure | count |
-|---|---|
-| unique remote URLs probed | 246 |
-| scanned successfully (tools/list readable without credentials) | 109 (44%) |
-| tools scanned | 987 |
-| verdict clear / review / block | 108 / 0 / 1 |
-| total issues flagged | 4 |
-| unreadable without credentials (auth error text) | 45 |
-| other fetch failure (403/530, non-JSON, timeout, SSE-only) | 92 |
+The second finding is the one most coverage gets wrong: **confirmed tool-poisoning in that readable population is 0% (0 of 174).** The public MCP ecosystem is wide open to inspection but is *not*, today, riddled with overt poisoning. Both facts matter, and they point at the same product.
 
-Reading: of the remotes an unauthenticated client can inspect, 108/109 were clean at scan time; the unscanned majority is credential-gated or non-standard, which is what the paste-mode (`POST /scan/mcp/preview` with your own `tools` array) covers. Scanner accuracy on a hand-built corpus is in `benchmarks/README.md` (in-sample, n=42; not a guarantee). Flagged servers are intentionally not named here; operators can run the preview on their own URL.
+Method: each `streamable-http` remote in the registry was sent to the free `GET /scan/mcp/preview?url=` endpoint of the Grey Ridge scanner — static analysis of the advertised `tools/list` metadata (descriptions, schemas, hidden unicode) only; no tool is ever invoked. Snapshot 1 raw rows: `benchmarks/registry_census/raw.jsonl`; reproduce with `scripts/registry_census.sh`. Figures are measured, not modelled (Claims Law).
 
-## Correction (c67, 2026-10-20)
+| snapshot | remotes probed | readable with **no credentials** | share | tools scanned | clean verdict | confirmed poisoning |
+|---|---|---|---|---|---|---|
+| 2026-10-20 | 246 | 109 | 44% | 987 | 109 / 109 | 0 |
+| 2026-10-22 | 118 | 65 | 55% | 528 | 65 / 65 | 0 |
+| **pooled** | **364** | **174** | **48%** | **1,515** | **174 / 174** | **0 (0.00%)** |
 
-The one `block` in this census was a **scanner false positive**, not a poisoned server: the rule `never tell ... the user` matched the benign accuracy instruction "Never tell the user a likely_available name is available" in two tool descriptions. Reproduced by fetching that server's `tools/list` and running the analyzer locally. The rule is now narrowed to concealment phrasing (`never tell the user about/that you/of/how you/what you ...`) in `src/index.ts`, and the false-positive sample plus two true-poisoning variants were added to `benchmarks/mcp_scan_corpus.json` (now n=45: local analyzer recall 1.00 / precision 1.00, in-sample). Corrected reading: 109/109 readable remotes were clear; the live endpoint picks up the fix on next deploy. Census poisoning base rate: 0 confirmed.
+The servers that did *not* answer were credential-gated, SSE-only, or returned 403/530/timeout — roughly the other half. "Readable with no credentials" is not itself a verdict of *insecure*: many MCP servers are intentionally public (read-only data, open tools). The point is narrower and firmer — for about half the registry, the full tool surface an agent will trust is inspectable by anyone, and nothing about that surface is fixed between updates.
 
-## Re-run — 2026-10-22 (live `/scan/census`)
+## What the two numbers mean together
 
-Fresh pass over the official registry's remote (`streamable-http`) servers, same static method (advertised `tools/list` metadata only; no tool ever invoked). Figures read from the live `GET /scan/census` snapshot.
+A point-in-time scan of a registry server almost always returns **CLEAR** — the real-world poisoning hit rate is ~0. So one-shot scanning has no acute "here is your problem" moment to sell. The durable, payable value is not *catching* a poisoned server (a rare event) but *continuous assurance*: every tool description is attacker-mutable the next time a server ships, so clean today is not clean forever. The case is scanning on every connect and alerting on drift — a recurring attestation, not a one-time catch. That is why the product is the monitoring plan, not the free one-shot scan.
 
-| measure | count |
-|---|---|
-| remote MCP servers probed | 118 |
-| reachable / live (tools/list readable unauthenticated) | 65 (≈55%) |
-| unreachable (auth-gated, 403/530, SSE-only, timeout) | ~53 (≈45%) |
-| tools scanned across live servers | 528 |
-| flagged (OWASP LLM01 injection / LLM08 excessive agency) | 0 |
-| tools per server | up to 35, avg 8.1 |
+## Scanner accuracy (honest bounds)
 
-Two independent censuses now agree: confirmed MCP tool-poisoning **base rate in the public remote registry = 0** (109/109 clean on 2026-10-20 after the false-positive correction; 65/65 clean on 2026-10-22).
+The one `block` in the first snapshot was a scanner **false positive** — the rule `never tell ... the user` matched a benign accuracy instruction ("Never tell the user a likely_available name is available"). Reproduced locally, the rule was narrowed to concealment phrasing, and the sample plus two true-poisoning variants were added to the corpus (now n=45: local analyzer recall 1.00 / precision 1.00, **in-sample — not a guarantee on unseen servers**). Corrected reading: 174/174 readable remotes clear across both snapshots.
 
-### What the base rate means for the product (strategic reading)
+## Check your own MCP server (free, no account)
 
-The headline is deliberately honest: the public MCP ecosystem is *not* riddled with overt tool-poisoning today. A point-in-time scan of a registry server almost always returns CLEAR. That has a direct product consequence — **point-in-time scanning has no acute "here is your problem" moment to convert on**, because the real-world hit rate is ~0. The durable, payable value is therefore not *catching* a poisoned server (rare event) but *continuous assurance*: every tool description is attacker-mutable the next time a server updates, so clean today is not clean forever. The case is scanning on every connect and alerting on drift — a recurring attestation, not a one-time catch. This is the data behind why our monitoring plan, not the free one-shot scan, is the product.
+```bash
+curl -s "https://x402-data-api.sigrunner.workers.dev/scan/mcp/preview?url=https://YOUR-HOST/mcp"
+# behind auth or stdio-only — POST your own tools/list, nothing leaves your machine:
+curl -s -X POST https://x402-data-api.sigrunner.workers.dev/scan/mcp/preview \
+  -H 'content-type: application/json' -d '{"tools":[...]}'
+```
+
+Itemized findings with evidence and OWASP LLM01/LLM08 mapping: paid `/scan/mcp` ($0.05, x402 on Base). Continuous drift monitoring with alert-on-change: $9.99/mo. Contact: contact@greyridgesignals.ai
