@@ -1,0 +1,21 @@
+name: mcp-admission-gate
+# Live example + canary for our published MCP tool-poisoning admission gate
+# (the CI Action at rezearcher/greyridge-x402-tools). On every push to main and
+# daily, we run the gate against a stable public MCP server as a smoke test:
+# it proves the Action resolves and our hosted scanner is up, and it is a
+# real, copy-pasteable `uses:` example of the gate in a workflow. Fails closed:
+# a scan that can't run exits non-zero, so a broken scanner turns this red.
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+jobs:
+  admission-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run the Grey Ridge MCP admission gate against a public server
+        uses: rezearcher/greyridge-x402-tools@v0.3.1
+        with:
+          url: https://mcp.deepwiki.com/mcp
