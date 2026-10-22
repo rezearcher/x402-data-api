@@ -7698,6 +7698,11 @@ async function buildSwapGate(token: string, side: "buy" | "sell", notional: numb
   const r = await buildTokenReport(token);
   const liq = r.liquidity.wethPoolUsd;
   const impact = liq && liq > 0 ? (notional / liq) * 100 : null;
+  // No verifiable WETH-pool liquidity (no pool found, or the check could not run).
+  // We cannot confirm the position is exitable or size the trade — and thin/absent
+  // markets are exactly where honeypot simulations are least reliable — so this must
+  // never produce a GO. Fail closed to HOLD (below AVOID/BLOCK, above GO).
+  const noLiquidityEvidence = liq === null;
   let decision: "go" | "hold" | "block" = "go";
   let reason = "token passes safety checks";
   if (r.verdict === "AVOID") {
@@ -7706,6 +7711,11 @@ async function buildSwapGate(token: string, side: "buy" | "sell", notional: numb
   } else if (impact !== null && impact > 10) {
     decision = "block";
     reason = `trade is ${impact.toFixed(1)}% of pool liquidity; severe price impact`;
+  } else if (noLiquidityEvidence) {
+    decision = "hold";
+    reason = side === "sell"
+      ? "no verifiable Uniswap v3 WETH-pool liquidity — cannot confirm an on-chain exit venue; verify another DEX/pair before trading"
+      : "no verifiable Uniswap v3 WETH-pool liquidity — cannot confirm the position is exitable or size the trade; not safe to auto-buy";
   } else if (impact !== null && impact > 2) {
     decision = "hold";
     reason = `trade is ${impact.toFixed(1)}% of pool liquidity; split the order`;
