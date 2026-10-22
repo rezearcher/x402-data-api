@@ -12,7 +12,7 @@
    "status": "ball-in-court",
    "do_not_send_until": "2026-10-28",
    "note": "OSINT platform (Python) w/ crypto-wallet-analysis. Replied interested but closed issue 'future version'. Converted the brush-off: posted (comment 6330281302) a self-contained stdlib drop-in token_safety() provider (free preview by default, one flag to paid) + exact fit = flag honeypot/scam holdings in wallet reports + offer to open a PR. Ball-in-court on them. DO NOT re-ping; only act if they reply."
-  }
+  },
   {
    "lead": "X402blockchains / x402-registry (PR #19)",
    "channel": "github",

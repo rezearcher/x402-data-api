@@ -65,6 +65,8 @@ def main():
     ap.add_argument("--lead", default="", help="substring of a lead name")
     ap.add_argument("--reply", action="store_true",
                     help="this send is a direct reply to a message they just sent (reopens the window)")
+    ap.add_argument("--ledger", default=LEDGER,
+                    help="warm-lead ledger path (override for tests)")
     a = ap.parse_args()
 
     if not (a.to or a.thread or a.lead):
@@ -74,11 +76,20 @@ def main():
         print("ALLOW: marked as a reply to their inbound — their message reopens the conversation")
         return 0
 
+    if not os.path.exists(a.ledger):
+        # No ledger yet is a benign first-run state — stay quietly open.
+        print("ALLOW: no warm-lead ledger yet (degrade-open)")
+        return 0
     try:
-        data = json.load(open(LEDGER))
+        data = json.load(open(a.ledger))
     except Exception as e:
-        print(f"ALLOW: ledger unreadable ({type(e).__name__}) — degrade-open", file=sys.stderr)
-        print("ALLOW: warm-lead ledger unavailable (degrade-open)")
+        # The ledger EXISTS but is corrupt — this disables the guard, so make it LOUD
+        # (an operator/harness must notice) while still degrading open so one broken
+        # file never blocks all outreach.
+        print(f"WARN: warm-lead ledger is corrupt ({type(e).__name__}: {e}) — guard is "
+              f"DISABLED until {a.ledger} is repaired; validate with: python3 -m json.tool {a.ledger}",
+              file=sys.stderr)
+        print("ALLOW: warm-lead ledger corrupt (degrade-open; see WARN on stderr)")
         return 0
 
     now = datetime.datetime.now(datetime.timezone.utc)
