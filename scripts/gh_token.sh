@@ -19,6 +19,18 @@ _auths() { # $1 = token -> 0 if it authenticates as rezearcher
     | grep -q '"login": *"rezearcher"'
 }
 
+# 0) ~/.git-credentials (local, instant, no rate limit). git caches a working
+#    PAT here as x-access-token:<tok>@github.com. This is the ONLY source that
+#    survives a 1Password service-account rate-limit (which has blocked `op read`
+#    for days at a time), so it is tried FIRST. Caught 2026-10-22 after ~14
+#    cycles wrongly concluded "writes dead" while a valid PAT sat in this file.
+if [ -f "$HOME/.git-credentials" ]; then
+  while IFS= read -r line; do
+    tok="$(printf '%s' "$line" | sed -nE 's#^https://x-access-token:([^@]+)@github\.com.*#\1#p')"
+    if _auths "$tok"; then echo "$tok"; exit 0; fi
+  done < "$HOME/.git-credentials"
+fi
+
 # 1) 1Password classic PAT (the known-good source)
 if [ -f "$HOME/.config/greyridge/op.env" ]; then
   # shellcheck disable=SC1091
