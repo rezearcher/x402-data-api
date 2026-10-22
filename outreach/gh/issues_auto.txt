@@ -1,3 +1,4 @@
+https://github.com/Agent-Threat-Rule/agent-threat-rules/issues/727
 https://github.com/BlockRunAI/ClawRouter/issues/503
 https://github.com/Chain-Love/chain-love/issues/4745
 https://github.com/DrVelvetFog/x402-pilot/issues/14
@@ -60,6 +61,7 @@ https://github.com/xpaysh/awesome-x402/issues/868
 https://github.com/Haustorium12/gold-402/issues/38
 https://github.com/punkpeye/awesome-mcp-servers/issues/10353
 https://github.com/Br0ski777/x402-agent-tools/issues/7
+https://github.com/Agent-Threat-Rule/agent-threat-rules/issues/727
 https://github.com/BlockRunAI/ClawRouter/issues/503
 https://github.com/Chain-Love/chain-love/issues/4745
 https://github.com/DrVelvetFog/x402-pilot/issues/14
