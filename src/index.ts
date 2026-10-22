@@ -756,6 +756,7 @@ ${provisionMeta}
     <li><a href="/.well-known/x402">/.well-known/x402</a></li>
     <li><a href="/.well-known/agent-card.json">A2A Agent Card</a></li>
     <li><a href="/mcp">/mcp</a></li>
+    <li><a href="/miniapp">Base Token Gate &mdash; free GO/HOLD/BLOCK honeypot check (Farcaster Mini App)</a></li>
     <li><a href="/partners">Partner program &mdash; resell our verdicts</a></li>
   </ul>
 
@@ -1565,6 +1566,7 @@ app.get("/sitemap.xml", (c) => {
     { path: "/terms", priority: "0.7", changefreq: "monthly" },
     { path: "/token-safety", priority: "0.8", changefreq: "daily" },
     { path: "/check", priority: "0.8", changefreq: "weekly" },
+    { path: "/miniapp", priority: "0.9", changefreq: "weekly" },
     { path: "/partners", priority: "0.8", changefreq: "weekly" },
     { path: "/pricing", priority: "0.9", changefreq: "weekly" },
     { path: "/scan/mcp-scanner", priority: "0.9", changefreq: "weekly" },
@@ -7886,6 +7888,118 @@ app.get("/check", (c) => {
     ),
   );
 });
+
+// ---------------------------------------------------------------------------
+// FARCASTER MINI APP — the native in-feed distribution surface for Base traders.
+// Base's retail/memecoin audience lives on Farcaster (token launches via Clanker,
+// alpha in group casts); the moment of pain is "about to swap — is this a rug?".
+// A Mini App is just a page carrying an fc:miniapp embed meta tag: when its URL is
+// cast, Farcaster clients render a rich card (3:2 image + button) that opens this
+// interactive gate natively. Zero-capital to host (this Worker), not maintainer-
+// merge-dependent, not slow-SEO. Once checked, the user is offered a one-tap
+// composeCast to re-share — the BlockRun give-away-free-tool viral loop, in-feed.
+// The embed works standalone (no domain-association manifest needed to SHARE; the
+// /.well-known/farcaster.json manifest + signed domain association is only needed
+// to LIST in the Farcaster app store — that step needs Rez's custody key).
+// ---------------------------------------------------------------------------
+const MINIAPP_HOST = "https://x402-data-api.sigrunner.workers.dev";
+const MINIAPP_EMBED = {
+  version: "1",
+  imageUrl: `${MINIAPP_HOST}/miniapp/card.svg`,
+  button: {
+    title: "Check a Base token",
+    action: {
+      type: "launch_miniapp",
+      name: "Base Token Gate",
+      url: `${MINIAPP_HOST}/miniapp`,
+      splashImageUrl: `${MINIAPP_HOST}/miniapp/card.svg`,
+      splashBackgroundColor: "#0d1117",
+    },
+  },
+};
+const MINIAPP_EMBED_LEGACY = { ...MINIAPP_EMBED, button: { ...MINIAPP_EMBED.button, action: { ...MINIAPP_EMBED.button.action, type: "launch_frame" } } };
+
+// 3:2 (1200x800) branded card image for the cast embed. SVG keeps this zero-dep
+// and edge-renderable; Content-Type is image/svg+xml.
+app.get("/miniapp/card.svg", (c) => {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+<rect width="1200" height="800" fill="#0d1117"/>
+<rect x="0" y="0" width="1200" height="12" fill="#0b5"/>
+<text x="80" y="210" fill="#e6e6e6" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="92" font-weight="800">Base Token Gate</text>
+<text x="80" y="320" fill="#8b949e" font-family="system-ui,sans-serif" font-size="46" font-weight="500">Before you swap: is it a honeypot?</text>
+<g font-family="system-ui,sans-serif" font-weight="800" font-size="70">
+<rect x="80" y="400" width="300" height="120" rx="18" fill="#10311c"/><text x="230" y="480" fill="#3fb950" text-anchor="middle">GO</text>
+<rect x="420" y="400" width="300" height="120" rx="18" fill="#3a2f0b"/><text x="570" y="480" fill="#d29922" text-anchor="middle">HOLD</text>
+<rect x="760" y="400" width="300" height="120" rx="18" fill="#3a1113"/><text x="910" y="480" fill="#f85149" text-anchor="middle">BLOCK</text>
+</g>
+<text x="80" y="640" fill="#e6e6e6" font-family="system-ui,sans-serif" font-size="40">One decision, sized to your trade — honeypot + sellability + liquidity.</text>
+<text x="80" y="710" fill="#8b949e" font-family="system-ui,sans-serif" font-size="34">Grey Ridge Signals · free check · tap to run it on any Base token</text>
+</svg>`;
+  return c.body(svg, 200, { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+});
+
+// The mini app itself: interactive GO/HOLD/BLOCK gate over the free /gate/swap/preview,
+// with a native composeCast re-share and a paid upgrade (card for humans, x402 for agents).
+const MINIAPP_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Base Token Gate — honeypot check before you swap</title>
+<meta name="description" content="Paste a Base token address and get GO / HOLD / BLOCK before you swap — honeypot & sellability simulation, admin-control checks, and liquidity vs your trade size. Free.">
+<meta property="og:title" content="Base Token Gate — is this a honeypot?">
+<meta property="og:description" content="GO / HOLD / BLOCK before you swap on Base. Free honeypot + liquidity check.">
+<meta property="og:image" content="${MINIAPP_HOST}/miniapp/card.svg">
+<meta property="og:url" content="${MINIAPP_HOST}/miniapp">
+<meta name="fc:miniapp" content='${JSON.stringify(MINIAPP_EMBED)}'>
+<meta name="fc:frame" content='${JSON.stringify(MINIAPP_EMBED_LEGACY)}'>
+<style>body{max-width:40rem;margin:0 auto;padding:2rem 1.1rem;font:16px/1.5 system-ui,sans-serif;background:#0d1117;color:#e6e6e6}input{width:100%;padding:.8rem;font:inherit;border-radius:8px;border:1px solid #333;background:#161b22;color:inherit;box-sizing:border-box}button{margin-top:.6rem;padding:.75rem 1.2rem;font:inherit;font-weight:600;border:0;border-radius:8px;background:#0b5;color:#fff;cursor:pointer}button.alt{background:#21262d;color:#e6e6e6}#card{margin-top:1.4rem;padding:1.2rem;border-radius:12px;background:#161b22;display:none}.v{font-size:2.4rem;font-weight:800;letter-spacing:.02em}.go{color:#3fb950}.hold{color:#d29922}.block{color:#f85149}li{margin:.25rem 0}small,a{color:#8b949e}a{color:#58a6ff}.row{display:flex;gap:.5rem;flex-wrap:wrap}</style></head><body>
+<h1>Base Token Gate</h1><p>Paste a Base token address. We simulate a sell, scan owner controls, and size your trade against pool liquidity — one answer: <b>GO</b>, <b>HOLD</b> or <b>BLOCK</b>.</p>
+<input id="t" placeholder="0x… Base token address" autocomplete="off" autocapitalize="off" spellcheck="false">
+<div class="row"><button onclick="go()">Check token</button></div>
+<div id="card"></div>
+<p><small>Free: 3 checks/day. Unlimited &amp; sized to your trade — humans: <a href="/pricing">$9.99/mo, pay by card</a> · agents: x402 <a href="/gate/swap">/gate/swap</a> ($0.008/call). Heuristic signal, not financial advice.</small></p>
+<script type="module">
+let FC=null;
+try{const m=await import('https://esm.sh/@farcaster/miniapp-sdk');FC=m.sdk;await FC.actions.ready();}catch(e){FC=null;}
+window.__FC=FC;
+const q=new URLSearchParams(location.search).get('token');if(q){document.getElementById('t').value=q;go();}
+</script>
+<script>
+function esc(x){return String(x).replace(/[<>&]/g,s=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[s]));}
+function shareUI(t,j){
+  var sym=(j.token_meta&&j.token_meta.symbol)||'This Base token';
+  var dec=String(j.decision||'').toUpperCase();
+  var text=sym+' — Base Token Gate says '+dec+'. '+(j.reason||'');
+  var url=location.origin+'/miniapp?token='+t;
+  var warp='https://warpcast.com/~/compose?text='+encodeURIComponent(text)+'&embeds[]='+encodeURIComponent(url);
+  var x='https://twitter.com/intent/tweet?text='+encodeURIComponent(text)+'&url='+encodeURIComponent(url);
+  var tg='https://t.me/share/url?url='+encodeURIComponent(url)+'&text='+encodeURIComponent(text);
+  var html='<div class="row" style="margin-top:1rem"><button class="alt" id="sh">Share this check</button> '
+    +'<a href="'+x+'" target="_blank" rel="noopener"><button class="alt">X</button></a> '
+    +'<a href="'+tg+'" target="_blank" rel="noopener"><button class="alt">Telegram</button></a></div>';
+  setTimeout(function(){var b=document.getElementById('sh');if(b)b.onclick=async function(){
+    try{if(window.__FC&&window.__FC.actions&&window.__FC.actions.composeCast){await window.__FC.actions.composeCast({text:text,embeds:[url]});return;}}catch(e){}
+    window.open(warp,'_blank','noopener');
+  };},0);
+  return html;
+}
+async function go(){
+  var t=document.getElementById('t').value.trim(),c=document.getElementById('card');c.style.display='block';
+  if(!/^0x[0-9a-fA-F]{40}$/.test(t)){c.textContent='Enter a valid 0x… address (40 hex chars).';return;}
+  c.textContent='Checking…';history.replaceState(null,'','?token='+t);
+  try{
+    var r=await fetch('/gate/swap/preview?token='+t);var j=await r.json();
+    if(!r.ok){c.innerHTML='<b>'+esc(j.error||'Limit reached')+'</b><br>Daily free limit may be used up — unlimited via <a href="/pricing">card</a> or x402 <a href="/gate/swap">/gate/swap</a>.';return;}
+    var dec=String(j.decision||'').toLowerCase();var m=j.token_meta||{};
+    var liq=(j.liquidity_usd==null)?'n/a':'$'+Math.round(j.liquidity_usd).toLocaleString();
+    c.innerHTML='<div class="v '+esc(dec)+'">'+esc(dec.toUpperCase())+'</div>'
+      +'<div>'+esc(m.symbol||'?')+(m.name?' · '+esc(m.name):'')+' · verdict '+esc(j.verdict||'?')+' · risk '+esc(j.risk_score)+'/100</div>'
+      +'<p>'+esc(j.reason||'')+'</p>'
+      +'<ul><li>Liquidity (WETH pool): '+liq+'</li><li>Flags: '+((j.flags||[]).map(esc).join('; ')||'none')+'</li></ul>'
+      +shareUI(t,j);
+  }catch(e){c.textContent='Error: '+e;}
+}
+window.go=go;
+</script></body></html>`;
+
+app.get("/miniapp", (c) => c.html(MINIAPP_HTML));
 
 // Absolute, directly-quotable paid URL built from the live preview request: drop the "/preview"
 // segment and keep the caller's exact query (token, side, notional_usd). An agent can feed the
