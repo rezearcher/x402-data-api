@@ -3595,10 +3595,10 @@ app.get("/token-safety", (c) => {
       <div class="price">$9.99</div>
       <div class="note">per month</div>
       <ul>
-        <li>100 token checks / month</li>
-        <li>Any Base ERC-20 address</li>
-        <li>API key access</li>
-        <li>Priority RPC routing</li>
+        <li>100 API calls / month — any endpoint</li>
+        <li>MCP security scans &amp; token-safety checks</li>
+        <li>Market &amp; on-chain data (prices, yields, funding, RPC)</li>
+        <li>Card payment — no wallet or crypto needed</li>
       </ul>
       <a class="btn" href="#" onclick="(async () => { try { const res = await fetch('/stripe/create-checkout-session', { method: 'POST' }); const json = await res.json(); if (json.url) { window.location.href = json.url; } else { alert('Error: ' + (json.error || 'unknown')); } } catch (e) { alert('Failed to initialize checkout: ' + e); } })(); return false;">Subscribe</a>
       <p class="note" style="margin-top:0.5rem;">Prefer agent-native? Use our <a href="${BASE}/" style="color:#7fd1a8;">x402 endpoint</a> — pay per call in USDC, no account needed.</p>
