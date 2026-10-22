@@ -8747,6 +8747,10 @@ if(sub)sub.onclick=async function(){sub.disabled=true;var o=sub.textContent;sub.
 // ship), ranks for "MCP security scanner" / "scan MCP server for prompt injection", and
 // funnels to the $0.05 full audit + the $9.99/mo monitor. The preview response is
 // server-generated; all of it is rendered via textContent, never innerHTML.
+// Short, memorable CTA alias used on shareable research cards / social — a plain
+// 302 to the interactive scanner page. No billing surface, no payload.
+app.get("/scan", (c) => c.redirect("/scan/mcp-scanner", 302));
+
 app.get("/scan/mcp-scanner", (c) => {
   const ORIGIN = new URL(c.req.url).origin;
   const title = "Free MCP Security Scanner — detect prompt injection & tool poisoning";

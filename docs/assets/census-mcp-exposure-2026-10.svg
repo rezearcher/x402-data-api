@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="MCP registry security census, October 2026: 44 percent of public MCP servers expose their full tool list with no credentials.">
+  <defs>
+    <style>
+      .ink{fill:#e6e6e6}.mut{fill:#8b949e}.dim{fill:#6b7280}
+      .ff{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+      .mono{font-family:"SF Mono",ui-monospace,"Cascadia Mono",Menlo,Consolas,monospace}
+    </style>
+  </defs>
+
+  <rect width="1200" height="630" fill="#0d1117"/>
+  <rect x="0" y="0" width="1200" height="10" fill="#0b5"/>
+
+  <!-- wordmark -->
+  <g class="ff">
+    <text x="80" y="88" class="ink" font-size="30" font-weight="800" letter-spacing="2">GREY RIDGE</text>
+    <text x="297" y="88" class="mut" font-size="30" font-weight="500" letter-spacing="2">SIGNALS</text>
+    <text x="80" y="120" class="dim mono" font-size="19" letter-spacing="1">MCP SECURITY CENSUS &#183; OFFICIAL REGISTRY SNAPSHOT &#183; OCT 2026</text>
+  </g>
+
+  <!-- headline -->
+  <g class="ff">
+    <text x="80" y="214" class="ink" font-size="52" font-weight="800">44% of public MCP servers expose</text>
+    <text x="80" y="276" class="ink" font-size="52" font-weight="800">their full tool list &#8212; <tspan fill="#d29922">no credentials</tspan></text>
+  </g>
+
+  <!-- proportion bar: 246 probed, 109 readable -->
+  <g class="ff">
+    <text x="80" y="340" class="mut" font-size="22" font-weight="600">246 remote servers probed &#8212; every streamable-http remote in the registry</text>
+    <rect x="80" y="356" width="1040" height="46" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+    <rect x="80" y="356" width="460" height="46" rx="8" fill="#0f766e"/>
+    <rect x="534" y="356" width="12" height="46" fill="#161b22"/>
+    <text x="96" y="385" class="ink mono" font-size="21" font-weight="700">109 readable, no auth (44%)</text>
+    <text x="1104" y="385" class="mut mono" font-size="21" text-anchor="end">137 gated / non-standard</text>
+  </g>
+
+  <!-- three stat tiles -->
+  <g class="ff">
+    <!-- tile 1 -->
+    <rect x="80" y="438" width="330" height="128" rx="14" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+    <text x="104" y="494" class="ink" font-size="54" font-weight="800">19%</text>
+    <text x="104" y="524" class="mut" font-size="17" font-weight="600">of readable servers advertise a</text>
+    <text x="104" y="546" class="mut" font-size="17" font-weight="600">credential / state-changing tool</text>
+
+    <!-- tile 2 -->
+    <rect x="435" y="438" width="330" height="128" rx="14" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+    <text x="459" y="494" class="ink" font-size="54" font-weight="800">987</text>
+    <text x="459" y="524" class="mut" font-size="17" font-weight="600">tool definitions statically</text>
+    <text x="459" y="546" class="mut" font-size="17" font-weight="600">inspected, no tool ever called</text>
+
+    <!-- tile 3 -->
+    <rect x="790" y="438" width="330" height="128" rx="14" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+    <text x="814" y="494" font-size="54" font-weight="800" fill="#3fb950">0</text>
+    <text x="814" y="524" class="mut" font-size="17" font-weight="600">confirmed tool-poisoning</text>
+    <text x="814" y="546" class="mut" font-size="17" font-weight="600">attacks &#8212; measured base rate</text>
+  </g>
+
+  <!-- CTA footer -->
+  <g class="ff">
+    <text x="80" y="606" class="dim mono" font-size="16">Static scan of advertised tools/list &#183; reproducible</text>
+    <text x="1120" y="606" class="mut mono" font-size="17" text-anchor="end" font-weight="600">Scan your server free &#8594; api.greyridgesignals.ai/scan</text>
+  </g>
+</svg>
