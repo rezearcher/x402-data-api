@@ -46,8 +46,7 @@ caught and documented one false positive and how I fixed the rule). You can scan
 free, no account: `curl "https://x402-data-api.sigrunner.workers.dev/scan/mcp/preview?url=https://YOUR-HOST/mcp"`
 — or POST your own `tools/list` if it's behind auth (nothing leaves your machine).
 
-Happy to answer anything about method or the per-server findings. (Drafts AI-assisted, numbers
-and claims checked by me against the scan data.)
+Happy to answer anything about method or the per-server findings.
 
 ---
 

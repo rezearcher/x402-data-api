@@ -1,3 +1,4 @@
+https://github.com/Agorean/claude-plugin/issues/1
 https://github.com/Agent-Threat-Rule/agent-threat-rules/issues/727
 https://github.com/BlockRunAI/ClawRouter/issues/503
 https://github.com/Chain-Love/chain-love/issues/4745
@@ -30,7 +31,6 @@ https://github.com/DrVelvetFog/x402-pilot/issues/13
 https://github.com/successaje/pokter/issues/213
 https://github.com/gelu22/x402-gateway-omarchy/issues/3
 https://github.com/HelpCode-ai/anythingmcp/issues/1174
-https://github.com/Agorean/claude-plugin/issues/1
 https://github.com/ValentinTorassa/VT-Agent-Firewall/issues/1
 https://github.com/d-hinders/Haven-AI/issues/4107
 https://github.com/desplega-ai/agent-swarm/issues/2269
@@ -61,6 +61,7 @@ https://github.com/xpaysh/awesome-x402/issues/868
 https://github.com/Haustorium12/gold-402/issues/38
 https://github.com/punkpeye/awesome-mcp-servers/issues/10353
 https://github.com/Br0ski777/x402-agent-tools/issues/7
+https://github.com/Agorean/claude-plugin/issues/1
 https://github.com/Agent-Threat-Rule/agent-threat-rules/issues/727
 https://github.com/BlockRunAI/ClawRouter/issues/503
 https://github.com/Chain-Love/chain-love/issues/4745
@@ -77,7 +78,6 @@ https://github.com/romudille-bit/agentpay/issues/11
 https://github.com/d85rcrcy27-creator/ArbiVault/issues/40
 https://github.com/DrVelvetFog/x402-pilot/issues/13
 https://github.com/successaje/pokter/issues/213
-https://github.com/Agorean/claude-plugin/issues/1
 https://github.com/d-hinders/Haven-AI/issues/4107
 https://github.com/punkpeye/awesome-remote-mcp-servers/issues/2350
 https://github.com/swarm-agent-operator/swarm-x402-mcp/issues/2

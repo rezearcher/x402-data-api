@@ -147,3 +147,32 @@
   "n_enforced_routes": 62,
   "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
 }
+{
+  "ts": "2026-10-22T23:25:01.526851+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 61,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 0,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}
