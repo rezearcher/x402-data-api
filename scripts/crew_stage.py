@@ -63,6 +63,18 @@ STAGES = {
         "criteria": "builder.artifacts is a non-empty list",
         "require": [("builder.artifacts", "list")],
     },
+    "security": {
+        "goal": "clear the shipped build on security at every layer — auth, secrets, data retention, "
+                "attack surface, dependency + supply chain — WITHOUT locking us out and WITHOUT skipping "
+                "a control because it was hard; block back to builder until cleared",
+        "criteria": "security.verdict == 'cleared' AND security.review non-empty AND "
+                    "security.lockout_checked is true (verdict 'unfixable' parks it; anything not "
+                    "'cleared' HOLDs in place so the builder fixes it — security is never skipped)",
+        "require": [("security.verdict", "eq:cleared"), ("security.review", "text"),
+                    ("security.lockout_checked", "true")],
+        "kill_when": ("security.verdict", "unfixable"),
+        "kill_why": "security.review",
+    },
     "judge": {
         "goal": "confirmed external USDC",
         "criteria": "judge.external_usdc_confirmed is true (oracle/revenue sensor only, never by hand)",
@@ -420,7 +432,12 @@ def selftest():
         assert set_(cid, '{"builder": {"artifacts": ["scripts/tool.py"]}}') == 0
         assert set_(cid, '{"builder": {"artifacts": ["scripts/tool.py", "docs/x.md"]}}') == 0
         assert find(load(), cid)["builder"]["artifacts"] == ["scripts/tool.py", "docs/x.md"], "lists union"
-        assert advance(cid) == 0 and stage_of(find(load(), cid)) == "judge"
+        assert advance(cid) == 0 and stage_of(find(load(), cid)) == "security"
+        assert advance(cid) == 1, "security without a clearance must HOLD (never skipped)"
+        assert set_(cid, '{"security": {"verdict": "cleared", "review": "auth+secrets+retention ok"}}') == 0
+        assert advance(cid) == 1, "security cleared but lockout not checked must HOLD"
+        assert set_(cid, '{"security": {"lockout_checked": true}}') == 0
+        assert advance(cid) == 0 and stage_of(find(load(), cid)) == "judge", "security cleared + lockout checked advances"
         import tempfile as _tf
         _rev = _tf.mkdtemp()
         os.environ["X402_REVENUE_DIR"] = _rev

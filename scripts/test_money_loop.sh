@@ -33,6 +33,39 @@ python3 -I scripts/crew_stage.py advance t >/dev/null 2>&1
 [ $? -eq 0 ] && ok "economist ADVANCEs once econ computed" || bad "economist should ADVANCE (exit 0) once econ set"
 unset CREW_PIPELINE_STORE
 
+echo "== 1c. security gate: never skipped, blocks until cleared + lockout-checked =="
+export CREW_PIPELINE_STORE="$TMP/sec.jsonl"
+# drive a candidate straight to the builder->security boundary
+python3 -I scripts/crew_stage.py new '{"id":"s","name":"s","source":"x","resells":"r","audience_hypothesis":"a"}' >/dev/null 2>&1
+python3 -I scripts/crew_stage.py advance s >/dev/null 2>&1   # scout->economist
+python3 -I scripts/crew_stage.py set s '{"econ":{"spread_usd":1,"computed_note":"n"}}' >/dev/null 2>&1
+python3 -I scripts/crew_stage.py advance s >/dev/null 2>&1   # economist->skeptic
+python3 -I scripts/crew_stage.py set s '{"skeptic":{"verdict":"survive","assumption":"a"}}' >/dev/null 2>&1
+python3 -I scripts/crew_stage.py advance s >/dev/null 2>&1   # skeptic->distribution
+python3 -I scripts/crew_stage.py set s '{"distribution":{"channel":"c","reach_evidence":"e"}}' >/dev/null 2>&1
+python3 -I scripts/crew_stage.py advance s >/dev/null 2>&1   # distribution->builder
+python3 -I scripts/crew_stage.py set s '{"builder":{"artifacts":["x"]}}' >/dev/null 2>&1
+python3 -I scripts/crew_stage.py advance s >/dev/null 2>&1   # builder->security
+stage="$(python3 -I -c "import sys;sys.path.insert(0,'scripts');import crew_stage as c;r=c.find(c.load(),'s');print(c.stage_of(r) if r else 'none')" 2>/dev/null)"
+[ "$stage" = "security" ] && ok "builder advances INTO security (gate exists before judge)" || bad "expected security stage after builder, got '$stage'"
+python3 -I scripts/crew_stage.py advance s >/dev/null 2>&1
+[ $? -eq 1 ] && ok "security HOLDs with no clearance (cannot be skipped)" || bad "security should HOLD (1) without a clearance"
+python3 -I scripts/crew_stage.py set s '{"security":{"verdict":"cleared","review":"ok"}}' >/dev/null 2>&1
+python3 -I scripts/crew_stage.py advance s >/dev/null 2>&1
+[ $? -eq 1 ] && ok "security still HOLDs until lockout is checked (no self-lockout)" || bad "security should HOLD (1) until lockout_checked"
+python3 -I scripts/crew_stage.py set s '{"security":{"lockout_checked":true}}' >/dev/null 2>&1
+python3 -I scripts/crew_stage.py advance s >/dev/null 2>&1
+[ $? -eq 0 ] && ok "security ADVANCEs once cleared AND lockout-checked" || bad "security should ADVANCE (0) when cleared + lockout checked"
+# unfixable verdict parks the candidate (escape hatch, not a silent skip)
+python3 -I scripts/crew_stage.py new '{"id":"u","name":"u","source":"x","resells":"r","audience_hypothesis":"a"}' >/dev/null 2>&1
+for step in 'advance u' 'set u {"econ":{"spread_usd":1,"computed_note":"n"}}' 'advance u' 'set u {"skeptic":{"verdict":"survive","assumption":"a"}}' 'advance u' 'set u {"distribution":{"channel":"c","reach_evidence":"e"}}' 'advance u' 'set u {"builder":{"artifacts":["x"]}}' 'advance u'; do
+  python3 -I scripts/crew_stage.py $step >/dev/null 2>&1
+done
+python3 -I scripts/crew_stage.py set u '{"security":{"verdict":"unfixable","review":"cannot secure without lockout"}}' >/dev/null 2>&1
+python3 -I scripts/crew_stage.py advance u >/dev/null 2>&1
+[ $? -eq 3 ] && ok "security 'unfixable' KILLs (escape hatch exists)" || bad "security unfixable should KILL (3)"
+unset CREW_PIPELINE_STORE
+
 echo "== 2. send-gate decision table (fixture ledger, date-independent) =="
 LED="$TMP/leads.json"
 cat > "$LED" <<'JSON'
