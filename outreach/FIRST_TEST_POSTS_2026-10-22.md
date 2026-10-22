@@ -4,10 +4,13 @@ Source data: `docs/MCP_REGISTRY_CENSUS_2026-10-20.md` (measured, reproducible).
 Byline: Rez / Grey Ridge (real founder). Voice bar: no AI-assist disclosure lines in public copy (removed 2026-10-22); numbers claim-traced to docs/MCP_REGISTRY_CENSUS_2026-10-20.md.
 Post MANUALLY from: HN `greyridge`, Reddit `rezarcher`. Human-review gate = you approve before posting.
 
-Best link target = the census writeup. Cleanest live artifact to link:
-- Free scanner (try-it): https://x402-data-api.sigrunner.workers.dev/scan/mcp-scanner
+**Primary link target (use this URL in the post) = the live findings page:**
+https://rezearcher.github.io/greyridge-x402-tools/mcp-registry-census-2026-10-20
+It reads as a standalone writeup (not a bare repo), and now ends with clickable next-steps —
+browser scanner + $9.99/mo monitoring checkout — so a convinced reader can act without a terminal.
+Supporting links (mention inline, not as the submission URL):
+- Free browser scanner (try-it): https://x402-data-api.sigrunner.workers.dev/scan/mcp-scanner
 - Repo (reproduce): https://github.com/rezearcher/x402-data-api  (scripts/registry_census.sh)
-- (Ideal: publish the census as a standalone page — I can do that next so HN links to findings, not a repo.)
 
 ---
 
