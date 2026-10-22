@@ -1,1 +1,2 @@
 custom_domain_serves=True (HTTP 200) | consumers=4 targets=0 alert=False -> /home/rez/.hermes/data/x402_consumers/stale_pins.json
+custom_domain_serves=True (HTTP 200) | consumers=6 targets=0 alert=False -> /home/rez/.hermes/data/x402_consumers/stale_pins.json
