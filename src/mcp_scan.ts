@@ -113,6 +113,40 @@ export function analyzeMcpTool(name: string, description: string, schemaText: st
   if (exfilHit) add("high", "exfiltration-hint",
     "Description instructs sending sensitive data (system prompt / conversation / env / file contents / private keys) to a destination, credentials to a foreign destination, or references a secret-file artifact (.env/.ssh/id_rsa).", exfilHit[0]);
 
+  // 2b. Schema-injection exfil. The exfil matchers above run on the top-level
+  // description ONLY, sentence-scoped so a payload word in the description can't
+  // pair with a URL that lives over in the schema (a cross-boundary false positive).
+  // But the agent ALSO ingests every parameter's `description`/`title` prose from the
+  // inputSchema, so an attacker who has read these open-source rules can simply move
+  // the whole "send the system prompt to https://evil" payload INTO a parameter
+  // description and slip past rule 2 (the documented "schema injection" / parameter-
+  // description vector — Invariant Labs' canonical PoC smuggled its exfil through a
+  // `sidenote` parameter). We close that by pulling each prose string out of the
+  // parsed schema and running the SAME matchers against it INDIVIDUALLY — so a hit
+  // means verb+payload+destination are all inside one parameter description, never a
+  // cross-field concatenation. Precision: only `description`/`title` prose is scanned
+  // (not `enum`/`default`/`type`), each field standalone, so the clean corpus (terse
+  // type-hint descriptions like "0x-prefixed address") stays clean.
+  const schemaProse: string[] = [];
+  try {
+    const walk = (node: unknown) => {
+      if (Array.isArray(node)) { for (const x of node) walk(x); return; }
+      if (node && typeof node === "object") {
+        for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+          if ((k === "description" || k === "title") && typeof v === "string") schemaProse.push(v);
+          else walk(v);
+        }
+      }
+    };
+    walk(JSON.parse(schemaText));
+  } catch { /* schemaText not JSON — rule 1/full-text matchers already cover it */ }
+  for (const prose of schemaProse) {
+    const pl = prose.toLowerCase();
+    const h = pl.match(exfilSensitive) || pl.match(exfilCredential);
+    if (h) { add("high", "exfiltration-hint",
+      "A tool parameter's schema description instructs sending sensitive data / credentials to a destination — schema-injection exfiltration (payload hidden in inputSchema rather than the top-level description).", h[0]); break; }
+  }
+
   // 3. Dangerous capability surface
   const danger = /((?<![\/.\w-])(exec|execs)(?![\/\w-])|\b(exec\(|eval|eval\(|subprocess|shell|sudo|chmod)\b|os\.system|child_process|rm -rf|arbitrary (code|command)|remote code|\bexecute (shell|arbitrary|code|commands?)\b|run (shell|arbitrary) (commands?|code))/i;
   if (danger.test(low)) add("high", "dangerous-capability",
