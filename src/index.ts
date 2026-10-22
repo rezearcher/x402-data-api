@@ -1108,6 +1108,15 @@ app.get("/.well-known/x402", (c) => {
         "Pay-per-call x402 for Base agents, led by the pre-trade safety gate: /gate/swap (GO/HOLD/BLOCK sized to your trade, $0.008), /chain/token-report (SAFE/CAUTION/AVOID with measured transfer tax, $0.01) and /chain/token-security (live honeypot/sellability sim, $0.009) — a honeypot check for a fraction of what rival Base token-safety APIs charge (up to $0.25/call). Plus market & on-chain data: /defi/yields (lending/LP yields + IL risk), /crypto/funding (cross-venue Hyperliquid+OKX+dYdX funding + arb spread), /crypto/prices, /pm/markets (Polymarket) and 20+ Base RPC/chain routes. Free /preview paths on the flagship routes. No account, no key — agents pay inline in USDC from $0.001/call.",
       website: BASE,
       categories: ["prediction-markets", "crypto", "data", "security", "mcp", "funding", "yield", "token-price", "rpc", "base", "onchain", "blockchain"],
+      // Primary category in the x402 agent-catalog taxonomy used by the Circle Agent
+      // Marketplace / CDP discovery API (enum: FINANCIAL_ANALYSIS, PREDICTION_MARKETS,
+      // WEB_SEARCH_RESEARCH, SOCIAL_INTELLIGENCE, CREATIVE, INFRASTRUCTURE). Our flagship
+      // token-safety + DeFi/market-data routes are FINANCIAL_ANALYSIS — where the lane's
+      // data sellers are filed — and we also span PREDICTION_MARKETS (/pm/markets) and
+      // INFRASTRUCTURE (Base RPC/chain reads). Stated so a catalog-native agent filtering
+      // by the standard enum, or a marketplace reviewer, resolves us to the right shelf.
+      category: "FINANCIAL_ANALYSIS",
+      catalog_taxonomy: ["FINANCIAL_ANALYSIS", "PREDICTION_MARKETS", "INFRASTRUCTURE"],
       // Measured reliability — the question every integrator asks first (latency/uptime).
       // Sourced from STATUS_SNAPSHOT (scripts/status_report.py over data/uptime_samples.jsonl),
       // surfaced here so a buyer-agent or registry reviewer evaluating trust reads the real
