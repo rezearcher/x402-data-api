@@ -127,6 +127,27 @@ export function analyzeMcpTool(name: string, description: string, schemaText: st
   // 5. Invisible / non-ASCII payloads (unicode tag chars, zero-width, long base64)
   if (/[​-‍﻿‪-‮⁦-⁩]/.test(text) || /[\u{E0000}-\u{E007F}]/u.test(text))
     add("high", "invisible-unicode", "Hidden/zero-width or unicode-tag characters in description — covert instruction channel.", "non-printable chars");
+
+  // 5b. ANSI terminal escape / C0 control-char covert channel. A separate concealment
+  // class from zero-width unicode (rule 5): a malicious server embeds the ESC byte
+  // (0x1B) and CSI/OSC sequences, or other non-whitespace C0 control characters, in a
+  // tool NAME or description. When that text renders in the agent's terminal or is
+  // written to logs, the escape sequences can overwrite/hide text so a HUMAN reviewing
+  // the tool sees something different from what the model ingests — Trail of Bits'
+  // "line jumping" / ANSI-escape research and CVE-2026-6494 (AAP MCP server, ANSI log
+  // injection, 2026-04-17). Precision: legitimate tool text is plain, using only
+  // TAB/LF/CR whitespace; any other C0 control (and DEL) is anomalous, so false
+  // positives are near-zero. We scan name too (the name is attacker-controllable and
+  // rendered in tool pickers/logs), unlike the regex rules above which scan text only.
+  const controlChan = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
+  if (controlChan.test(name) || controlChan.test(text)) {
+    const inName = controlChan.test(name);
+    add("high", "ansi-terminal-escape",
+      "ANSI terminal escape sequence or non-whitespace control character in the tool " +
+      (inName ? "name" : "description") +
+      " — a covert channel that can hide instructions from a human reviewer or inject into terminal output/logs (Trail of Bits line-jumping / ANSI; CVE-2026-6494).",
+      /\u001b/.test(inName ? name : text) ? "ESC (0x1b) escape sequence" : "non-printable control char");
+  }
   if (/[A-Za-z0-9+/]{120,}={0,2}/.test(text))
     add("medium", "opaque-blob", "Long base64-like blob embedded in tool text — possible hidden payload.", "…base64…");
 
