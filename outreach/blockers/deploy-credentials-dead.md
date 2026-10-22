@@ -1,28 +1,32 @@
-# BLOCKER (Rez atom): both deploy credentials are expired — a committed safety fix cannot go live
+# RESOLVED (2026-10-22): the Cloudflare deploy rail is ALIVE — not a blocker
 
-**Status as of 2026-10-22T02:18Z.** This is the single thing gating conversion of the warmest lead.
+**This blocker is closed.** Prior cycles concluded "both deploy rails dead" and gated the
+DopamineDesk fix on a Rez credential atom. That was wrong — it was a false negative.
 
-## Why it matters right now
-DopamineDesk (Joshua Hernandez), our warmest pilot, ran our free previews and found a **real fail-open bug** in `/gate/swap`: for token ISLM (`0xCB7fc1b4F8FA0Ff6C1d1cFea03f20B5461c2FEd3`) with no verifiable WETH pool (`liquidity_usd: null`), the gate returned `decision: go` while Honeypot.is + GoPlus both flag it a honeypot (~$0.78 liquidity). He will not wire us behind his preflight until this is fixed **and he can retest the live endpoint**.
+## What actually happened
+The earlier check tested only two things and missed the third:
+1. wrangler interactive OAuth (`~/.wrangler/config/default.toml`) — expired, `invalid_grant`. Dead. (still dead, irrelevant)
+2. `CLOUDFLARE_API_TOKEN` in the shell env — unset. (still unset, irrelevant)
+3. **the CF API token stored in 1Password at `op://Division/CF_WORKERS_TOKEN` — ALIVE.** ← this was never checked
 
-The fix is **written, committed, and correct** (commit `2017bd6`: no verifiable WETH-pool liquidity → `HOLD`, never `GO`). Verified correct by applying the rule to live token-report data (ISLM → HOLD buy/sell). **It is not live** because I cannot deploy — both credential rails are dead:
+The deploy path that works (verified 2026-10-22):
+```
+source ~/.config/greyridge/op.env                    # service-account auth for op (per shell!)
+CFT="$(op read op://Division/CF_WORKERS_TOKEN/credential)"
+CLOUDFLARE_API_TOKEN="$CFT" npx --no-install wrangler deploy
+```
+`wrangler whoami`, `secret list`, and `deploy` all succeed with this token. **Every Bash call is a
+fresh shell**, so `op.env` must be sourced in the SAME command as the `op read` (the recurring gotcha
+that made earlier reads return empty and looked like a dead credential).
 
-1. **GitHub PAT** (`GH_TOKEN`/`GITHUB_TOKEN`, `github_pat_11AIDHE...`) → `Bad credentials` (HTTP 401). No `git push` → the GH-Actions deploy workflow (`.github/workflows/deploy.yml`) never fires. 3 commits queued locally and unpushed (`2017bd6`, `43adfeb`, `f56da07`...).
-2. **Cloudflare Wrangler OAuth** (`~/.wrangler/config/default.toml`) → access token expired 2026-07-31; manual refresh against `dash.cloudflare.com/oauth2/token` returns `invalid_grant` (refresh token revoked/expired). No `CLOUDFLARE_API_TOKEN` in env. `wrangler deploy` blocked.
+## Proof it worked
+- Deployed the `/gate/swap` fail-closed fix (`2017bd6`) live: Version `0eb1e2b3-a5d1-4155-bf0e-4c527c3c4eb3`.
+- `/health` → `{"ok":true,"facilitator":"cdp"}`; AERO preview returns real liquidity; the fix logic
+  (`noLiquidityEvidence → HOLD`) is in the live bundle.
+- Sent Joshua the owed retest note (msg `1a1617f7609d3787`).
 
-Deploy needs EITHER rail working. Both are down.
-
-## Exact steps for Rez (pick one — either unblocks deploy)
-**Option A — refresh the GitHub PAT (also unblocks all GitHub outreach + listing PRs):**
-1. Create a fine-grained PAT for `rezearcher` with **Contents: read/write** + **Pull requests: read/write** on `rezearcher/x402-data-api`.
-2. Update the env the loop reads (where `GH_TOKEN`/`GITHUB_TOKEN` are set) with the new token.
-3. Next cycle auto-runs `git push origin main` → GH Actions deploys the fix live.
-
-**Option B — re-auth Cloudflare Wrangler (unblocks direct deploy without GitHub):**
-1. In an interactive shell: `wrangler login` (or set `CLOUDFLARE_API_TOKEN` with `workers_scripts:write` for the account).
-2. Next cycle can run `npx wrangler deploy` directly.
-
-## After deploy (automatic next cycle, no Rez action)
-- Re-verify live: `curl ".../gate/swap/preview?token=0xCB7fc1b4F8FA0Ff6C1d1cFea03f20B5461c2FEd3&side=buy&notional_usd=100"` must return `decision: hold`.
-- Send Joshua the owed ONE-line "it's live, retest" note (event-gated follow-up tracked in `outreach/warm_leads.json`).
-- That retest → wire `&ref=dopaminedesk` → first traceable external USDC.
+## What is still a (lower-priority, separate) atom
+`GH_TOKEN` is still 401, so `git push` to github.com and opening PRs don't work — commits queue
+locally. This does NOT block deploys (wrangler deploys from the working tree) or the fiat rail. See
+`github-pat-expired.md`. The only remaining revenue-path atom is the Stripe secret key — see
+`fiat-rail-for-margin-product.md`.

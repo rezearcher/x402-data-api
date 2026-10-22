@@ -1,81 +1,81 @@
 {
- "_doc": "Ground-truth warm-lead state. The SIGNAL for 'may I nudge?' is the real thread last-sender, NOT a file mtime. A cycle may send ONLY when last_dir=='them' AND now>do_not_send_until. last_dir=='us' => ball-in-court on THEM => DO NOT SEND. Missing lead => review manually (degrade open), never auto-send. Update last_dir/last_at/do_not_send_until whenever you read a thread or send. Dates ISO-8601 UTC.",
- "updated_at": "2026-10-22T01:16:00Z",
- "leads": [
-  {
-   "lead": "chadi0x / TheBigBrother (issue #9)",
-   "channel": "github",
-   "thread_id": "chadi0x/TheBigBrother#9",
-   "last_dir": "us",
-   "last_at": "2026-10-22T01:16:00Z",
-   "their_last_at": "2026-10-21T10:45:32Z",
-   "status": "ball-in-court",
-   "do_not_send_until": "2026-10-28",
-   "note": "OSINT platform (Python) w/ crypto-wallet-analysis. Replied interested but closed issue 'future version'. Converted the brush-off: posted (comment 6330281302) a self-contained stdlib drop-in token_safety() provider (free preview by default, one flag to paid) + exact fit = flag honeypot/scam holdings in wallet reports + offer to open a PR. Ball-in-court on them. DO NOT re-ping; only act if they reply."
-  },
-  {
-   "lead": "X402blockchains / x402-registry (PR #19)",
-   "channel": "github",
-   "thread_id": "X402blockchains/x402-registry#19",
-   "last_dir": "us",
-   "last_at": "2026-10-22T00:49:00Z",
-   "their_last_at": "2026-10-21T16:48:22Z",
-   "status": "ball-in-court",
-   "do_not_send_until": "2026-10-25",
-   "note": "Actively-maintained community x402 registry that INDEPENDENTLY VERIFIES submissions (confirmed our settlement tx on-chain). Listing PR OPEN/MERGEABLE. They asked for 2 items before approval: (1) delivered resource result distinct from payment evidence; (2) corrected retry/recovery guidance. BOTH pushed in commit dd0656e + replied (comment 6329949640) 2026-10-22. Approval = live listing on a verifying registry = real organic discoverability (NOT a dead registry). DO NOT re-ping; watch PR #19 for recheck/approval."
-  },
-  {
-   "lead": "DrVelvetFog / x402-pilot (PR #14)",
-   "channel": "github",
-   "thread_id": "DrVelvetFog/x402-pilot#14",
-   "last_dir": "us",
-   "last_at": "2026-10-22T00:28:00Z",
-   "their_last_at": "2026-10-21T14:05:19Z",
-   "status": "ball-in-court",
-   "do_not_send_until": "2026-10-27",
-   "note": "HOTTEST lead. They ran the free leg (previews+402+manifest+x402scan all verified), then asked for 2 edits before merge: (1) attribute verdicts to Grey Ridge / state x402-pilot doesn't vouch; (2) reword CDP Bazaar claim to verifiable-only. BOTH edits pushed to branch live-evm-verify-target 2026-10-22; replied with paste-ready x402-fetch paid-call snippet. ONLY remaining step is THEIR $0.01 paid settle from a throwaway wallet -> merges + real external USDC. DO NOT re-ping; watch revenue sensor + PR #14 for their settle result."
-  },
-  {
-   "lead": "DopamineDesk / Joshua Hernandez",
-   "channel": "email",
-   "thread_id": "1a152b620cf6f611",
-   "last_dir": "us",
-   "last_at": "2026-10-22T02:18:00Z",
-   "their_last_at": "2026-10-22T01:34:34Z",
-   "status": "ball-in-court",
-   "do_not_send_until": "2026-10-26",
-   "note": "Warmest lead. 2026-10-22: Joshua ran free previews and found a REAL fail-open bug — /gate/swap returned decision=go/CAUTION for ISLM (0xCB7f..FEd3) with liquidity_usd=null ('no WETH pool'), while Honeypot.is+GoPlus flag it honeypot (~$0.78 liq). Fix committed 2017bd6: no verifiable WETH-pool liquidity -> HOLD (not GO, not BLOCK). Replied (msg 1a161655394777fa) confirming the gap, showing corrected HOLD output for his exact token computed from live token-report data, explaining HOLD-vs-BLOCK + honeypot-sim limitation. ONE owed follow-up is EVENT-GATED not time-gated: the moment /gate/swap deploys the fix live, send him ONE line so he can retest (deploy blocked on credential atom below). Do NOT send any other message until he replies.",
-   "emails": [
-    "jblaz6335@gmail.com"
-   ]
-  },
-  {
-   "lead": "LiquidLogicX / Miles",
-   "channel": "email",
-   "thread_id": "1a157c9da1e86694",
-   "last_dir": "them",
-   "last_at": "2026-10-21T04:36:22Z",
-   "their_last_at": "2026-10-21T04:36:22Z",
-   "status": "self-committed",
-   "do_not_send_until": "2026-10-27",
-   "note": "Miles said his team will pull tools/list and run the free paste-mode preview THIS WEEK, then take the itemized paid run if useful. Explicit ball-in-court on him. Do not nudge before end of week (2026-10-27).",
-   "emails": [
-    "hello@liquidlogicx.com"
-   ]
-  },
-  {
-   "lead": "agenticpay / Krystian Gwizdala",
-   "channel": "email",
-   "thread_id": "1a1524ad2b0d4f85",
-   "last_dir": "us",
-   "last_at": "2026-10-21T00:00:00Z",
-   "their_last_at": "2026-10-19T18:39:18Z",
-   "status": "ball-in-court",
-   "do_not_send_until": "2026-10-26",
-   "note": "He asked latency/uptime/free-tier for /chain/token-report as a pre-trade gate. We answered with measured latency + 99.86% uptime + free preview, plus 5 follow-ups already. DO NOT re-ping.",
-   "emails": [
-    "gwizdala.kr@gmail.com"
-   ]
-  }
- ]
+  "_doc": "Ground-truth warm-lead state. The SIGNAL for 'may I nudge?' is the real thread last-sender, NOT a file mtime. A cycle may send ONLY when last_dir=='them' AND now>do_not_send_until. last_dir=='us' => ball-in-court on THEM => DO NOT SEND. Missing lead => review manually (degrade open), never auto-send. Update last_dir/last_at/do_not_send_until whenever you read a thread or send. Dates ISO-8601 UTC.",
+  "updated_at": "2026-10-22T01:16:00Z",
+  "leads": [
+    {
+      "lead": "chadi0x / TheBigBrother (issue #9)",
+      "channel": "github",
+      "thread_id": "chadi0x/TheBigBrother#9",
+      "last_dir": "us",
+      "last_at": "2026-10-22T01:16:00Z",
+      "their_last_at": "2026-10-21T10:45:32Z",
+      "status": "ball-in-court",
+      "do_not_send_until": "2026-10-28",
+      "note": "OSINT platform (Python) w/ crypto-wallet-analysis. Replied interested but closed issue 'future version'. Converted the brush-off: posted (comment 6330281302) a self-contained stdlib drop-in token_safety() provider (free preview by default, one flag to paid) + exact fit = flag honeypot/scam holdings in wallet reports + offer to open a PR. Ball-in-court on them. DO NOT re-ping; only act if they reply."
+    },
+    {
+      "lead": "X402blockchains / x402-registry (PR #19)",
+      "channel": "github",
+      "thread_id": "X402blockchains/x402-registry#19",
+      "last_dir": "us",
+      "last_at": "2026-10-22T00:49:00Z",
+      "their_last_at": "2026-10-21T16:48:22Z",
+      "status": "ball-in-court",
+      "do_not_send_until": "2026-10-25",
+      "note": "Actively-maintained community x402 registry that INDEPENDENTLY VERIFIES submissions (confirmed our settlement tx on-chain). Listing PR OPEN/MERGEABLE. They asked for 2 items before approval: (1) delivered resource result distinct from payment evidence; (2) corrected retry/recovery guidance. BOTH pushed in commit dd0656e + replied (comment 6329949640) 2026-10-22. Approval = live listing on a verifying registry = real organic discoverability (NOT a dead registry). DO NOT re-ping; watch PR #19 for recheck/approval."
+    },
+    {
+      "lead": "DrVelvetFog / x402-pilot (PR #14)",
+      "channel": "github",
+      "thread_id": "DrVelvetFog/x402-pilot#14",
+      "last_dir": "us",
+      "last_at": "2026-10-22T00:28:00Z",
+      "their_last_at": "2026-10-21T14:05:19Z",
+      "status": "ball-in-court",
+      "do_not_send_until": "2026-10-27",
+      "note": "HOTTEST lead. They ran the free leg (previews+402+manifest+x402scan all verified), then asked for 2 edits before merge: (1) attribute verdicts to Grey Ridge / state x402-pilot doesn't vouch; (2) reword CDP Bazaar claim to verifiable-only. BOTH edits pushed to branch live-evm-verify-target 2026-10-22; replied with paste-ready x402-fetch paid-call snippet. ONLY remaining step is THEIR $0.01 paid settle from a throwaway wallet -> merges + real external USDC. DO NOT re-ping; watch revenue sensor + PR #14 for their settle result."
+    },
+    {
+      "lead": "DopamineDesk / Joshua Hernandez",
+      "channel": "email",
+      "thread_id": "1a152b620cf6f611",
+      "last_dir": "us",
+      "last_at": "2026-10-22T02:18:00Z",
+      "their_last_at": "2026-10-22T01:34:34Z",
+      "status": "ball-in-court",
+      "do_not_send_until": "2026-10-27",
+      "note": "RESOLVED+SENT 2026-10-22: /gate/swap fail-closed fix DEPLOYED LIVE (version 0eb1e2b3, deploy via CLOUDFLARE_API_TOKEN from op://Division/CF_WORKERS_TOKEN \u2014 deploy rail is ALIVE, NOT dead). Sent Joshua the owed event-gated reply (msg 1a1617f7609d3787): answered his verdict-logic question, explained thin-pool sim unreliability, confirmed ISLM now HOLD on buy+sell, re-offered the free 10-20 token comparison set. Ball now in HIS court \u2014 do NOT send again until he replies (then --reply). Prior msg 7 was a garbled inversion; this reply supersedes it.",
+      "emails": [
+        "jblaz6335@gmail.com"
+      ]
+    },
+    {
+      "lead": "LiquidLogicX / Miles",
+      "channel": "email",
+      "thread_id": "1a157c9da1e86694",
+      "last_dir": "them",
+      "last_at": "2026-10-21T04:36:22Z",
+      "their_last_at": "2026-10-21T04:36:22Z",
+      "status": "self-committed",
+      "do_not_send_until": "2026-10-27",
+      "note": "Miles said his team will pull tools/list and run the free paste-mode preview THIS WEEK, then take the itemized paid run if useful. Explicit ball-in-court on him. Do not nudge before end of week (2026-10-27).",
+      "emails": [
+        "hello@liquidlogicx.com"
+      ]
+    },
+    {
+      "lead": "agenticpay / Krystian Gwizdala",
+      "channel": "email",
+      "thread_id": "1a1524ad2b0d4f85",
+      "last_dir": "us",
+      "last_at": "2026-10-21T00:00:00Z",
+      "their_last_at": "2026-10-19T18:39:18Z",
+      "status": "ball-in-court",
+      "do_not_send_until": "2026-10-26",
+      "note": "He asked latency/uptime/free-tier for /chain/token-report as a pre-trade gate. We answered with measured latency + 99.86% uptime + free preview, plus 5 follow-ups already. DO NOT re-ping.",
+      "emails": [
+        "gwizdala.kr@gmail.com"
+      ]
+    }
+  ]
 }

@@ -1,14 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "ai.greyridgesignals/tech-risk",
-  "description": "x402 pay-per-call: pre-trade swap gate, token safety, Base RPC, DeFi/Polymarket data (USDC)",
-  "version": "0.1.1",
-  "$comment": "Version mirrors root package.json (canonical).",
+  "name": "io.github.rezearcher/tech-risk",
+  "description": "Scan any MCP server for tool-poisoning/prompt-injection/exfiltration (OWASP LLM01/08) + Base data",
+  "version": "1.3.0",
+  "repository": {
+    "url": "https://github.com/rezearcher/x402-data-api",
+    "source": "github"
+  },
   "websiteUrl": "https://api.greyridgesignals.ai",
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://api.greyridgesignals.ai/mcp"
+      "url": "https://x402-data-api.sigrunner.workers.dev/mcp"
     }
   ]
 }

@@ -1,0 +1,23 @@
+name: host-probe
+# Definitively tests whether the custom domain (api.greyridgesignals.ai) is
+# Cloudflare-bot-challenged (403) from GitHub Actions runner IPs — the exact
+# datacenter ASN class where AI agents run. If this returns 200s, the
+# "custom-domain 403 conversion killer" thesis is stale and surfaces can
+# safely carry the more-trustworthy custom domain again.
+on:
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe both origins from Actions runner
+        run: |
+          echo "runner public IP:"; curl -s https://api.ipify.org; echo
+          for H in api.greyridgesignals.ai x402-data-api.sigrunner.workers.dev; do
+            echo "=== $H ==="
+            curl -s -o /dev/null -w "GET /                         -> %{http_code}\n" "https://$H/"
+            curl -s -o /dev/null -w "GET /.well-known/x402         -> %{http_code}\n" "https://$H/.well-known/x402"
+            curl -s -o /dev/null -w "GET /gate/swap/preview?degen  -> %{http_code}\n" "https://$H/gate/swap/preview?token=degen"
+            curl -s -o /dev/null -w "GET /chain/token-report/prev  -> %{http_code}\n" "https://$H/chain/token-report/preview?token=degen"
+            curl -s -o /dev/null -w "POST /v1/chat/completions/prv -> %{http_code}\n" -X POST "https://$H/v1/chat/completions/preview" -H "content-type: application/json" -d '{"model":"llama-3.3-70b","messages":[{"role":"user","content":"hi"}]}'
+          done

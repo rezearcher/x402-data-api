@@ -1,7 +1,12 @@
+https://github.com/chadi0x/TheBigBrother/issues/9
+https://github.com/X402blockchains/x402-registry/issues/19
+https://github.com/DrVelvetFog/x402-pilot/issues/14
+https://github.com/ondraulehla/mcpcost/issues/3
+https://github.com/BiscayneDev/shipyard-inference/issues/34
+https://github.com/joshuaswarren/sovereign-inference/issues/56
 https://github.com/Echolonius/the-penniless-agent/issues/6
 https://github.com/BlockRunAI/ClawRouter/issues/503
 https://github.com/bytesbrains/16ane/issues/81
-https://github.com/chadi0x/TheBigBrother/issues/9
 https://github.com/alextitonis/fly.ai/issues/14
 https://github.com/d-hinders/Haven-AI/issues/4188
 https://github.com/alextitonis/fly.ai/issues/13
@@ -49,6 +54,8 @@ https://github.com/xpaysh/awesome-x402/issues/868
 https://github.com/Haustorium12/gold-402/issues/38
 https://github.com/punkpeye/awesome-mcp-servers/issues/10353
 https://github.com/Br0ski777/x402-agent-tools/issues/7
+https://github.com/chadi0x/TheBigBrother/issues/9
+https://github.com/ondraulehla/mcpcost/issues/3
 https://github.com/basitalisandhu/mcp-egress/issues/19
 https://github.com/X402blockchains/x402-registry/issues/16
 https://github.com/0xcuy/adexto/issues/4
