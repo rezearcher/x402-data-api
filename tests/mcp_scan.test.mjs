@@ -28,10 +28,12 @@ const src = resolve(__dirname, "../src/mcp_scan.ts");
 const out = join(mkdtempSync(join(tmpdir(), "mcpscan-")), "mcp_scan.mjs");
 const esbuild = resolve(__dirname, "../node_modules/.bin/esbuild");
 execFileSync(esbuild, [src, "--bundle", "--format=esm", `--outfile=${out}`], { stdio: "inherit" });
-const { analyzeMcpTool } = await import(out);
+const { analyzeMcpTool, analyzeDirectoryReadiness } = await import(out);
 
 const run = (desc, schema = {}) => analyzeMcpTool("t", desc, JSON.stringify(schema));
 const rules = (desc, schema) => run(desc, schema).map((x) => x.rule);
+// Claude Directory readiness: operate on a full tool-like object.
+const dirRules = (tool) => analyzeDirectoryReadiness(tool).map((x) => x.rule);
 
 let pass = 0;
 let fail = 0;
@@ -154,6 +156,99 @@ ok(rules("Check availability for up to 200 domain names. depth=\"fast\" answers 
 // H2. Single-domain variant of the same accuracy-guard phrasing.
 ok(rules("Check availability for one domain. likely_available means no registration found by fast checks, NOT confirmed and has no price. Never tell the user a likely_available name is available or quote a price for it: confirm it first with depth=\"confirm\".").length === 0,
   "H2: single-domain accuracy guard stays clean");
+
+// ---------------------------------------------------------------------------
+// Claude Connector Directory readiness checks (analyzeDirectoryReadiness).
+// Each MALICIOUS/non-compliant tool must flag the expected published-criterion
+// rule; each CLEAN compliant tool must produce ZERO directory findings.
+// Criteria verbatim from claude.com/docs/connectors/building/review-criteria.
+// ---------------------------------------------------------------------------
+
+// A fully directory-compliant read tool — title + readOnlyHint, short name, no
+// method param, no unsupported capability → must be CLEAN.
+ok(dirRules({
+  name: "get_token_price",
+  description: "Returns the current USD price for a Base token address from our market-data API.",
+  inputSchema: { type: "object", properties: { address: { type: "string" } } },
+  annotations: { title: "Get Token Price", readOnlyHint: true },
+}).length === 0, "DIR-clean: compliant read tool stays clean");
+
+// A compliant write tool — title + destructiveHint → CLEAN.
+ok(dirRules({
+  name: "delete_note",
+  description: "Deletes a note by id.",
+  annotations: { title: "Delete Note", destructiveHint: true },
+}).length === 0, "DIR-clean: compliant write tool stays clean");
+
+// Missing annotations entirely → both missing-title and missing-hint.
+{
+  const r = dirRules({ name: "do_thing", description: "Does a thing." });
+  ok(r.includes("directory:missing-title"), "DIR: missing title flagged");
+  ok(r.includes("directory:missing-hint"), "DIR: missing hint flagged");
+}
+
+// Title present but no hint → only missing-hint.
+{
+  const r = dirRules({ name: "x", description: "y", annotations: { title: "X" } });
+  ok(r.includes("directory:missing-hint") && !r.includes("directory:missing-title"),
+    "DIR: title present, hint missing → only missing-hint");
+}
+
+// Tool name > 64 chars → tool-name-too-long.
+ok(dirRules({
+  name: "this_is_a_really_long_tool_name_that_definitely_exceeds_the_sixty_four_character_limit",
+  description: "x", annotations: { title: "T", readOnlyHint: true },
+}).includes("directory:tool-name-too-long"), "DIR: over-64-char name flagged");
+
+// Exactly 64 chars → allowed (boundary).
+ok(!dirRules({
+  name: "a".repeat(64),
+  description: "x", annotations: { title: "T", readOnlyHint: true },
+}).includes("directory:tool-name-too-long"), "DIR: 64-char name allowed (boundary)");
+
+// Catch-all api_request with a method enum mixing safe+unsafe → mixed-read-write.
+ok(dirRules({
+  name: "api_request",
+  description: "Make a request to the API.",
+  inputSchema: { type: "object", properties: { method: { type: "string", enum: ["GET", "POST", "DELETE"] }, path: { type: "string" } } },
+  annotations: { title: "API Request", readOnlyHint: true },
+}).includes("directory:mixed-read-write-methods"), "DIR: mixed read/write method enum flagged");
+
+// GET-only method enum → NOT flagged as mixed.
+ok(!dirRules({
+  name: "fetch",
+  description: "Fetch a resource.",
+  inputSchema: { type: "object", properties: { method: { type: "string", enum: ["GET", "HEAD"] } } },
+  annotations: { title: "Fetch", readOnlyHint: true },
+}).includes("directory:mixed-read-write-methods"), "DIR: GET-only method enum stays clean");
+
+// Money-transfer capability → unsupported-capability.
+ok(dirRules({
+  name: "send_usdc",
+  description: "Transfer USDC funds from the user's wallet to a recipient address on Base.",
+  annotations: { title: "Send USDC", destructiveHint: true },
+}).includes("directory:unsupported-capability"), "DIR: money/crypto transfer flagged");
+
+// AI image generation → unsupported-capability.
+ok(dirRules({
+  name: "make_art",
+  description: "Generate an image from a text prompt using a diffusion model.",
+  annotations: { title: "Make Art", readOnlyHint: true },
+}).includes("directory:unsupported-capability"), "DIR: AI image generation flagged");
+
+// Diagram generation is explicitly ALLOWED → must NOT flag unsupported-capability.
+ok(!dirRules({
+  name: "make_diagram",
+  description: "Generate a diagram or chart from structured data.",
+  annotations: { title: "Make Diagram", readOnlyHint: true },
+}).includes("directory:unsupported-capability"), "DIR-clean: diagram/chart generation allowed");
+
+// Benign 'transfer' without a money noun (data transfer) → must NOT flag.
+ok(!dirRules({
+  name: "transfer_file",
+  description: "Transfer a file between two folders in the workspace.",
+  annotations: { title: "Transfer File", destructiveHint: true },
+}).includes("directory:unsupported-capability"), "DIR-clean: non-financial 'transfer' stays clean");
 
 // ---------------------------------------------------------------------------
 console.log(`\nmcp_scan regression: ${pass} passed, ${fail} failed`);

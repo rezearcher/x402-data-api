@@ -6,7 +6,7 @@ import {
   finiteOrNull, optionalFeeGwei,
 } from "./sibling_contracts";
 import { STATUS_SNAPSHOT } from "./status_snapshot.ts";
-import { analyzeMcpTool, type ScanFinding } from "./mcp_scan.ts";
+import { analyzeMcpTool, analyzeDirectoryReadiness, type ScanFinding } from "./mcp_scan.ts";
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
@@ -8149,7 +8149,41 @@ app.post("/scan/mcp", async (c) => {
   const weight = { critical: 40, high: 20, medium: 8, low: 3 } as const;
   const risk_score = Math.min(100, findings.reduce((s, x) => s + weight[x.severity], 0));
   const { verdict, risk_summary } = mcpScanVerdict(findings, tools.length, risk_score);
-  const result = { target: "(pasted tools/list)", tools_scanned: tools.length, findings, risk_score, verdict, risk_summary, scanned_at: new Date().toISOString() };
+  const result: Record<string, unknown> = { target: "(pasted tools/list)", tools_scanned: tools.length, findings, risk_score, verdict, risk_summary, scanned_at: new Date().toISOString() };
+
+  // OPT-IN Claude Connector Directory readiness check. Off by default so the
+  // census / security scan output (and its carefully-tuned clean corpus) are
+  // never changed. When body.directory is set, ALSO run the structural checks
+  // against Anthropic's PUBLISHED review criteria so a connector author sees
+  // whether they will pass BEFORE burning a ~20-day review cycle. The injection
+  // patterns on Anthropic's reject list are already covered by `findings` above
+  // (tool-poisoning:* / exfiltration-hint / cross-tool-shadowing), so we fold
+  // those into the readiness blocker list too. Claims law: PUBLISHED criteria
+  // only — this does not reproduce Anthropic's private scan or guarantee acceptance.
+  if (body?.directory === true || body?.mode === "directory") {
+    const dirFindings: ScanFinding[] = [];
+    for (const t of tools) {
+      dirFindings.push(...analyzeDirectoryReadiness({
+        name: t?.name, description: t?.description, inputSchema: t?.inputSchema,
+        annotations: (t as { annotations?: { title?: string; readOnlyHint?: boolean; destructiveHint?: boolean } })?.annotations ?? undefined,
+      }));
+    }
+    // Injection-class security findings that Anthropic also rejects on.
+    const injectionRejects = findings.filter((x) =>
+      x.rule.startsWith("tool-poisoning") || x.rule === "exfiltration-hint" ||
+      x.rule === "cross-tool-shadowing" || x.rule === "invisible-unicode");
+    const blockers = [...dirFindings, ...injectionRejects];
+    const ready = blockers.length === 0;
+    result.directory_readiness = {
+      ready,
+      checked_against: "Anthropic Claude Connector Directory published review criteria (claude.com/docs/connectors/building/review-criteria)",
+      blocker_count: blockers.length,
+      blockers,
+      note: ready
+        ? "No structural blockers against the PUBLISHED criteria. This checks published rules only — it does not reproduce Anthropic's private scan and cannot guarantee acceptance. Not checked here: privacy policy, OAuth 2.0 config, DNS/domain ownership (verify those manually)."
+        : `${blockers.length} issue(s) would likely fail Claude Directory review. Fix these before submitting — the review queue runs ~20 days, so a rejection is expensive. Not checked here: privacy policy, OAuth 2.0, DNS/domain ownership.`,
+    };
+  }
   console.log(JSON.stringify({ event: "paid_request", endpoint: "POST /scan/mcp", target: "(paste)", findings: findings.length, ts: result.scanned_at }));
   const rail = c.get("rail") ?? "x402-paid";
   fireAndForget(c, trackPaidRequest("POST /scan/mcp", rail, makeUsageCounter(c.env)));

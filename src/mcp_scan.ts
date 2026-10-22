@@ -132,3 +132,103 @@ export function analyzeMcpTool(name: string, description: string, schemaText: st
 
   return f;
 }
+
+// ---------------------------------------------------------------------------
+// Claude Connector Directory readiness checks.
+//
+// Anthropic's directory (claude.ai/directory, portal opened 2026-09-25) runs a
+// MANDATORY automated security/policy scan on every submission: pass→publish,
+// held-for-reviewer, or FAIL with the violated rules listed — and the review
+// queue runs ~20 days, so eating a rejection is expensive. This is a demand-side
+// GATEKEEPER, not a voluntary badge.
+//
+// analyzeMcpTool above already covers the tool-poisoning / prompt-injection
+// patterns on Anthropic's reject list (override, hidden instructions, exfil,
+// cross-tool interference). This function adds the deterministic STRUCTURAL
+// rejection triggers Anthropic publishes at
+// claude.com/docs/connectors/building/review-criteria (read 2026-10-22), so a
+// connector author sees exactly which published criteria their server fails
+// BEFORE they burn a 20-day review cycle.
+//
+// Claims law: these map to Anthropic's PUBLISHED criteria only — they do not
+// reproduce Anthropic's private scan and never guarantee acceptance. Precision
+// is held to the same bar as the poisoning rules (the Context7 lesson): a check
+// that false-flags a clean, directory-compliant tool is worse than a miss.
+// ---------------------------------------------------------------------------
+
+export interface McpToolLike {
+  name?: string;
+  description?: string;
+  inputSchema?: unknown;
+  annotations?: { title?: string; readOnlyHint?: boolean; destructiveHint?: boolean } | null;
+}
+
+export function analyzeDirectoryReadiness(tool: McpToolLike): ScanFinding[] {
+  const f: ScanFinding[] = [];
+  const name = tool.name ?? "(unnamed)";
+  const desc = tool.description ?? "";
+  const low = desc.toLowerCase();
+  const ann = tool.annotations ?? undefined;
+  const add = (severity: ScanFinding["severity"], rule: string, detail: string, ev: string) =>
+    f.push({ tool: name, severity, rule, detail, evidence: ev.slice(0, 160) });
+
+  // 1. Tool-name length. Anthropic: "Tool names must be 64 characters or fewer."
+  // Hard reject — deterministic.
+  if (name !== "(unnamed)" && name.length > 64)
+    add("high", "directory:tool-name-too-long",
+      `Tool name is ${name.length} chars; Anthropic rejects names over 64.`, name);
+
+  // 2. Required annotations. Anthropic: "Every tool must include a `title` and the
+  // applicable hint: `readOnlyHint: true` for read-only tools, `destructiveHint:
+  // true` for tools that modify or delete data." These drive auto-permissions, so
+  // their absence is a documented reject.
+  if (!ann || typeof ann.title !== "string" || ann.title.trim() === "")
+    add("medium", "directory:missing-title",
+      "Tool is missing the required `annotations.title` — Claude Directory rejects tools without a title.", "annotations.title");
+  if (!ann || (typeof ann.readOnlyHint !== "boolean" && typeof ann.destructiveHint !== "boolean"))
+    add("medium", "directory:missing-hint",
+      "Tool declares neither `readOnlyHint` nor `destructiveHint` — Claude Directory requires the applicable permission hint.", "annotations.readOnlyHint|destructiveHint");
+
+  // 3. Catch-all read+write tool. Anthropic: "A single tool that accepts both safe
+  // HTTP methods (GET/HEAD/OPTIONS) and unsafe methods (POST/PUT/PATCH/DELETE) is
+  // rejected. Don't ship a catch-all api_request tool with a method parameter."
+  // Detect a `method`-like schema property whose enum mixes safe and unsafe verbs.
+  const safe = /\b(GET|HEAD|OPTIONS)\b/;
+  const unsafe = /\b(POST|PUT|PATCH|DELETE)\b/;
+  const schema = tool.inputSchema;
+  let methodEnum: string[] | null = null;
+  if (schema && typeof schema === "object") {
+    const props = (schema as Record<string, unknown>).properties;
+    if (props && typeof props === "object") {
+      for (const [k, v] of Object.entries(props as Record<string, unknown>)) {
+        if (!/^(method|http_?method|verb)$/i.test(k)) continue;
+        const en = v && typeof v === "object" ? (v as Record<string, unknown>).enum : undefined;
+        if (Array.isArray(en)) methodEnum = en.map(String);
+      }
+    }
+  }
+  const enumText = methodEnum ? methodEnum.join(" ").toUpperCase() : "";
+  if (enumText && safe.test(enumText) && unsafe.test(enumText)) {
+    add("high", "directory:mixed-read-write-methods",
+      "Single tool accepts both safe (GET/HEAD/OPTIONS) and unsafe (POST/PUT/PATCH/DELETE) methods — Anthropic rejects catch-all read+write tools; split into separate read and write tools.",
+      methodEnum!.join(","));
+  }
+
+  // 4. Unsupported capabilities (documented auto-reject). Anthropic rejects tools
+  // that "transfer money, cryptocurrency, or other financial assets" or "generate
+  // images, video, or audio through AI models" (diagram/chart/UI-mockup allowed).
+  // FP guard: require a transfer/move/send VERB paired with a money/asset NOUN, and
+  // for media require a generate VERB + media NOUN + an AI qualifier, excluding the
+  // explicitly-allowed diagram/chart/mockup forms.
+  const moneyMove = /\b(transfer|send|move|withdraw|remit|disburse|pay out|payout)\b[^.]{0,40}\b(money|funds?|cash|cryptocurrenc(y|ies)|crypto|tokens?|coins?|usdc|usdt|eth|btc|stablecoins?|financial assets?|assets?)\b/;
+  if (moneyMove.test(low))
+    add("high", "directory:unsupported-capability",
+      "Tool appears to transfer money/crypto/financial assets — a documented Claude Directory auto-reject.", (low.match(moneyMove) || [""])[0]);
+  const aiMedia = /\b(generate|create|produce|synthesi[sz]e|render)\b[^.]{0,40}\b(image|images|picture|photo|video|audio|speech|voice|music|sound)s?\b/;
+  const allowedMedia = /\b(diagram|chart|graph|flowchart|ui ?mock[- ]?up|mockup|wireframe)s?\b/;
+  if (aiMedia.test(low) && !allowedMedia.test(low) && /\b(ai|model|diffusion|gpt|generative|neural|gan|text[- ]to[- ])\b/.test(low))
+    add("high", "directory:unsupported-capability",
+      "Tool appears to generate image/video/audio via an AI model — a documented Claude Directory auto-reject (diagram/chart/mock-up generation is allowed).", (low.match(aiMedia) || [""])[0]);
+
+  return f;
+}
