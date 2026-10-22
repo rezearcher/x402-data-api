@@ -72,11 +72,11 @@ assert.ok(!block200.required.includes("note"));
 
 const gas200 =
   openapi.paths["/chain/gas-price"].get.responses["200"].content["application/json"].schema;
-assert.deepEqual(gas200, { type: "object" });
+assert.ok(gas200.required.includes("gas_price_wei"));
 const prices200 =
   openapi.paths["/crypto/prices"].get.responses["200"].content["application/json"].schema;
 assert.deepEqual(prices200, { type: "object" });
-console.log("ok 1: OpenAPI GET /chain/block-number requires handler-owned roots; siblings stay bare objects");
+console.log("ok 1: OpenAPI GET /chain/block-number requires handler-owned roots; unrelated prices stay a bare object");
 
 const preview = await app.request("/chain/block-number/preview", {}, env());
 assert.equal(preview.status, 200);

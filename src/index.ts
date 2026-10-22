@@ -1,5 +1,10 @@
 import { Hono } from "hono";
 import { RESPONSE_EXAMPLES } from "./examples";
+import {
+  GAS_SUCCESS_SCHEMA, WALLET_SUCCESS_SCHEMA, toOpenApiSuccess, gasSuccess,
+  parsePrimaryQuantity, primaryAmount, parseWalletNonce, parseWalletCode,
+  finiteOrNull, optionalFeeGwei,
+} from "./sibling_contracts";
 import { STATUS_SNAPSHOT } from "./status_snapshot.ts";
 import { analyzeMcpTool, type ScanFinding } from "./mcp_scan.ts";
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
@@ -1661,6 +1666,13 @@ function withOperationIds<T extends Record<string, Record<string, any>>>(paths: 
             example: example ?? { block_number: 0, chain: "base" },
           },
         };
+      } else if ((path === "/chain/gas-price" || path === "/chain/wallet") && ok) {
+        ok.content = {
+          "application/json": {
+            schema: toOpenApiSuccess(path === "/chain/gas-price" ? GAS_SUCCESS_SCHEMA : WALLET_SUCCESS_SCHEMA),
+            example,
+          },
+        };
       } else if (example !== undefined && ok && !ok.content) {
         ok.content = {
           "application/json": { schema: { type: "object" }, example },
@@ -2452,6 +2464,7 @@ function makeRoutes(payTo: string) {
         input: {},
         inputSchema: { type: "object", properties: {} },
         output: {
+          schema: GAS_SUCCESS_SCHEMA,
           example: {
             gas_price_wei: "21284349",
             gas_price_gwei: 0.021284349,
@@ -3079,6 +3092,7 @@ function makeRoutes(payTo: string) {
           },
         },
         output: {
+          schema: WALLET_SUCCESS_SCHEMA,
           example: {
             address: "0x4200000000000000000000000000000000000006",
             balance_wei: "17265432100000000000",
@@ -5475,7 +5489,10 @@ app.get("/chain/block-number/preview", async (c) => {
 // EIP-1559 base/priority fee via eth_feeHistory (1 block, median-percentile
 // reward). Best-effort: an upstream hiccup here degrades to nulls rather than
 // failing the whole gas-price read (eth_gasPrice already has its own answer).
-async function fetchFeeHistory(): Promise<{ base_fee_gwei: number | null; priority_fee_gwei: number | null }> {
+// Only gas HTTP routes opt into strict fee parsing; MCP keeps its existing fallback semantics.
+async function fetchFeeHistory(
+  parseFee: (value: string | undefined) => number | null = (value) => value ? Number(BigInt(value)) / 1e9 : null,
+): Promise<{ base_fee_gwei: number | null; priority_fee_gwei: number | null }> {
   try {
     const hist = (await baseRpc("eth_feeHistory", ["0x1", "latest", [50]])) as {
       baseFeePerGas?: string[];
@@ -5484,8 +5501,8 @@ async function fetchFeeHistory(): Promise<{ base_fee_gwei: number | null; priori
     const baseFee = hist.baseFeePerGas?.[0];
     const priorityFee = hist.reward?.[0]?.[0];
     return {
-      base_fee_gwei: baseFee ? Number(BigInt(baseFee)) / 1e9 : null,
-      priority_fee_gwei: priorityFee ? Number(BigInt(priorityFee)) / 1e9 : null,
+      base_fee_gwei: parseFee(baseFee),
+      priority_fee_gwei: parseFee(priorityFee),
     };
   } catch {
     return { base_fee_gwei: null, priority_fee_gwei: null };
@@ -5496,19 +5513,10 @@ app.get("/chain/gas-price", async (c) => {
   try {
     const [hex, feeHistory, ethUsd] = await Promise.all([
       baseRpc("eth_gasPrice", []) as Promise<string>,
-      fetchFeeHistory(),
+      fetchFeeHistory(optionalFeeGwei),
       getEthUsd(),
     ]);
-    const wei = BigInt(hex);
-    const gasPriceEth = Number(wei) / 1e18;
-    const result = {
-      gas_price_wei: wei.toString(),
-      gas_price_gwei: Number(wei) / 1e9,
-      base_fee_gwei: feeHistory.base_fee_gwei,
-      priority_fee_gwei: feeHistory.priority_fee_gwei,
-      gas_price_usd: ethUsd !== null ? gasPriceEth * ethUsd : null,
-      chain: "base",
-    };
+    const result = gasSuccess(hex, feeHistory, ethUsd);
 
     console.log(
       JSON.stringify({ event: "paid_request", endpoint: "/chain/gas-price", ts: new Date().toISOString() }),
@@ -5527,18 +5535,11 @@ app.get("/chain/gas-price/preview", async (c) => {
   try {
     const [hex, feeHistory, ethUsd] = await Promise.all([
       baseRpc("eth_gasPrice", []) as Promise<string>,
-      fetchFeeHistory(),
+      fetchFeeHistory(optionalFeeGwei),
       getEthUsd(),
     ]);
-    const wei = BigInt(hex);
-    const gasPriceEth = Number(wei) / 1e18;
     return c.json({
-      gas_price_wei: wei.toString(),
-      gas_price_gwei: Number(wei) / 1e9,
-      base_fee_gwei: feeHistory.base_fee_gwei,
-      priority_fee_gwei: feeHistory.priority_fee_gwei,
-      gas_price_usd: ethUsd !== null ? gasPriceEth * ethUsd : null,
-      chain: "base",
+      ...gasSuccess(hex, feeHistory, ethUsd),
       note: "Free live sample — identical to the paid route. Full: GET /chain/gas-price ($0.01), keyless x402 on Base.",
     });
   } catch (e) {
@@ -6914,15 +6915,17 @@ app.get("/chain/wallet", async (c) => {
       baseRpc("eth_getCode", [address, "latest"]) as Promise<string>,
       getEthUsd(),
     ]);
-    const wei = BigInt(balanceHex);
-    const balanceEth = Number(wei) / 1e18;
+    const wei = parsePrimaryQuantity(balanceHex, "eth_getBalance");
+    const balanceEth = primaryAmount(wei, 1e18, "eth_getBalance");
+    const txCount = parseWalletNonce(nonceHex);
+    const walletCode = parseWalletCode(code);
     const result = {
       address,
       balance_wei: wei.toString(),
       balance_eth: balanceEth,
-      balance_usd: ethUsd !== null ? balanceEth * ethUsd : null,
-      tx_count: parseInt(nonceHex, 16),
-      ...classifyCode(code),
+      balance_usd: finiteOrNull(ethUsd !== null ? balanceEth * ethUsd : null),
+      tx_count: txCount,
+      ...classifyCode(walletCode),
       chain: "base",
     };
 
