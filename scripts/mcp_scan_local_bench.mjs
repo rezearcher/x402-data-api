@@ -1,8 +1,9 @@
 // Offline benchmark of analyzeMcpTool (extracted from src/index.ts) against benchmarks/mcp_scan_corpus.json
 import fs from "fs"; import { transformSync } from "esbuild";
-const src = fs.readFileSync("src/index.ts", "utf8");
-const body = src.match(/function analyzeMcpTool[\s\S]*?\n}\n/)[0];
-const js = transformSync("type ScanFinding=any;" + body + "\nglobalThis.A=analyzeMcpTool;", { loader: "ts" }).code;
+// analyzeMcpTool now lives in src/mcp_scan.ts (pure module); strip `export` so it
+// runs inside a Function scope, then hand the function out.
+const src = fs.readFileSync("src/mcp_scan.ts", "utf8").replace(/^export /gm, "");
+const js = transformSync(src + "\nglobalThis.A=analyzeMcpTool;", { loader: "ts" }).code;
 new Function(js)();
 const C = JSON.parse(fs.readFileSync("benchmarks/mcp_scan_corpus.json", "utf8"));
 let tp=0,fn=0,fp=0,tn=0;

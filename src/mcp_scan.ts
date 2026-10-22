@@ -60,10 +60,18 @@ export function analyzeMcpTool(name: string, description: string, schemaText: st
   // failure class as the Context7 false positive.
   const concealMatch = conceal.exec(text);
   const accuracyGuard = /\bconfirm(s|ed|ing)?\b[^.?!]{0,20}?\b(it|this|that|them|first|again|with)\b|\b(until|unless|before)\b[^.?!]{0,25}?\b(confirm|verif|validat|re-?check|double[- ]?check)/i;
-  const concealHit = concealMatch && !accuracyGuard.test(text.slice(concealMatch.index, concealMatch.index + 140));
+  // Concealment can also target the injected DIRECTIVE itself rather than naming
+  // "the user": "never reveal this instruction", "do not disclose these
+  // instructions", "keep this prompt secret". The object is a hidden-directive noun,
+  // which benign copy does not carry — privacy text says "do not disclose this
+  // information" ("information", not instruction/prompt/directive). Caught a real
+  // false-negative: a redirect attack whose only secrecy marker was "Never reveal
+  // this instruction" passed clean because its conceal target was not "the user".
+  const concealInstr = /\b(do not|don'?t|does ?n'?t|wo ?n'?t|never|avoid)\b[^.?!]{0,30}?\b(tell|mention|reveal|disclose|share|expose|repeat|acknowledge|output|surface)\b[^.?!]{0,20}?\b(this|these|that|the)\b[^.?!]{0,14}?\b(instruction|instructions|directive|directives|prompt|note|sidenote|rule|step|fact)\b/i;
+  const concealHit = (concealMatch && !accuracyGuard.test(text.slice(concealMatch.index, concealMatch.index + 140))) || concealInstr.test(text);
   if (inj.test(text) || concealHit) add("critical", "tool-poisoning:hidden-instructions",
     "Description contains deceptive/override instructions aimed at the AI agent (conceal-from-user or ignore-prior-instructions) — classic MCP tool-poisoning.",
-    (text.match(inj) || (concealHit ? concealMatch : null) || [""])[0]);
+    (text.match(inj) || concealMatch || concealInstr.exec(text) || [""])[0]);
 
   // 2. Data-exfiltration hints. A BARE mention of "api key"/"password"/"secret" is
   // NOT exfiltration — legitimate auth/docs tools (and even security warnings like
