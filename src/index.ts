@@ -7945,12 +7945,31 @@ function analyzeMcpTool(name: string, description: string, schemaText: string): 
   // Real exfiltration is (a) an unambiguous secret-artifact that has no business in
   // a tool description, or (b) a sensitive target PAIRED with an instruction to send
   // it to an external destination.
+  //
+  // The payload class matters. Authenticated remote MCP tools legitimately tell the
+  // agent to send ITS OWN credential (cookie / api key / bearer token) to a URL in
+  // order to authenticate — e.g. "send its session Cookie header, or an agent key
+  // the account made at https://…". Treating a bare URL as an exfil destination for
+  // those credentials false-flags nearly every auth'd server as HIGH-risk, which
+  // destroys the scanner's credibility (same class of error as the Context7 false
+  // CRITICAL). So we split the targets:
+  //   • SENSITIVE payloads (system prompt, conversation, env, file contents, private
+  //     keys) have no legitimate reason to be transmitted anywhere → flag on ANY
+  //     destination, including a bare https:// URL.
+  //   • AUTH-AMBIGUOUS credentials (cookies, api keys, access tokens, passwords) are
+  //     routinely sent to authenticate → flag ONLY when the destination is explicitly
+  //     foreign (webhook / external / third-party / attacker), never a bare URL.
   const secretArtifact = /(\.env\b|~\/\.ssh|id_rsa|\bprivate key\b|exfiltrat)/i;
-  const externalize = /(send|post|upload|transmit|forward|leak|exfiltrat\w*)\b[^.]{0,60}?\b(secrets?|credentials?|passwords?|api[ _-]?keys?|access tokens?|cookies?|private keys?|conversation|chat history|system prompt|environment variables?|contents? of (the |any )?files?)\b[^.]{0,80}?(https?:\/\/|\bwebhook\b|\bexternal\b|third[- ]?party|attacker|\bexfil)|(secrets?|credentials?|passwords?|api[ _-]?keys?|cookies?|private keys?|conversation|chat history|system prompt)\b[^.]{0,60}?\b(to|at|via) (https?:\/\/|an? (external|remote|third[- ]?party)|attacker)/i;
+  const foreignDest = String.raw`\bwebhook\b|\bexternal\b|third[- ]?party|attacker|\bexfil`;
+  const anyDest = String.raw`https?:\/\/|` + foreignDest;
+  const exfilSensitive = new RegExp(
+    String.raw`(send|post|upload|transmit|forward|leak|exfiltrat\w*)\b[^.]{0,60}?\b(system prompt|conversation|chat history|environment variables?|private keys?|contents? of (the |any )?files?)\b[^.]{0,80}?(` + anyDest + `)`, "i");
+  const exfilCredential = new RegExp(
+    String.raw`(send|post|upload|transmit|forward|leak|exfiltrat\w*)\b[^.]{0,60}?\b(secrets?|credentials?|passwords?|api[ _-]?keys?|access tokens?|cookies?)\b[^.]{0,80}?(` + foreignDest + `)`, "i");
   const descLow = description.toLowerCase(); // sentence-scoped: never match across the description/schema boundary
-  const exfilHit = low.match(secretArtifact) || descLow.match(externalize);
+  const exfilHit = low.match(secretArtifact) || descLow.match(exfilSensitive) || descLow.match(exfilCredential);
   if (exfilHit) add("high", "exfiltration-hint",
-    "Description instructs sending data to an external destination, or references a secret-file artifact (.env/.ssh/id_rsa).", exfilHit[0]);
+    "Description instructs sending sensitive data (system prompt / conversation / env / file contents / private keys) to a destination, credentials to a foreign destination, or references a secret-file artifact (.env/.ssh/id_rsa).", exfilHit[0]);
 
   // 3. Dangerous capability surface
   const danger = /((?<![\/.\w-])(exec|execs)(?![\/\w-])|\b(exec\(|eval|eval\(|subprocess|shell|sudo|chmod)\b|os\.system|child_process|rm -rf|arbitrary (code|command)|remote code|\bexecute (shell|arbitrary|code|commands?)\b|run (shell|arbitrary) (commands?|code))/i;
@@ -8505,8 +8524,8 @@ const CENSUS = {
   tools_inspected: 528,
   avg_tools: 8.1,
   max_tools: 35,
-  issues_found: 1,
-  servers_flagged: 1,
+  issues_found: 0,
+  servers_flagged: 0,
   largest_surfaces: [
     { name: "ad.getle/leads", tools: 35 },
     { name: "ai.agentboard/agentboard", tools: 35 },
@@ -8521,7 +8540,10 @@ app.get("/scan/census", async (c) => {
     String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m] as string);
   const ORIGIN = new URL(c.req.url).origin;
   const x = CENSUS;
-  const metaDesc = `We scanned ${x.servers_sampled} remote MCP servers from the official registry (${x.scanned_on}): ${x.pct_unreachable}% were unreachable, and across ${x.tools_inspected} advertised tools on ${x.servers_live} live servers, static OWASP LLM01/08 checks flagged ${x.issues_found}. The state of Model Context Protocol server security.`;
+  const flaggedPhrase = x.issues_found === 0 ? "none" : String(x.issues_found);
+  const patternWord = x.issues_found === 1 ? "pattern" : "patterns";
+  const flaggedSentence = x.issues_found === 0 ? "came back clean — zero tool-poisoning or injection patterns" : `flagged ${x.issues_found} ${patternWord}`;
+  const metaDesc = `We scanned ${x.servers_sampled} remote MCP servers from the official registry (${x.scanned_on}): ${x.pct_unreachable}% were unreachable, and across ${x.tools_inspected} advertised tools on ${x.servers_live} live servers, static OWASP LLM01/08 checks flagged ${flaggedPhrase}. The state of Model Context Protocol server security.`;
   const surfacesHtml = x.largest_surfaces
     .map((s) => `<tr><td><code>${esc(s.name)}</code></td><td style="text-align:right">${s.tools}</td></tr>`)
     .join("\n");
@@ -8569,7 +8591,7 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
 <h2>Two findings stand out</h2>
 <div class=card>
 <p><strong>1. Nearly half the registry's remote servers don't answer.</strong> ${x.servers_unreachable} of ${x.servers_sampled} sampled servers (${x.pct_unreachable}%) failed to return a tool list — dead hosts, moved endpoints, or auth walls with no public handshake. Before you wire an agent to a registry entry, confirm it is actually live; a surprising share are not.</p>
-<p style="margin-bottom:0"><strong>2. The live servers are clean on static checks — but the surface is large.</strong> Across ${x.tools_inspected} advertised tools on the ${x.servers_live} reachable servers, our static OWASP LLM01/LLM08 checks flagged just ${x.issues_found} pattern. That is good news: the public ecosystem is not riddled with overt tool-poisoning today. But servers advertise up to ${x.max_tools} tools each (avg ${x.avg_tools}), and every one of those descriptions is attacker-mutable the next time the server updates. Clean today is not clean forever — which is the case for scanning on every connect, not once.</p>
+<p style="margin-bottom:0"><strong>2. The live servers are clean on static checks — but the surface is large.</strong> Across ${x.tools_inspected} advertised tools on the ${x.servers_live} reachable servers, our static OWASP LLM01/LLM08 checks ${flaggedSentence}. That is good news: the public ecosystem is not riddled with overt tool-poisoning today. But servers advertise up to ${x.max_tools} tools each (avg ${x.avg_tools}), and every one of those descriptions is attacker-mutable the next time the server updates. Clean today is not clean forever — which is the case for scanning on every connect, not once.</p>
 </div>
 <h2>Largest tool surfaces observed</h2>
 <p class=note>More advertised tools means more text flowing into your model's context — a bigger surface to keep clean.</p>
