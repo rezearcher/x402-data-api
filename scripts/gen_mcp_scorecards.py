@@ -10,22 +10,34 @@ report -> $9.99/mo monitoring. Pages carry only measured, dated claims (Claims L
 and read in the Grey Ridge human voice (PRODUCT BAR — no AI tells).
 
 Usage:
-  python3 scripts/gen_mcp_scorecards.py --dry-run     # scan + render locally, no push
-  python3 scripts/gen_mcp_scorecards.py --publish     # scan + render + PUT to Pages repo
+  python3 scripts/gen_mcp_scorecards.py --dry-run             # scan curated set locally, no push
+  python3 scripts/gen_mcp_scorecards.py --publish             # scan curated set + PUT to Pages
+  python3 scripts/gen_mcp_scorecards.py --from-registry --publish --scan-cap 30
+        # ALSO discover live public servers from the official MCP registry at runtime,
+        # scan the ones that answer an unauthenticated tools/list, publish a scorecard each
 
 Data source for the scorecard = our own LIVE scanner (keyless preview):
   GET {BASE}/scan/mcp/preview?url=<server>&directory=true
+
+Server discovery (the --from-registry path) is the ground-truth signal, not a hand list:
+the official registry (registry.modelcontextprotocol.io) is the canonical roster of public
+MCP servers. We pull the active, latest entries that advertise a remote HTTP endpoint and keep
+only those that actually answer an unauthenticated tools/list. This is how the AgentSeal SEO
+moat scales — one crawlable, measured long-tail page per real public server — without a
+brittle hardcoded roster that silently rots as servers come and go.
 """
 import argparse, base64, json, subprocess, sys, urllib.parse, urllib.request, datetime, os
 
 BASE = os.environ.get("X402_BASE", "https://x402-data-api.sigrunner.workers.dev")
 REPO = "rezearcher/greyridge-x402-tools"
 DOCS = "docs"
+REGISTRY = "https://registry.modelcontextprotocol.io/v0/servers"
 UA = {"User-Agent": "Mozilla/5.0 (compatible; GreyRidgeScorecards/1.0)"}
 
-# Curated list of real, well-known PUBLIC remote MCP servers that answer an
-# unauthenticated tools/list (verified reachable 2026-10-22). Vendor one-liners are
-# neutral descriptions of what each server is; no claim is made about the vendor.
+# Curated anchor set of real, well-known PUBLIC remote MCP servers (verified reachable
+# 2026-10-22). These are kept hand-named for display polish; everything beyond them is
+# DISCOVERED from the registry at runtime via --from-registry (no hardcoded roster as the
+# gate for coverage). Vendor one-liners are neutral descriptions; no claim about the vendor.
 SERVERS = [
     ("DeepWiki", "deepwiki", "https://mcp.deepwiki.com/mcp",
      "DeepWiki's MCP server exposes repository-documentation lookup tools to AI agents."),
@@ -42,6 +54,95 @@ SERVERS = [
     ("Find A Domain", "find-a-domain", "https://api.findadomain.dev/mcp",
      "Find A Domain's MCP server exposes domain-availability lookup tools to AI agents."),
 ]
+
+
+def _slugify(host):
+    s = host.lower().strip()
+    for pre in ("www.", "mcp.", "api.", "app.", "server."):
+        if s.startswith(pre):
+            s = s[len(pre):]
+    s = "".join(c if (c.isalnum() or c == ".") else "-" for c in s)
+    s = s.replace(".", "-").strip("-")
+    while "--" in s:
+        s = s.replace("--", "-")
+    return s or "server"
+
+
+def _display_name(title, host):
+    t = (title or "").strip()
+    if t and len(t) <= 40 and "/" not in t:
+        return t
+    # fall back to the bare host, which is what a user would actually search for
+    return host
+
+
+def _fetch_registry(pages, per_page=100):
+    """Yield (title, description, url) for active, latest registry entries that
+    advertise a remote HTTP endpoint. The registry is the ground-truth roster."""
+    cursor = None
+    for _ in range(pages):
+        q = f"{REGISTRY}?limit={per_page}" + (f"&cursor={urllib.parse.quote(cursor)}" if cursor else "")
+        req = urllib.request.Request(q, headers=UA)
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                d = json.load(r)
+        except Exception as e:
+            print(f"registry fetch stopped: {e}", file=sys.stderr)
+            return
+        for entry in d.get("servers", []):
+            srv = entry.get("server", entry)
+            meta = (entry.get("_meta") or {}).get("io.modelcontextprotocol.registry/official", {})
+            if meta.get("status") != "active" or not meta.get("isLatest", True):
+                continue
+            for rem in (srv.get("remotes") or []):
+                url = rem.get("url", "")
+                if rem.get("type") in ("streamable-http", "http", "sse") and url.startswith("http"):
+                    yield srv.get("title"), srv.get("description"), url
+                    break
+        cursor = (d.get("metadata") or {}).get("nextCursor")
+        if not cursor:
+            return
+
+
+def discover_servers(scan_cap, pages, seen_urls, seen_slugs):
+    """Discover live public MCP servers from the registry and keep only those that
+    answer an unauthenticated tools/list with at least one tool. Returns scored tuples
+    (name, slug, url, vendor) ready to render. Bounded by scan_cap."""
+    out = []
+    checked = 0
+    for title, desc, url in _fetch_registry(pages):
+        parsed = urllib.parse.urlparse(url)
+        key = (parsed.netloc + parsed.path.rstrip("/")).lower()
+        if key in seen_urls:
+            continue
+        seen_urls.add(key)
+        host = parsed.netloc
+        slug = _slugify(host)
+        if slug in seen_slugs:
+            continue
+        name = _display_name(title, host)
+        vendor = (desc or "").strip().replace("\n", " ")
+        if len(vendor) > 220:
+            vendor = vendor[:217].rstrip() + "..."
+        if not vendor:
+            vendor = f"The {name} MCP server exposes tools to AI agents over a public remote endpoint."
+        checked += 1
+        try:
+            d = scan(url)
+        except Exception as e:
+            print(f"  discover SKIP {host}: {e}", file=sys.stderr)
+            continue
+        if d.get("tools_scanned", 0) < 1:
+            continue
+        seen_slugs.add(slug)
+        out.append((name, slug, url, vendor, d))
+        print(f"  discover OK {name} ({host}): tools={d.get('tools_scanned')} "
+              f"verdict={d.get('verdict')} blockers={(d.get('directory_readiness') or {}).get('blocker_count')}")
+        if len(out) >= scan_cap:
+            break
+    print(f"discovery: probed {checked} registry endpoint(s), kept {len(out)} live scorecard(s)",
+          file=sys.stderr)
+    return out
 
 
 def scan(url):
@@ -83,6 +184,9 @@ def render(name, slug, url, vendor, d, today):
     desc = (f"Independent, measured security and Claude Connector Directory readiness scan of the "
             f"{name} MCP server ({url}), run {today}: {tools} tools scanned, injection verdict "
             f"'{v}', {ready_txt}. Re-run it yourself in one keyless call.")
+    vendor_para = vendor.strip()
+    if vendor_para and vendor_para[-1] not in ".!?":
+        vendor_para += "."
     body = f"""---
 title: Is the {name} MCP server safe? Security & Claude Directory readiness scan
 description: {desc}
@@ -92,7 +196,9 @@ description: {desc}
 **Server:** `{url}`
 **Scanned:** {today} · **Tools advertised:** {tools} · **Injection verdict:** `{v}` · **Directory:** {ready_txt}
 
-{vendor} Before an agent — or a user — connects it, every tool definition it advertises is read
+{vendor_para}
+
+Before an agent — or a user — connects it, every tool definition it advertises is read
 by the model, so a poisoned description or a hidden instruction can steer the agent before any
 tool runs. This scorecard is an independent, static read of that advertised metadata, run against
 the {name} server on the date above.
@@ -163,11 +269,22 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--publish", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--from-registry", action="store_true",
+                    help="also discover live public servers from the MCP registry")
+    ap.add_argument("--scan-cap", type=int, default=25,
+                    help="max NEW discovered scorecards to publish this run")
+    ap.add_argument("--pages", type=int, default=12,
+                    help="registry pages (x100) to walk while discovering")
     args = ap.parse_args()
     today = datetime.date.today().isoformat()
 
     results = []
+    seen_urls, seen_slugs = set(), set()
+    # curated anchor set first (hand-named for display polish)
     for name, slug, url, vendor in SERVERS:
+        parsed = urllib.parse.urlparse(url)
+        seen_urls.add((parsed.netloc + parsed.path.rstrip("/")).lower())
+        seen_slugs.add(slug)
         try:
             d = scan(url)
         except Exception as e:
@@ -180,6 +297,12 @@ def main():
         results.append((name, slug, url, d, body, desc))
         print(f"OK {name}: tools={d.get('tools_scanned')} verdict={d.get('verdict')} "
               f"blockers={(d.get('directory_readiness') or {}).get('blocker_count')}")
+
+    # runtime-discovered servers from the official registry (the ground-truth roster)
+    if args.from_registry:
+        for name, slug, url, vendor, d in discover_servers(args.scan_cap, args.pages, seen_urls, seen_slugs):
+            body, desc = render(name, slug, url, vendor, d, today)
+            results.append((name, slug, url, d, body, desc))
 
     # index page listing every scorecard
     rows = []
@@ -233,6 +356,38 @@ Independent scans by [Grey Ridge Signals](https://github.com/rezearcher/greyridg
     # emit slugs for sitemap update
     open("/tmp/scorecard_slugs.txt", "w").write(
         "\n".join([f"mcp-{s}-mcp-security" for _, s, *_ in results] + ["mcp-server-scorecards"]))
+    # regenerate the sitemap so every scorecard (curated + discovered) is crawlable
+    publish_sitemap(results, today)
+
+
+SITE = "https://rezearcher.github.io/greyridge-x402-tools"
+# Static, hand-authored pages on the Pages site (non-scorecard). Kept here so the
+# regenerated sitemap never drops them; scorecard URLs are derived from results.
+STATIC_PAGES = [
+    "", "scan-mcp-server-prompt-injection.html", "claude-connector-directory-readiness.html",
+    "mcp-registry-census-2026-10-20.html", "honeypot-check-api-base.html",
+    "pre-trade-safety-gate-ai-agents.html", "x402-token-risk-api.html",
+    "base-token-safety-price-comparison.html",
+]
+
+
+def publish_sitemap(results, today):
+    locs = [f"{SITE}/{p}" for p in STATIC_PAGES]
+    locs.append(f"{SITE}/mcp-server-scorecards.html")
+    for _, slug, *_ in results:
+        locs.append(f"{SITE}/mcp-{slug}-mcp-security.html")
+    # dedup, preserve order
+    seen, ordered = set(), []
+    for loc in locs:
+        if loc not in seen:
+            seen.add(loc)
+            ordered.append(loc)
+    rows = "\n".join(f"<url><loc>{loc}</loc><lastmod>{today}</lastmod></url>" for loc in ordered)
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+           '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+           f"{rows}\n</urlset>\n")
+    gh_put(f"{DOCS}/sitemap.xml", xml, f"sitemap: {len(ordered)} URLs incl. all MCP scorecards ({today})")
+    print(f"PUT {DOCS}/sitemap.xml ({len(ordered)} urls)")
 
 
 if __name__ == "__main__":
