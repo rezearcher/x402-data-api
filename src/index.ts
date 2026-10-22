@@ -8980,7 +8980,7 @@ ${ctaBlock}${scriptBlock}`);
     clearTimeout(dto);
     if (dr.ok) {
       const dj = await dr.json() as any;
-      const credit = `<span class=muted>Live drift signal by <a href="https://dominionobservatory.com" rel="noopener">Dominion Observatory</a></span>`;
+      const credit = `<span class=muted>Live drift signal by <a href="https://dominionobservatory.com" rel="noopener">Dominion Observatory</a> — signed, canonicalization-hashed tool-definition captures anyone can recompute, plus a free drift API</span>`;
       if (dj && dj.tracked && dj.baseline) {
         const drifted = dj.drift_detected === true;
         const tc = Number(dj.baseline.tool_count);
