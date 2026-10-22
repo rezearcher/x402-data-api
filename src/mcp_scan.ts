@@ -48,9 +48,22 @@ export function analyzeMcpTool(name: string, description: string, schemaText: st
   // conceal family (no "let"/"say" — "don't let the user pass …" is legit guidance).
   const conceal = /\b(do not|don'?t|does ?n'?t|would ?n'?t|wo ?n'?t|never|avoid)\b[^.?!]{0,30}?\b(tell|mention|inform|notify|alert|reveal|disclose|warn)\b[^.?!]{0,30}?\b(the user|the human|the operator)\b/i;
   const inj = /(ignore (all |any )?(previous|prior|earlier|above)( instructions| context| prompt)?|disregard (the )?(above|previous|prior|earlier)|<\/?important>|<\/?system>|<\/?secret>|(hidden|concealed|kept secret) from the user|keep (this|it) (secret|hidden)|without (telling|informing|notifying|alerting) the user|reveal (your|the) (full |complete )?(system )?(prompt|instructions))/i;
-  if (inj.test(text) || conceal.test(text)) add("critical", "tool-poisoning:hidden-instructions",
+  // A truthfulness / accuracy guard is the OPPOSITE of concealment: "never tell the
+  // user a name is available — confirm it first" instructs the agent to WITHHOLD a
+  // premature/false CLAIM about data until it is verified, not to hide its own
+  // actions. The tell is the verify-first corrective ("confirm it first", "until
+  // confirmed", "before you verify"), which no tool-poisoning attack carries (the
+  // WhatsApp exploit says "don't notify the user" with no such corrective). Scoped to
+  // the window right after the conceal match so a distant, unrelated "confirm" in a
+  // long description cannot suppress a real hit. Killed a false CRITICAL on a clean
+  // domain-registrar server (AIvikings check_domain_availability), same credibility
+  // failure class as the Context7 false positive.
+  const concealMatch = conceal.exec(text);
+  const accuracyGuard = /\bconfirm(s|ed|ing)?\b[^.?!]{0,20}?\b(it|this|that|them|first|again|with)\b|\b(until|unless|before)\b[^.?!]{0,25}?\b(confirm|verif|validat|re-?check|double[- ]?check)/i;
+  const concealHit = concealMatch && !accuracyGuard.test(text.slice(concealMatch.index, concealMatch.index + 140));
+  if (inj.test(text) || concealHit) add("critical", "tool-poisoning:hidden-instructions",
     "Description contains deceptive/override instructions aimed at the AI agent (conceal-from-user or ignore-prior-instructions) — classic MCP tool-poisoning.",
-    (text.match(inj) || text.match(conceal) || [""])[0]);
+    (text.match(inj) || (concealHit ? concealMatch : null) || [""])[0]);
 
   // 2. Data-exfiltration hints. A BARE mention of "api key"/"password"/"secret" is
   // NOT exfiltration — legitimate auth/docs tools (and even security warnings like

@@ -144,6 +144,17 @@ ok(rules("Transfer USDC on Base. Specify the recipient address and amount; the t
 ok(rules("Formats a date. Do not forget to pass the user's timezone, otherwise UTC is assumed.").length === 0,
   "G: 'do not forget … user's timezone' stays clean");
 
+// H. Truthfulness / accuracy guard — "never tell the user X is available, confirm first"
+// is the OPPOSITE of concealment (withhold a premature/false claim until verified), not
+// tool-poisoning. Verbatim from a real clean domain-registrar server (AIvikings
+// check_domain_availability) that the pre-fix conceal regex false-flagged CRITICAL.
+ok(rules("Check availability for up to 200 domain names. depth=\"fast\" answers in about a second without contacting the registry; depth=\"confirm\" (default) asks the registry and returns prices. Each result has a status: available, likely_available (NOT confirmed and has no price), taken, reserved. Never tell the user a likely_available name is available or quote a price for it: confirm it first with depth=\"confirm\".").length === 0,
+  "H: domain-availability accuracy guard ('never tell the user … is available, confirm first') stays clean");
+
+// H2. Single-domain variant of the same accuracy-guard phrasing.
+ok(rules("Check availability for one domain. likely_available means no registration found by fast checks, NOT confirmed and has no price. Never tell the user a likely_available name is available or quote a price for it: confirm it first with depth=\"confirm\".").length === 0,
+  "H2: single-domain accuracy guard stays clean");
+
 // ---------------------------------------------------------------------------
 console.log(`\nmcp_scan regression: ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
