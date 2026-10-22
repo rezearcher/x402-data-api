@@ -1,0 +1,241 @@
+{
+  "ts": "2026-10-22T20:14:13Z",
+  "stats": {
+    "auth": 12,
+    "unreachable": 41,
+    "scanned": 67,
+    "flagged": 1,
+    "clean_with_tools": 62,
+    "clean_empty": 4,
+    "total_tools_scanned": 535
+  },
+  "n_servers": 120,
+  "findings": [
+    {
+      "server": {
+        "name": "ai.agentrapay/agentra",
+        "url": "https://api.agentrapay.ai/mcp",
+        "title": null,
+        "desc": "Identity oracle and trust layer for autonomous AI agents. Bidirectional KYA and "
+      },
+      "report": {
+        "target": "https://api.agentrapay.ai/mcp",
+        "tools_scanned": 6,
+        "issue_count": 1,
+        "severity_breakdown": {
+          "critical": 0,
+          "high": 1,
+          "medium": 0,
+          "low": 0
+        },
+        "risk_score": 20,
+        "verdict": "clear",
+        "risk_summary": "1 issue(s) across 6 tool(s). Risk 20/100. Review flagged tools before trusting this server.",
+        "upsell": "1 issue(s) found. This preview hides WHICH tools and the evidence. Get full itemized findings + remediation now: paste-mode POST /scan/mcp (zero egress) or GET /scan/mcp?url= ($0.05). Or monitor this server continuously with drift alerts \u2014 $9.99/mo at /pricing.",
+        "scanned_at": "2026-10-22T20:13:30.859Z"
+      }
+    }
+  ],
+  "clean_examples": [
+    {
+      "name": "ac.tandem/docs-mcp",
+      "url": "https://tandem.ac/mcp",
+      "tools": 13
+    },
+    {
+      "name": "academy.apexai/apex-ai-academy",
+      "url": "https://apexai.academy/mcp",
+      "tools": 30
+    },
+    {
+      "name": "ad.getle/leads",
+      "url": "https://mcp.getle.ad/mcp",
+      "tools": 35
+    },
+    {
+      "name": "ad.inside/inside-ads",
+      "url": "https://app.inside.ad/api/mcp",
+      "tools": 3
+    },
+    {
+      "name": "ae.brainy/grocery-prices",
+      "url": "https://prices.brainy.ae/mcp/v2",
+      "tools": 26
+    },
+    {
+      "name": "ae.datadubai/dubai-real-estate",
+      "url": "https://mcp.datadubai.ae/mcp",
+      "tools": 6
+    },
+    {
+      "name": "ae.easyvoice/tts",
+      "url": "https://easyvoice.ae/api/mcp",
+      "tools": 7
+    },
+    {
+      "name": "ae.genosys/genosys",
+      "url": "https://genosys.ae/mcp",
+      "tools": 11
+    },
+    {
+      "name": "ae.grovisor/grotax",
+      "url": "https://mcp.grovisor.ae/",
+      "tools": 8
+    },
+    {
+      "name": "ae.plantguide/dubai-gardening",
+      "url": "https://plantguide.ae/mcp",
+      "tools": 15
+    },
+    {
+      "name": "ae.projectory/mcp",
+      "url": "https://mcp.projectory.ae/mcp",
+      "tools": 5
+    },
+    {
+      "name": "ae.propick/propick",
+      "url": "https://propick.ae/mcp",
+      "tools": 8
+    },
+    {
+      "name": "ae.waggle/fenlight",
+      "url": "https://fenlight.waggle.ae/mcp",
+      "tools": 8
+    },
+    {
+      "name": "ae.waggle/vera",
+      "url": "https://vera.waggle.ae/v1/mcp",
+      "tools": 16
+    },
+    {
+      "name": "aero.events/events",
+      "url": "https://events.aero/mcp/events",
+      "tools": 5
+    },
+    {
+      "name": "ag.hood/name-service",
+      "url": "https://www.hood.ag/api/mcp",
+      "tools": 5
+    },
+    {
+      "name": "agency.goji/goji",
+      "url": "https://mcp.goji.agency/mcp",
+      "tools": 9
+    },
+    {
+      "name": "agency.justidea/justidea-agency",
+      "url": "https://justidea.agency/mcp",
+      "tools": 8
+    },
+    {
+      "name": "agency.ottobot/business-contact-finder",
+      "url": "https://business-contact-finder-mcp.ottobot2025.workers.dev/mcp",
+      "tools": 1
+    },
+    {
+      "name": "agency.ottobot/contractor-license-changes",
+      "url": "https://license-changes-mcp.ottobot2025.workers.dev/mcp",
+      "tools": 2
+    },
+    {
+      "name": "agency.ottobot/licensed-house-painters",
+      "url": "https://house-painters.ottobot.agency/mcp",
+      "tools": 3
+    },
+    {
+      "name": "agency.thebureauoflostcontext/bureau-public",
+      "url": "https://thebureauoflostcontext.agency/mcp",
+      "tools": 5
+    },
+    {
+      "name": "ai.1court.state/court-directory",
+      "url": "https://state.1court.ai/api/mcp",
+      "tools": 4
+    },
+    {
+      "name": "ai.achromat/mcp-server",
+      "url": "https://mom.achromat.ai/mcp",
+      "tools": 1
+    },
+    {
+      "name": "ai.actwise/ideation",
+      "url": "https://actwise.ai/ideation/mcp/v1",
+      "tools": 2
+    },
+    {
+      "name": "ai.adoraads/beauty",
+      "url": "https://mcp.adoraads.ai/beauty",
+      "tools": 6
+    },
+    {
+      "name": "ai.advisorsai/store-readiness",
+      "url": "https://advisorsai.ai/store-readiness-mcp",
+      "tools": 1
+    },
+    {
+      "name": "ai.afg/afg",
+      "url": "https://afg.ai/mcp",
+      "tools": 18
+    },
+    {
+      "name": "ai.afmr/discovery",
+      "url": "https://afmr.ai/mcp",
+      "tools": 4
+    },
+    {
+      "name": "ai.agenlify/catalog",
+      "url": "https://agenlify.ai/mcp",
+      "tools": 3
+    },
+    {
+      "name": "ai.agent-bev/bev-door",
+      "url": "https://mcp.bev-buyer.ai/mcp",
+      "tools": 9
+    },
+    {
+      "name": "ai.agentberg/agentberg",
+      "url": "https://agentberg.ai/mcp",
+      "tools": 11
+    },
+    {
+      "name": "ai.agentboard/agentboard",
+      "url": "https://www.agentboard.ai/mcp",
+      "tools": 35
+    },
+    {
+      "name": "ai.agenticplug/agent-ready-report",
+      "url": "https://scan.agenticplug.ai/mcp",
+      "tools": 2
+    },
+    {
+      "name": "ai.agenticterminal/directory",
+      "url": "https://mcp.agenticterminal.ai/mcp",
+      "tools": 6
+    },
+    {
+      "name": "ai.agentlookups/counterscript",
+      "url": "https://rx.agentlookups.ai/mcp",
+      "tools": 1
+    },
+    {
+      "name": "ai.agentlookups/greenlight",
+      "url": "https://solar.agentlookups.ai/mcp",
+      "tools": 2
+    },
+    {
+      "name": "ai.agentlookups/groundrules",
+      "url": "https://law.agentlookups.ai/mcp",
+      "tools": 4
+    },
+    {
+      "name": "ai.agentlookups/groundtruth",
+      "url": "https://env.agentlookups.ai/mcp",
+      "tools": 4
+    },
+    {
+      "name": "ai.agentlookups/overassessed",
+      "url": "https://overassessed.agentlookups.ai/mcp",
+      "tools": 1
+    }
+  ]
+}

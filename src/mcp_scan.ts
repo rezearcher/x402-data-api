@@ -93,7 +93,15 @@ export function analyzeMcpTool(name: string, description: string, schemaText: st
   //   • AUTH-AMBIGUOUS credentials (cookies, api keys, access tokens, passwords) are
   //     routinely sent to authenticate → flag ONLY when the destination is explicitly
   //     foreign (webhook / external / third-party / attacker), never a bare URL.
-  const secretArtifact = /(\.env\b|~\/\.ssh|id_rsa|\bprivate key\b|exfiltrat)/i;
+  // NOTE: "private key" is deliberately NOT a bare artifact. Unlike .env/~/.ssh/id_rsa
+  // (concrete file paths with no benign reason to appear in a tool description), the
+  // phrase "private key" is an ordinary noun common in legitimate wallet/crypto tooling
+  // and, crucially, in security REASSURANCES ("we never touch your private key", "you
+  // hold your private keys"). Flagging the bare mention HIGH false-positives on exactly
+  // the trustworthy servers (observed live: agentrapay "Agentra never touches your
+  // private key"). Real private-key exfil is still caught by exfilSensitive below, which
+  // requires a send verb + the payload + a destination.
+  const secretArtifact = /(\.env\b|~\/\.ssh|id_rsa|exfiltrat)/i;
   const foreignDest = String.raw`\bwebhook\b|\bexternal\b|third[- ]?party|attacker|\bexfil`;
   const anyDest = String.raw`https?:\/\/|` + foreignDest;
   const exfilSensitive = new RegExp(
