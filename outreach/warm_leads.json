@@ -1,6 +1,6 @@
 {
  "_doc": "Ground-truth warm-lead state. The SIGNAL for 'may I nudge?' is the real thread last-sender, NOT a file mtime. A cycle may send ONLY when last_dir=='them' AND now>do_not_send_until. last_dir=='us' => ball-in-court on THEM => DO NOT SEND. Missing lead => review manually (degrade open), never auto-send. Update last_dir/last_at/do_not_send_until whenever you read a thread or send. Dates ISO-8601 UTC.",
- "updated_at": "2026-10-22T09:21:00Z",
+ "updated_at": "2026-10-22T19:30:00Z",
  "leads": [
   {
    "lead": "chadi0x / TheBigBrother (issue #9)",
@@ -98,6 +98,17 @@
    "status": "ball-in-court",
    "do_not_send_until": "2026-10-28",
    "note": "BlockRun = the reseller ARCHETYPE from our thesis (free ClawRouter router, keeps the x402 spread, real traffic). Our PR #503 wires the Grey Ridge token-safety gate into ClawRouter's Market-data tools. OPEN/MERGEABLE, reviewDecision=REVIEW_REQUIRED (human maintainer approval needed). Addressed CodeRabbit: pushed commit a90ed2b correcting the tool description to the real /gate/swap contract (decision go|hold|block + verdict SAFE|CAUTION|AVOID, was wrongly go/caution/no-go + SAFE/RISKY). Remaining blockers ON BLOCKRUN: (1) merge the PR; (2) a one-time server-side gateway-routing step so blockrun.ai/api/v1/gate/swap forwards (currently 404, explained in our comment). DO NOT re-ping; CodeRabbit auto-re-reviews the push. Watch PR #503 for maintainer review/merge."
+  },
+  {
+   "lead": "eeee2345 / Agent-Threat-Rule (issue #727)",
+   "channel": "github",
+   "thread_id": "Agent-Threat-Rule/agent-threat-rules#727",
+   "last_dir": "us",
+   "last_at": "2026-10-22T19:30:00Z",
+   "their_last_at": "2026-10-22T18:51:16Z",
+   "status": "ball-in-court",
+   "do_not_send_until": "2026-10-27",
+   "note": "Peer MCP threat-detection project (ATR, MIT rules). Cross-validation/labeled-set exchange. We shipped a labeled tools/list corpus (benchmarks/mcp_tools_list_corpus.json 59 samples + bare sample.json for their PR #737) + answered their 4 Qs (license MIT, single-author labels, synthetic poisoned, publish both directions). Fixed our own FN ('never reveal this instruction') found doing it, commit 6861b29. Ball on them to run our corpus + publish per-sample results. CREDIBILITY/BACKLINK channel, not direct fiat. DON'T re-nudge; reply only on their next message via --reply."
   }
  ]
 }
