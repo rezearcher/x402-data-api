@@ -1532,6 +1532,7 @@ app.get("/sitemap.xml", (c) => {
     { path: "/partners", priority: "0.8", changefreq: "weekly" },
     { path: "/scan/badge-gen", priority: "0.8", changefreq: "weekly" },
     { path: "/scan/directory", priority: "0.9", changefreq: "daily" },
+    { path: "/scan/census", priority: "0.9", changefreq: "weekly" },
   ];
   // Each seeded MCP server also gets its own crawlable report page — list them so
   // crawlers discover the per-server trust pages the directory links to.
@@ -8466,7 +8467,7 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
 <body>
 <h1>MCP Server Security Directory</h1>
 <p class=sub>Independent prompt-injection &amp; tool-poisoning scans of popular public MCP servers · ${clean} clear · ${flagged} flagged</p>
-<p class=lead>Before you connect an AI agent to a Model Context Protocol server, you are trusting every tool that server advertises — its descriptions and schemas run inside your model's context, where a poisoned or injection-laden tool can quietly redirect the agent. Grey Ridge scans each server's advertised tools for prompt-injection, tool-poisoning, data-exfiltration and hidden-unicode patterns (OWASP LLM01/LLM08) without ever invoking a tool. Results below are refreshed automatically.</p>
+<p class=lead>Before you connect an AI agent to a Model Context Protocol server, you are trusting every tool that server advertises — its descriptions and schemas run inside your model's context, where a poisoned or injection-laden tool can quietly redirect the agent. Grey Ridge scans each server's advertised tools for prompt-injection, tool-poisoning, data-exfiltration and hidden-unicode patterns (OWASP LLM01/LLM08) without ever invoking a tool. Results below are refreshed automatically. See also our <a href="/scan/census">State of MCP Server Security census</a> — what we found scanning the whole registry.</p>
 ${rowsHtml}
 <h2>Scan your own server</h2>
 <div class=card>
@@ -8484,6 +8485,113 @@ ${rowsHtml}
   // Cache a clone for 6h so repeat traffic never re-triggers the live scans.
   c.executionCtx.waitUntil(cache.put(cacheKey, res.clone()));
   return res;
+});
+
+// State-of-MCP-security census. A dated, data-backed snapshot of the public MCP
+// ecosystem's security posture, produced by running our own scanner across a sample of
+// the remote servers listed in the official MCP registry. This is the data-report
+// distribution play (the Socket.dev / Snyk "State of the Supply Chain" pattern): a
+// citable, shareable artifact that establishes authority and funnels to the live scanner,
+// rather than another listing nobody searches for. Numbers are a fixed, honest snapshot
+// of a real scan run on CENSUS.scanned_on; refreshed by re-running scripts and redeploying
+// (periodic by nature — like every published security census). Everything here is a
+// measured claim: static tool-metadata checks only, sample size + date stated plainly.
+const CENSUS = {
+  scanned_on: "2026-10-22",
+  servers_sampled: 118,
+  servers_live: 65,
+  servers_unreachable: 53,
+  pct_unreachable: 45,
+  tools_inspected: 528,
+  avg_tools: 8.1,
+  max_tools: 35,
+  issues_found: 1,
+  servers_flagged: 1,
+  largest_surfaces: [
+    { name: "ad.getle/leads", tools: 35 },
+    { name: "ai.agentboard/agentboard", tools: 35 },
+    { name: "ai.aivikings/registrar", tools: 34 },
+    { name: "academy.apexai/apex-ai-academy", tools: 30 },
+    { name: "ae.brainy/grocery-prices", tools: 26 },
+    { name: "ai.alphabazaar/arena", tools: 24 },
+  ],
+};
+app.get("/scan/census", async (c) => {
+  const esc = (s: string) =>
+    String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m] as string);
+  const ORIGIN = new URL(c.req.url).origin;
+  const x = CENSUS;
+  const metaDesc = `We scanned ${x.servers_sampled} remote MCP servers from the official registry (${x.scanned_on}): ${x.pct_unreachable}% were unreachable, and across ${x.tools_inspected} advertised tools on ${x.servers_live} live servers, static OWASP LLM01/08 checks flagged ${x.issues_found}. The state of Model Context Protocol server security.`;
+  const surfacesHtml = x.largest_surfaces
+    .map((s) => `<tr><td><code>${esc(s.name)}</code></td><td style="text-align:right">${s.tools}</td></tr>`)
+    .join("\n");
+  const html = `<!doctype html><html lang=en><meta charset=utf-8>
+<title>The State of MCP Server Security (${esc(x.scanned_on)}) — Grey Ridge Signals</title>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=description content="${esc(metaDesc)}">
+<meta property="og:title" content="The State of MCP Server Security — ${esc(x.scanned_on)}">
+<meta property="og:description" content="${esc(metaDesc)}">
+<meta property="og:type" content="article">
+<link rel=canonical href="${esc(ORIGIN)}/scan/census">
+<style>
+:root{--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#0f766e;--bg:#fafafa}
+*{box-sizing:border-box}
+body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6;max-width:760px;margin:0 auto;padding:2.5rem 1.25rem}
+h1{font-size:1.75rem;margin:0 0 .3rem;line-height:1.2}
+.sub{color:var(--muted);margin:0 0 1.8rem;font-size:.95rem}
+h2{font-size:1.15rem;margin:2.4rem 0 .6rem}
+.lead{font-size:1.08rem;margin:0 0 1.4rem}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.9rem;margin:1.6rem 0}
+.stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:1.1rem 1.2rem}
+.stat .n{font-size:2rem;font-weight:800;color:var(--accent);line-height:1}
+.stat .l{color:var(--muted);font-size:.84rem;margin-top:.35rem}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:1.1rem 1.3rem;margin:1.1rem 0}
+table{width:100%;border-collapse:collapse;margin:.5rem 0 0;font-size:.9rem;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+th,td{text-align:left;padding:.6rem .7rem;border-bottom:1px solid var(--line)}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);background:#f8fafc}
+tr:last-child td{border-bottom:0}
+code{background:#eef2f7;padding:.1rem .35rem;border-radius:4px;font-size:.88em;word-break:break-all}
+a{color:var(--accent)}
+button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:.65rem 1.2rem;font-size:.98rem;font-weight:600;cursor:pointer}
+footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);color:var(--muted);font-size:.82rem}
+.note{color:var(--muted);font-size:.86rem}
+</style>
+<body>
+<h1>The State of MCP Server Security</h1>
+<p class=sub>A measured snapshot of the public Model Context Protocol ecosystem · scanned ${esc(x.scanned_on)}</p>
+<p class=lead>Every tool an MCP server advertises runs inside your agent's context — its name, description and JSON schema are read by the model, so a poisoned or injection-laden tool can quietly steer the agent before it ever calls anything. To see how exposed the ecosystem actually is, we took ${x.servers_sampled} remote servers listed in the <a href="https://registry.modelcontextprotocol.io">official MCP registry</a> and ran each one through our scanner. Here is what we found.</p>
+<div class=stats>
+  <div class=stat><div class=n>${x.servers_sampled}</div><div class=l>registry servers sampled</div></div>
+  <div class=stat><div class=n>${x.pct_unreachable}%</div><div class=l>unreachable at scan time (${x.servers_unreachable} of ${x.servers_sampled})</div></div>
+  <div class=stat><div class=n>${x.tools_inspected}</div><div class=l>advertised tools inspected across ${x.servers_live} live servers</div></div>
+  <div class=stat><div class=n>${x.issues_found}</div><div class=l>static injection/poisoning patterns flagged</div></div>
+</div>
+<h2>Two findings stand out</h2>
+<div class=card>
+<p><strong>1. Nearly half the registry's remote servers don't answer.</strong> ${x.servers_unreachable} of ${x.servers_sampled} sampled servers (${x.pct_unreachable}%) failed to return a tool list — dead hosts, moved endpoints, or auth walls with no public handshake. Before you wire an agent to a registry entry, confirm it is actually live; a surprising share are not.</p>
+<p style="margin-bottom:0"><strong>2. The live servers are clean on static checks — but the surface is large.</strong> Across ${x.tools_inspected} advertised tools on the ${x.servers_live} reachable servers, our static OWASP LLM01/LLM08 checks flagged just ${x.issues_found} pattern. That is good news: the public ecosystem is not riddled with overt tool-poisoning today. But servers advertise up to ${x.max_tools} tools each (avg ${x.avg_tools}), and every one of those descriptions is attacker-mutable the next time the server updates. Clean today is not clean forever — which is the case for scanning on every connect, not once.</p>
+</div>
+<h2>Largest tool surfaces observed</h2>
+<p class=note>More advertised tools means more text flowing into your model's context — a bigger surface to keep clean.</p>
+<table><thead><tr><th>Server</th><th style="text-align:right">Tools advertised</th></tr></thead><tbody>
+${surfacesHtml}
+</tbody></table>
+<h2>Method</h2>
+<div class=card>
+<p style="margin-top:0">We pulled remote (<code>streamable-http</code>) servers marked current in the official MCP registry, requested each server's <code>tools/list</code>, and ran every advertised tool's name, description and schema through static checks for prompt-injection, tool-poisoning, data-exfiltration and hidden-unicode patterns (OWASP LLM01 &amp; LLM08). <strong>The scanner never invokes a tool</strong> — it reads only the metadata the server publishes. "Unreachable" means the server did not return a usable tool list at scan time. This is a static analysis of advertised metadata, not a runtime audit, and the numbers are a point-in-time snapshot of the ${esc(x.scanned_on)} sample.</p>
+</div>
+<h2>Check your own server</h2>
+<div class=card>
+  <p style="margin:0 0 .9rem">Run the same scan on any MCP server in seconds — free, read-only, no tool ever invoked. Get a live README badge that re-scans every six hours, or gate your CI on the verdict with continuous monitoring.</p>
+  <div style="display:flex;gap:.8rem;flex-wrap:wrap">
+    <a href="/scan/badge-gen"><button>Scan a server — free</button></a>
+    <a href="/scan/directory" style="align-self:center">Browse the security directory →</a>
+  </div>
+</div>
+<footer>Grey Ridge Signals Group LLC · Static MCP tool-metadata analysis (OWASP LLM01/LLM08) — the scanner reads advertised tool descriptions and schemas; it never invokes a tool. Figures are a measured snapshot of the sample scanned on ${esc(x.scanned_on)}. <a href="/scan/directory">MCP security directory</a> · <a href="/">greyridgesignals.ai</a></footer>`;
+  return new Response(html, {
+    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=86400" },
+  });
 });
 
 // Public per-server security report. Server-rendered (crawlable) so each scanned MCP
