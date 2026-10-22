@@ -112,3 +112,15 @@ marketing it as "additive x402 fallback provider (pay $0 until your primary fail
 is ~$0.002–0.005/call of *our own* routes and **retail has no commodity price floor** to undercut
 us. The hunt reframes to: which packaged SKU has a named human/SMB audience that pays fiat?
 (queue item 9b7a5cee4b).
+
+---
+
+## 2026-10-21 — Crew candidate locked + a commodity SKU killed
+
+**Active candidate: `dopaminedesk-preflight-reseller`** (scout→economist→skeptic→distribution all passed; at builder, blocked only on deploy).
+
+The buyer-and-reseller thesis gets its first concrete instance. DopamineDesk (an inbound integrator with a production preflight tool) wires our `/gate/swap` GO/HOLD/BLOCK gate behind their own product and exposes it to their user base; we take the x402 USDC on settled volume with `?ref=dopaminedesk` attribution. Our side needs no fiat rail — they bill their users; we collect wholesale.
+
+Unit economics (computed, not asserted): spread **$0.0079/call = 98.75% gross margin** ($0.008 x402 wholesale − ~$0.0001 free-tier RPC COGS − $0 gasless fees). Capital deployed $0, marginal COGS ~$0, paid path never touches a Durable Object → downside bounded at $0, upside uncapped (barbell PASS). Honest ceiling: a single reseller is a trickle — 1k/5k/20k checks/day = $7.90/$39.50/$158/day; **$1,000/day needs ~63 active resellers at 2k checks/day.** So DopamineDesk is the proof-of-model first-dollar + repeat-payer vehicle, and reseller replication is the growth engine (now a queued scout question).
+
+**Killed before any build: the paid MCP-security-scan SKU.** Web research settled it — Snyk acquired Invariant Labs (June 2025); `mcp-scan` is now Snyk Agent Scan, a free CLI with a `--ci` exit-code gate and tool-pinning rug-pull detection. Also free: `mcpscan` (PyPI, SARIF 2.1 output for CI), `mcp-audit` (free GitHub Action + PR-comment diff + pre-commit hook), and npm MCP Security Scanner. A funded incumbent gives away exactly the scan-plus-CI-gate we'd try to charge for, and static scanners carry a known accuracy ceiling (they can't separate adversarial injection from normal tool instructions). Willingness-to-pay is ~0 — the same free-commodity trap that killed token-safety against GoPlus. Our `/scan/mcp` stays valuable **only as an invisible x402 backend inside a packaged outcome, never as a sold scanner.** Do not revisit a paid MCP-scan CI SaaS.
