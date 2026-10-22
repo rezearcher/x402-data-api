@@ -8964,6 +8964,43 @@ ${ctaBlock}${scriptBlock}`);
 
   const v = result.verdict as string;
   const vClass = ({ clear: "clear", review: "review", block: "block" } as Record<string, string>)[v] || "unknown";
+
+  // Point-in-time safety is only half the picture: a manifest that scans clear today can be
+  // silently re-poisoned tomorrow. Dominion Observatory (dominionobservatory.com) watches MCP
+  // tool manifests for drift over time and exposes a free, stable, unauthenticated read. We
+  // surface it here so a report answers "safe AND staying safe", and credit them for the signal.
+  let driftBlock = "";
+  try {
+    const dctl = new AbortController();
+    const dto = setTimeout(() => dctl.abort(), 2500);
+    const dr = await fetch(`https://dominionobservatory.com/api/drift?server=${encodeURIComponent(target)}`, {
+      signal: dctl.signal,
+      headers: { accept: "application/json" },
+    });
+    clearTimeout(dto);
+    if (dr.ok) {
+      const dj = await dr.json() as any;
+      const credit = `<span class=muted>Live drift signal by <a href="https://dominionobservatory.com" rel="noopener">Dominion Observatory</a></span>`;
+      if (dj && dj.tracked && dj.baseline) {
+        const drifted = dj.drift_detected === true;
+        const tc = Number(dj.baseline.tool_count);
+        const cap = String(dj.baseline.captured_at || "").slice(0, 19).replace("T", " ");
+        const hp = String(dj.baseline.manifest_hash || "").slice(0, 12);
+        driftBlock = `<h2>Manifest drift monitoring</h2>
+<div class=card>
+  <p class=summary><span class="pill ${drifted ? "review" : "clear"}">${drifted ? "drift detected" : "no drift"}</span> &nbsp;Baseline on record: ${Number.isFinite(tc) ? tc : "?"} tool(s), manifest <code>${esc(hp)}…</code>${cap ? `, captured ${esc(cap)} UTC` : ""}. ${drifted ? "The advertised manifest changed since the last capture — re-audit before trusting it again." : "The advertised manifest matches its last capture; a change would be flagged over time."}</p>
+  <p class=muted style="margin:.6rem 0 0">Grey Ridge scores this manifest at a point in time; Dominion watches it for silent change. ${credit}.</p>
+</div>`;
+      } else if (dj && dj.supported) {
+        driftBlock = `<h2>Manifest drift monitoring</h2>
+<div class=card>
+  <p class=summary>No drift baseline is on record for <code>${esc(host)}</code> yet. A point-in-time scan can't catch a manifest that is quietly re-poisoned later.</p>
+  <p class=muted style="margin:.6rem 0 0">Pair this report with over-time monitoring: ${credit} tracks MCP tool manifests for drift.</p>
+</div>`;
+      }
+    }
+  } catch { /* degrade open: drift block is additive, never blocks the report */ }
+
   const findingsBlock = result.findings.length === 0
     ? `<div class=card><p class=summary>No prompt-injection or tool-poisoning patterns were found in any of the ${result.tools_scanned} advertised tool(s). ${esc(result.risk_summary)}</p></div>`
     : `<div class=card>
@@ -8978,6 +9015,7 @@ ${ctaBlock}${scriptBlock}`);
     `<h1>${esc(host)}</h1>
 <p class=sub>MCP security report · <span class="pill ${vClass}">${esc(v)}</span> · risk ${result.risk_score}/100 · ${result.tools_scanned} tool(s) · scanned ${esc(result.scanned_at)}</p>
 ${findingsBlock}
+${driftBlock}
 ${badgeBlock}
 ${ctaBlock}
 <p class=muted style="margin:1.2rem 0 0">Full machine-readable audit (itemized findings + OWASP mapping + remediation): <code>GET ${esc(ORIGIN)}/scan/mcp?url=…</code> ($0.05 USDC via x402), or zero-egress <code>POST /scan/mcp</code> with your <code>tools/list</code> for private servers.</p>
