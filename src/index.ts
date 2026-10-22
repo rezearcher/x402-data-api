@@ -8165,8 +8165,8 @@ function previewOf(r: McpScanResult) {
   for (const f of r.findings) by[f.severity]++;
   const upsell =
     r.findings.length === 0
-      ? "Clean on static checks. Full itemized report + evidence: GET /scan/mcp?url= or zero-egress POST /scan/mcp with your tools array ($0.05 via x402)."
-      : `${r.findings.length} issue(s) found${by.critical ? `, ${by.critical} CRITICAL` : ""}. This preview hides WHICH tools and the evidence — get the full itemized findings + remediation: paste-mode POST /scan/mcp (zero egress, same body you just used) or GET /scan/mcp?url= ($0.05), or the scan_mcp_server MCP tool ($0.005).`;
+      ? "Clean on static checks today. Keep it safe as it changes — continuous monitoring + drift alerts, $9.99/mo at /pricing. Full itemized report for this scan: GET /scan/mcp?url= or zero-egress POST /scan/mcp ($0.05 via x402)."
+      : `${r.findings.length} issue(s) found${by.critical ? `, ${by.critical} CRITICAL` : ""}. This preview hides WHICH tools and the evidence. Get full itemized findings + remediation now: paste-mode POST /scan/mcp (zero egress) or GET /scan/mcp?url= ($0.05). Or monitor this server continuously with drift alerts — $9.99/mo at /pricing.`;
   return {
     target: r.target,
     tools_scanned: r.tools_scanned,
