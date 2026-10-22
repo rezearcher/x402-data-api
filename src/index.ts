@@ -8240,7 +8240,7 @@ function previewOf(
       checked_against: "Anthropic Claude Connector Directory published review criteria",
       upsell: dir.ready
         ? "No structural blockers against the PUBLISHED criteria on static checks. This teaser checks published rules only and cannot guarantee acceptance (privacy policy, OAuth 2.0 and DNS ownership are not checked here). Keep it compliant as tools change — continuous per-release monitoring at /pricing."
-        : `${dir.blocker_count} issue(s) would likely FAIL Claude Directory review — the queue runs ~20 days, so a rejection is expensive. This teaser hides WHICH criteria fail and how to fix them: get the itemized blocker list + remediation now — POST /scan/mcp {"directory":true} (zero egress, $0.05 via x402).`,
+        : `${dir.blocker_count} issue(s) would likely FAIL Claude Directory review — the queue runs ~20 days, so a rejection is expensive. This teaser hides WHICH criteria fail and how to fix them. Unlock the itemized blocker list + remediation + continuous per-release monitoring: subscribe by card at /pricing ($9.99/mo, no wallet — your key runs 100 scans across every endpoint, so you re-check each release before you resubmit). Agents can pay $0.05 per scan over x402 instead: POST /scan/mcp {"directory":true} (zero egress).`,
     };
   }
   return out;
