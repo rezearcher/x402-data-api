@@ -40,11 +40,11 @@
    "channel": "email",
    "thread_id": "1a152b620cf6f611",
    "last_dir": "us",
-   "last_at": "2026-10-21T21:43:44Z",
-   "their_last_at": "2026-10-21T17:04:15Z",
+   "last_at": "2026-10-22T02:18:00Z",
+   "their_last_at": "2026-10-22T01:34:34Z",
    "status": "ball-in-court",
-   "do_not_send_until": "2026-10-25",
-   "note": "Warmest lead. We answered his 2026-10-21 reply THREE times (snippet+prices+attribution, then EVIDENCE.md accuracy/paid-delivery, then a terse status self-send). He must review previews + send a token list for the free bounded test. DO NOT send again until he replies.",
+   "do_not_send_until": "2026-10-26",
+   "note": "Warmest lead. 2026-10-22: Joshua ran free previews and found a REAL fail-open bug — /gate/swap returned decision=go/CAUTION for ISLM (0xCB7f..FEd3) with liquidity_usd=null ('no WETH pool'), while Honeypot.is+GoPlus flag it honeypot (~$0.78 liq). Fix committed 2017bd6: no verifiable WETH-pool liquidity -> HOLD (not GO, not BLOCK). Replied (msg 1a161655394777fa) confirming the gap, showing corrected HOLD output for his exact token computed from live token-report data, explaining HOLD-vs-BLOCK + honeypot-sim limitation. ONE owed follow-up is EVENT-GATED not time-gated: the moment /gate/swap deploys the fix live, send him ONE line so he can retest (deploy blocked on credential atom below). Do NOT send any other message until he replies.",
    "emails": [
     "jblaz6335@gmail.com"
    ]
