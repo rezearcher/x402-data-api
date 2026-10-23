@@ -59,6 +59,10 @@ Headline: no high-severity exposure. Priority action is the **`sigrunner.com` em
 - **TLS:** valid Google Trust Services certificates, ~90-day validity, correct SANs.
 - **Email (`greyridgesignals.ai`):** SPF `-all` (hard-fail), DMARC `p=reject`, DKIM present — strong, low risk.
 
+### GR-2026-007 — Authorization-before-scan control (Pass) — NEW this cycle
+- **Lens:** the free scan reads only an MCP server's *published* `tools/list` (public metadata every client already receives) and never invokes a tool. To *claim* an asset — a verified-owner badge, continuous monitoring, drift alerts, the full report — a caller must complete an automated DNS-01-style domain-control challenge (`_grsg-verify.<host>` TXT) plus a versioned, IP/UA/timestamp-logged click-through authorization before any claim is recorded (`/scan/verify`, `/scan/verify/check`). This implements AUTHORIZATION_STANDARD Tier 1 end-to-end, headless.
+- **Evidence (live):** `check` without `authorize=1` returns `authorization_required`; a non-hostname target is rejected 400 (no challenge minted, SSRF-safe — DoH only queries the validated host's own TXT); challenge token is deterministic per host (security is DNS control, not token secrecy) and host-bound (no cross-domain replay). Mirrors Detectify/Probely/Astra ownership gating. Known gap: DNS-TXT is currently the only verification method (no HTML-meta/file-at-path fallback yet) — acceptable for domain-hosted MCP servers, tracked for a bare-host/IP fallback.
+
 ## 4. Remediation roadmap (priority order)
 
 1. **GR-2026-001** — `sigrunner.com` DMARC/SPF/DKIM (Medium; highest real risk) — once the op/CF token window clears.
@@ -68,6 +72,7 @@ Headline: no high-severity exposure. Priority action is the **`sigrunner.com` em
 ## 5. Retest & operational notes
 
 - GR-2026-003 retested and closed live this cycle.
+- GR-2026-007 added this cycle: authorization-before-scan control shipped + live-verified (commit `33b2b46`).
 - GR-2026-001 remediation blocked this cycle by a transient 1Password rate-limit on the Cloudflare token read (ops dependency, not a target weakness); re-attempt next clear window.
 
 ## 6. Appendix — references
