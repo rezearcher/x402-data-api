@@ -56,6 +56,14 @@ export type Env = {
   STRIPE_API_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRICE_ID?: string;
+  // Telegram bot — the Base token gate where memecoin traders already live.
+  // TELEGRAM_BOT_TOKEN is the @BotFather token (one-time Rez setup); the webhook
+  // handler stays INERT until it is set. TELEGRAM_WEBHOOK_SECRET authenticates
+  // inbound updates (echoed by Telegram in X-Telegram-Bot-Api-Secret-Token) so a
+  // forged POST cannot make the bot message arbitrary chats. Both via
+  //   wrangler secret put TELEGRAM_BOT_TOKEN ; wrangler secret put TELEGRAM_WEBHOOK_SECRET
+  TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_WEBHOOK_SECRET?: string;
   // Optional KV namespace for API key storage. Needs `wrangler kv namespace create API_KEYS`
   // + binding id in wrangler.toml. If absent, API key auth returns 501.
   API_KEYS?: KVNamespace;
@@ -8573,6 +8581,95 @@ app.get("/gate/swap/preview", async (c) => {
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
+});
+
+// ---------------------------------------------------------------------------
+// TELEGRAM BOT — the Base token gate where memecoin traders already live.
+// A trader pastes a 0x contract (DM or group); the bot replies with the same
+// free GO/HOLD/BLOCK engine as /gate/swap/preview plus a one-tap link to the
+// miniapp, where the paid 0.01-USDC unlock sizes it to a real trade. No new
+// money surface: the bot serves only the FREE verdict + a link; every payment
+// still settles on the existing on-chain /gate/swap/unlock route.
+//
+// SECURITY (hard controls, not skipped):
+//  - Authn: Telegram echoes the secret we set at registration time in the
+//    X-Telegram-Bot-Api-Secret-Token header. We reject any update whose header
+//    != TELEGRAM_WEBHOOK_SECRET, so a forged POST cannot drive sendMessage to an
+//    arbitrary chat_id (spam/abuse vector).
+//  - Fail closed + inert: if either secret is unset the webhook 200s and does
+//    nothing — an un-provisioned bot never crashes, never leaks, never sends.
+//  - Self-lockout guard: unsetting the secrets simply disables the bot; it can
+//    never brick the rest of the Worker (own route, own try/catch).
+//  - Compute-abuse cap: 20 checks / chat / hour in KV (degrades OPEN if KV is
+//    unbound) so a spammy group can't drain the on-chain read budget.
+// ---------------------------------------------------------------------------
+const tgApi = (token: string, method: string) => `https://api.telegram.org/bot${token}/${method}`;
+function tgEsc(s: unknown) { return String(s).replace(/[<>&]/g, (ch) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[ch] as string)); }
+async function tgSend(token: string, chatId: number | string, text: string, extra?: Record<string, unknown>) {
+  try {
+    await fetch(tgApi(token, "sendMessage"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: false, ...extra }),
+    });
+  } catch { /* best-effort: we still 200 the update so Telegram doesn't retry-loop */ }
+}
+
+app.post("/tg/webhook", async (c) => {
+  const token = c.env.TELEGRAM_BOT_TOKEN;
+  const secret = c.env.TELEGRAM_WEBHOOK_SECRET;
+  if (!token || !secret) return c.json({ ok: true }); // inert until provisioned
+  if (c.req.header("X-Telegram-Bot-Api-Secret-Token") !== secret) return c.json({ ok: false }, 403);
+
+  let update: Record<string, any>;
+  try { update = await c.req.json(); } catch { return c.json({ ok: true }); }
+  const msg = update.message || update.edited_message || update.channel_post;
+  const chatId = msg?.chat?.id;
+  const text: string = String(msg?.text || "").trim();
+  if (!chatId || !text) return c.json({ ok: true });
+
+  const origin = new URL(c.req.url).origin;
+  if (/^\/(start|help)\b/i.test(text)) {
+    await tgSend(token, chatId,
+      "<b>Base Token Gate</b>\n" +
+      "Paste any Base token contract (0x…) and I'll return a <b>GO / HOLD / BLOCK</b> verdict — honeypot check, sellability, and WETH-pool liquidity depth — in one line.\n\n" +
+      "Example: <code>0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed</code>\n\n" +
+      "Want it sized to a real trade (max safe size, price impact, and an exit simulation of the USD you'd actually recover)? Open the check and unlock for 0.01 USDC. Heuristic signal, not financial advice.");
+    return c.json({ ok: true });
+  }
+
+  const m = text.match(/0x[0-9a-fA-F]{40}/);
+  if (!m) {
+    await tgSend(token, chatId, "Send a Base token contract address (0x followed by 40 hex characters). Try /help.");
+    return c.json({ ok: true });
+  }
+  const addr = m[0];
+
+  if (c.env.API_KEYS) {
+    try {
+      const k = `tg_rl:${chatId}:${Math.floor(Date.now() / 3600000)}`;
+      const n = Number((await c.env.API_KEYS.get(k)) || "0");
+      if (n >= 20) { await tgSend(token, chatId, "Rate limit: 20 checks per hour in this chat. Try again shortly."); return c.json({ ok: true }); }
+      await c.env.API_KEYS.put(k, String(n + 1), { expirationTtl: 3700 });
+    } catch { /* KV hiccup: degrade open */ }
+  }
+
+  try {
+    const out = await buildSwapGate(addr, "buy", 100);
+    const dec = String(out.decision || "").toUpperCase();
+    const emoji = dec === "GO" ? "\u{1F7E2}" : dec === "BLOCK" ? "\u{1F534}" : "\u{1F7E1}";
+    const sym = (out.token_meta && (out.token_meta as Record<string, unknown>).symbol) || "token";
+    const liq = out.liquidity_usd == null ? "n/a" : "$" + Math.round(out.liquidity_usd).toLocaleString("en-US");
+    const link = `${origin}/miniapp?token=${addr}`;
+    await tgSend(token, chatId,
+      `${emoji} <b>${dec}</b> — ${tgEsc(sym)}\n` +
+      `${tgEsc(out.reason || "")}\n` +
+      `Verdict ${tgEsc(out.verdict)} · risk ${tgEsc(out.risk_score)}/100 · WETH-pool liquidity ${tgEsc(liq)}`,
+      { reply_markup: { inline_keyboard: [[{ text: "Size it to your trade ↗", url: link }]] } });
+  } catch {
+    await tgSend(token, chatId, "Couldn't read that token on-chain right now — try again in a moment.");
+  }
+  return c.json({ ok: true });
 });
 
 // ---------------------------------------------------------------------------
