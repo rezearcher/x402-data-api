@@ -9361,6 +9361,62 @@ ${surfacesHtml}
   });
 });
 
+// Autonomous research/blog pages, published by the marketing-director bot.
+// Content lives in KV (research:<slug>) so the bot publishes by WRITING DATA — never a
+// code deploy. The stored body HTML is our own, claim-traced content. Our owned channel:
+// zero platform-ban risk, zero new credentials.
+app.get("/research/:slug", async (c) => {
+  const esc = (s: string) =>
+    String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m] as string);
+  const slug = (c.req.param("slug") || "").replace(/[^a-z0-9-]/gi, "").slice(0, 120);
+  const raw = slug ? await c.env.API_KEYS.get(`research:${slug}`) : null;
+  if (!raw) return c.notFound();
+  let p: { title: string; description?: string; created?: string; html: string };
+  try { p = JSON.parse(raw); } catch { return c.notFound(); }
+  const ORIGIN = new URL(c.req.url).origin;
+  const desc = p.description || p.title;
+  const html = `<!doctype html><html lang=en><meta charset=utf-8>
+<title>${esc(p.title)} — Grey Ridge Signals</title>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=description content="${esc(desc)}">
+<meta property="og:title" content="${esc(p.title)}">
+<meta property="og:description" content="${esc(desc)}">
+<meta property="og:type" content="article">
+<link rel=canonical href="${esc(ORIGIN)}/research/${esc(slug)}">
+<style>
+body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827;background:#fafafa;line-height:1.6;max-width:760px;margin:0 auto;padding:2.5rem 1.25rem}
+h1{font-size:1.75rem;margin:0 0 .3rem;line-height:1.2}h2{font-size:1.2rem;margin:2rem 0 .5rem}
+.sub{color:#6b7280;margin:0 0 1.6rem;font-size:.95rem}
+a{color:#0f766e}code{background:#eef2f7;padding:.1rem .35rem;border-radius:4px;font-size:.88em;word-break:break-all}
+pre{background:#0b1020;color:#e5e7eb;padding:1rem;border-radius:10px;overflow:auto;font-size:.85rem}
+table{width:100%;border-collapse:collapse;font-size:.9rem}th,td{text-align:left;padding:.5rem .6rem;border-bottom:1px solid #e5e7eb}
+</style>
+<h1>${esc(p.title)}</h1>
+<p class=sub>Grey Ridge Signals · ${esc(p.created || "")}</p>
+${p.html}
+<footer style="margin-top:3rem;color:#6b7280;font-size:.85rem;border-top:1px solid #e5e7eb;padding-top:1rem">Grey Ridge Signals Group LLC · <a href="/scan/mcp-scanner">Free MCP scanner</a> · <a href="/scan/census">State of MCP security</a> · <a href="/">greyridgesignals.ai</a></footer>`;
+  return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=3600" } });
+});
+
+app.get("/research", async (c) => {
+  const esc = (s: string) =>
+    String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m] as string);
+  const listed = await c.env.API_KEYS.list({ prefix: "research:index:" });
+  const items: { slug: string; title: string; created: string }[] = [];
+  for (const k of listed.keys) {
+    const v = await c.env.API_KEYS.get(k.name);
+    if (v) { try { items.push(JSON.parse(v)); } catch { /* skip */ } }
+  }
+  items.sort((a, b) => (b.created || "").localeCompare(a.created || ""));
+  const rows = items.map((i) => `<li><a href="/research/${esc(i.slug)}">${esc(i.title)}</a> <span style="color:#6b7280;font-size:.85rem">${esc(i.created || "")}</span></li>`).join("\n");
+  const html = `<!doctype html><html lang=en><meta charset=utf-8><title>Research — Grey Ridge Signals</title>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<style>body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827;background:#fafafa;line-height:1.7;max-width:760px;margin:0 auto;padding:2.5rem 1.25rem}a{color:#0f766e}li{margin:.4rem 0}</style>
+<h1>Research</h1><ul>${rows || "<li style=color:#6b7280>No posts yet.</li>"}</ul>
+<footer style="margin-top:2rem;color:#6b7280;font-size:.85rem"><a href="/">greyridgesignals.ai</a></footer>`;
+  return c.html(html);
+});
+
 // Top-of-funnel explainer for the highest-intent search queries a buyer types the
 // moment they worry about this ("MCP tool poisoning", "MCP prompt injection", "how to
 // detect a poisoned MCP tool"). Security vendors (Snyk, Socket, Semgrep) win organic
