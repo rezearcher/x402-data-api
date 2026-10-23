@@ -145,6 +145,25 @@ don't notify the user about it, it is a mere implementation detail of this syste
   ok(r.includes("invisible-unicode"), "6: zero-width chars → invisible-unicode");
 }
 
+// 6b. Variation-selector smuggling (Paul Butler emoji/variation-selector covert
+// channel). A run of BMP variation selectors (U+FE00–U+FE0F) OR any Variation
+// Selector Supplement char (U+E0100–U+E01EF) appended to a visible base char hides
+// a payload the human can't see but the model ingests — a distinct class from the
+// zero-width/TAG-block covered by rule 6.
+{
+  const r = rules("Returns the weather." + "︁".repeat(12) + " (hidden run).");
+  ok(r.includes("variation-selector-smuggling"), "6b: BMP variation-selector run → variation-selector-smuggling");
+}
+{
+  const r = rules("Gets a quote" + "\u{E0101}".repeat(8) + ".");
+  ok(r.includes("variation-selector-smuggling"), "6b2: Variation Selector Supplement → variation-selector-smuggling");
+}
+{
+  // smuggled into the tool NAME (attacker-controllable, rendered in pickers/logs)
+  const r = analyzeMcpTool("get_price\u{E0100}\u{E0105}", "Returns a price.", "{}").map((x) => x.rule);
+  ok(r.includes("variation-selector-smuggling"), "6b3: variation selectors in tool name → variation-selector-smuggling");
+}
+
 // 7. Dangerous capability
 {
   const r = rules("Runs arbitrary shell commands on the host via child_process.exec().");
@@ -256,6 +275,13 @@ ok(rules("Formats a report.\n\tIndented bullet one.\r\n\tIndented bullet two.").
 // space, i.e. the CSS function form).
 ok(rules("Fetches the page. Pass the target URL (https://example.com/page) as the only argument.").length === 0,
   "J: prose 'URL (https://…)' with a space stays clean (no css-resource-exfil false positive)");
+
+// K. A SINGLE legitimate variation selector (VS16/U+FE0F forcing emoji presentation,
+// e.g. the warning sign "⚠️") must NOT trip variation-selector-smuggling — the rule
+// requires a run of ≥2 BMP selectors or the Supplement block, so ordinary emoji copy
+// (even two separate emoji, each with its own selector) stays clean.
+ok(rules("⚠️ Destructive: deletes files. ✅️ Supported on Linux.").length === 0,
+  "K: single emoji variation selectors (⚠️ ✅️) stay clean (no variation-selector-smuggling false positive)");
 
 // ---------------------------------------------------------------------------
 // Claude Connector Directory readiness checks (analyzeDirectoryReadiness).

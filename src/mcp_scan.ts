@@ -186,6 +186,30 @@ export function analyzeMcpTool(name: string, description: string, schemaText: st
   if (/[​-‍﻿‪-‮⁦-⁩]/.test(text) || /[\u{E0000}-\u{E007F}]/u.test(text))
     add("high", "invisible-unicode", "Hidden/zero-width or unicode-tag characters in description — covert instruction channel.", "non-printable chars");
 
+  // 5d. Variation-selector smuggling. A distinct invisible-payload class from rule 5:
+  // rule 5 covers zero-width/bidi (U+200B–U+202E, U+FEFF) and the Unicode TAG block
+  // (U+E0000–U+E007F), but NOT variation selectors. Arbitrary bytes can be encoded in
+  // a run of variation selectors appended to ANY visible base character — the payload
+  // is invisible to a human yet ingested verbatim by the model (Paul Butler's
+  // "smuggling arbitrary data through an emoji / variation selectors", widely weaponised
+  // 2025–2026 for prompt-injection concealment). Two uncovered ranges:
+  //   • Variation Selector Supplement U+E0100–U+E01EF — 240 code points with NO
+  //     legitimate use in tool-metadata prose → flag on ANY occurrence.
+  //   • BMP variation selectors U+FE00–U+FE0F — here a SINGLE selector is legitimate
+  //     (VS16/U+FE0F forces emoji presentation, e.g. "⚠️", VS15 text presentation), so
+  //     flagging one would false-positive on ordinary emoji copy. A smuggled payload is
+  //     a RUN (one selector per encoded byte), and two consecutive selectors never
+  //     occur in legitimate text (adjacent emoji keep their selectors separated by the
+  //     base char), so we require ≥2 consecutive. Scans name too (attacker-controllable,
+  //     rendered in tool pickers/logs) — same precision class as rules 5b/5c.
+  const varSel = /[\u{E0100}-\u{E01EF}]|[︀-️]{2,}/u;
+  if (varSel.test(text) || varSel.test(name))
+    add("high", "variation-selector-smuggling",
+      "Unicode variation selectors encode a hidden payload in the tool " +
+      (varSel.test(name) && !varSel.test(text) ? "name" : "description") +
+      " — an invisible covert channel (Variation Selector Supplement, or a run of BMP selectors) the model ingests but a human reviewer cannot see.",
+      "variation selectors");
+
   // 5b. ANSI terminal escape / C0 control-char covert channel. A separate concealment
   // class from zero-width unicode (rule 5): a malicious server embeds the ESC byte
   // (0x1B) and CSI/OSC sequences, or other non-whitespace C0 control characters, in a
