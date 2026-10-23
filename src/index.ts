@@ -10971,7 +10971,7 @@ const mcpHandler = createMcpHandler(() => {
     "gate_swap",
     {
       description:
-        "Pre-trade GO / HOLD / BLOCK gate for a Base ERC-20 swap: honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your trade size. One decision + reason. Cost: $0.005 USDC per call via the shared MCP payment gate (the direct HTTP endpoint GET /gate/swap is $0.008 — MCP tools/call is gated at a flat $0.005 per request).",
+        "Pre-trade GO / HOLD / BLOCK gate for a Base ERC-20 swap: honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your trade size. Returns the GO/HOLD/BLOCK decision AND decision-grade sizing — per $100 / $1k / $10k / $50k (and your exact notional_usd): entry-slippage + exit-simulation (net USD recovered vs lost to slippage), round-trip breakeven move %, and max_safe_notional_usd. Cost: $0.005 USDC per call via the shared MCP payment gate (the direct HTTP endpoint GET /gate/swap is $0.008 — MCP tools/call is gated at a flat $0.005 per request).",
       inputSchema: {
         token: z.string().describe("0x-prefixed ERC-20 contract on Base mainnet"),
         side: z.enum(["buy", "sell"]).optional().describe("default buy"),
@@ -10983,8 +10983,14 @@ const mcpHandler = createMcpHandler(() => {
         return { content: [{ type: "text" as const, text: "Error: token must be a 0x-prefixed 20-byte address" }] };
       }
       try {
-        const result = await buildSwapGate(token, side ?? "buy", notional_usd ?? 100);
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+        const notional = notional_usd ?? 100;
+        const result = await buildSwapGate(token, side ?? "buy", notional);
+        // Paid MCP rail parity: deliver the same decision-grade sizing the direct
+        // paid HTTP route returns (exit_sim/entry_sim/roundtrip_breakeven across
+        // notionals). sizedExecution is intentionally NOT inside buildSwapGate so
+        // the free gate_swap_preview path below can never leak these numbers.
+        const sizing = sizedExecution(result.liquidity_usd, notional);
+        return { content: [{ type: "text" as const, text: JSON.stringify({ ...result, sizing }, null, 2) }] };
       } catch (e) {
         return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
       }
@@ -10995,7 +11001,7 @@ const mcpHandler = createMcpHandler(() => {
     "gate_swap_preview",
     {
       description:
-        "FREE live sample of the gate_swap pre-trade GO/HOLD/BLOCK decision for a demo Base token (usdc|weth|cbbtc|aero|degen), same shape as the paid gate_swap tool. No payment required.",
+        "FREE live sample of the gate_swap pre-trade GO/HOLD/BLOCK decision for a demo Base token (usdc|weth|cbbtc|aero|degen), same shape as the paid gate_swap tool. The paid gate_swap tool additionally returns `sizing` (entry/exit slippage simulation + round-trip breakeven + max_safe_notional_usd); the `paid_adds` block here names those fields. No payment required.",
       inputSchema: {
         token: z.enum(["usdc", "weth", "cbbtc", "aero", "degen"]).optional().describe("demo token, default usdc"),
         side: z.enum(["buy", "sell"]).optional().describe("default buy"),
@@ -11004,8 +11010,13 @@ const mcpHandler = createMcpHandler(() => {
     },
     async ({ token, side, notional_usd }) => {
       try {
-        const result = await buildSwapGate(PREVIEW_DEMO_TOKENS[token ?? "usdc"], side ?? "buy", notional_usd ?? 100);
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+        const notional = notional_usd ?? 100;
+        const result = await buildSwapGate(PREVIEW_DEMO_TOKENS[token ?? "usdc"], side ?? "buy", notional);
+        // Name (never compute) the paid-only sizing so an agent on the free MCP
+        // preview sees the upgrade path. paidSwapAdds returns strings only — the
+        // actual exit_sim/entry_sim numbers stay behind the $0.005 paid gate_swap.
+        const paid_adds = paidSwapAdds(notional);
+        return { content: [{ type: "text" as const, text: JSON.stringify({ ...result, paid_adds }, null, 2) }] };
       } catch (e) {
         return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
       }
