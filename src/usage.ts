@@ -271,3 +271,79 @@ export async function getMetrics(
   }
   return metrics;
 }
+
+// ---------------------------------------------------------------------------
+// Human-page funnel beacons.
+//
+// The server-side counters above record SETTLED paid calls, but the human pay
+// path (/check, /miniapp) is otherwise blind: we cannot tell whether nobody
+// views the page or everybody views it and abandons at wallet-connect. These
+// aggregate, no-PII beacons measure the drop between stages so the revenue
+// goal-gate reads a real leak instead of guessing. Same DO, same fail-soft
+// contract as trackPaidRequest.
+//
+// SECURITY: the surface/event strings become DO storage keys, so they are
+// strictly validated against the fixed enums below BEFORE any write — an
+// attacker cannot inflate an unbounded key space (a cost/row DoS on the shared
+// counter). Unknown values are dropped (the page still renders; the beacon is
+// fire-and-forget). Config, not a behavioural gate: adding a surface/event is a
+// one-line enum edit, and an unlisted value degrades open to "not counted".
+// ---------------------------------------------------------------------------
+
+export const FUNNEL_KEY_PREFIX = "funnel:";
+
+export const FUNNEL_SURFACES = ["check", "miniapp", "tg"] as const;
+export const FUNNEL_EVENTS = ["view", "unlock_click", "wallet_open", "tx_submit"] as const;
+export type FunnelSurface = (typeof FUNNEL_SURFACES)[number];
+export type FunnelEvent = (typeof FUNNEL_EVENTS)[number];
+
+export function isFunnelSurface(v: unknown): v is FunnelSurface {
+  return typeof v === "string" && (FUNNEL_SURFACES as readonly string[]).includes(v);
+}
+export function isFunnelEvent(v: unknown): v is FunnelEvent {
+  return typeof v === "string" && (FUNNEL_EVENTS as readonly string[]).includes(v);
+}
+
+/**
+ * Record one page-funnel event, fire-and-forget. Caller SHOULD pre-validate
+ * (to return 204 vs 400); this re-validates as defense-in-depth so no unchecked
+ * caller can ever write an arbitrary key. Never throws.
+ */
+export async function trackFunnelEvent(
+  surface: string,
+  event: string,
+  counter: UsageCounterLike | undefined,
+): Promise<void> {
+  if (!isFunnelSurface(surface) || !isFunnelEvent(event)) return;
+  if (!counter) return;
+  try {
+    await counter.apply([
+      { kind: "increment", key: `${FUNNEL_KEY_PREFIX}${surface}:${event}` },
+    ]);
+  } catch (error) {
+    console.error("Error tracking funnel event:", error);
+  }
+}
+
+export type FunnelMetrics = Record<FunnelSurface, Record<FunnelEvent, number>>;
+
+/** Aggregate the funnel beacon counters into a surface -> event -> count map. */
+export async function getFunnelMetrics(
+  counter: UsageCounterLike | undefined,
+): Promise<FunnelMetrics> {
+  const out = Object.fromEntries(
+    FUNNEL_SURFACES.map((s) => [s, Object.fromEntries(FUNNEL_EVENTS.map((e) => [e, 0]))]),
+  ) as FunnelMetrics;
+  if (!counter) return out;
+  try {
+    const snap = await counter.snapshot();
+    for (const s of FUNNEL_SURFACES) {
+      for (const e of FUNNEL_EVENTS) {
+        out[s][e] = toNumber(snap[`${FUNNEL_KEY_PREFIX}${s}:${e}`]);
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching funnel metrics:", error);
+  }
+  return out;
+}

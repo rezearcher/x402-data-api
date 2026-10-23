@@ -37,7 +37,8 @@ import { register } from "node:module";
 // (the import itself is dynamic, below, so the hook is live by then).
 register(new URL("./cfw-hooks.mjs", import.meta.url));
 
-const { trackPaidRequest, getMetrics } = await import("../src/usage.ts");
+const { trackPaidRequest, getMetrics, trackFunnelEvent, getFunnelMetrics } =
+  await import("../src/usage.ts");
 const { default: app } = await import("../src/index.ts");
 
 // ---------------------------------------------------------------------------
@@ -295,6 +296,7 @@ async function testMetricsAggregation() {
     "x402-paid": 3,
     "rapidapi-bypass": 1,
     "api-key": 1,
+    "x402-browser-unlock": 0,
   });
   assert.ok(m.first_call_ts !== null && m.last_call_ts !== null);
   assert.ok(m.last_call_ts >= m.first_call_ts);
@@ -695,8 +697,46 @@ async function testInternalCdpEndpointsGated() {
 
 // ---------------------------------------------------------------------------
 
+// Page-funnel beacons: valid enum pairs increment funnel:<surface>:<event>;
+// invalid surface/event is dropped (no arbitrary key written — the DO key-space
+// stays bounded); getFunnelMetrics aggregates to surface->event->count.
+async function testFunnelBeacons() {
+  const counter = makeFakeCounter();
+  await trackFunnelEvent("check", "view", counter);
+  await trackFunnelEvent("check", "view", counter);
+  await trackFunnelEvent("check", "unlock_click", counter);
+  await trackFunnelEvent("miniapp", "tx_submit", counter);
+  // Invalid values MUST NOT write a key (cost/row-DoS guard).
+  await trackFunnelEvent("evil", "view", counter);
+  await trackFunnelEvent("check", "../../etc", counter);
+  await trackFunnelEvent("check", "", counter);
+
+  assert.strictEqual(counter.store.get("funnel:check:view"), 2);
+  assert.strictEqual(counter.store.get("funnel:check:unlock_click"), 1);
+  assert.strictEqual(counter.store.get("funnel:miniapp:tx_submit"), 1);
+  // No key outside the fixed enum namespace was created.
+  for (const k of counter.store.keys()) {
+    assert.ok(/^funnel:(check|miniapp|tg):(view|unlock_click|wallet_open|tx_submit)$/.test(k),
+      `unexpected funnel key written: ${k}`);
+  }
+
+  const fm = await getFunnelMetrics(counter);
+  assert.strictEqual(fm.check.view, 2);
+  assert.strictEqual(fm.check.unlock_click, 1);
+  assert.strictEqual(fm.check.wallet_open, 0);
+  assert.strictEqual(fm.miniapp.tx_submit, 1);
+  assert.strictEqual(fm.tg.view, 0);
+
+  // No counter binding => no-op, zeros, never throws.
+  const empty = await getFunnelMetrics(undefined);
+  assert.strictEqual(empty.check.view, 0);
+  await trackFunnelEvent("check", "view", undefined); // must not throw
+  console.log("  ok  funnel beacons: enum-validated, bounded keys, aggregated");
+}
+
 async function main() {
   const tests = [
+    testFunnelBeacons,
     testX402PaidTracksRouteRailAndTs,
     testNonChainRailsNeverTouchPaidCounters,
     testPaidSurfaceTracked,

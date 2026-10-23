@@ -39,7 +39,16 @@ import { z } from "zod/v4";
 import { keccak256, stringToHex } from "viem";
 import { DurableObject } from "cloudflare:workers";
 import { createCdpFacilitator } from "./facilitator";
-import { trackPaidRequest, getMetrics, type Rail, type Route } from "./usage.ts";
+import {
+  trackPaidRequest,
+  getMetrics,
+  trackFunnelEvent,
+  getFunnelMetrics,
+  isFunnelSurface,
+  isFunnelEvent,
+  type Rail,
+  type Route,
+} from "./usage.ts";
 import { makeUsageCounter, type UsageCounter } from "./usage_counter.ts";
 
 // ---------------------------------------------------------------------------
@@ -488,7 +497,12 @@ app.get("/metrics", async (c) => {
       net_external_degraded = true;
     }
   }
-  const res = c.json({ ...metrics, net_external_paid_calls, net_external });
+  // Human-page funnel beacons (aggregate, no PII) — the drop between page view,
+  // unlock click, wallet open and tx submit. Lets the goal-gate see WHERE the
+  // human pay path leaks instead of inferring 0% from a flat wallet. Same 1h TTL
+  // tolerates staleness; a throw inside getFunnelMetrics is swallowed to zeros.
+  const funnel = await getFunnelMetrics(makeUsageCounter(c.env));
+  const res = c.json({ ...metrics, net_external_paid_calls, net_external, funnel });
   // Degraded snapshot = the counter read threw (metrics.degraded) OR the
   // net-external read threw. Both produce bogus zeros / an unavailable block. A 1h
   // edge cache PINS that degraded body for the whole hour on a public endpoint
@@ -503,6 +517,23 @@ app.get("/metrics", async (c) => {
   res.headers.set("Cache-Control", `public, max-age=${maxAge}`);
   if (cache) fireAndForget(c, cache.put(cacheKey, res.clone()));
   return res;
+});
+
+// Page-funnel beacon — a free, unauthenticated, aggregate-only event counter for
+// the human pay path (/check, /miniapp). Query: s=<surface> e=<event>, both
+// strictly validated against fixed enums so the DO key space stays bounded (no
+// cost/row DoS via arbitrary keys). No body, no PII, no IP stored. Fire-and-forget
+// via waitUntil and always returns 204 fast so it never blocks page render.
+// Accepts GET and POST (navigator.sendBeacon posts; fetch keepalive gets).
+app.on(["GET", "POST"], "/ev", (c) => {
+  const s = c.req.query("s");
+  const e = c.req.query("e");
+  if (isFunnelSurface(s) && isFunnelEvent(e)) {
+    fireAndForget(c, trackFunnelEvent(s, e, makeUsageCounter(c.env)));
+  }
+  // 204 regardless — we never reveal whether the enum matched (no probing signal)
+  // and the client doesn't care. Unknown values are silently dropped.
+  return c.body(null, 204);
 });
 
 // ---------------------------------------------------------------------------
@@ -4045,7 +4076,7 @@ app.use(async (c, next) => {
   }
 
   // Toll-free routes — never check API key or x402
-  const FREE_PATHS = new Set(["/", "/health", "/status", "/terms", "/token-safety", "/stripe/webhook", "/metrics"]);
+  const FREE_PATHS = new Set(["/", "/health", "/status", "/terms", "/token-safety", "/stripe/webhook", "/metrics", "/ev"]);
   if (FREE_PATHS.has(c.req.path)) return next();
   if (c.req.path.startsWith("/.well-known/")) return next();
 
@@ -8205,11 +8236,13 @@ function sizingHtml(j){var s=j.sizing;if(!s)return '';
 var PAY_TO='0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10';
 var USDC='0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 var UNLOCK='0.01';
+function ev(e){try{fetch('/ev?s=check&e='+e,{method:'POST',keepalive:true}).catch(function(){})}catch(_){}}
+try{ev('view')}catch(_){}
 function unlockUI(t){
   var h='<div class="row" style="margin-top:.9rem"><button id="unlk" style="background:#1f6feb">Unlock sized trade check - pay 0.01 USDC</button></div>'
     +'<div id="ures" style="margin-top:.6rem"></div>'
     +'<small>&#128274; Locked: max safe trade size + price impact at $100 / $1k / $10k / $50k + exit simulation (the net USD you actually recover selling now, after slippage), sized to the measured pool. One-off, no signup. Agents pay inline via x402 at <a href="/gate/swap">/gate/swap</a>.</small>';
-  setTimeout(function(){var b=document.getElementById('unlk');if(b)b.onclick=function(){payUnlock(t)}},0);
+  setTimeout(function(){var b=document.getElementById('unlk');if(b)b.onclick=function(){ev('unlock_click');payUnlock(t)}},0);
   return h;
 }
 async function getProvider(){
@@ -8220,6 +8253,7 @@ async function getProvider(){
 function pad32(h){h=h.replace(/^0x/,'').toLowerCase();while(h.length<64)h='0'+h;return h}
 async function payUnlock(t){
   var u=document.getElementById('ures');u.textContent='Opening wallet...';
+  ev('wallet_open');
   var p=await getProvider();
   if(!p){u.innerHTML='No wallet detected. Open this in a browser with a Base wallet (Coinbase Wallet, Rabby, MetaMask on Base) or the Base app. You can also send '+UNLOCK+' USDC to '+PAY_TO.slice(0,10)+'... and reload this page with the tx hash appended as &amp;tx=.';return}
   try{
@@ -8228,6 +8262,7 @@ async function payUnlock(t){
     var data='0xa9059cbb'+pad32(PAY_TO)+pad32((10000).toString(16));
     u.textContent='Confirm the 0.01 USDC payment in your wallet...';
     var tx=await p.request({method:'eth_sendTransaction',params:[{from:from,to:USDC,data:data,value:'0x0'}]});
+    ev('tx_submit');
     history.replaceState(null,'','?token='+t+'&tx='+tx);
     u.innerHTML='Payment sent (<a href="https://basescan.org/tx/'+tx+'" target="_blank" rel="noopener">'+tx.slice(0,12)+'...</a>). Verifying on Base...';
     await finishUnlock(t,tx,u);
@@ -8573,11 +8608,13 @@ async function go(){
 // no manifest — a human in a browser settles on-chain directly to our wallet.
 var PAY_TO='0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10';
 var USDC='0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+function ev(e){try{fetch('/ev?s=miniapp&e='+e,{method:'POST',keepalive:true}).catch(function(){})}catch(_){}}
+try{ev('view')}catch(_){}
 function unlockUI(t){
   var html='<div class="row" style="margin-top:.8rem"><button id="unlk">Unlock sized check — pay 0.01 USDC</button></div>'
     +'<div id="ures" style="margin-top:.6rem"></div>'
     +'<small>&#128274; Locked: max safe trade size + price impact at $100 / $1k / $10k / $50k + exit simulation (the net USD you actually recover selling now, after slippage), sized to the measured pool. One-off, no signup.</small>';
-  setTimeout(function(){var b=document.getElementById('unlk');if(b)b.onclick=function(){payUnlock(t);};},0);
+  setTimeout(function(){var b=document.getElementById('unlk');if(b)b.onclick=function(){ev('unlock_click');payUnlock(t);};},0);
   return html;
 }
 async function getProvider(){
@@ -8588,6 +8625,7 @@ async function getProvider(){
 function pad32(h){h=h.replace(/^0x/,'').toLowerCase();while(h.length<64)h='0'+h;return h;}
 async function payUnlock(t){
   var u=document.getElementById('ures');u.textContent='Opening wallet…';
+  ev('wallet_open');
   var p=await getProvider();
   if(!p){u.innerHTML='No wallet found. Open this in the Base app / a Farcaster client, or a browser with a Base wallet. You can also pay '+UNLOCK+' USDC to '+PAY_TO.slice(0,10)+'… and append &tx=<hash> to the unlock URL.';return;}
   try{
@@ -8597,6 +8635,7 @@ async function payUnlock(t){
     var data='0xa9059cbb'+pad32(PAY_TO)+pad32((10000).toString(16));
     u.textContent='Confirm the 0.01 USDC payment in your wallet…';
     var tx=await p.request({method:'eth_sendTransaction',params:[{from:from,to:USDC,data:data,value:'0x0'}]});
+    ev('tx_submit');
     u.innerHTML='Payment sent (<a href="https://basescan.org/tx/'+tx+'" target="_blank" rel="noopener">'+tx.slice(0,12)+'…</a>). Verifying on-chain…';
     var notional=100;
     for(var i=0;i<12;i++){
@@ -8798,6 +8837,9 @@ app.post("/tg/webhook", async (c) => {
       `${tgEsc(out.reason || "")}\n` +
       `Verdict ${tgEsc(out.verdict)} · risk ${tgEsc(out.risk_score)}/100 · WETH-pool liquidity ${tgEsc(liq)}`,
       { reply_markup: { inline_keyboard: [[{ text: "Size it to your trade ↗", url: link }]] } });
+    // Count a TG verdict delivered (the surface's "view"-equivalent reach) so the
+    // funnel block shows Telegram's top-of-funnel alongside /check + /miniapp.
+    fireAndForget(c, trackFunnelEvent("tg", "view", makeUsageCounter(c.env)));
   } catch {
     await tgSend(token, chatId, "Couldn't read that token on-chain right now — try again in a moment.");
   }
