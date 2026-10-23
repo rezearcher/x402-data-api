@@ -9426,6 +9426,31 @@ async function grsgVerifyDnsHit(host: string, token: string): Promise<boolean> {
   }
 }
 
+// File-at-path alternative to the DNS TXT challenge: fetch the token from
+// https://<host>/.well-known/grsg-verify.txt. For operators who control the
+// server's HTTP surface but not its DNS zone (PaaS deploys, path-mounted MCP
+// servers, managed subdomains). Mirrors the ACME HTTP-01 / Search Console file
+// primitive. https only; redirects are NOT followed (the file must be served
+// directly, which is what proves control); response read is capped.
+async function grsgVerifyHttpHit(host: string, token: string): Promise<boolean> {
+  const url = `https://${host}/.well-known/grsg-verify.txt`;
+  try {
+    const ctl = new AbortController();
+    const to = setTimeout(() => ctl.abort(), 4000);
+    const res = await fetch(url, {
+      redirect: "manual",
+      signal: ctl.signal,
+      headers: { accept: "text/plain", "user-agent": "grsg-mcp-verify/1 (+https://x402-data-api.sigrunner.workers.dev/scan/verify)" },
+    });
+    clearTimeout(to);
+    if (!res.ok) return false;
+    const txt = (await res.text()).slice(0, 8192);
+    return txt.replace(/\s+/g, "").toLowerCase().includes(token.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
 async function grsgVerifyRecord(c: any, host: string): Promise<any | null> {
   try {
     const raw = await c.env.API_KEYS?.get("verify:" + host);
@@ -9446,6 +9471,7 @@ app.get("/scan/verify/status", async (c) => {
     host,
     verified: !!rec,
     verified_at: rec?.verified_at ?? null,
+    verify_method: rec?.verify_method ?? null,
     mcp_url: rec?.mcp_url ?? null,
     authz_version: rec?.authz_version ?? null,
   });
@@ -9487,20 +9513,47 @@ app.get("/scan/verify/check", async (c) => {
       { status: 400 },
     );
   }
-  const hit = await grsgVerifyDnsHit(host, token);
+  // Two interchangeable proofs of control: a DNS TXT record (default) or a file
+  // served at /.well-known/grsg-verify.txt. `method=dns|http` forces one; unset
+  // tries DNS first, then the HTTP file — so an operator who controls either the
+  // DNS zone OR the HTTP path can claim. Both prove the same thing: domain control.
+  const method = (c.req.query("method") || "").toLowerCase();
+  const fileUrl = `https://${host}/.well-known/grsg-verify.txt`;
+  let hit = false;
+  let verifyMethod = "";
+  if (method === "http" || method === "file") {
+    hit = await grsgVerifyHttpHit(host, token);
+    verifyMethod = "http-file";
+  } else if (method === "dns" || method === "txt") {
+    hit = await grsgVerifyDnsHit(host, token);
+    verifyMethod = "dns-txt";
+  } else {
+    if (await grsgVerifyDnsHit(host, token)) {
+      hit = true;
+      verifyMethod = "dns-txt";
+    } else if (await grsgVerifyHttpHit(host, token)) {
+      hit = true;
+      verifyMethod = "http-file";
+    }
+  }
   if (!hit) {
     return c.json({
       verified: false,
       pending: true,
       host,
+      methods: {
+        dns: { type: "TXT", name: "_grsg-verify." + host, value: token, how: "add this TXT record to your DNS zone" },
+        http: { url: fileUrl, contents: token, how: "serve a plain-text file at this URL containing the token" },
+      },
       add_record: { type: "TXT", name: "_grsg-verify." + host, value: token },
-      note: "TXT record not found yet. DNS can take a few minutes to propagate; add the record above then re-check.",
+      note: "No proof found yet. Add EITHER the DNS TXT record OR the /.well-known file above, then re-check. DNS can take a few minutes to propagate.",
     });
   }
   const rec = {
     host,
     mcp_url: /^https?:\/\//i.test(url) ? url : null,
     verified_at: new Date().toISOString(),
+    verify_method: verifyMethod,
     authz_accepted: true,
     authz_version: GRSG_VERIFY_AUTHZ_VERSION,
     ip: c.req.header("cf-connecting-ip") || null,
@@ -9521,6 +9574,7 @@ app.get("/scan/verify/check", async (c) => {
     verified: true,
     host,
     verified_at: rec.verified_at,
+    verify_method: verifyMethod,
     authz_version: GRSG_VERIFY_AUTHZ_VERSION,
     owner_badge_markdown: `[![MCP ownership verified](${ownerBadge})](${ORIGIN}/scan/report?url=${encodeURIComponent(url || "https://" + host)})`,
     scan_badge_markdown: scanBadge
@@ -9568,19 +9622,25 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
 </style>
 <body>
 <h1>Claim your MCP server</h1>
-<p class=sub>Prove you control the domain, then get a verified-owner badge and continuous monitoring. One-time DNS record &mdash; fully automated, no email, no account.</p>
+<p class=sub>Prove you control the domain, then get a verified-owner badge and continuous monitoring. One-time DNS record or served file &mdash; fully automated, no email, no account.</p>
 
 <label for=u>Your MCP server URL</label>
 <input id=u placeholder="https://your-server.example/mcp" autocomplete=off value="${u(input)}">
 <button id=load>Get my verification record</button>
 
 <div class=card id=inst${host ? "" : " style=display:none"}>
-  <h2 style="margin-top:0">1 &middot; Add this DNS record</h2>
-  <p class=muted style="margin:.2rem 0 0">Add a TXT record on <code id=host>${u(host || "")}</code>. This proves control of the domain &mdash; the standard ACME DNS-01 / Search Console primitive.</p>
+  <h2 style="margin-top:0">1 &middot; Prove you control <code id=host>${u(host || "")}</code></h2>
+  <p class=muted style="margin:.2rem 0 .6rem">Use <strong>either</strong> method &mdash; whichever you can edit. Both prove the same thing: control of the domain.</p>
+  <p style="margin:.4rem 0 .2rem;font-weight:600;font-size:.9rem">Option A &mdash; DNS TXT record <span class=muted style="font-weight:400">(standard ACME DNS-01 / Search Console primitive)</span></p>
   <table>
     <tr><td>Type</td><td><code>TXT</code></td></tr>
     <tr><td>Name / host</td><td><code id=rn>${u(recName)}</code></td></tr>
     <tr><td>Value</td><td><code id=rv>${u(token)}</code></td></tr>
+  </table>
+  <p style="margin:.9rem 0 .2rem;font-weight:600;font-size:.9rem">Option B &mdash; served file <span class=muted style="font-weight:400">(no DNS access needed &mdash; for PaaS / managed hosts)</span></p>
+  <table>
+    <tr><td>URL</td><td><code id=fu>${host ? u("https://" + host + "/.well-known/grsg-verify.txt") : "https://your-domain.example/.well-known/grsg-verify.txt"}</code></td></tr>
+    <tr><td>Contents</td><td><code id=fc>${u(token)}</code></td></tr>
   </table>
 
   <h2>2 &middot; Accept the authorization</h2>
@@ -9611,13 +9671,13 @@ if(chk)chk.onclick=async function(){
     var r=await fetch(ORIGIN+"/scan/verify/check?authorize=1&url="+encodeURIComponent(t));
     var j=await r.json();
     if(j.verified){
-      out.innerHTML="<strong style=\\"color:#16a34a\\">Verified ✓</strong> &mdash; "+j.host+" claimed."+
+      out.innerHTML="<strong style=\\"color:#16a34a\\">Verified ✓</strong> &mdash; "+j.host+" claimed"+(j.verify_method?" (via "+(j.verify_method==="http-file"?"served file":"DNS TXT")+")":"")+"."+
         "<div class=row style=\\"margin-top:.6rem\\"><strong style=font-size:.85rem>Owner badge</strong></div>"+
         "<pre>"+j.owner_badge_markdown+"</pre>"+
         (j.scan_badge_markdown?"<div class=row style=\\"margin-top:.6rem\\"><strong style=font-size:.85rem>Scan verdict badge</strong></div><pre>"+j.scan_badge_markdown+"</pre>":"")+
         "<p class=muted style=\\"margin:.7rem 0 0\\">"+j.monitor+"</p>";
     } else if(j.pending){
-      out.innerHTML="<strong style=\\"color:#ca8a04\\">Not found yet</strong> &mdash; add the TXT record above, then re-check. "+(j.note||"");
+      out.innerHTML="<strong style=\\"color:#ca8a04\\">Not found yet</strong> &mdash; add either proof above, then re-check. "+(j.note||"");
     } else {
       out.textContent=j.error||"Could not verify.";
     }
@@ -10855,6 +10915,27 @@ ${ctaBlock}${scriptBlock}`);
   const vClass = ({ clear: "clear", review: "review", block: "block" } as Record<string, string>)[v] || "unknown";
   const grade = mcpGrade(result.risk_score, result.findings.some((f) => f.severity === "critical"));
 
+  // A claimed server (owner proved domain control via DNS/file challenge) carries a
+  // visible ownership marker — its public report outranks an unclaimed scan and the
+  // badge is one the operator vouches for. Unclaimed reports advertise the claim path.
+  let ownerBlock = "";
+  const ownerHost = verifyHost(target);
+  const ownerRec = ownerHost ? await grsgVerifyRecord(c, ownerHost) : null;
+  if (ownerRec) {
+    const claimedAt = String(ownerRec.verified_at || "").slice(0, 19).replace("T", " ");
+    const via = ownerRec.verify_method === "http-file" ? "served-file" : "DNS";
+    ownerBlock = `<h2>Ownership</h2>
+<div class=card>
+  <div class=badge-row><img alt="ownership verified" src="https://img.shields.io/endpoint?url=${encodeURIComponent(ORIGIN + "/scan/verify/badge?domain=" + ownerHost)}&style=flat-square"></div>
+  <p class=summary style="margin:.5rem 0 0"><span class="pill clear">verified owner</span> &nbsp;The operator of <code>${esc(ownerHost)}</code> proved domain control (${esc(via)} challenge${claimedAt ? `, ${esc(claimedAt)} UTC` : ""}). This report is for a claimed server.</p>
+</div>`;
+  } else if (ownerHost) {
+    ownerBlock = `<h2>Ownership</h2>
+<div class=card>
+  <p class=summary style="margin:0"><span class="pill unknown">unclaimed</span> &nbsp;No one has proved control of <code>${esc(ownerHost)}</code>. If this is your server, <a href="/scan/verify?url=${encodeURIComponent(target)}">claim it</a> (one-time DNS record or served file) to add a verified-owner badge and continuous monitoring.</p>
+</div>`;
+  }
+
   // Point-in-time safety is only half the picture: a manifest that scans clear today can be
   // silently re-poisoned tomorrow. Dominion Observatory (dominionobservatory.com) watches MCP
   // tool manifests for drift over time and exposes a free, stable, unauthenticated read. We
@@ -10905,6 +10986,7 @@ ${ctaBlock}${scriptBlock}`);
     `<h1>${esc(host)}</h1>
 <p class=sub>MCP security report · <span class="pill ${vClass}">grade ${grade} · ${esc(v)}</span> · risk ${result.risk_score}/100 · ${result.tools_scanned} tool(s) · scanned ${esc(result.scanned_at)}</p>
 <p class=muted style="margin:-1rem 0 1.6rem;font-size:.82rem">Grade on the familiar A (best) – F (worst) scale, from our risk_score — the Grey Ridge Signals grade, not a third-party certification. A 0–9 · B 10–29 · C 30–49 · D 50–69 · F 70+ or any critical finding.</p>
+${ownerBlock}
 ${findingsBlock}
 ${driftBlock}
 ${badgeBlock}

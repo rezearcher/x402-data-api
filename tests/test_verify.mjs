@@ -53,6 +53,26 @@ function installDohStub(host, token, present) {
   };
 }
 
+// Combined stub: controls the DNS TXT answer AND the /.well-known file response
+// independently, so we can test each proof method and the fallback order.
+function installStub(host, token, { dns = false, file = false } = {}) {
+  globalThis.fetch = async (url) => {
+    const uStr = String(url);
+    if (uStr.includes("cloudflare-dns.com") && uStr.includes("_grsg-verify." + host)) {
+      return new Response(JSON.stringify({ Answer: dns ? [{ data: `"${token}"` }] : [] }), {
+        status: 200,
+        headers: { "content-type": "application/dns-json" },
+      });
+    }
+    if (uStr === `https://${host}/.well-known/grsg-verify.txt`) {
+      return file
+        ? new Response(token + "\n", { status: 200, headers: { "content-type": "text/plain" } })
+        : new Response("not found", { status: 404 });
+    }
+    throw new Error("unexpected fetch in verify test: " + uStr);
+  };
+}
+
 let passed = 0;
 function ok(cond, msg) {
   assert.ok(cond, msg);
@@ -111,6 +131,46 @@ assert.ok(/^grsg-verify=[0-9a-f]{40}$/.test(token), "token shape");
   ok(rec && rec.authz_accepted === true && rec.authz_version === "2026-10-23", "authorization artifact recorded");
   ok(rec.ip === "203.0.113.9" && rec.ua === "claim-test", "IP + UA recorded for recordkeeping");
   ok(rec.mcp_url === MCP_URL, "mcp_url recorded");
+}
+
+// 4b. HTTP file method: DNS absent, file present => verified via http-file.
+{
+  const kv = makeFakeKV();
+  installStub(HOST, token, { dns: false, file: true });
+  const res = await app.request("/scan/verify/check?authorize=1&url=" + encodeURIComponent(MCP_URL), {}, { API_KEYS: kv });
+  const j = await res.json();
+  ok(j.verified === true, "DNS absent + file present + fallback => verified");
+  ok(j.verify_method === "http-file", "verify_method reports http-file");
+  const rec = JSON.parse(kv.store.get("verify:" + HOST));
+  ok(rec.verify_method === "http-file", "http-file method recorded in KV");
+}
+
+// 4c. method=dns forces DNS only: file present but DNS absent => pending (no fallback).
+{
+  const kv = makeFakeKV();
+  installStub(HOST, token, { dns: false, file: true });
+  const res = await app.request("/scan/verify/check?authorize=1&method=dns&url=" + encodeURIComponent(MCP_URL), {}, { API_KEYS: kv });
+  const j = await res.json();
+  ok(j.verified === false && j.pending === true, "method=dns ignores the file proof");
+  ok(j.methods && j.methods.http.url === `https://${HOST}/.well-known/grsg-verify.txt`, "pending advertises both methods");
+}
+
+// 4d. method=http forces the file: DNS present but file absent => pending.
+{
+  const kv = makeFakeKV();
+  installStub(HOST, token, { dns: true, file: false });
+  const res = await app.request("/scan/verify/check?authorize=1&method=http&url=" + encodeURIComponent(MCP_URL), {}, { API_KEYS: kv });
+  const j = await res.json();
+  ok(j.verified === false && j.pending === true, "method=http ignores the DNS proof");
+}
+
+// 4e. fallback prefers DNS when both are present.
+{
+  const kv = makeFakeKV();
+  installStub(HOST, token, { dns: true, file: true });
+  const res = await app.request("/scan/verify/check?authorize=1&url=" + encodeURIComponent(MCP_URL), {}, { API_KEYS: kv });
+  const j = await res.json();
+  ok(j.verified === true && j.verify_method === "dns-txt", "fallback prefers DNS when both present");
 }
 
 // 5. status + ownership badge reflect a recorded verification.
