@@ -63,6 +63,10 @@ Headline: no high-severity exposure. Priority action is the **`sigrunner.com` em
 - **Lens:** the free scan reads only an MCP server's *published* `tools/list` (public metadata every client already receives) and never invokes a tool. To *claim* an asset — a verified-owner badge, continuous monitoring, drift alerts, the full report — a caller must complete an automated DNS-01-style domain-control challenge (`_grsg-verify.<host>` TXT) plus a versioned, IP/UA/timestamp-logged click-through authorization before any claim is recorded (`/scan/verify`, `/scan/verify/check`). This implements AUTHORIZATION_STANDARD Tier 1 end-to-end, headless.
 - **Evidence (live):** `check` without `authorize=1` returns `authorization_required`; a non-hostname target is rejected 400 (no challenge minted, SSRF-safe — DoH only queries the validated host's own TXT); challenge token is deterministic per host (security is DNS control, not token secrecy) and host-bound (no cross-domain replay). Mirrors Detectify/Probely/Astra ownership gating. Known gap: DNS-TXT is currently the only verification method (no HTML-meta/file-at-path fallback yet) — acceptable for domain-hosted MCP servers, tracked for a bare-host/IP fallback.
 
+### GR-2026-008 — Subscription-to-host binding & monitored-badge gate (Pass) — NEW this cycle
+- **Lens:** the paid "monitored" trust badge must go green *only* for a host whose owner (a) has proven domain control and (b) holds an active monitoring subscription — and must drop to grey the moment either lapses, so the public badge never asserts a trust state the customer is not paying for. Authorization integrity: a caller cannot buy monitoring for a server they have not verified.
+- **Evidence (live, commit `4d5ae75`):** `POST /stripe/create-checkout-session?host=<unverified>` is refused `400 ownership_not_verified` (no sub bound without prior DNS/file control). The sub is bound to the host via `client_reference_id` + `subscription_data.metadata.grsg_host` so both the first charge and every renewal invoice map back to it. `sub:<host>` is written only by a signature-verified webhook (`checkout.session.completed` / `invoice.paid` activate & extend; `customer.subscription.deleted` / `invoice.payment_failed` deactivate). `/scan/verify/badge?kind=monitored` is green only on verified-owner **AND** active sub (period + 3-day grace); a lapsed ownership proof (amber) takes precedence over any active sub; the free ownership badge is unchanged. Webhook HMAC verify, timestamp-freshness, and per-invoice idempotency (GR-2026-005 controls) are unchanged and still pass (usage suite 16/16). Known gap: push drift-alert *delivery* (email/webhook to the owner) is not yet built — the grey-badge-on-lapse is the current drift signal; tracked.
+
 ## 4. Remediation roadmap (priority order)
 
 1. **GR-2026-001** — `sigrunner.com` DMARC/SPF/DKIM (Medium; highest real risk) — once the op/CF token window clears.
@@ -72,7 +76,8 @@ Headline: no high-severity exposure. Priority action is the **`sigrunner.com` em
 ## 5. Retest & operational notes
 
 - GR-2026-003 retested and closed live this cycle.
-- GR-2026-007 added this cycle: authorization-before-scan control shipped + live-verified (commit `33b2b46`).
+- GR-2026-007 added: authorization-before-scan control shipped + live-verified (commit `33b2b46`).
+- GR-2026-008 added this cycle: subscription-to-host binding + monitored-badge gate shipped + live-verified (commit `4d5ae75`); checkout refuses an unverified host, badge green only on verified-owner + active sub.
 - GR-2026-001 remediation blocked this cycle by a transient 1Password rate-limit on the Cloudflare token read (ops dependency, not a target weakness); re-attempt next clear window.
 
 ## 6. Appendix — references
