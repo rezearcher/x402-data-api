@@ -327,16 +327,36 @@ def post_site(slug: str, title: str, description: str | None, md_body: str, publ
         return {"result": "dryrun", "channel": "site", "target": slug, "url": url, "html_chars": len(body_html)}
     env = dict(os.environ)
     if not env.get("CLOUDFLARE_API_TOKEN"):
-        # resolve the Workers/KV token from 1Password (op.env + op read in one shell, per the verified rail)
-        tok = subprocess.run(
-            ["bash", "-lc", "source ~/.config/greyridge/op.env 2>/dev/null; "
-             "op read op://Division/CF_WORKERS_TOKEN/credential 2>/dev/null"],
-            capture_output=True, text=True, timeout=60).stdout.strip()
+        # Resolve the Workers/KV token from 1Password, but CACHE it: hitting op on every
+        # publish burns the 1000/day cap and gets us rate-limited (the root cause of the
+        # /research 404s). A short-TTL 0600 cache means one op read serves many publishes,
+        # so the loop recovers the moment op has any budget and stops self-throttling.
+        import time as _tt
+        cache = Path.home() / ".hermes" / "data" / ".cf_workers_token"
+        ttl = 6 * 3600
+        tok = ""
+        try:
+            if cache.exists() and (_tt.time() - cache.stat().st_mtime) < ttl:
+                tok = cache.read_text().strip()
+        except Exception:
+            tok = ""
+        if not tok:
+            tok = subprocess.run(
+                ["bash", "-lc", "source ~/.config/greyridge/op.env 2>/dev/null; "
+                 "op read op://Division/CF_WORKERS_TOKEN/credential 2>/dev/null"],
+                capture_output=True, text=True, timeout=60).stdout.strip()
+            if tok:
+                try:
+                    cache.parent.mkdir(parents=True, exist_ok=True)
+                    cache.write_text(tok)
+                    cache.chmod(0o600)
+                except Exception:
+                    pass
         if tok:
             env["CLOUDFLARE_API_TOKEN"] = tok
         else:
             return {"result": "failed", "channel": "site", "target": slug, "url": url,
-                    "error": "no CLOUDFLARE_API_TOKEN and op read failed (1Password rate-limited?) — can't write site KV"}
+                    "error": "no CLOUDFLARE_API_TOKEN: op read failed (1Password rate-limited) and no fresh token cache — can't write site KV"}
     payload = json.dumps({"title": title, "description": description or title, "created": created, "html": body_html})
     index = json.dumps({"slug": slug, "title": title, "created": created})
     for key, val in [(f"research:{slug}", payload), (f"research:index:{slug}", index)]:
