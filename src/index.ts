@@ -8365,11 +8365,16 @@ const MINIAPP_EMBED = {
 const MINIAPP_EMBED_LEGACY = { ...MINIAPP_EMBED, button: { ...MINIAPP_EMBED.button, action: { ...MINIAPP_EMBED.button.action, type: "launch_frame" } } };
 
 // 3:2 (1200x800) branded card image for the cast embed. SVG keeps this zero-dep
-// and edge-renderable; Content-Type is image/svg+xml.
-app.get("/miniapp/card.svg", (c) => {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
-<rect width="1200" height="800" fill="#0d1117"/>
-<rect x="0" y="0" width="1200" height="12" fill="#0b5"/>
+// and edge-renderable; Content-Type is image/svg+xml. With a valid ?token= it
+// renders the live GO/HOLD/BLOCK verdict for that token so every cast of
+// /miniapp?token=0x… unfurls as the real decision (in-feed viral loop), not a
+// generic promo. No token / unverifiable → the generic promo card.
+const MINIAPP_CARD_WIDTH = 1200;
+const MINIAPP_CARD_HEIGHT = 800;
+function miniappCardWrap(inner: string): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${MINIAPP_CARD_WIDTH}" height="${MINIAPP_CARD_HEIGHT}" viewBox="0 0 ${MINIAPP_CARD_WIDTH} ${MINIAPP_CARD_HEIGHT}"><rect width="${MINIAPP_CARD_WIDTH}" height="${MINIAPP_CARD_HEIGHT}" fill="#0d1117"/>${inner}</svg>`;
+}
+const MINIAPP_CARD_GENERIC_INNER = `<rect x="0" y="0" width="1200" height="12" fill="#0b5"/>
 <text x="80" y="210" fill="#e6e6e6" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="92" font-weight="800">Base Token Gate</text>
 <text x="80" y="320" fill="#8b949e" font-family="system-ui,sans-serif" font-size="46" font-weight="500">Before you swap: is it a honeypot?</text>
 <g font-family="system-ui,sans-serif" font-weight="800" font-size="70">
@@ -8378,9 +8383,39 @@ app.get("/miniapp/card.svg", (c) => {
 <rect x="760" y="400" width="300" height="120" rx="18" fill="#3a1113"/><text x="910" y="480" fill="#f85149" text-anchor="middle">BLOCK</text>
 </g>
 <text x="80" y="640" fill="#e6e6e6" font-family="system-ui,sans-serif" font-size="40">One decision, sized to your trade — honeypot + sellability + liquidity.</text>
-<text x="80" y="710" fill="#8b949e" font-family="system-ui,sans-serif" font-size="34">Grey Ridge Signals · free check · tap to run it on any Base token</text>
-</svg>`;
-  return c.body(svg, 200, { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+<text x="80" y="710" fill="#8b949e" font-family="system-ui,sans-serif" font-size="34">Grey Ridge Signals · free check · tap to run it on any Base token</text>`;
+app.get("/miniapp/card.svg", async (c) => {
+  const svgHeaders = { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=300" };
+  const t = c.req.query("token") ?? "";
+  if (!/^0x[0-9a-fA-F]{40}$/.test(t)) return c.body(miniappCardWrap(MINIAPP_CARD_GENERIC_INNER), 200, svgHeaders);
+  try {
+    const g = await buildSwapGate(t, "buy", 1000);
+    const dec = String(g.decision || "").toLowerCase();
+    const label = dec === "go" ? "GO" : dec === "hold" ? "HOLD" : "BLOCK";
+    const color = dec === "go" ? "#3fb950" : dec === "hold" ? "#d29922" : "#f85149";
+    const bg = dec === "go" ? "#10311c" : dec === "hold" ? "#3a2f0b" : "#3a1113";
+    const meta = (g.token_meta || {}) as Record<string, unknown>;
+    const sym = svgEsc((meta.symbol as string) || `${t.slice(0, 6)}…${t.slice(-4)}`).slice(0, 18);
+    const score = typeof g.risk_score === "number" ? String(Math.round(g.risk_score)) : "—";
+    const liq = fmtUsd(g.liquidity_usd as number | null);
+    const reason = svgEsc(String(g.reason || "")).slice(0, 64);
+    const inner = `<rect x="0" y="0" width="1200" height="12" fill="${color}"/>
+<text x="80" y="130" fill="#8b949e" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="38" font-weight="600">Base Token Gate · pre-trade safety check</text>
+<text x="80" y="250" fill="#e6e6e6" font-family="system-ui,sans-serif" font-size="88" font-weight="800">${sym}</text>
+<rect x="80" y="310" width="440" height="160" rx="22" fill="${bg}"/>
+<text x="300" y="422" fill="${color}" font-family="system-ui,sans-serif" font-size="96" font-weight="800" text-anchor="middle">${label}</text>
+<g font-family="system-ui,sans-serif">
+<text x="580" y="360" fill="#8b949e" font-size="34" font-weight="600">Risk score</text>
+<text x="580" y="432" fill="#e6e6e6" font-size="64" font-weight="800">${svgEsc(score)}<tspan fill="#8b949e" font-size="36" font-weight="500">/100</tspan></text>
+<text x="880" y="360" fill="#8b949e" font-size="34" font-weight="600">WETH-pool liquidity</text>
+<text x="880" y="432" fill="#e6e6e6" font-size="64" font-weight="800">${svgEsc(liq)}</text>
+</g>
+<text x="80" y="560" fill="#c9d1d9" font-family="system-ui,sans-serif" font-size="40" font-weight="500">${reason}</text>
+<text x="80" y="720" fill="#8b949e" font-family="system-ui,sans-serif" font-size="32">Grey Ridge Signals · free honeypot + liquidity check · tap to check any Base token</text>`;
+    return c.body(miniappCardWrap(inner), 200, svgHeaders);
+  } catch {
+    return c.body(miniappCardWrap(MINIAPP_CARD_GENERIC_INNER), 200, svgHeaders);
+  }
 });
 
 // 512x512 branded PNG app icon for the Mini App manifest. Farcaster/Base catalog
@@ -8443,16 +8478,38 @@ app.get("/.well-known/farcaster.json", (c) => {
 
 // The mini app itself: interactive GO/HOLD/BLOCK gate over the free /gate/swap/preview,
 // with a native composeCast re-share and a paid upgrade (card for humans, x402 for agents).
-const MINIAPP_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+// Head is built per-request so a cast of /miniapp?token=0x… carries a token-
+// specific embed image (the live verdict card) and launch URL. Token is strictly
+// 0x-hex validated upstream; only the validated address goes into URL/attribute
+// context — token-derived strings (symbol/reason) live only inside the svgEsc'd
+// card SVG, never in these HTML attributes.
+function miniappEmbedFor(imageUrl: string, launchUrl: string) {
+  const embed = {
+    version: "1",
+    imageUrl,
+    button: {
+      title: "Check a Base token",
+      action: { type: "launch_miniapp", name: "Base Token Gate", url: launchUrl, splashImageUrl: `${MINIAPP_HOST}/miniapp/card.svg`, splashBackgroundColor: "#0d1117" },
+    },
+  };
+  const legacy = { ...embed, button: { ...embed.button, action: { ...embed.button.action, type: "launch_frame" } } };
+  return { embed, legacy };
+}
+function miniappHead(imageUrl: string, pageUrl: string, embedJson: string, embedLegacyJson: string): string {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Base Token Gate — honeypot check before you swap</title>
 <meta name="description" content="Paste a Base token address and get GO / HOLD / BLOCK before you swap — honeypot & sellability simulation, admin-control checks, and liquidity vs your trade size. Free.">
 <meta property="og:title" content="Base Token Gate — is this a honeypot?">
 <meta property="og:description" content="GO / HOLD / BLOCK before you swap on Base. Free honeypot + liquidity check.">
-<meta property="og:image" content="${MINIAPP_HOST}/miniapp/card.svg">
-<meta property="og:url" content="${MINIAPP_HOST}/miniapp">
-<meta name="fc:miniapp" content='${JSON.stringify(MINIAPP_EMBED)}'>
-<meta name="fc:frame" content='${JSON.stringify(MINIAPP_EMBED_LEGACY)}'>
-<style>body{max-width:40rem;margin:0 auto;padding:2rem 1.1rem;font:16px/1.5 system-ui,sans-serif;background:#0d1117;color:#e6e6e6}input{width:100%;padding:.8rem;font:inherit;border-radius:8px;border:1px solid #333;background:#161b22;color:inherit;box-sizing:border-box}button{margin-top:.6rem;padding:.75rem 1.2rem;font:inherit;font-weight:600;border:0;border-radius:8px;background:#0b5;color:#fff;cursor:pointer}button.alt{background:#21262d;color:#e6e6e6}#card{margin-top:1.4rem;padding:1.2rem;border-radius:12px;background:#161b22;display:none}.v{font-size:2.4rem;font-weight:800;letter-spacing:.02em}.go{color:#3fb950}.hold{color:#d29922}.block{color:#f85149}li{margin:.25rem 0}small,a{color:#8b949e}a{color:#58a6ff}.row{display:flex;gap:.5rem;flex-wrap:wrap}</style></head><body>
+<meta property="og:image" content="${imageUrl}">
+<meta property="og:url" content="${pageUrl}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="${imageUrl}">
+<meta name="fc:miniapp" content='${embedJson}'>
+<meta name="fc:frame" content='${embedLegacyJson}'>
+`;
+}
+const MINIAPP_BODY = `<style>body{max-width:40rem;margin:0 auto;padding:2rem 1.1rem;font:16px/1.5 system-ui,sans-serif;background:#0d1117;color:#e6e6e6}input{width:100%;padding:.8rem;font:inherit;border-radius:8px;border:1px solid #333;background:#161b22;color:inherit;box-sizing:border-box}button{margin-top:.6rem;padding:.75rem 1.2rem;font:inherit;font-weight:600;border:0;border-radius:8px;background:#0b5;color:#fff;cursor:pointer}button.alt{background:#21262d;color:#e6e6e6}#card{margin-top:1.4rem;padding:1.2rem;border-radius:12px;background:#161b22;display:none}.v{font-size:2.4rem;font-weight:800;letter-spacing:.02em}.go{color:#3fb950}.hold{color:#d29922}.block{color:#f85149}li{margin:.25rem 0}small,a{color:#8b949e}a{color:#58a6ff}.row{display:flex;gap:.5rem;flex-wrap:wrap}</style></head><body>
 <h1>Base Token Gate</h1><p>Paste a Base token address. We simulate a sell, scan owner controls, and size your trade against pool liquidity — one answer: <b>GO</b>, <b>HOLD</b> or <b>BLOCK</b>.</p>
 <input id="t" placeholder="0x… Base token address" autocomplete="off" autocapitalize="off" spellcheck="false">
 <div class="row"><button onclick="go()">Check token</button></div>
@@ -8564,7 +8621,16 @@ var UNLOCK='0.01';
 window.go=go;
 </script></body></html>`;
 
-app.get("/miniapp", (c) => c.html(MINIAPP_HTML));
+app.get("/miniapp", (c) => {
+  const t = c.req.query("token") ?? "";
+  const valid = /^0x[0-9a-fA-F]{40}$/.test(t);
+  const imageUrl = valid ? `${MINIAPP_HOST}/miniapp/card.svg?token=${t}` : `${MINIAPP_HOST}/miniapp/card.svg`;
+  const pageUrl = valid ? `${MINIAPP_HOST}/miniapp?token=${t}` : `${MINIAPP_HOST}/miniapp`;
+  const launchUrl = pageUrl;
+  const { embed, legacy } = miniappEmbedFor(imageUrl, launchUrl);
+  const head = miniappHead(imageUrl, pageUrl, JSON.stringify(embed), JSON.stringify(legacy));
+  return c.html(head + MINIAPP_BODY);
+});
 
 // Absolute, directly-quotable paid URL built from the live preview request: drop the "/preview"
 // segment and keep the caller's exact query (token, side, notional_usd). An agent can feed the
