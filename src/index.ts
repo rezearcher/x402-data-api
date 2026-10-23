@@ -8263,9 +8263,75 @@ app.get("/check", (c) => {
   return c.html(
     CHECK_HTML.replace(
       /<meta property="og:title"[^>]*>/,
-      `<meta property="og:title" content="Is ${short} a honeypot? Base Token Check"><meta property="og:url" content="https://x402-data-api.sigrunner.workers.dev/check?token=${t}">`,
+      `<meta property="og:title" content="Is ${short} a honeypot? Base Token Check"><meta property="og:url" content="https://x402-data-api.sigrunner.workers.dev/check?token=${t}"><meta property="og:image" content="https://x402-data-api.sigrunner.workers.dev/check/card.svg?token=${t}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:image" content="https://x402-data-api.sigrunner.workers.dev/check/card.svg?token=${t}">`,
     ),
   );
+});
+
+// ---------------------------------------------------------------------------
+// DYNAMIC SHARE CARD — every /check?token= link that is shared in Telegram /
+// Twitter / Discord / Farcaster now unfurls as a verdict card carrying the
+// actual GO/HOLD/BLOCK, the token symbol, risk score and pool liquidity. This
+// turns each share into an ad for the gate — the viral loop is builder-side and
+// zero-capital. The engine call is the FREE buildSwapGate (same path as the
+// public preview), so rendering a card never touches a paid route or our wallet.
+// Fails open to the generic branded card on any error / bad token.
+// ---------------------------------------------------------------------------
+const CARD_GENERIC_INNER = `<rect x="0" y="0" width="1200" height="12" fill="#0b5"/>
+<text x="80" y="200" fill="#e6e6e6" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="80" font-weight="800">Base Token Check</text>
+<text x="80" y="300" fill="#8b949e" font-family="system-ui,sans-serif" font-size="44" font-weight="500">Honeypot, tax &amp; rug-risk verdict in one paste</text>
+<g font-family="system-ui,sans-serif" font-weight="800" font-size="60">
+<rect x="80" y="380" width="280" height="110" rx="16" fill="#10311c"/><text x="220" y="452" fill="#3fb950" text-anchor="middle">GO</text>
+<rect x="400" y="380" width="280" height="110" rx="16" fill="#3a2f0b"/><text x="540" y="452" fill="#d29922" text-anchor="middle">HOLD</text>
+<rect x="720" y="380" width="280" height="110" rx="16" fill="#3a1113"/><text x="860" y="452" fill="#f85149" text-anchor="middle">BLOCK</text>
+</g>
+<text x="80" y="570" fill="#8b949e" font-family="system-ui,sans-serif" font-size="32">Grey Ridge Signals · free check · greyridgesignals.ai</text>`;
+
+function svgEsc(s: unknown): string {
+  return String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m] as string);
+}
+function fmtUsd(n: number | null | undefined): string {
+  if (n == null || !isFinite(n)) return "—";
+  if (n >= 1e9) return `$${(n / 1e9).toFixed(1)}B`;
+  if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `$${(n / 1e3).toFixed(1)}K`;
+  return `$${Math.round(n)}`;
+}
+function cardWrap(inner: string): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="#0d1117"/>${inner}</svg>`;
+}
+app.get("/check/card.svg", async (c) => {
+  const svgHeaders = { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=300" };
+  const t = c.req.query("token") ?? "";
+  if (!/^0x[0-9a-fA-F]{40}$/.test(t)) return c.body(cardWrap(CARD_GENERIC_INNER), 200, svgHeaders);
+  try {
+    const g = await buildSwapGate(t, "buy", 1000);
+    const dec = String(g.decision || "").toLowerCase();
+    const label = dec === "go" ? "GO" : dec === "hold" ? "HOLD" : "BLOCK";
+    const color = dec === "go" ? "#3fb950" : dec === "hold" ? "#d29922" : "#f85149";
+    const bg = dec === "go" ? "#10311c" : dec === "hold" ? "#3a2f0b" : "#3a1113";
+    const meta = (g.token_meta || {}) as Record<string, unknown>;
+    const sym = svgEsc((meta.symbol as string) || `${t.slice(0, 6)}…${t.slice(-4)}`).slice(0, 18);
+    const score = typeof g.risk_score === "number" ? String(Math.round(g.risk_score)) : "—";
+    const liq = fmtUsd(g.liquidity_usd as number | null);
+    const reason = svgEsc(String(g.reason || "")).slice(0, 72);
+    const inner = `<rect x="0" y="0" width="1200" height="12" fill="${color}"/>
+<text x="80" y="110" fill="#8b949e" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="34" font-weight="600">Base Token Check · pre-trade safety gate</text>
+<text x="80" y="210" fill="#e6e6e6" font-family="system-ui,sans-serif" font-size="78" font-weight="800">${sym}</text>
+<rect x="80" y="260" width="420" height="150" rx="20" fill="${bg}"/>
+<text x="290" y="362" fill="${color}" font-family="system-ui,sans-serif" font-size="92" font-weight="800" text-anchor="middle">${label}</text>
+<g font-family="system-ui,sans-serif">
+<text x="560" y="305" fill="#8b949e" font-size="32" font-weight="600">Risk score</text>
+<text x="560" y="372" fill="#e6e6e6" font-size="60" font-weight="800">${svgEsc(score)}<tspan fill="#8b949e" font-size="34" font-weight="500">/100</tspan></text>
+<text x="860" y="305" fill="#8b949e" font-size="32" font-weight="600">WETH-pool liquidity</text>
+<text x="860" y="372" fill="#e6e6e6" font-size="60" font-weight="800">${svgEsc(liq)}</text>
+</g>
+<text x="80" y="480" fill="#c9d1d9" font-family="system-ui,sans-serif" font-size="36" font-weight="500">${reason}</text>
+<text x="80" y="580" fill="#8b949e" font-family="system-ui,sans-serif" font-size="30">Grey Ridge Signals · free honeypot + liquidity check · greyridgesignals.ai</text>`;
+    return c.body(cardWrap(inner), 200, svgHeaders);
+  } catch {
+    return c.body(cardWrap(CARD_GENERIC_INNER), 200, svgHeaders);
+  }
 });
 
 // ---------------------------------------------------------------------------
