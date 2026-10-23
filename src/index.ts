@@ -8741,12 +8741,30 @@ function paidUrlFrom(c: any): string {
 // evaluating the preview has a zero-friction, paste-ready path to the paid call
 // (the exact paid URL for the token it just previewed + an x402 wiring snippet).
 // Strictly additive — preview data depth is unchanged.
-function upgradeCTA(paidUrl: string, price: string, adds: string) {
+function upgradeCTA(paidUrl: string, price: string, adds: string, extra?: Record<string, unknown>) {
   return {
     paid_url: paidUrl,
     price_usdc: price,
     adds,
+    ...(extra ?? {}),
     pay_with: `x402 (USDC on Base, settles inline): npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f("${paidUrl}"). Any x402 client works (@x402/fetch, Cloudflare withX402Client). Docs: https://api.greyridgesignals.ai/llms.txt`,
+  };
+}
+
+// The machine-readable reason an autonomous trading agent should spend $0.008
+// here: the free preview returns the GO/HOLD/BLOCK verdict + pool liquidity, but
+// the paid /gate/swap call adds the EXIT SIMULATION — the exact USD recoverable
+// (and lost to slippage) if you need to dump the position. For a loss-minimizing
+// agent about to commit `notional` USD, that bounds the downside of THIS trade
+// before it buys: a $0.008 call to avoid an unquantified rug loss. We describe
+// the paid output precisely but compute NO exit numbers in the free path, so the
+// teaser never leaks the gated value (it only names it, in the agent's terms).
+function paidSwapAdds(notional: number) {
+  return {
+    exit_simulation: `net USD you recover (and lose to slippage) selling $100 / $1k / $10k / $50k of this token into its measured Uniswap v3 WETH pool — bounds your worst-case loss on a rug or thin pool BEFORE you buy`,
+    for_this_trade: `the recovered-vs-lost USD and slippage % for your exact notional_usd=${notional}`,
+    trade_sizing: `max_safe_notional_usd (largest order under 2% price impact) + per-size impact tiers, so the agent can split or skip instead of eating slippage`,
+    why_pay: `$${(0.008).toFixed(3)} to quantify the downside of a $${notional} position — the free verdict says buy/avoid, the paid call says how much you can get back out`,
   };
 }
 
@@ -8797,8 +8815,14 @@ app.get("/gate/swap/preview", async (c) => {
     if (t.exhausted) { const pu = paidUrlFrom(c); return c.json({ error: "free real-token trial exhausted (3/day/IP) - this is NOT a result for the token you asked about", trial: { real_token_checks_left_today: 0 }, paid: pu, paid_url: pu, price_usdc: "0.008", pay_with: `x402: npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f("${pu}") - pays USDC on Base automatically. Docs: https://api.greyridgesignals.ai/llms.txt` }, { status: 429 }); }
     const pSide = c.req.query("side") === "sell" ? "sell" : "buy";
     const pNotional = Number(c.req.query("notional_usd") ?? "100");
-    const out = await buildSwapGate(t.token, pSide, Number.isFinite(pNotional) && pNotional > 0 ? pNotional : 100);
-    const swapUpgrade = upgradeCTA(paidUrlFrom(c), "0.008", "Unmetered, any Base ERC-20, sized to your trade via side & notional_usd (this free preview is capped at 3 real tokens/IP/day).");
+    const effNotional = Number.isFinite(pNotional) && pNotional > 0 ? pNotional : 100;
+    const out = await buildSwapGate(t.token, pSide, effNotional);
+    const swapUpgrade = upgradeCTA(
+      paidUrlFrom(c),
+      "0.008",
+      "Adds the EXIT SIMULATION (USD recoverable vs lost to slippage at $100/$1k/$10k/$50k and for your own notional) + trade sizing — the bounded-downside number this free verdict does not include. Unmetered, any Base ERC-20 (free preview is capped at 3 real tokens/IP/day).",
+      { paid_adds: paidSwapAdds(effNotional) },
+    );
     if (t.left !== null) return c.json({ ...out, trial: { real_token_checks_left_today: t.left }, paid_gate: { url: paidUrlFrom(c), price_usdc: "0.008" }, upgrade: swapUpgrade, note: t.left === 0 && t.token === previewToken(c.req.query("token")) ? "Free real-token trial exhausted for today (3/day/IP); showing demo token. Paid: GET /gate/swap?token=<0x…> ($0.008)." : `Free real-token trial (${t.left} left today). Paid: GET /gate/swap?token=<0x…>&side=buy|sell&notional_usd=<n> ($0.008).` });
     return c.json({ ...out, upgrade: swapUpgrade, note: "Free live sample (demo tokens via ?token=usdc|weth|cbbtc|aero|degen; default Base USDC, buy, $100) — full: GET /gate/swap?token=<0x…>&side=buy|sell&notional_usd=<n> ($0.008) for ANY Base ERC-20." });
   } catch (e) {
