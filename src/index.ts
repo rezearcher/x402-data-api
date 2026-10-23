@@ -8239,10 +8239,11 @@ var UNLOCK='0.01';
 function ev(e){try{fetch('/ev?s=check&e='+e,{method:'POST',keepalive:true}).catch(function(){})}catch(_){}}
 try{ev('view')}catch(_){}
 function unlockUI(t){
-  var h='<div class="row" style="margin-top:.9rem"><button id="unlk" style="background:#1f6feb">Unlock sized trade check - pay 0.01 USDC</button></div>'
+  var h='<div class="row" style="margin-top:.9rem"><button id="bpbtn" style="background:#0052ff">Pay 0.01 USDC with Base &mdash; one tap</button></div>'
+    +'<div class="row" style="margin-top:.4rem"><button id="unlk" style="background:#21262d;color:#8b949e;font-size:.9rem;padding:.5rem .9rem">Use another wallet instead</button></div>'
     +'<div id="ures" style="margin-top:.6rem"></div>'
-    +'<small>&#128274; Locked: max safe trade size + price impact at $100 / $1k / $10k / $50k + exit simulation (the net USD you actually recover selling now, after slippage), sized to the measured pool. One-off, no signup. Agents pay inline via x402 at <a href="/gate/swap">/gate/swap</a>.</small>';
-  setTimeout(function(){var b=document.getElementById('unlk');if(b)b.onclick=function(){ev('unlock_click');payUnlock(t)}},0);
+    +'<small>&#128274; Locked: max safe trade size + price impact at $100 / $1k / $10k / $50k + exit simulation (the net USD you actually recover selling now, after slippage), sized to the measured pool. One-off, no signup, gas-free. Agents pay inline via x402 at <a href="/gate/swap">/gate/swap</a>.</small>';
+  setTimeout(function(){var b=document.getElementById('bpbtn');if(b)b.onclick=function(){ev('unlock_click');payUnlockBase(t)};var m=document.getElementById('unlk');if(m)m.onclick=function(){ev('unlock_click');payUnlock(t)}},0);
   return h;
 }
 async function getProvider(){
@@ -8251,6 +8252,23 @@ async function getProvider(){
   return null;
 }
 function pad32(h){h=h.replace(/^0x/,'').toLowerCase();while(h.length<64)h='0'+h;return h}
+// One-tap, gas-free USDC via Base Pay (Base Account / Coinbase smart wallets).
+// pay() settles 0.01 USDC straight to PAY_TO and returns the on-chain tx hash as
+// id (0x+64hex); the SAME /gate/swap/unlock receipt check verifies it server-side.
+async function payUnlockBase(t){
+  var u=document.getElementById('ures');u.textContent='Opening Base Pay...';
+  ev('wallet_open');
+  try{
+    var m=await import('https://esm.sh/@base-org/account@2.5.13');
+    var res=await m.pay({amount:'0.01',to:PAY_TO,testnet:false});
+    var id=(res&&(res.id||res.transactionHash))||'';
+    ev('tx_submit');
+    if(!/^0x[0-9a-fA-F]{64}$/.test(id)){u.innerHTML='Base Pay did not return a transaction - try "Use another wallet instead".';return}
+    history.replaceState(null,'','?token='+t+'&tx='+id);
+    u.innerHTML='Paid with Base (<a href="https://basescan.org/tx/'+id+'" target="_blank" rel="noopener">'+id.slice(0,12)+'...</a>). Verifying on Base...';
+    await finishUnlock(t,id,u);
+  }catch(e){u.innerHTML='Base Pay unavailable: '+esc0(String(e&&e.message||e))+' - try "Use another wallet instead".'}
+}
 async function payUnlock(t){
   var u=document.getElementById('ures');u.textContent='Opening wallet...';
   ev('wallet_open');
@@ -8611,10 +8629,11 @@ var USDC='0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 function ev(e){try{fetch('/ev?s=miniapp&e='+e,{method:'POST',keepalive:true}).catch(function(){})}catch(_){}}
 try{ev('view')}catch(_){}
 function unlockUI(t){
-  var html='<div class="row" style="margin-top:.8rem"><button id="unlk">Unlock sized check — pay 0.01 USDC</button></div>'
+  var html='<div class="row" style="margin-top:.8rem"><button id="bpbtn" style="background:#0052ff">Pay 0.01 USDC with Base — one tap</button></div>'
+    +'<div class="row" style="margin-top:.4rem"><button id="unlk" style="background:#21262d;color:#8b949e;font-size:.9rem">Use another wallet instead</button></div>'
     +'<div id="ures" style="margin-top:.6rem"></div>'
-    +'<small>&#128274; Locked: max safe trade size + price impact at $100 / $1k / $10k / $50k + exit simulation (the net USD you actually recover selling now, after slippage), sized to the measured pool. One-off, no signup.</small>';
-  setTimeout(function(){var b=document.getElementById('unlk');if(b)b.onclick=function(){ev('unlock_click');payUnlock(t);};},0);
+    +'<small>&#128274; Locked: max safe trade size + price impact at $100 / $1k / $10k / $50k + exit simulation (the net USD you actually recover selling now, after slippage), sized to the measured pool. One-off, no signup, gas-free.</small>';
+  setTimeout(function(){var b=document.getElementById('bpbtn');if(b)b.onclick=function(){ev('unlock_click');payUnlockBase(t);};var m=document.getElementById('unlk');if(m)m.onclick=function(){ev('unlock_click');payUnlock(t);};},0);
   return html;
 }
 async function getProvider(){
@@ -8623,6 +8642,39 @@ async function getProvider(){
   return null;
 }
 function pad32(h){h=h.replace(/^0x/,'').toLowerCase();while(h.length<64)h='0'+h;return h;}
+async function verifyLoop(t,tx,u,notional){
+  for(var i=0;i<16;i++){
+    await new Promise(function(r){setTimeout(r,2500);});
+    var r=await fetch('/gate/swap/unlock?token='+t+'&notional_usd='+notional+'&tx='+tx);
+    if(r.status===202){u.textContent='Waiting for the transaction to confirm on Base…';continue;}
+    var j=await r.json();
+    if(r.ok){
+      var dec=String(j.decision||'').toUpperCase();
+      u.innerHTML='<div class="v '+esc(String(j.decision||'').toLowerCase())+'">'+esc(dec)+'</div>'
+        +'<p>Unlocked — paid 0.01 USDC. '+esc(j.reason||'')+'</p>'
+        +sizingHtml(j)
+        +'<ul><li>Flags: '+((j.flags||[]).map(esc).join('; ')||'none')+'</li></ul>';
+      return;
+    }
+    u.innerHTML='Verification: <b>'+esc(j.error||'failed')+'</b>';return;
+  }
+  u.textContent='Still confirming — your payment is on-chain; reload with &tx='+tx+' to finish unlock.';
+}
+// One-tap, gas-free USDC via Base Pay. Returns the on-chain tx hash as id; the
+// existing /gate/swap/unlock receipt check verifies it server-side (no new trust).
+async function payUnlockBase(t){
+  var u=document.getElementById('ures');u.textContent='Opening Base Pay…';
+  ev('wallet_open');
+  try{
+    var m=await import('https://esm.sh/@base-org/account@2.5.13');
+    var res=await m.pay({amount:'0.01',to:PAY_TO,testnet:false});
+    var id=(res&&(res.id||res.transactionHash))||'';
+    ev('tx_submit');
+    if(!/^0x[0-9a-fA-F]{64}$/.test(id)){u.innerHTML='Base Pay did not return a transaction — try "Use another wallet instead".';return;}
+    u.innerHTML='Paid with Base (<a href="https://basescan.org/tx/'+id+'" target="_blank" rel="noopener">'+id.slice(0,12)+'…</a>). Verifying on Base…';
+    await verifyLoop(t,id,u,100);
+  }catch(e){u.innerHTML='Base Pay unavailable: '+esc(String(e&&e.message||e))+' — try "Use another wallet instead".';}
+}
 async function payUnlock(t){
   var u=document.getElementById('ures');u.textContent='Opening wallet…';
   ev('wallet_open');
