@@ -9471,6 +9471,7 @@ app.get("/scan/mcp/badge", async (c) => {
 // older than it trigger a background re-check (badges self-heal on the next
 // read), and /scan/verify/revalidate forces one synchronously for cron/CI.
 const GRSG_VERIFY_REVALIDATE_MS = 12 * 3600 * 1000; // 12h
+const GRSG_PUBLIC_BASE = "https://x402-data-api.sigrunner.workers.dev";
 
 const GRSG_VERIFY_AUTHZ_VERSION = "2026-10-23";
 const GRSG_VERIFY_AUTHZ_TEXT =
@@ -9647,13 +9648,95 @@ async function grsgProofHit(host: string, token: string, recordedMethod?: string
   return null;
 }
 
+// --- Drift-alert delivery (the "continuous monitoring" the subscription pays for)
+// A monitoring subscriber registers a webhook; on a genuine monitored-state
+// transition (ownership proof lapses or is restored) we POST a signed JSON event
+// to it. Webhook delivery (not email) is the self-serve, zero-credential channel
+// the incumbents also offer (Snyk/Checkly/UptimeRobot): the owner points it at
+// their own endpoint, a Slack/Discord incoming webhook, or a PagerDuty relay.
+// SSRF-safe: https only, public dotted host, redirects not followed, short
+// timeout; HMAC-SHA256 signed so the receiver can trust the sender.
+async function grsgNotifySecret(): Promise<string> {
+  const b = new Uint8Array(24);
+  crypto.getRandomValues(b);
+  return [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+}
+
+async function grsgHmacHex(secret: string, body: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Validate an owner-supplied webhook URL. https only, public dotted host, and
+// never our own domain (no reflection loops). Returns the normalized URL or null.
+function grsgValidNotifyUrl(raw: string): string | null {
+  let u: URL;
+  try {
+    u = new URL((raw || "").trim());
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:") return null;
+  const h = u.hostname.toLowerCase();
+  if (!/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(h)) return null;
+  if (h === "localhost" || h.endsWith(".local")) return null;
+  if (h.endsWith("sigrunner.workers.dev") || h.endsWith("greyridgesignals.ai") || h.endsWith("greyridgesignals.com"))
+    return null;
+  return u.toString();
+}
+
+// POST a signed drift event to the host's registered webhook. Never throws;
+// returns whether the receiver accepted it (2xx). No-ops when no webhook is set.
+async function grsgSendDriftAlert(c: any, host: string, rec: any, event: string, detail: any): Promise<boolean> {
+  const notifyUrl = rec?.notify_url;
+  if (!notifyUrl) return false;
+  const payload: any = {
+    service: "grey-ridge-mcp-monitoring",
+    event, // "test" | "ownership_lapsed" | "ownership_restored"
+    host,
+    verify_method: rec?.verify_method ?? null,
+    occurred_at: new Date().toISOString(),
+    report_url: `${GRSG_PUBLIC_BASE}/scan/report?url=${encodeURIComponent("https://" + host)}`,
+    status_url: `${GRSG_PUBLIC_BASE}/scan/verify/status?url=${encodeURIComponent("https://" + host)}`,
+    ...detail,
+  };
+  const body = JSON.stringify(payload);
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    "user-agent": "grsg-mcp-monitoring/1 (+https://x402-data-api.sigrunner.workers.dev/scan/verify)",
+    "x-grsg-event": event,
+  };
+  if (rec?.notify_secret) headers["x-grsg-signature"] = "sha256=" + (await grsgHmacHex(rec.notify_secret, body));
+  try {
+    const ctl = new AbortController();
+    const to = setTimeout(() => ctl.abort(), 4000);
+    const res = await fetch(notifyUrl, { method: "POST", redirect: "manual", signal: ctl.signal, headers, body });
+    clearTimeout(to);
+    console.log(JSON.stringify({ event: "grsg_drift_alert", host, kind: event, status: res.status }));
+    return res.ok;
+  } catch (e) {
+    console.log(JSON.stringify({ event: "grsg_drift_alert_error", host, kind: event, error: (e as Error).message }));
+    return false;
+  }
+}
+
 // Re-verify a claimed record and persist the outcome. Keeps the original
 // first-claim time; records last_checked/last_ok; stamps revoked_at the first
-// time the proof lapses and clears it if control is re-established.
+// time the proof lapses and clears it if control is re-established. On a genuine
+// transition (verified<->lapsed) for a host with an active monitoring sub and a
+// registered webhook, fires the drift alert — this is the delivery the sub buys.
 async function grsgRevalidate(c: any, host: string, rec: any): Promise<any> {
   const token = await grsgVerifyToken(host);
   const method = await grsgProofHit(host, token, rec?.verify_method);
   const now = new Date().toISOString();
+  const prevVerified = rec?.last_ok !== false; // unknown/true both count as "was verified"
   const updated: any = { ...rec, last_checked: now };
   if (method) {
     updated.last_ok = true;
@@ -9668,6 +9751,31 @@ async function grsgRevalidate(c: any, host: string, rec: any): Promise<any> {
     await c.env.API_KEYS?.put("verify:" + host, JSON.stringify(updated));
   } catch {
     /* degrade-open: the in-memory outcome is still returned to the caller */
+  }
+  // Drift alert on a real transition only — and only while the host is actively
+  // monitored (the alert is a paid feature) and a webhook is on file. Awaited so
+  // the forcing path (cron/CI → /scan/verify/revalidate) reliably delivers;
+  // self-heal reads run this inside waitUntil, so the await is still free there.
+  const nowVerified = !!method;
+  if (prevVerified !== nowVerified && updated.notify_url) {
+    try {
+      const srec = await grsgSubRecord(c, host);
+      if (grsgSubActive(srec)) {
+        await grsgSendDriftAlert(
+          c,
+          host,
+          updated,
+          nowVerified ? "ownership_restored" : "ownership_lapsed",
+          {
+            previously: prevVerified ? "verified" : "lapsed",
+            now: nowVerified ? "verified" : "lapsed",
+            revoked_at: updated.revoked_at ?? null,
+          },
+        );
+      }
+    } catch {
+      /* alert delivery must never break revalidation */
+    }
   }
   return updated;
 }
@@ -9719,6 +9827,7 @@ app.get("/scan/verify/status", async (c) => {
     monitored,
     monitoring_active: grsgSubActive(srec),
     monitoring_period_end: srec?.current_period_end_ms ? new Date(srec.current_period_end_ms).toISOString() : null,
+    notify_configured: !!rec?.notify_url,
   });
 });
 
@@ -9782,6 +9891,111 @@ app.get("/scan/verify/revalidate", async (c) => {
     verified_at: updated.verified_at ?? null,
     last_checked: updated.last_checked ?? null,
     revoked_at: updated.revoked_at ?? null,
+    notify_configured: !!updated.notify_url,
+  });
+});
+
+// Register / remove a drift-alert webhook for a claimed host. Gated by LIVE
+// proof of control (re-run now), so only the operator who currently controls
+// the DNS zone / served file can bind or change the webhook — no stored secret,
+// mirrors how the claim itself is gated. On register we return a per-host HMAC
+// secret (once) and fire a signed `test` event so the owner confirms wiring.
+// POST /scan/verify/notify?url=<server>   body { notify_url, remove? }
+app.post("/scan/verify/notify", async (c) => {
+  const input = c.req.query("url") || c.req.query("domain") || "";
+  const host = verifyHost(input);
+  if (!host) return c.json({ error: "pass ?url=<mcp-server-url> or ?domain=<domain>" }, { status: 400 });
+  let bodyJson: any = {};
+  try {
+    bodyJson = await c.req.json();
+  } catch {
+    bodyJson = {};
+  }
+  const remove = bodyJson?.remove === true || c.req.query("remove") === "1";
+  const rec = await grsgVerifyRecord(c, host);
+  if (!rec) {
+    return c.json(
+      { error: "claim_required", host, how: `Claim ${host} first at /scan/verify?domain=${host} (prove DNS/file control), then register a webhook.` },
+      { status: 409 },
+    );
+  }
+  // Live proof-of-control gate — the operator must still control the host NOW.
+  const token = await grsgVerifyToken(host);
+  const method = await grsgProofHit(host, token, rec?.verify_method);
+  if (!method) {
+    return c.json(
+      { error: "control_not_proven", host, how: "Re-add the DNS TXT record or served file, then retry — webhook changes require current proof of control." },
+      { status: 403 },
+    );
+  }
+  if (remove) {
+    const updated: any = { ...rec };
+    delete updated.notify_url;
+    delete updated.notify_secret;
+    delete updated.notify_registered_at;
+    try {
+      await c.env.API_KEYS?.put("verify:" + host, JSON.stringify(updated));
+    } catch {
+      /* degrade-open */
+    }
+    return c.json({ host, notify_configured: false, removed: true });
+  }
+  const notifyUrl = grsgValidNotifyUrl(bodyJson?.notify_url || "");
+  if (!notifyUrl) {
+    return c.json(
+      { error: "invalid_notify_url", how: "Provide an https webhook URL on a public host (a Slack/Discord incoming webhook, PagerDuty, or your own endpoint)." },
+      { status: 400 },
+    );
+  }
+  const secret = rec.notify_secret || (await grsgNotifySecret());
+  const updated: any = {
+    ...rec,
+    notify_url: notifyUrl,
+    notify_secret: secret,
+    notify_registered_at: new Date().toISOString(),
+  };
+  try {
+    await c.env.API_KEYS?.put("verify:" + host, JSON.stringify(updated));
+  } catch {
+    /* degrade-open */
+  }
+  const srec = await grsgSubRecord(c, host);
+  // Fire a signed test event so the owner can confirm the wiring + signature now.
+  const testDelivered = await grsgSendDriftAlert(c, host, updated, "test", {
+    note: "Grey Ridge monitoring webhook registered. While your subscription is active you will receive ownership_lapsed / ownership_restored events here.",
+  });
+  return c.json({
+    host,
+    notify_configured: true,
+    notify_url: notifyUrl,
+    notify_secret: secret,
+    signature_scheme: "HMAC-SHA256 hex over the raw request body, sent as header X-GRSG-Signature: sha256=<hex>; event type is in X-GRSG-Event.",
+    test_delivered: testDelivered,
+    monitoring_active: grsgSubActive(srec),
+    note: grsgSubActive(srec)
+      ? "Monitoring is active — drift alerts will be delivered."
+      : "Webhook stored. Alerts deliver only while a monitoring subscription is active for this host (start one at /stripe/create-checkout-session?host=" + host + ").",
+  });
+});
+
+// Non-secret status of a host's webhook registration (unauthenticated read).
+app.get("/scan/verify/notify", async (c) => {
+  const input = c.req.query("url") || c.req.query("domain") || "";
+  const host = verifyHost(input);
+  if (!host) return c.json({ error: "pass ?url=<mcp-server-url> or ?domain=<domain>" }, { status: 400 });
+  const rec = await grsgVerifyRecord(c, host);
+  let notifyUrlHost: string | null = null;
+  try {
+    notifyUrlHost = rec?.notify_url ? new URL(rec.notify_url).host : null;
+  } catch {
+    notifyUrlHost = null;
+  }
+  return c.json({
+    host,
+    claimed: !!rec,
+    notify_configured: !!rec?.notify_url,
+    notify_url_host: notifyUrlHost,
+    notify_registered_at: rec?.notify_registered_at ?? null,
   });
 });
 
@@ -9885,6 +10099,11 @@ app.get("/scan/verify/check", async (c) => {
     monitored_badge_markdown: `[![MCP security: monitored](https://img.shields.io/endpoint?url=${encodeURIComponent(ORIGIN + "/scan/verify/badge?kind=monitored&domain=" + host)}&style=flat-square)](${ORIGIN}/scan/report?url=${encodeURIComponent(url || "https://" + host)})`,
     subscribe_url: `${ORIGIN}/stripe/create-checkout-session?host=${encodeURIComponent(host)}`,
     monitor: `To turn the badge green and keep it live with drift alerts + the full auditor-grade report, start monitoring for this host: POST ${ORIGIN}/stripe/create-checkout-session?host=${host} ($9.99/mo). The badge goes grey if the subscription lapses.`,
+    // Drift-alert delivery: register an https webhook (Slack/Discord/PagerDuty or
+    // your own). Gated by live proof of control; we return an HMAC secret once and
+    // POST a signed test event. Alerts fire on ownership lapse/restore while the
+    // monitoring subscription is active.
+    alerts_webhook_setup: `curl -X POST "${ORIGIN}/scan/verify/notify?domain=${host}" -H 'content-type: application/json' -d '{"notify_url":"https://your-endpoint.example/grsg-hook"}'`,
   });
 });
 
@@ -9981,6 +10200,7 @@ if(chk)chk.onclick=async function(){
         (j.scan_badge_markdown?"<div class=row style=\\"margin-top:.6rem\\"><strong style=font-size:.85rem>Scan verdict badge</strong></div><pre>"+j.scan_badge_markdown+"</pre>":"")+
         (j.monitored_badge_markdown?"<div class=row style=\\"margin-top:.9rem\\"><strong style=font-size:.85rem>Monitored badge</strong> <span class=muted style=font-size:.8rem>(grey until you start monitoring)</span></div><pre>"+j.monitored_badge_markdown+"</pre>":"")+
         "<p class=muted style=\\"margin:.7rem 0 .4rem\\">"+j.monitor+"</p>"+
+        (j.alerts_webhook_setup?"<div class=row style=\\"margin-top:.6rem\\"><strong style=font-size:.85rem>Drift-alert webhook</strong> <span class=muted style=font-size:.8rem>(Slack/Discord/PagerDuty or your own; HMAC-signed)</span></div><pre>"+j.alerts_webhook_setup.replace(/</g,"&lt;")+"</pre>":"")+
         (j.subscribe_url?"<button id=sub style=\\"margin-top:.2rem\\">Start monitoring — $9.99/mo</button>":"");
       var sb=document.getElementById("sub");
       if(sb)sb.onclick=async function(){sb.disabled=true;sb.textContent="Opening checkout…";try{var sr=await fetch(j.subscribe_url,{method:"POST"});var sj=await sr.json();if(sj.url){location.href=sj.url;}else{sb.disabled=false;sb.textContent="Start monitoring — $9.99/mo";alert(sj.error||"Checkout unavailable");}}catch(e){sb.disabled=false;sb.textContent="Start monitoring — $9.99/mo";alert("Network error");}};

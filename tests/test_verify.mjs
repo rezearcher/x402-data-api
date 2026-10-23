@@ -346,4 +346,188 @@ assert.ok(/^grsg-verify=[0-9a-f]{40}$/.test(token), "token shape");
   ok(j.color === "brightgreen", "checkout (active, no period) => green");
 }
 
+// --- Drift-alert webhook delivery (the paid "continuous monitoring" promise) ---
+const NOTIFY_URL = "https://hook.example/grsg";
+
+// Stub that proves control (dns/file) AND captures POSTs to the webhook host.
+function installNotifyStub(host, token, { dns = true, file = false, webhookStatus = 200 } = {}) {
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const uStr = String(url);
+    if (uStr.includes("cloudflare-dns.com") && uStr.includes("_grsg-verify." + host)) {
+      return new Response(JSON.stringify({ Answer: dns ? [{ data: `"${token}"` }] : [] }), {
+        status: 200,
+        headers: { "content-type": "application/dns-json" },
+      });
+    }
+    if (uStr === `https://${host}/.well-known/grsg-verify.txt`) {
+      return file
+        ? new Response(token + "\n", { status: 200, headers: { "content-type": "text/plain" } })
+        : new Response("not found", { status: 404 });
+    }
+    if (uStr === NOTIFY_URL) {
+      calls.push({ method: init.method, headers: init.headers || {}, body: init.body });
+      return new Response("ok", { status: webhookStatus });
+    }
+    throw new Error("unexpected fetch in notify test: " + uStr);
+  };
+  return calls;
+}
+
+async function hmacHex(secret, body) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// 23. notify register on an UNCLAIMED host => 409 claim_required.
+{
+  const kv = makeFakeKV();
+  installNotifyStub(HOST, token, {});
+  const res = await app.request(
+    "/scan/verify/notify?domain=" + HOST,
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ notify_url: NOTIFY_URL }) },
+    { API_KEYS: kv },
+  );
+  const j = await res.json();
+  ok(res.status === 409 && j.error === "claim_required", "notify on unclaimed host => 409");
+}
+
+// 24. register webhook on a claimed, still-controlled host => configured, secret
+//     returned, and a signed `test` event delivered with a valid HMAC signature.
+{
+  const kv = makeFakeKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, last_ok: true, verify_method: "dns-txt" }));
+  const calls = installNotifyStub(HOST, token, { dns: true });
+  const res = await app.request(
+    "/scan/verify/notify?domain=" + HOST,
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ notify_url: NOTIFY_URL }) },
+    { API_KEYS: kv },
+  );
+  const j = await res.json();
+  ok(res.status === 200 && j.notify_configured === true, "register => notify_configured true");
+  ok(typeof j.notify_secret === "string" && j.notify_secret.length >= 32, "returns an HMAC secret once");
+  ok(j.test_delivered === true && calls.length === 1, "a test event was delivered to the webhook");
+  const sent = calls[0];
+  const payload = JSON.parse(sent.body);
+  ok(payload.event === "test" && payload.host === HOST, "test payload shape");
+  const wantSig = "sha256=" + (await hmacHex(j.notify_secret, sent.body));
+  ok(sent.headers["x-grsg-signature"] === wantSig, "test event is HMAC-signed over the raw body");
+  const rec = JSON.parse(kv.store.get("verify:" + HOST));
+  ok(rec.notify_url === NOTIFY_URL && rec.notify_secret === j.notify_secret, "webhook persisted to KV");
+}
+
+// 25. invalid webhook URL (http, or our own domain) => 400, nothing stored.
+{
+  const kv = makeFakeKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, last_ok: true, verify_method: "dns-txt" }));
+  installNotifyStub(HOST, token, { dns: true });
+  for (const bad of ["http://hook.example/x", "https://x402-data-api.sigrunner.workers.dev/hook"]) {
+    const res = await app.request(
+      "/scan/verify/notify?domain=" + HOST,
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ notify_url: bad }) },
+      { API_KEYS: kv },
+    );
+    const j = await res.json();
+    ok(res.status === 400 && j.error === "invalid_notify_url", "rejects " + bad);
+  }
+  ok(!JSON.parse(kv.store.get("verify:" + HOST)).notify_url, "no webhook stored on invalid url");
+}
+
+// 26. control no longer provable => 403 control_not_proven (can't change webhook).
+{
+  const kv = makeFakeKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, last_ok: true, verify_method: "dns-txt" }));
+  installNotifyStub(HOST, token, { dns: false, file: false });
+  const res = await app.request(
+    "/scan/verify/notify?domain=" + HOST,
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ notify_url: NOTIFY_URL }) },
+    { API_KEYS: kv },
+  );
+  const j = await res.json();
+  ok(res.status === 403 && j.error === "control_not_proven", "lost control => 403");
+}
+
+// 27. remove the webhook => notify_configured false, fields cleared.
+{
+  const kv = makeFakeKV();
+  kv.store.set(
+    "verify:" + HOST,
+    JSON.stringify({ host: HOST, last_ok: true, verify_method: "dns-txt", notify_url: NOTIFY_URL, notify_secret: "abc" }),
+  );
+  installNotifyStub(HOST, token, { dns: true });
+  const res = await app.request(
+    "/scan/verify/notify?domain=" + HOST,
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ remove: true }) },
+    { API_KEYS: kv },
+  );
+  const j = await res.json();
+  ok(res.status === 200 && j.removed === true && j.notify_configured === false, "remove clears the webhook");
+  ok(!JSON.parse(kv.store.get("verify:" + HOST)).notify_url, "notify_url deleted from KV");
+}
+
+// 28. DRIFT ALERT: revalidate on a monitored host whose proof lapsed fires a
+//     signed ownership_lapsed event.
+{
+  const kv = makeFakeKV();
+  kv.store.set(
+    "verify:" + HOST,
+    JSON.stringify({ host: HOST, last_ok: true, verify_method: "dns-txt", notify_url: NOTIFY_URL, notify_secret: "s3cr3t" }),
+  );
+  kv.store.set("sub:" + HOST, JSON.stringify({ host: HOST, active: true, status: "active" }));
+  const calls = installNotifyStub(HOST, token, { dns: false, file: false }); // proof gone
+  const res = await app.request("/scan/verify/revalidate?domain=" + HOST, {}, { API_KEYS: kv });
+  const j = await res.json();
+  ok(j.lapsed === true, "revalidate reports lapsed");
+  ok(calls.length === 1, "one drift alert delivered on the transition");
+  const payload = JSON.parse(calls[0].body);
+  ok(payload.event === "ownership_lapsed" && payload.host === HOST, "event is ownership_lapsed");
+  const wantSig = "sha256=" + (await hmacHex("s3cr3t", calls[0].body));
+  ok(calls[0].headers["x-grsg-signature"] === wantSig, "drift alert is HMAC-signed");
+}
+
+// 29. NO alert when there is no active subscription (alerts are a paid feature).
+{
+  const kv = makeFakeKV();
+  kv.store.set(
+    "verify:" + HOST,
+    JSON.stringify({ host: HOST, last_ok: true, verify_method: "dns-txt", notify_url: NOTIFY_URL, notify_secret: "s" }),
+  );
+  // no sub:<host> record at all
+  const calls = installNotifyStub(HOST, token, { dns: false, file: false });
+  await app.request("/scan/verify/revalidate?domain=" + HOST, {}, { API_KEYS: kv });
+  ok(calls.length === 0, "no sub => no drift alert delivered");
+}
+
+// 30. NO duplicate alert when the state does NOT change (still verified).
+{
+  const kv = makeFakeKV();
+  kv.store.set(
+    "verify:" + HOST,
+    JSON.stringify({ host: HOST, last_ok: true, verify_method: "dns-txt", notify_url: NOTIFY_URL, notify_secret: "s" }),
+  );
+  kv.store.set("sub:" + HOST, JSON.stringify({ host: HOST, active: true, status: "active" }));
+  const calls = installNotifyStub(HOST, token, { dns: true }); // still proven
+  await app.request("/scan/verify/revalidate?domain=" + HOST, {}, { API_KEYS: kv });
+  ok(calls.length === 0, "no transition => no alert");
+}
+
+// 31. GET /scan/verify/notify => non-secret registration status (no secret leak).
+{
+  const kv = makeFakeKV();
+  kv.store.set(
+    "verify:" + HOST,
+    JSON.stringify({ host: HOST, last_ok: true, notify_url: NOTIFY_URL, notify_secret: "s", notify_registered_at: "2026-10-23T00:00:00Z" }),
+  );
+  const j = await (await app.request("/scan/verify/notify?domain=" + HOST, {}, { API_KEYS: kv })).json();
+  ok(j.notify_configured === true && j.notify_url_host === "hook.example", "status shows configured + host");
+  ok(j.notify_secret === undefined && j.notify_url === undefined, "GET never leaks secret or full url");
+}
+
 console.log(`verify tests: ${passed}/${passed} passed`);
