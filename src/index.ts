@@ -3986,9 +3986,13 @@ app.post("/stripe/webhook", async (c) => {
     const body = await c.req.text();
     // Verify webhook signature — using Node crypto polyfill on CF Workers
     const enc = new TextEncoder();
+    // We recompute the expected HMAC with crypto.subtle.sign() and compare, so
+    // the key usage must be ["sign"] not ["verify"]. CF Workers' WebCrypto was
+    // lenient about the mismatch; Node's stricter WebCrypto (and the spec)
+    // rejects signing with a verify-only key ("Unable to use this key to sign").
     const key = await crypto.subtle.importKey(
       "raw", enc.encode(c.env.STRIPE_WEBHOOK_SECRET),
-      { name: "HMAC", hash: "SHA-256" }, false, ["verify"],
+      { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
     );
     const parts = sig.split(",");
     let sigValue = "", timeValue = "";

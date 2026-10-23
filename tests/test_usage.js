@@ -32,6 +32,7 @@
  */
 import assert from "node:assert";
 import { register } from "node:module";
+import { createHmac } from "node:crypto";
 
 // Shim the virtual `cloudflare:workers` module BEFORE importing src/index.ts
 // (the import itself is dynamic, below, so the hook is live by then).
@@ -758,11 +759,91 @@ async function main() {
     testInternalCdpEndpointsGated,
     testFiatSettlementTwoKeyBumpAndAggregate,
     testFiatSettlementDegradesOpenAndNoCounter,
+    testStripeWebhookRecordsFiatEndToEnd,
   ];
 
 // ---------------------------------------------------------------------------
-// Line-B fiat (Stripe) settled-revenue oracle.
+// Line-B fiat (Stripe) settled-revenue oracle — end-to-end through the real
+// /stripe/webhook handler (signed payload, fake bindings; no live secret).
 // ---------------------------------------------------------------------------
+async function postSignedStripeEvent(app, ENV, secret, eventObj) {
+  const body = JSON.stringify(eventObj);
+  const t = Math.floor(Date.now() / 1000);
+  const v1 = createHmac("sha256", secret).update(`${t}.${body}`).digest("hex");
+  return app.request(
+    "/stripe/webhook",
+    { method: "POST", headers: { "stripe-signature": `t=${t},v1=${v1}` }, body },
+    ENV,
+  );
+}
+
+async function testStripeWebhookRecordsFiatEndToEnd() {
+  const secret = "whsec_test_" + "0".repeat(24);
+  const doStore = new Map();
+  const ENV = {
+    ...BASE_ENV,
+    STRIPE_WEBHOOK_SECRET: secret,
+    STRIPE_API_KEY: "sk_test_dummy",
+    API_KEYS: makeFakeKV(),
+    USAGE_COUNTER: makeFakeDONamespace(doStore),
+  };
+
+  // 1) checkout.session.completed (paid, $9.99) -> checkout_paid count+cents.
+  const checkout = {
+    type: "checkout.session.completed",
+    data: { object: { id: "cs_test_abc", payment_status: "paid", amount_total: 999, customer_details: { email: "a@b.co" } } },
+  };
+  let r = await postSignedStripeEvent(app, ENV, secret, checkout);
+  assert.strictEqual(r.status, 200, "signed checkout webhook accepted");
+  await new Promise((res) => setTimeout(res, 15));
+  assert.strictEqual(doStore.get("fiat:count:checkout_paid"), 1, "checkout_paid counted once");
+  assert.strictEqual(doStore.get("fiat:cents:checkout_paid"), 999, "checkout cents = amount_total");
+
+  // 2) Replay the SAME session id -> dedup, no double count.
+  r = await postSignedStripeEvent(app, ENV, secret, checkout);
+  assert.strictEqual(r.status, 200);
+  await new Promise((res) => setTimeout(res, 15));
+  assert.strictEqual(doStore.get("fiat:count:checkout_paid"), 1, "replay must not double-count checkout");
+
+  // 3) invoice.paid ($9.99 renewal) -> invoice_paid = the REPEAT dollar.
+  const invoice = { type: "invoice.paid", data: { object: { id: "in_test_xyz", amount_paid: 999 } } };
+  r = await postSignedStripeEvent(app, ENV, secret, invoice);
+  assert.strictEqual(r.status, 200, "signed invoice webhook accepted");
+  await new Promise((res) => setTimeout(res, 15));
+  assert.strictEqual(doStore.get("fiat:count:invoice_paid"), 1, "invoice_paid counted once");
+  assert.strictEqual(doStore.get("fiat:cents:invoice_paid"), 999, "invoice cents = amount_paid");
+
+  // 4) Replay the SAME invoice id -> dedup, no double count.
+  r = await postSignedStripeEvent(app, ENV, secret, invoice);
+  assert.strictEqual(r.status, 200);
+  await new Promise((res) => setTimeout(res, 15));
+  assert.strictEqual(doStore.get("fiat:count:invoice_paid"), 1, "replay must not double-count invoice");
+
+  // 5) getFiatMetrics aggregates what /metrics would surface.
+  const m = await getFiatMetrics(makeFakeCounterFrom(doStore));
+  assert.strictEqual(m.checkout_paid.gross_usd, 9.99);
+  assert.strictEqual(m.invoice_paid.gross_usd, 9.99);
+  assert.strictEqual(m.total_gross_usd, 19.98);
+
+  // Negative: a bad signature must be rejected and write NOTHING.
+  const before = doStore.size;
+  const bad = await app.request(
+    "/stripe/webhook",
+    { method: "POST", headers: { "stripe-signature": "t=9999999999,v1=deadbeef" }, body: JSON.stringify(checkout) },
+    ENV,
+  );
+  assert.strictEqual(bad.status, 401, "bad signature rejected");
+  await new Promise((res) => setTimeout(res, 15));
+  assert.strictEqual(doStore.size, before, "a rejected webhook writes no fiat counters");
+
+  console.log("  ok: /stripe/webhook records checkout_paid + invoice_paid once each (idempotent), bad sig writes nothing");
+}
+
+// A plain UsageCounterLike over an existing doStore map, for reading back.
+function makeFakeCounterFrom(store) {
+  return { async apply() {}, async snapshot() { return Object.fromEntries(store); } };
+}
+
 async function testFiatSettlementTwoKeyBumpAndAggregate() {
   const counter = makeFakeCounter();
   // Two signups ($9.99 + $9.99) + one renewal ($9.99). Amounts in cents.
