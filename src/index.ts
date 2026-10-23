@@ -8045,6 +8045,34 @@ async function verifyUsdcPaymentToPayTo(
   return { ok: false, error: `no USDC transfer of >= ${minUsdc} USDC to the receiving wallet found in this transaction` };
 }
 
+// Paid-only sizing analytics: the incremental, decision-grade output the $0.01
+// unlock adds OVER the free report (which already shows the honeypot verdict and
+// pool liquidity). Pure math over the MEASURED WETH-pool liquidity — no extra RPC,
+// no added latency — so the paid result answers "how big can I trade this, and
+// what will each size cost me in slippage?", which the free teaser does not. Kept
+// out of buildSwapGate on purpose: that path is shared with the FREE preview.
+function sizedExecution(liquidityUsd: number | null, notional: number) {
+  if (liquidityUsd == null || liquidityUsd <= 0) {
+    return {
+      basis: "no verifiable Uniswap v3 WETH-pool liquidity — trade sizing unavailable for this token",
+      max_safe_notional_usd: null as number | null,
+      this_trade: null,
+      impact_tiers: null as unknown,
+    };
+  }
+  const impactAt = (n: number) => Math.round((n / liquidityUsd) * 100 * 100) / 100;
+  const tiers = [100, 1000, 10000, 50000].map((n) => ({ notional_usd: n, price_impact_pct: impactAt(n) }));
+  // Largest order that stays under 2% of pool depth (our HOLD threshold); split anything larger.
+  const maxSafe = Math.max(0, Math.round(liquidityUsd * 0.02));
+  return {
+    basis: "approx: price impact = trade notional / measured Uniswap v3 WETH-pool liquidity",
+    max_safe_notional_usd: maxSafe,
+    sizing_note: `Keep each order under ~$${maxSafe.toLocaleString()} to stay below 2% price impact on this pool; split larger trades.`,
+    this_trade: { notional_usd: notional, price_impact_pct: impactAt(notional) },
+    impact_tiers: tiers,
+  };
+}
+
 app.get("/gate/swap/unlock", async (c) => {
   const token = tokenQ(c);
   if (!token || !ADDR_RE.test(token)) return c.json({ error: "token query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
@@ -8079,8 +8107,9 @@ app.get("/gate/swap/unlock", async (c) => {
   }
   try {
     const out = await buildSwapGate(token, side as "buy" | "sell", notional);
+    const sizing = sizedExecution(out.liquidity_usd, notional);
     fireAndForget(c, trackPaidRequest("GET /gate/swap", "x402-browser-unlock", makeUsageCounter(c.env)));
-    return c.json({ ...out, paid: { tx, payer: v.from, amount_usdc: v.amount_usdc, basescan: `https://basescan.org/tx/${tx}` } });
+    return c.json({ ...out, sizing, paid: { tx, payer: v.from, amount_usdc: v.amount_usdc, basescan: `https://basescan.org/tx/${tx}` } });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
@@ -8125,6 +8154,13 @@ const m=j.token_meta||{},s=j.security||{},l=j.liquidity||{};const esc=x=>String(
 c.innerHTML='<div class="v '+esc(j.verdict)+'">'+esc(j.verdict)+'</div><div>'+esc(m.symbol||'?')+' · '+esc(m.name||'')+' · risk '+esc(j.risk_score)+'/100</div><ul>'
 +'<li>Honeypot: '+(s.isHoneypot?'YES':'no')+' (sim: '+esc(s.simStatus)+')</li><li>Can mint: '+(s.canMint?'yes':'no')+' · Can pause: '+(s.canPause?'yes':'no')+' · Blacklist: '+(s.hasBlacklist?'yes':'no')+'</li><li>Upgradeable proxy: '+(s.upgradeableProxy?'yes':'no')+' · Owner renounced: '+(s.ownerRenounced?'yes':'no')+'</li><li>Liquidity (WETH pool): '+(l.wethPoolUsd==null?'n/a':'$'+Math.round(l.wethPoolUsd))+'</li></ul><div>'+(j.reasons||[]).map(esc).join('; ')+'</div>'+share(t,j,m)+unlockUI(t)}catch(e){c.textContent='Error: '+e}}
 function esc0(x){return String(x).replace(/[<>&]/g,function(s){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[s]})}
+function fmtUsd(n){return '$'+Math.round(n).toLocaleString()}
+function sizingHtml(j){var s=j.sizing;if(!s)return '';
+  if(s.max_safe_notional_usd==null)return '<p><small>'+esc0(s.basis||'Trade sizing unavailable (no verifiable pool).')+'</small></p>';
+  var rows=(s.impact_tiers||[]).map(function(t){return '<tr><td>'+fmtUsd(t.notional_usd)+'</td><td>'+esc0(t.price_impact_pct)+'%</td></tr>'}).join('');
+  return '<p><b>Max safe trade size: '+fmtUsd(s.max_safe_notional_usd)+'</b> <small>(&lt;2% price impact)</small></p>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:.95rem"><thead><tr><td><small>Trade</small></td><td><small>Price impact</small></td></tr></thead><tbody>'+rows+'</tbody></table>'
+    +'<p><small>'+esc0(s.sizing_note||'')+'</small></p>';}
 // Pay 0.01 USDC from the visitor's own browser wallet (or an in-feed Farcaster
 // provider), then unlock the full trade-sized swap-execution check for this token.
 // No account, no manifest: a human settles USDC on Base directly to our wallet and
@@ -8135,7 +8171,7 @@ var UNLOCK='0.01';
 function unlockUI(t){
   var h='<div class="row" style="margin-top:.9rem"><button id="unlk" style="background:#1f6feb">Unlock sized trade check - pay 0.01 USDC</button></div>'
     +'<div id="ures" style="margin-top:.6rem"></div>'
-    +'<small>One-off, no signup. Checks execution risk sized to a real $100 trade (price impact, sell-tax, routing). Agents can pay inline via x402 at <a href="/gate/swap">/gate/swap</a>.</small>';
+    +'<small>&#128274; Locked: max safe trade size for this token + price impact at $100 / $1k / $10k / $50k, sized to the measured pool. One-off, no signup. Agents pay inline via x402 at <a href="/gate/swap">/gate/swap</a>.</small>';
   setTimeout(function(){var b=document.getElementById('unlk');if(b)b.onclick=function(){payUnlock(t)}},0);
   return h;
 }
@@ -8170,8 +8206,8 @@ async function finishUnlock(t,tx,u){
       var dec=String(j.decision||'').toUpperCase();
       u.innerHTML='<div class="v '+(dec==='DANGER'?'DANGER':dec==='CAUTION'?'CAUTION':'SAFE')+'">'+esc0(dec||'DONE')+'</div>'
         +'<p>Unlocked - paid 0.01 USDC. '+esc0(j.reason||'')+'</p>'
-        +'<ul><li>Price impact (sized $100): '+esc0(j.price_impact_pct!=null?j.price_impact_pct+'%':'n/a')+'</li>'
-        +'<li>Flags: '+(((j.flags||[]).map(esc0)).join('; ')||'none')+'</li></ul>';
+        +sizingHtml(j)
+        +'<ul><li>Flags: '+(((j.flags||[]).map(esc0)).join('; ')||'none')+'</li></ul>';
       return;
     }
     u.innerHTML='Verification: <b>'+esc0(j.error||'failed')+'</b>';return;
@@ -8327,6 +8363,13 @@ const q=new URLSearchParams(location.search).get('token');if(q){document.getElem
 </script>
 <script>
 function esc(x){return String(x).replace(/[<>&]/g,s=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[s]));}
+function fmtUsd(n){return '$'+Math.round(n).toLocaleString();}
+function sizingHtml(j){var s=j.sizing;if(!s)return '';
+  if(s.max_safe_notional_usd==null)return '<p><small>'+esc(s.basis||'Trade sizing unavailable (no verifiable pool).')+'</small></p>';
+  var rows=(s.impact_tiers||[]).map(function(t){return '<tr><td>'+fmtUsd(t.notional_usd)+'</td><td>'+esc(t.price_impact_pct)+'%</td></tr>';}).join('');
+  return '<p><b>Max safe trade size: '+fmtUsd(s.max_safe_notional_usd)+'</b> <small>(&lt;2% price impact)</small></p>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:.95rem"><thead><tr><td><small>Trade</small></td><td><small>Price impact</small></td></tr></thead><tbody>'+rows+'</tbody></table>'
+    +'<p><small>'+esc(s.sizing_note||'')+'</small></p>';}
 function shareUI(t,j){
   var sym=(j.token_meta&&j.token_meta.symbol)||'This Base token';
   var dec=String(j.decision||'').toUpperCase();
@@ -8368,7 +8411,7 @@ var USDC='0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 function unlockUI(t){
   var html='<div class="row" style="margin-top:.8rem"><button id="unlk">Unlock sized check — pay 0.01 USDC</button></div>'
     +'<div id="ures" style="margin-top:.6rem"></div>'
-    +'<small>Out of free checks, or want it sized to a real trade? Pay 0.01 USDC from your wallet for a one-off full check of this token. No signup.</small>';
+    +'<small>&#128274; Locked: max safe trade size for this token + price impact at $100 / $1k / $10k / $50k, sized to the measured pool. One-off, no signup.</small>';
   setTimeout(function(){var b=document.getElementById('unlk');if(b)b.onclick=function(){payUnlock(t);};},0);
   return html;
 }
@@ -8400,8 +8443,8 @@ async function payUnlock(t){
         var dec=String(j.decision||'').toUpperCase();
         u.innerHTML='<div class="v '+esc(String(j.decision||'').toLowerCase())+'">'+esc(dec)+'</div>'
           +'<p>Unlocked — paid 0.01 USDC. '+esc(j.reason||'')+'</p>'
-          +'<ul><li>Price impact: '+esc(j.price_impact_pct!=null?j.price_impact_pct+'%':'n/a')+'</li>'
-          +'<li>Flags: '+((j.flags||[]).map(esc).join('; ')||'none')+'</li></ul>';
+          +sizingHtml(j)
+          +'<ul><li>Flags: '+((j.flags||[]).map(esc).join('; ')||'none')+'</li></ul>';
         return;
       }
       u.innerHTML='Verification: <b>'+esc(j.error||'failed')+'</b>';return;
