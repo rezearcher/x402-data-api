@@ -9374,6 +9374,14 @@ app.get("/scan/mcp/badge", async (c) => {
 // Mirrors Detectify / Probely / Astra ownership gating.
 // ---------------------------------------------------------------------------
 
+// A claimed badge must not keep asserting "verified owner" after the operator
+// removes the DNS/file proof — a stale trust signal is a dishonest one, and
+// continuous re-verification IS the monitoring value the subscription charges
+// for. Claimed records are re-checked no more often than this window; reads
+// older than it trigger a background re-check (badges self-heal on the next
+// read), and /scan/verify/revalidate forces one synchronously for cron/CI.
+const GRSG_VERIFY_REVALIDATE_MS = 12 * 3600 * 1000; // 12h
+
 const GRSG_VERIFY_AUTHZ_VERSION = "2026-10-23";
 const GRSG_VERIFY_AUTHZ_TEXT =
   "I warrant that I own the named target or hold current authorization, granted by " +
@@ -9460,6 +9468,67 @@ async function grsgVerifyRecord(c: any, host: string): Promise<any | null> {
   }
 }
 
+// Re-run the proof of control for an already-claimed host. Prefers the method
+// the owner originally used but falls back to the other (an operator may migrate
+// DNS <-> served-file). Returns the method that still proves control, or null if
+// neither does any more.
+async function grsgProofHit(host: string, token: string, recordedMethod?: string): Promise<string | null> {
+  if (recordedMethod === "http-file") {
+    if (await grsgVerifyHttpHit(host, token)) return "http-file";
+    if (await grsgVerifyDnsHit(host, token)) return "dns-txt";
+    return null;
+  }
+  if (await grsgVerifyDnsHit(host, token)) return "dns-txt";
+  if (await grsgVerifyHttpHit(host, token)) return "http-file";
+  return null;
+}
+
+// Re-verify a claimed record and persist the outcome. Keeps the original
+// first-claim time; records last_checked/last_ok; stamps revoked_at the first
+// time the proof lapses and clears it if control is re-established.
+async function grsgRevalidate(c: any, host: string, rec: any): Promise<any> {
+  const token = await grsgVerifyToken(host);
+  const method = await grsgProofHit(host, token, rec?.verify_method);
+  const now = new Date().toISOString();
+  const updated: any = { ...rec, last_checked: now };
+  if (method) {
+    updated.last_ok = true;
+    updated.verify_method = method;
+    updated.verified_at = rec?.verified_at || now;
+    delete updated.revoked_at;
+  } else {
+    updated.last_ok = false;
+    if (!rec?.revoked_at) updated.revoked_at = now;
+  }
+  try {
+    await c.env.API_KEYS?.put("verify:" + host, JSON.stringify(updated));
+  } catch {
+    /* degrade-open: the in-memory outcome is still returned to the caller */
+  }
+  return updated;
+}
+
+function grsgVerifyStale(rec: any): boolean {
+  const last = Date.parse(rec?.last_checked || rec?.verified_at || "");
+  if (!Number.isFinite(last)) return true;
+  return Date.now() - last > GRSG_VERIFY_REVALIDATE_MS;
+}
+
+// Fire a background re-verify when a claimed record is older than the window, so
+// embedded badges self-heal on the next read without slowing this response. A
+// badge nobody reads can't mislead anyone; one that is read refreshes itself.
+function grsgScheduleRevalidate(c: any, host: string, rec: any): void {
+  if (rec && grsgVerifyStale(rec)) {
+    fireAndForget(
+      c,
+      grsgRevalidate(c, host, rec).then(
+        () => {},
+        () => {},
+      ),
+    );
+  }
+}
+
 // JSON: machine-readable verification state / challenge for a host. The monitoring
 // subscription polls this; so can CI. Pass ?url= or ?domain=.
 app.get("/scan/verify/status", async (c) => {
@@ -9467,13 +9536,19 @@ app.get("/scan/verify/status", async (c) => {
   const host = verifyHost(input);
   if (!host) return c.json({ error: "pass ?url=<mcp-server-url> or ?domain=<domain>" }, { status: 400 });
   const rec = await grsgVerifyRecord(c, host);
+  grsgScheduleRevalidate(c, host, rec);
   return c.json({
     host,
-    verified: !!rec,
+    // A claimed record whose proof has since lapsed is still "claimed" (the
+    // authz artifact is retained) but no longer "verified" — report both.
+    claimed: !!rec,
+    verified: !!rec && rec.last_ok !== false,
     verified_at: rec?.verified_at ?? null,
     verify_method: rec?.verify_method ?? null,
     mcp_url: rec?.mcp_url ?? null,
     authz_version: rec?.authz_version ?? null,
+    last_checked: rec?.last_checked ?? null,
+    revoked_at: rec?.revoked_at ?? null,
   });
 });
 
@@ -9485,9 +9560,38 @@ app.get("/scan/verify/badge", async (c) => {
   const host = verifyHost(c.req.query("url") || c.req.query("domain") || "");
   if (!host) return c.json({ ...base, message: "unknown", color: "lightgrey" });
   const rec = await grsgVerifyRecord(c, host);
-  return rec
-    ? c.json({ ...base, message: "verified owner", color: "brightgreen" })
-    : c.json({ ...base, message: "unclaimed", color: "lightgrey" });
+  grsgScheduleRevalidate(c, host, rec);
+  if (!rec) return c.json({ ...base, message: "unclaimed", color: "lightgrey" });
+  // Proof removed since the claim: flip to amber and cache briefly so the badge
+  // recovers (or re-lapses) quickly — never keep asserting a lapsed claim.
+  if (rec.last_ok === false) return c.json({ ...base, message: "verification lapsed", color: "orange", cacheSeconds: 600 });
+  return c.json({ ...base, message: "verified owner", color: "brightgreen" });
+});
+
+// Force a synchronous re-verify of a claimed host and persist the outcome. The
+// honest-monitoring hook: a cron (or the subscription monitor, or CI) hits this
+// per claimed host to confirm the DNS/file proof is still in place; if it was
+// removed, the owner badge flips to "verification lapsed" immediately. Safe and
+// idempotent — it only re-checks hosts that are already claimed. JSON only.
+app.get("/scan/verify/revalidate", async (c) => {
+  const input = c.req.query("url") || c.req.query("domain") || "";
+  const host = verifyHost(input);
+  if (!host) return c.json({ error: "pass ?url=<mcp-server-url> or ?domain=<domain>" }, { status: 400 });
+  const rec = await grsgVerifyRecord(c, host);
+  if (!rec) {
+    return c.json({ host, claimed: false, still_verified: false, note: "not claimed — nothing to revalidate" });
+  }
+  const updated = await grsgRevalidate(c, host, rec);
+  return c.json({
+    host,
+    claimed: true,
+    still_verified: updated.last_ok !== false,
+    lapsed: updated.last_ok === false,
+    verify_method: updated.verify_method ?? null,
+    verified_at: updated.verified_at ?? null,
+    last_checked: updated.last_checked ?? null,
+    revoked_at: updated.revoked_at ?? null,
+  });
 });
 
 // Run the DNS check + record the click-through authorization. Headless claim.
@@ -9549,10 +9653,13 @@ app.get("/scan/verify/check", async (c) => {
       note: "No proof found yet. Add EITHER the DNS TXT record OR the /.well-known file above, then re-check. DNS can take a few minutes to propagate.",
     });
   }
+  const nowIso = new Date().toISOString();
   const rec = {
     host,
     mcp_url: /^https?:\/\//i.test(url) ? url : null,
-    verified_at: new Date().toISOString(),
+    verified_at: nowIso,
+    last_checked: nowIso,
+    last_ok: true,
     verify_method: verifyMethod,
     authz_accepted: true,
     authz_version: GRSG_VERIFY_AUTHZ_VERSION,
@@ -10921,7 +11028,15 @@ ${ctaBlock}${scriptBlock}`);
   let ownerBlock = "";
   const ownerHost = verifyHost(target);
   const ownerRec = ownerHost ? await grsgVerifyRecord(c, ownerHost) : null;
-  if (ownerRec) {
+  if (ownerRec && ownerRec.last_ok === false) {
+    // Was claimed, but the DNS/file proof has since been removed — say so plainly.
+    const lapsedAt = String(ownerRec.revoked_at || ownerRec.last_checked || "").slice(0, 19).replace("T", " ");
+    ownerBlock = `<h2>Ownership</h2>
+<div class=card>
+  <div class=badge-row><img alt="ownership verification lapsed" src="https://img.shields.io/endpoint?url=${encodeURIComponent(ORIGIN + "/scan/verify/badge?domain=" + ownerHost)}&style=flat-square"></div>
+  <p class=summary style="margin:.5rem 0 0"><span class="pill review">verification lapsed</span> &nbsp;<code>${esc(ownerHost)}</code> was claimed, but the ownership proof is no longer in place${lapsedAt ? ` (last confirmed removed ${esc(lapsedAt)} UTC)` : ""}. Re-add the DNS record or served file and <a href="/scan/verify/revalidate?url=${encodeURIComponent(target)}">re-check</a> to restore the verified-owner badge.</p>
+</div>`;
+  } else if (ownerRec) {
     const claimedAt = String(ownerRec.verified_at || "").slice(0, 19).replace("T", " ");
     const via = ownerRec.verify_method === "http-file" ? "served-file" : "DNS";
     ownerBlock = `<h2>Ownership</h2>

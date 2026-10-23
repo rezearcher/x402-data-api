@@ -185,6 +185,61 @@ assert.ok(/^grsg-verify=[0-9a-f]{40}$/.test(token), "token shape");
   ok(bgu.message === "unclaimed" && bgu.color === "lightgrey", "owner badge grey when unclaimed");
 }
 
+// 8. revalidate: proof still present => still_verified, last_ok persisted true.
+{
+  const kv = makeFakeKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, verified_at: "2026-10-01T00:00:00Z", verify_method: "dns-txt", last_ok: true, mcp_url: MCP_URL }));
+  installDohStub(HOST, token, true);
+  const j = await (await app.request("/scan/verify/revalidate?url=" + encodeURIComponent(MCP_URL), {}, { API_KEYS: kv })).json();
+  ok(j.claimed === true && j.still_verified === true && j.lapsed === false, "proof present => still verified");
+  ok(typeof j.last_checked === "string", "revalidate stamps last_checked");
+  const rec = JSON.parse(kv.store.get("verify:" + HOST));
+  ok(rec.last_ok === true && rec.verified_at === "2026-10-01T00:00:00Z", "keeps first-claim time, last_ok true");
+}
+
+// 9. revalidate: proof removed => lapsed, revoked_at stamped, last_ok false.
+{
+  const kv = makeFakeKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, verified_at: "2026-10-01T00:00:00Z", verify_method: "dns-txt", last_ok: true, mcp_url: MCP_URL }));
+  installStub(HOST, token, { dns: false, file: false });
+  const j = await (await app.request("/scan/verify/revalidate?url=" + encodeURIComponent(MCP_URL), {}, { API_KEYS: kv })).json();
+  ok(j.still_verified === false && j.lapsed === true, "proof removed => lapsed");
+  ok(typeof j.revoked_at === "string", "lapse stamps revoked_at");
+  const rec = JSON.parse(kv.store.get("verify:" + HOST));
+  ok(rec.last_ok === false && typeof rec.revoked_at === "string", "lapse persisted to KV");
+}
+
+// 10. a lapsed record drives an amber badge and claimed-but-not-verified status.
+{
+  const kv = makeFakeKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, verified_at: "2026-10-01T00:00:00Z", verify_method: "dns-txt", last_ok: false, revoked_at: "2026-10-20T00:00:00Z" }));
+  const bg = await (await app.request("/scan/verify/badge?domain=" + HOST, {}, { API_KEYS: kv })).json();
+  ok(bg.message === "verification lapsed" && bg.color === "orange", "lapsed badge is amber");
+  const st = await (await app.request("/scan/verify/status?domain=" + HOST, {}, { API_KEYS: kv })).json();
+  ok(st.claimed === true && st.verified === false, "lapsed record: claimed but not verified");
+  ok(st.revoked_at === "2026-10-20T00:00:00Z", "status surfaces revoked_at");
+}
+
+// 11. revalidate an unclaimed host => claimed false, nothing stored.
+{
+  const kv = makeFakeKV();
+  const j = await (await app.request("/scan/verify/revalidate?domain=unclaimed.example", {}, { API_KEYS: kv })).json();
+  ok(j.claimed === false && j.still_verified === false, "unclaimed revalidate => claimed:false");
+  ok(kv.store.size === 0, "no record created for an unclaimed host");
+}
+
+// 12. recovery: a lapsed record whose proof returns flips back to verified.
+{
+  const kv = makeFakeKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, verified_at: "2026-10-01T00:00:00Z", verify_method: "dns-txt", last_ok: false, revoked_at: "2026-10-20T00:00:00Z", mcp_url: MCP_URL }));
+  installDohStub(HOST, token, true);
+  const j = await (await app.request("/scan/verify/revalidate?url=" + encodeURIComponent(MCP_URL), {}, { API_KEYS: kv })).json();
+  ok(j.still_verified === true && j.lapsed === false, "proof restored => verified again");
+  ok(j.revoked_at === null, "recovery clears revoked_at");
+  const rec = JSON.parse(kv.store.get("verify:" + HOST));
+  ok(rec.last_ok === true && rec.revoked_at === undefined, "recovery clears revoked_at in KV");
+}
+
 // 6. host validation: garbage input is rejected (no scan, no challenge).
 {
   const res = await app.request("/scan/verify/check?authorize=1&domain=not_a_host", {}, { API_KEYS: makeFakeKV() });
