@@ -8032,9 +8032,16 @@ app.get("/gate/swap", async (c) => {
   if (!Number.isFinite(notional) || notional <= 0) return c.json({ error: "notional_usd must be a positive number" }, { status: 400 });
   try {
     const out = await buildSwapGate(token, side as "buy" | "sell", notional);
+    // Deliver the paid value the free preview's upgrade.paid_adds promises: the
+    // EXIT SIMULATION + trade sizing. This is the incremental, decision-grade
+    // output an x402 agent pays $0.008 for and the free preview withholds (it is
+    // intentionally absent from buildSwapGate so the free path can't leak it).
+    // Without this the paid x402 route returned the same body as the free teaser,
+    // charging the only rail with real external payers for value it never got.
+    const sizing = sizedExecution(out.liquidity_usd, notional);
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /gate/swap", rail, makeUsageCounter(c.env)));
-    return c.json(out);
+    return c.json({ ...out, sizing });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
