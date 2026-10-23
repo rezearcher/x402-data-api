@@ -1511,6 +1511,14 @@ If you build, ship, or operate MCP servers and tools, this is the fast path — 
 - CI gate (GitHub Action): \`uses: rezearcher/x402-data-api/actions/mcp-scan@main\` — runs the scan on every push and fails the build on a \`block\` verdict.
 - Why this and not a free token checker: token-safety has free multi-chain scanners; MCP tool-poisoning / prompt-injection detection does not. This is the differentiated, paid-worthy lane.
 
+## For security & platform teams — hands-on assessments (engagement, not per-call)
+When a static scan isn't enough — a live agent deployment, permission and auth boundaries, secret handling, on-chain approval and slippage exposure — Grey Ridge Signals runs scoped security assessments.
+- Service page: ${BASE}/security-assessment — fixed-scope assessment of MCP servers, agents, or on-chain integrations ($7,500–$15,000 per engagement) and continuous monitoring retainers ($3,000–$5,000/mo).
+- What it covers: tool poisoning and prompt injection (OWASP LLM01), excessive agency and over-scoped tools (LLM08), data exfiltration, cross-tool shadowing, invisible-unicode / variation-selector smuggling, ANSI and CSS covert channels, auth and secret handling, on-chain approval exposure — static plus live behavioural testing and manual review.
+- Deliverable: a severity-scored findings report with reproduction and remediation, an executive summary, and a free re-test after fixes ship.
+- Authorized testing only: we test solely the assets you own or explicitly authorize. Scope and authorization are fixed at a scoping call before anything is tested.
+- Start: contact@greyridgesignals.ai or the intake form at ${BASE}/security-assessment. Payment is by invoice, not crypto.
+
 ## How to pay — first paid call in ~8 lines (copy-paste, verified)
 Each paid GET returns HTTP 402 with an x402 v2 challenge (network eip155:8453 / Base, asset USDC, 6 decimals). The standard x402-fetch client signs + retries for you — no account, no API key. Your wallet needs a little USDC on Base; no gas ETH (the exact scheme is EIP-3009 gasless — the facilitator submits). The 2nd arg to wrapFetchWithPayment is a viem WalletClient, not a bare account.
 
@@ -1661,6 +1669,7 @@ app.get("/sitemap.xml", (c) => {
     { path: "/check", priority: "0.8", changefreq: "weekly" },
     { path: "/miniapp", priority: "0.9", changefreq: "weekly" },
     { path: "/partners", priority: "0.8", changefreq: "weekly" },
+    { path: "/security-assessment", priority: "1.0", changefreq: "weekly" },
     { path: "/pricing", priority: "0.9", changefreq: "weekly" },
     { path: "/scan/mcp-scanner", priority: "0.9", changefreq: "weekly" },
     { path: "/scan/badge-gen", priority: "0.8", changefreq: "weekly" },
