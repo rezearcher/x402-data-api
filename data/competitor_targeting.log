@@ -82,3 +82,59 @@
 }
 
 [wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-22T23:58:01.947514+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 3.7,
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-23T05:58:01.229918+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 4.0,
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-23T11:58:01.607754+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 4.2,
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-23T17:58:01.547740+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 4.5,
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]

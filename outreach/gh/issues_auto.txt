@@ -1,3 +1,11 @@
+https://github.com/calbebop/batesian/issues/545
+https://github.com/Observal/Observal/issues/1950
+https://github.com/aklivity/zilla/issues/2751
+https://github.com/naxytra/naxytra-mcp/issues/1
+https://github.com/naxytra/naxytra-mcp/issues/3
+https://github.com/punkpeye/awesome-remote-mcp-servers/issues/2350
+https://github.com/ACJLabs/x402-listing-monitor/issues/1
+https://github.com/MikkoParkkola/mcp-gateway/issues/4003
 https://github.com/Agorean/claude-plugin/issues/1
 https://github.com/Agent-Threat-Rule/agent-threat-rules/issues/727
 https://github.com/BlockRunAI/ClawRouter/issues/503
@@ -44,12 +52,10 @@ https://github.com/noobshole/svalin-agent/issues/2
 https://github.com/ARPAHLS/skillware/issues/445
 https://github.com/dchu3/x402-agent-mcp/issues/49
 https://github.com/dchu3/x402-agent-mcp/issues/51
-https://github.com/punkpeye/awesome-remote-mcp-servers/issues/2350
 https://github.com/michielpost/x402-dev/issues/206
 https://github.com/BofAI/x402/issues/109
 https://github.com/MikeyPetrillo/Agent402/issues/1673
 https://github.com/6ixtyy/switchbord/issues/1
-https://github.com/Pranavms09/decentralization_DI05_/issues/16
 https://github.com/imokokok/Insight/issues/245
 https://github.com/Bitterbot-AI/bitterbot-desktop/issues/279
 https://github.com/alsk1992/CloddsBot/issues/154
@@ -61,6 +67,7 @@ https://github.com/xpaysh/awesome-x402/issues/868
 https://github.com/Haustorium12/gold-402/issues/38
 https://github.com/punkpeye/awesome-mcp-servers/issues/10353
 https://github.com/Br0ski777/x402-agent-tools/issues/7
+https://github.com/punkpeye/awesome-remote-mcp-servers/issues/2350
 https://github.com/Agorean/claude-plugin/issues/1
 https://github.com/Agent-Threat-Rule/agent-threat-rules/issues/727
 https://github.com/BlockRunAI/ClawRouter/issues/503
@@ -79,7 +86,6 @@ https://github.com/d85rcrcy27-creator/ArbiVault/issues/40
 https://github.com/DrVelvetFog/x402-pilot/issues/13
 https://github.com/successaje/pokter/issues/213
 https://github.com/d-hinders/Haven-AI/issues/4107
-https://github.com/punkpeye/awesome-remote-mcp-servers/issues/2350
 https://github.com/swarm-agent-operator/swarm-x402-mcp/issues/2
 https://github.com/coinbase/agentkit/issues/1091
 https://github.com/crewAIInc/crewAI/issues/7227

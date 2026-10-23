@@ -43,3 +43,37 @@ DERIVED distribution candidates (rank top-3 across >=2 categories = aggregator/p
   api.marketintelligenceapi.com            categories=['token-safety', 'yields'] hits=4
   crypto.openverbs.com                     categories=['funding', 'yields'] hits=2
 written -> /home/rez/.hermes/data/x402_bazaar_index/discovery_rank.json
+bazaar discovery coverage: 1/10 queries surface us (10.0%)
+  [STRUCTURAL / dead lever — not an actionable alert] CDP metadata frozen at first-registration: 2/20 indexed routes carry a serviceName despite the catalog refresh sending it for weeks. CDP settlements only bump quality.lastCalledAt; serviceName/desc are not overwritten. Production revenue settles via xpay (never CDP facilitator), so the only catalog-touching settlements are forbidden self-pays. => CDP need-phrase rank is NOT a legitimately movable lever; pursue direct dev integrations (wire-our-URL PRs) + x402scan browse instead.
+  [agentpay] not in scores.json yet (of 366 svcs) — Bazaar-gated out, expected
+  'token safety check before swap'         n=12  NOT in top-20 | top3: api.usesaferoute.com, chain.tollkit.dev, tokencheck.madebydevx.com
+  'is this token a scam'                   n=17  NOT in top-20 | top3: trust-check.gm-tools.workers.dev, saylorinnovations.com, api.marketintelligenceapi.com
+  'rug pull check base token'              n=15  NOT in top-20 | top3: api.marketintelligenceapi.com, 402.com.tr, crypto.theboredlab.com
+  'honeypot detector base erc20'           n=12  NOT in top-20 | top3: crypto.theboredlab.com, api.x402node.dev, chain.intel.rallylive.ca
+  'token risk report'                      n=13  NOT in top-20 | top3: token-risk.com, api.zkrobotics.fr, agent402.tools
+  'pre-trade safety gate'                  n=14  rank 13 x402-data-api.sigrunner.workers.dev/gate/swap | top3: 402.com.tr, api.tradebot.devs.surf, agentpay.tools
+  'gas price base'                         n=11  NOT in top-20 | top3: base-facts.yankii.fr, base-gas-x402-production.up.railway.app, base-gas-x402-production.up.railway.app
+  'crypto funding rates'                   n=18  NOT in top-20 | top3: crypto.openverbs.com, perpsignals.use.x402atlas.com, derivs.duoleads.com
+  'defi yields'                            n=18  NOT in top-20 | top3: api.marketintelligenceapi.com, crypto.openverbs.com, bess-x402.onrender.com
+  'prediction market odds'                 n=17  NOT in top-20 | top3: api.agentstools.dev, x402.shizu.me, agentsvc.io
+DERIVED distribution candidates (rank top-3 across >=2 categories = aggregator/platform surface):
+  api.marketintelligenceapi.com            categories=['token-safety', 'yields'] hits=3
+  crypto.openverbs.com                     categories=['funding', 'yields'] hits=2
+written -> /home/rez/.hermes/data/x402_bazaar_index/discovery_rank.json
+bazaar discovery coverage: 1/10 queries surface us (10.0%)
+  [STRUCTURAL / dead lever — not an actionable alert] CDP metadata frozen at first-registration: 2/20 indexed routes carry a serviceName despite the catalog refresh sending it for weeks. CDP settlements only bump quality.lastCalledAt; serviceName/desc are not overwritten. Production revenue settles via xpay (never CDP facilitator), so the only catalog-touching settlements are forbidden self-pays. => CDP need-phrase rank is NOT a legitimately movable lever; pursue direct dev integrations (wire-our-URL PRs) + x402scan browse instead.
+  [agentpay] not in scores.json yet (of 366 svcs) — Bazaar-gated out, expected
+  'token safety check before swap'         n=11  NOT in top-20 | top3: api.usesaferoute.com, chain.tollkit.dev, agent-data-tools.revmesh2074.workers.dev
+  'is this token a scam'                   n=18  NOT in top-20 | top3: trust-check.gm-tools.workers.dev, saylorinnovations.com, api.marketintelligenceapi.com
+  'rug pull check base token'              n=15  NOT in top-20 | top3: api.marketintelligenceapi.com, 402.com.tr, crypto.theboredlab.com
+  'honeypot detector base erc20'           n=10  NOT in top-20 | top3: crypto.theboredlab.com, api.x402node.dev, chain.intel.rallylive.ca
+  'token risk report'                      n=12  NOT in top-20 | top3: token-risk.com, api.zkrobotics.fr, agent402.tools
+  'pre-trade safety gate'                  n=15  rank 12 x402-data-api.sigrunner.workers.dev/gate/swap | top3: 402.com.tr, api.tradebot.devs.surf, agentpay.tools
+  'gas price base'                         n=11  NOT in top-20 | top3: base-facts.yankii.fr, base-gas-x402-production.up.railway.app, base-gas-x402-production.up.railway.app
+  'crypto funding rates'                   n=18  NOT in top-20 | top3: crypto.openverbs.com, perpsignals.use.x402atlas.com, derivs.duoleads.com
+  'defi yields'                            n=17  NOT in top-20 | top3: api.marketintelligenceapi.com, crypto.openverbs.com, bess-x402.onrender.com
+  'prediction market odds'                 n=18  NOT in top-20 | top3: api.agentstools.dev, x402.shizu.me, api.marketintelligenceapi.com
+DERIVED distribution candidates (rank top-3 across >=2 categories = aggregator/platform surface):
+  api.marketintelligenceapi.com            categories=['prediction', 'token-safety', 'yields'] hits=4
+  crypto.openverbs.com                     categories=['funding', 'yields'] hits=2
+written -> /home/rez/.hermes/data/x402_bazaar_index/discovery_rank.json
