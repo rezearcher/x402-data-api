@@ -1,0 +1,37 @@
+name: publish-research
+# Op-independent publish path for Line-B research/marketing assets: CI holds the
+# reliable CF_WORKERS_TOKEN (KV+Workers), so publishing doesn't depend on the local
+# 1Password day-cap. Reuses scripts/marketing_channel.py (incl. its verify-live gate).
+on:
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: "research slug (file must exist at outreach/research/<slug>.md)"
+        required: true
+      title:
+        description: "page title"
+        required: true
+      description:
+        description: "meta description (optional)"
+        required: false
+        default: ""
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm ci --omit=dev || npm install --omit=dev
+      - name: publish to /research via KV (verify-live gated)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_WORKERS_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 9b5a408f758c052fd9ab99f5d0f32bea
+        run: |
+          python3 scripts/marketing_channel.py post \
+            --channel site \
+            --target "${{ inputs.slug }}" \
+            --title "${{ inputs.title }}" \
+            --description "${{ inputs.description }}" \
+            --body-file "outreach/research/${{ inputs.slug }}.md" \
+            --publish
