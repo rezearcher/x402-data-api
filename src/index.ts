@@ -9801,6 +9801,75 @@ function grsgScheduleRevalidate(c: any, host: string, rec: any): void {
   }
 }
 
+// Continuous-monitoring sweep — the engine behind the recurring subscription.
+// The paid tier promises CONTINUOUS re-verification of a claimed host, not just
+// the lazy self-heal that runs when someone happens to read the badge. This
+// iterates every active sub:<host> record and re-runs ownership proof on it via
+// grsgRevalidate, which persists fresh last_checked/last_ok AND auto-fires the
+// signed drift webhook on any genuine verified<->lapsed transition (delivery
+// built in db20fbc). Driven by the Worker cron (scheduled handler); also exposed
+// as an idempotent ops endpoint so a sweep can be forced + verified on demand.
+//
+// Bounded by design: KV list is paginated (100/page), a hard `max` caps hosts
+// per run well under the cron subrequest/CPU ceiling, and each host is
+// independently try/caught so one unreachable host never aborts the batch. Only
+// hosts with an ACTIVE sub are swept — ownership re-checks are the paid layer;
+// unsubbed claimed hosts keep self-healing lazily on read. Returns counts only
+// (never a host list — the subscriber roster is private).
+async function grsgRunMonitoringSweep(
+  env: Env,
+  max = 500,
+): Promise<{ scanned: number; active: number; revalidated: number; lapsed: number; restored: number; errors: number }> {
+  const c: any = { env };
+  const summary = { scanned: 0, active: 0, revalidated: 0, lapsed: 0, restored: 0, errors: 0 };
+  if (!env.API_KEYS) return summary;
+  let cursor: string | undefined = undefined;
+  do {
+    let page: any;
+    try {
+      page = await env.API_KEYS.list({ prefix: "sub:", cursor, limit: 100 });
+    } catch {
+      break;
+    }
+    for (const k of page?.keys ?? []) {
+      if (summary.scanned >= max) {
+        cursor = undefined;
+        break;
+      }
+      summary.scanned++;
+      const host = String(k.name).slice("sub:".length);
+      if (!host) continue;
+      try {
+        const srec = await grsgSubRecord(c, host);
+        if (!grsgSubActive(srec)) continue; // lapsed/cancelled sub — not a paid host
+        summary.active++;
+        const vrec = await grsgVerifyRecord(c, host);
+        if (!vrec) continue; // subbed but ownership never claimed — nothing to re-verify
+        const prevVerified = vrec.last_ok !== false;
+        const updated = await grsgRevalidate(c, host, vrec);
+        summary.revalidated++;
+        const nowVerified = updated.last_ok !== false;
+        if (prevVerified && !nowVerified) summary.lapsed++;
+        else if (!prevVerified && nowVerified) summary.restored++;
+      } catch {
+        summary.errors++;
+      }
+    }
+    cursor = page?.list_complete ? undefined : page?.cursor;
+  } while (cursor);
+  return summary;
+}
+
+// Ops/CI: force the monitoring sweep now, counts-only. Idempotent and identical
+// to a cron tick — lets us verify the continuous-monitoring loop without waiting
+// for the next scheduled run. Safe to expose: it only re-checks ownership of
+// already-active paid hosts and fires webhooks to URLs those hosts registered
+// (and proved control of) themselves.
+app.get("/scan/verify/sweep", async (c) => {
+  const summary = await grsgRunMonitoringSweep(c.env);
+  return c.json({ ok: true, swept_at: new Date().toISOString(), ...summary });
+});
+
 // JSON: machine-readable verification state / challenge for a host. The monitoring
 // subscription polls this; so can CI. Pass ?url= or ?domain=.
 app.get("/scan/verify/status", async (c) => {
@@ -12283,4 +12352,25 @@ app.all("/sse", mcpRouteHandler);
 // ---------------------------------------------------------------------------
 
 export { UsageCounter } from "./usage_counter.ts";
+
+// Cron entrypoint. Cloudflare invokes scheduled() on the triggers declared in
+// wrangler.toml (every 6h). The continuous-monitoring sweep runs in the
+// background via waitUntil so the tick returns immediately while the Worker
+// stays alive until the sweep (and any drift webhooks it fires) complete. A
+// one-line JSON summary lands in the Worker logs for each run.
+//
+// Attached onto the Hono app (rather than wrapping it in a fresh { fetch,
+// scheduled } object) so that `export default app` keeps working as both the
+// Cloudflare module handler (runtime reads default.fetch + default.scheduled)
+// AND the Hono instance the test harness drives via app.request(...).
+const scheduled = async (event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> => {
+  ctx.waitUntil(
+    grsgRunMonitoringSweep(env).then(
+      (s) => console.log(JSON.stringify({ event: "grsg_monitoring_sweep", cron: event.cron, ...s })),
+      (e) => console.log(JSON.stringify({ event: "grsg_monitoring_sweep_error", error: (e as Error).message })),
+    ),
+  );
+};
+(app as unknown as { scheduled: typeof scheduled }).scheduled = scheduled;
+
 export default app;

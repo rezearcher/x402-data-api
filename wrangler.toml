@@ -23,6 +23,15 @@ workers_dev = true
 pattern = "api.greyridgesignals.ai"
 custom_domain = true
 
+# Continuous-monitoring cron. The paid "monitored" subscription promises
+# CONTINUOUS re-verification of a claimed host; the scheduled() handler in
+# src/index.ts runs grsgRunMonitoringSweep every 6h, re-checking ownership proof
+# for every active sub:<host> and auto-firing the signed drift webhook on any
+# genuine verified<->lapsed transition. 6h keeps us far under Cloudflare's free
+# cron allowance while making "monitoring" real rather than lazy-on-read-only.
+[triggers]
+crons = ["0 */6 * * *"]
+
 [vars]
 # Override PAY_TO in .dev.vars (local) or via `wrangler secret put PAY_TO` (deployed)
 PAY_TO = "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10"
