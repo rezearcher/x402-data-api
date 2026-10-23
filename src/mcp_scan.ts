@@ -148,7 +148,15 @@ export function analyzeMcpTool(name: string, description: string, schemaText: st
   }
 
   // 3. Dangerous capability surface
-  const danger = /((?<![\/.\w-])(exec|execs)(?![\/\w-])|\b(exec\(|eval|eval\(|subprocess|shell|sudo|chmod)\b|os\.system|child_process|rm -rf|arbitrary (code|command)|remote code|\bexecute (shell|arbitrary|code|commands?)\b|run (shell|arbitrary) (commands?|code))/i;
+  // The bare token "exec" must be the verb (this tool executes), not a
+  // capability-class NOUN describing OTHER tools/servers — "no write or exec
+  // tools", "exec access", "exec permission" are filter/enumeration prose, not
+  // this tool's power, and flagging them is the precision-killing false positive
+  // (seen live on a registry server whose only match was "…restrict to servers
+  // with no write or exec tools"). Genuinely dangerous bare-"exec" descriptions
+  // still match via the stronger tokens (exec(, shell, child_process, "execute
+  // code", etc.), so the negative lookahead costs no real-world recall.
+  const danger = /((?<![\/.\w-])(exec|execs)(?![\/\w-])(?!\s+(tools?|access|permission|capabilit|rights?|mode|flag|param)\b)|\b(exec\(|eval|eval\(|subprocess|shell|sudo|chmod)\b|os\.system|child_process|rm -rf|arbitrary (code|command)|remote code|\bexecute (shell|arbitrary|code|commands?)\b|run (shell|arbitrary) (commands?|code))/i;
   if (danger.test(low)) add("high", "dangerous-capability",
     "Tool exposes code/command execution or destructive filesystem ops.", (low.match(danger) || [""])[0]);
 
