@@ -18,7 +18,6 @@
   .mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
   a{color:var(--cyan);text-decoration:none} a:hover{text-decoration:underline}
   .wrap{max-width:1500px;margin:0 auto;padding:16px}
-  /* status bar */
   .bar{display:flex;align-items:center;gap:22px;flex-wrap:wrap;border:1px solid var(--line);
        background:linear-gradient(180deg,var(--panel2),var(--panel));border-radius:10px;padding:14px 18px}
   .brand{font-weight:700;letter-spacing:.14em;font-size:15px}
@@ -27,11 +26,12 @@
   .node{padding:4px 11px;border:1px solid var(--line);border-radius:999px;color:var(--muted);transition:.3s}
   .node.active{color:var(--ink);background:var(--jade);border-color:var(--jade);font-weight:600}
   .node.rest{color:var(--amber);border-color:#3a3320}
+  .node.rest.active{background:var(--amber);color:var(--ink)}
   .arrow{color:var(--muted)}
   .lamps{display:flex;gap:18px;margin-left:auto;align-items:center}
   .lamp{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
   .lamp b{color:var(--txt);font-weight:500}
-  .dot{width:11px;height:11px;border-radius:50%;background:#33404f;box-shadow:none}
+  .dot{width:11px;height:11px;border-radius:50%;background:#33404f}
   .lamp.on .dot{background:var(--jade);box-shadow:0 0 10px rgba(84,185,138,.7)}
   .ring{width:14px;height:14px;border-radius:50%;border:2px solid #33404f;position:relative}
   .lamp.on .ring{border-color:var(--jade)} .lamp.on .ring:after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--jade)}
@@ -41,11 +41,9 @@
   .toggle{width:46px;height:24px;border-radius:999px;background:#2a3645;border:1px solid var(--line);position:relative;cursor:pointer;transition:.25s}
   .toggle.on{background:var(--jade)} .knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#dfe8f2;transition:.25s}
   .toggle.on .knob{left:24px}
-  /* ever-green waveform */
   .wave{height:30px;width:150px}
-  /* grid */
   .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:12px}
-  .col{border:1px solid var(--line);background:var(--panel);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;min-height:360px}
+  .col{border:1px solid var(--line);background:var(--panel);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;min-height:380px}
   .col h3{margin:0;padding:11px 14px;font-size:12px;letter-spacing:.12em;color:var(--muted);border-bottom:1px solid var(--line);
           display:flex;justify-content:space-between;align-items:center;font-weight:600}
   .live{display:inline-flex;align-items:center;gap:6px;color:var(--jade);font-size:11px}
@@ -53,22 +51,30 @@
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
   .now{padding:13px 14px;border-bottom:1px solid var(--line);background:var(--panel2);min-height:74px;font-size:13px;color:#dfe7f0}
   .now .k{font-size:10.5px;letter-spacing:.1em;color:var(--muted);display:block;margin-bottom:5px}
-  .hist{padding:6px 0;overflow:auto;flex:1;max-height:420px}
+  /* scroll region + "new updates" pill */
+  .scrollwrap{position:relative;flex:1;display:flex;min-height:0}
+  .hist{padding:6px 0;overflow-y:auto;width:100%;max-height:440px}
   .ev{padding:8px 14px;border-bottom:1px solid #1d2838}
   .ev .t{font-size:10.5px;color:var(--muted)} .ev .d{font-size:12.5px;margin-top:2px}
   .ev .n{font-size:11.5px;color:var(--muted);margin-top:3px}
   .ev .atom{font-size:11px;color:var(--amber);margin-top:3px}
-  /* bottom panels */
+  .pill{position:absolute;left:50%;transform:translateX(-50%);bottom:10px;display:none;
+        background:var(--cyan);color:var(--ink);font-weight:600;font-size:11.5px;border:none;border-radius:999px;
+        padding:5px 14px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+  .pill.show{display:block}
   .btm{display:grid;grid-template-columns:1.4fr 1fr;gap:12px;margin-top:12px}
-  .box{border:1px solid var(--line);background:var(--panel);border-radius:10px}
+  .box{border:1px solid var(--line);background:var(--panel);border-radius:10px;overflow:hidden}
   .box h4{margin:0;padding:11px 14px;font-size:12px;letter-spacing:.12em;color:var(--muted);border-bottom:1px solid var(--line);font-weight:600}
-  .box .body{padding:8px 14px;max-height:230px;overflow:auto}
+  .box .scrollwrap{max-height:240px}
+  .box .body{padding:8px 14px;overflow-y:auto;width:100%;max-height:240px}
   .lk{display:flex;gap:9px;align-items:baseline;padding:5px 0;border-bottom:1px solid #1d2838;font-size:12.5px}
-  .chip{font-size:10px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .chip{font-size:10px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
   .chip.ok{color:var(--jade);border-color:#2b4a3c} .chip.commit{color:var(--cyan);border-color:#234048}
   .feedline{font-size:12px;color:var(--muted);padding:4px 0;border-bottom:1px solid #1d2838}
-  .off{color:var(--muted);font-style:italic}
-  .stamp{color:var(--muted);font-size:11px;margin-top:10px;text-align:right}
+  .off{color:var(--muted);font-style:italic;padding:10px 0}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
+  .stamp{color:var(--muted);font-size:11px}
+  .paused{color:var(--amber);font-size:11px;display:none} .paused.show{display:inline}
   @media(max-width:1000px){.grid{grid-template-columns:1fr}.btm{grid-template-columns:1fr}.lamps{margin-left:0}}
 </style>
 </head>
@@ -90,73 +96,112 @@
   <div class="btm">
     <div class="box">
       <h4>WORK SHIPPED</h4>
-      <div class="body" id="links"></div>
+      <div class="scrollwrap"><div class="body" id="links"></div><button class="pill" data-k="links" onclick="jump('links')">↓ new</button></div>
     </div>
     <div class="box">
       <h4>MONITOR CONSOLE</h4>
-      <div class="body" id="feed"></div>
+      <div class="scrollwrap"><div class="body" id="feed"></div><button class="pill" data-k="feed" onclick="jump('feed')">↓ new</button></div>
     </div>
   </div>
-  <div class="stamp" id="stamp"></div>
+  <div class="topbar">
+    <span class="paused" id="paused">↑ scrolled up — live updates paused in this panel; click a “new” pill to catch up</span>
+    <span class="stamp" id="stamp"></span>
+  </div>
 </div>
 
 <script>
 const AG=['research','builder','marketing'], LABEL={research:'RESEARCH · GM',builder:'BUILDER',marketing:'MARKETING'};
-let monOn=false;
+let monOn=false, built=false;
+const counts={};  // scroll-id -> last item count
 
 function esc(s){return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
 
 function waveSVG(runs,rests){
-  // interleave run (jade) + rest (amber) as a tempo trace
   const seq=[]; const n=Math.max(runs.length,rests.length);
   for(let i=0;i<n;i++){ if(runs[i]!=null)seq.push({v:runs[i],k:'run'}); if(rests[i]!=null)seq.push({v:rests[i],k:'rest'}); }
   const s=seq.slice(-14); if(!s.length) return '';
-  const W=150,Hh=30,max=Math.max(22,...s.map(x=>x.v)); const step=W/Math.max(1,s.length-1);
-  let d='',pts=s.map((x,i)=>[i*step, Hh-(x.v/max)*(Hh-4)-2]);
-  pts.forEach((p,i)=>d+=(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)+' ');
+  const W=150,Hh=30,max=Math.max(22,...s.map(x=>x.v)),step=W/Math.max(1,s.length-1);
+  const pts=s.map((x,i)=>[i*step, Hh-(x.v/max)*(Hh-4)-2]);
+  let d=''; pts.forEach((p,i)=>d+=(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)+' ');
   const dots=s.map((x,i)=>`<circle cx="${pts[i][0].toFixed(1)}" cy="${pts[i][1].toFixed(1)}" r="2" fill="${x.k==='run'?'#54B98A':'#E8B04B'}"/>`).join('');
   return `<svg class="wave" viewBox="0 0 ${W} ${Hh}"><path d="${d}" fill="none" stroke="#5BC9D6" stroke-width="1.5" opacity=".85"/>${dots}</svg>`;
 }
 
+// Update a scroll panel IN PLACE: stick to bottom only if already at bottom; else keep
+// the user's position and flash a "new" pill when fresh items arrive.
+function setScroll(id, html, count){
+  const el=document.getElementById(id); if(!el) return;
+  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+  const prevTop = el.scrollTop, prev = counts[id]||0;
+  el.innerHTML = html;
+  const pill = el.parentElement.querySelector('.pill');
+  if(atBottom){ el.scrollTop = el.scrollHeight; if(pill) pill.classList.remove('show'); }
+  else { el.scrollTop = prevTop; if(pill && count>prev) pill.classList.add('show'); }
+  counts[id]=count;
+  reflectPaused();
+}
+function jump(id){ const el=document.getElementById(id); el.scrollTop=el.scrollHeight;
+  const pill=el.parentElement.querySelector('.pill'); if(pill)pill.classList.remove('show'); reflectPaused(); }
+function reflectPaused(){
+  const any=[...document.querySelectorAll('.pill')].some(p=>p.classList.contains('show'));
+  document.getElementById('paused').classList.toggle('show', any);
+}
+
+function buildSkeleton(){
+  document.getElementById('agents').innerHTML = AG.map(a=>`
+    <div class="col">
+      <h3>${LABEL[a]} <span id="live-${a}"></span></h3>
+      <div class="now" id="now-${a}"><span class="k">NOW</span></div>
+      <div class="scrollwrap"><div class="hist" id="hist-${a}"></div>
+        <button class="pill" data-k="${a}" onclick="jump('hist-${a}')">↓ new updates</button></div>
+    </div>`).join('');
+  built=true;
+}
+
 function render(d){
-  // chain
+  if(!built) buildSkeleton();
+  // chain (no scroll — safe to replace)
   document.getElementById('chain').innerHTML = AG.map((a,i)=>
     `<span class="node ${d.engine.stage===a?'active':''}">${a}</span>${i<2?'<span class="arrow">▸</span>':''}`
-  ).join('') + `<span class="arrow">▸</span><span class="node ${d.engine.stage==='rest'?'rest active':'rest'}">rest ∿</span>`
+  ).join('') + `<span class="arrow">▸</span><span class="node rest ${d.engine.stage==='rest'?'active':''}">rest ∿</span>`
     + ` <span style="color:var(--muted);font-size:11px" class="mono">pass ${d.engine.pass??'—'}</span>`;
-  // lamps (form encodes state: dot / ring / wave)
-  const h=d.health||{}; const L=(id,el)=>`<div class="lamp ${h[id]&&h[id].ok?'on':''}" title="${esc(h[id]&&h[id].why)}">${el}</div>`;
+  const h=d.health||{};
+  const lamp=(id,el)=>`<div class="lamp ${h[id]&&h[id].ok?'on':''}" title="${esc(h[id]&&h[id].why)}">${el}</div>`;
   document.getElementById('lamps').innerHTML =
-     L('green',`<span class="dot"></span><b>green</b>`)
-   + L('super_green',`<span class="ring"></span><b>super-green</b>`)
+     lamp('green',`<span class="dot"></span><b>green</b>`)
+   + lamp('super_green',`<span class="ring"></span><b>super-green</b>`)
    + `<div class="lamp ${h.ever_green&&h.ever_green.ok?'on':''}" title="${esc(h.ever_green&&h.ever_green.why)}">${waveSVG(d.rhythm.runs,d.rhythm.rests)||'<span class="dot"></span>'}<b>ever-green</b></div>`;
-  // revenue
-  const r=d.revenue||{}; const pos=v=>v&&v>0?'pos':'';
+  const r=d.revenue||{}, pos=v=>v&&v>0?'pos':'';
   document.getElementById('rev').innerHTML =
     `<span>Line A <b class="mono ${pos(r.line_a_external_usdc)}">$${(r.line_a_external_usdc??0).toFixed(3)}</b> ext</span>`
    +`<span>Line B <b class="mono ${pos(r.line_b_fiat_usd)}">$${(r.line_b_fiat_usd??0).toFixed(2)}</b></span>`;
-  // agents
-  document.getElementById('agents').innerHTML = AG.map(a=>{
-    const ag=d.agents[a]||{}; const hist=(ag.history||[]).slice().reverse();
-    return `<div class="col"><h3>${LABEL[a]} ${ag.live?'<span class="live"><i></i>live</span>':''}</h3>
-      <div class="now"><span class="k">NOW</span>${esc(ag.now)||'<span class="off">idle — waiting for its turn</span>'}</div>
-      <div class="hist">${hist.map(e=>`<div class="ev"><div class="t mono">${esc((e.ts||'').replace('T',' ').replace('Z',''))}</div>
-        <div class="d">${esc(e.did)||'—'}</div>${e.next?`<div class="n">→ ${esc(e.next)}</div>`:''}
-        ${e.atom&&e.atom.toLowerCase()!=='none'&&e.atom!=='none non-gated this cycle. standing rez-only'?`<div class="atom">ATOM: ${esc(e.atom)}</div>`:''}</div>`).join('')||'<div class="ev off" style="padding:12px 14px">no history yet</div>'}</div></div>`;
-  }).join('');
+  // agents — NOW replaced freely; history updated IN PLACE (scroll preserved)
+  AG.forEach(a=>{
+    const ag=d.agents[a]||{};
+    document.getElementById('live-'+a).innerHTML = ag.live?'<span class="live"><i></i>live</span>':'';
+    document.getElementById('now-'+a).innerHTML = `<span class="k">NOW</span>${esc(ag.now)||'<span class="off">idle — waiting for its turn</span>'}`;
+    const chrono=(ag.history||[]).slice();  // oldest→newest (newest at bottom)
+    const html = chrono.map(e=>`<div class="ev"><div class="t mono">${esc((e.ts||'').replace('T',' ').replace('Z',''))}</div>
+      <div class="d">${esc(e.did)||'—'}</div>${e.next?`<div class="n">→ ${esc(e.next)}</div>`:''}
+      ${e.atom&&!/^none/i.test(e.atom)?`<div class="atom">ATOM: ${esc(e.atom)}</div>`:''}</div>`).join('')
+      || '<div class="off" style="padding:12px 14px">no history yet</div>';
+    setScroll('hist-'+a, html, chrono.length);
+  });
   // links
-  document.getElementById('links').innerHTML = (d.links||[]).map(l=>{
+  const lhtml=(d.links||[]).map(l=>{
     const chip = l.type==='commit'?'<span class="chip commit">commit</span>':(l.verified?'<span class="chip ok">live ✓</span>':'<span class="chip">unverified</span>');
     const body = l.url?`<a href="${l.url}" target="_blank" rel="noopener">${esc(l.label)}</a>`:`<span class="mono" style="font-size:11.5px">${esc(l.label)}</span>`;
     return `<div class="lk">${chip}${body}</div>`;
-  }).join('')||'<div class="off" style="padding:8px 0">nothing shipped yet</div>';
+  }).join('')||'<div class="off">nothing shipped yet</div>';
+  setScroll('links', lhtml, (d.links||[]).length);
   // monitor
   monOn = !!(d.monitor&&d.monitor.on);
-  document.getElementById('toggle').className = 'toggle'+(monOn?' on':'');
+  document.getElementById('toggle').className='toggle'+(monOn?' on':'');
   const feed=(d.monitor&&d.monitor.feed)||[];
-  document.getElementById('feed').innerHTML = monOn
+  const fhtml = monOn
     ? (feed.map(f=>`<div class="feedline mono">${esc(f)}</div>`).join('')||'<div class="off">monitor on — first check pending…</div>')
     : '<div class="off">monitor off — hermes-self-heal is the floor</div>';
+  setScroll('feed', fhtml, feed.length);
   document.getElementById('stamp').textContent = 'updated '+new Date(d.generated_at).toLocaleTimeString();
 }
 
