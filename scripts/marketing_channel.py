@@ -335,7 +335,8 @@ def post_site(slug: str, title: str, description: str | None, md_body: str, publ
         if tok:
             env["CLOUDFLARE_API_TOKEN"] = tok
         else:
-            raise RuntimeError("no CLOUDFLARE_API_TOKEN and op read failed — can't write site KV")
+            return {"result": "failed", "channel": "site", "target": slug, "url": url,
+                    "error": "no CLOUDFLARE_API_TOKEN and op read failed (1Password rate-limited?) — can't write site KV"}
     payload = json.dumps({"title": title, "description": description or title, "created": created, "html": body_html})
     index = json.dumps({"slug": slug, "title": title, "created": created})
     for key, val in [(f"research:{slug}", payload), (f"research:index:{slug}", index)]:
@@ -400,7 +401,7 @@ def cmd_post(a) -> int:
             print(f"unknown channel: {a.channel}")
             return 2
     except Exception as e:
-        row = {**base, "result": "error", "error": f"{type(e).__name__}: {e}"}
+        row = {**base, "result": "error", "published": False, "error": f"{type(e).__name__}: {e}"}
         _ledger_append(row)
         print(f"ERROR — {row['error']}")
         return 1
@@ -414,7 +415,10 @@ def cmd_post(a) -> int:
         print(f"  {('url: ' + (a.url or '')) if a.channel=='hn' else 'body chars: ' + str(len(body))}")
         print("  re-run with --publish to post for real.")
         return 0
-    print(f"PUBLISHED ({a.channel}) → {res.get('url')}")
+    if res["result"] != "ok":
+        print(f"FAILED ({a.channel}) — NOT published: {res.get('error', 'unknown error')}")
+        return 1
+    print(f"PUBLISHED ({a.channel}) → {res.get('url')} (verified live)")
     return 0
 
 
