@@ -8113,17 +8113,75 @@ const CHECK_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8"><
 <div id="card"></div>
 <p><small>Free: 3 checks/day. Unlimited for agents via x402 pay-per-call: <a href="/chain/token-report">/chain/token-report</a> ($0.01) · <a href="/chain/token-security">/chain/token-security</a> ($0.009) · <a href="/llms.txt">llms.txt</a>. Heuristic signal, not financial advice.</small></p>
 <script>
-const q=new URLSearchParams(location.search).get('token');if(q){document.getElementById('t').value=q;go()}
+const _sp=new URLSearchParams(location.search),q=_sp.get('token');if(q){document.getElementById('t').value=q;if(!_sp.get('tx'))go()}
 function share(t,j,m){const u=location.origin+'/check?token='+t,tx=encodeURIComponent((m.symbol||'Token')+' on Base: '+j.verdict+' (risk '+j.risk_score+'/100) via Base Token Check'),eu=encodeURIComponent(u);
 return '<p>Share: <a href="https://twitter.com/intent/tweet?text='+tx+'&url='+eu+'" target="_blank" rel="noopener">X</a> · <a href="https://warpcast.com/~/compose?text='+tx+'&embeds[]='+eu+'" target="_blank" rel="noopener">Farcaster</a> · <a href="https://t.me/share/url?url='+eu+'&text='+tx+'" target="_blank" rel="noopener">Telegram</a></p>'}
 async function go(){const t=document.getElementById('t').value.trim(),c=document.getElementById('card');c.style.display='block';
 if(!/^0x[0-9a-fA-F]{40}$/.test(t)){c.textContent='Enter a valid 0x… address (40 hex chars).';return}
 c.textContent='Checking…';history.replaceState(null,'','?token='+t);
 try{const r=await fetch('/chain/token-report/preview?token='+t);const j=await r.json();
-if(!r.ok){c.innerHTML='<b>'+(j.error||'Limit reached')+'</b><br>Daily free limit may be used up — use the paid x402 route for more.';return}
+if(!r.ok){c.innerHTML='<b>'+esc0(j.error||'Daily free limit reached (3/day)')+'</b><br>Want to keep checking, or size this to a real trade? Pay 0.01 USDC from your wallet for a one-off full check of this token — no signup.'+unlockUI(t);return}
 const m=j.token_meta||{},s=j.security||{},l=j.liquidity||{};const esc=x=>String(x).replace(/[<>&]/g,'');
 c.innerHTML='<div class="v '+esc(j.verdict)+'">'+esc(j.verdict)+'</div><div>'+esc(m.symbol||'?')+' · '+esc(m.name||'')+' · risk '+esc(j.risk_score)+'/100</div><ul>'
-+'<li>Honeypot: '+(s.isHoneypot?'YES':'no')+' (sim: '+esc(s.simStatus)+')</li><li>Can mint: '+(s.canMint?'yes':'no')+' · Can pause: '+(s.canPause?'yes':'no')+' · Blacklist: '+(s.hasBlacklist?'yes':'no')+'</li><li>Upgradeable proxy: '+(s.upgradeableProxy?'yes':'no')+' · Owner renounced: '+(s.ownerRenounced?'yes':'no')+'</li><li>Liquidity (WETH pool): '+(l.wethPoolUsd==null?'n/a':'$'+Math.round(l.wethPoolUsd))+'</li></ul><div>'+(j.reasons||[]).map(esc).join('; ')+'</div>'+share(t,j,m)}catch(e){c.textContent='Error: '+e}}
++'<li>Honeypot: '+(s.isHoneypot?'YES':'no')+' (sim: '+esc(s.simStatus)+')</li><li>Can mint: '+(s.canMint?'yes':'no')+' · Can pause: '+(s.canPause?'yes':'no')+' · Blacklist: '+(s.hasBlacklist?'yes':'no')+'</li><li>Upgradeable proxy: '+(s.upgradeableProxy?'yes':'no')+' · Owner renounced: '+(s.ownerRenounced?'yes':'no')+'</li><li>Liquidity (WETH pool): '+(l.wethPoolUsd==null?'n/a':'$'+Math.round(l.wethPoolUsd))+'</li></ul><div>'+(j.reasons||[]).map(esc).join('; ')+'</div>'+share(t,j,m)+unlockUI(t)}catch(e){c.textContent='Error: '+e}}
+function esc0(x){return String(x).replace(/[<>&]/g,function(s){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[s]})}
+// Pay 0.01 USDC from the visitor's own browser wallet (or an in-feed Farcaster
+// provider), then unlock the full trade-sized swap-execution check for this token.
+// No account, no manifest: a human settles USDC on Base directly to our wallet and
+// the /gate/swap/unlock endpoint verifies the on-chain receipt before serving.
+var PAY_TO='0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10';
+var USDC='0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+var UNLOCK='0.01';
+function unlockUI(t){
+  var h='<div class="row" style="margin-top:.9rem"><button id="unlk" style="background:#1f6feb">Unlock sized trade check - pay 0.01 USDC</button></div>'
+    +'<div id="ures" style="margin-top:.6rem"></div>'
+    +'<small>One-off, no signup. Checks execution risk sized to a real $100 trade (price impact, sell-tax, routing). Agents can pay inline via x402 at <a href="/gate/swap">/gate/swap</a>.</small>';
+  setTimeout(function(){var b=document.getElementById('unlk');if(b)b.onclick=function(){payUnlock(t)}},0);
+  return h;
+}
+async function getProvider(){
+  try{if(window.__FC&&window.__FC.wallet&&window.__FC.wallet.getEthereumProvider){var p=await window.__FC.wallet.getEthereumProvider();if(p)return p}}catch(e){}
+  if(window.ethereum)return window.ethereum;
+  return null;
+}
+function pad32(h){h=h.replace(/^0x/,'').toLowerCase();while(h.length<64)h='0'+h;return h}
+async function payUnlock(t){
+  var u=document.getElementById('ures');u.textContent='Opening wallet...';
+  var p=await getProvider();
+  if(!p){u.innerHTML='No wallet detected. Open this in a browser with a Base wallet (Coinbase Wallet, Rabby, MetaMask on Base) or the Base app. You can also send '+UNLOCK+' USDC to '+PAY_TO.slice(0,10)+'... and reload this page with the tx hash appended as &amp;tx=.';return}
+  try{
+    var accts=await p.request({method:'eth_requestAccounts'});var from=accts&&accts[0];
+    try{await p.request({method:'wallet_switchEthereumChain',params:[{chainId:'0x2105'}]})}catch(e){}
+    var data='0xa9059cbb'+pad32(PAY_TO)+pad32((10000).toString(16));
+    u.textContent='Confirm the 0.01 USDC payment in your wallet...';
+    var tx=await p.request({method:'eth_sendTransaction',params:[{from:from,to:USDC,data:data,value:'0x0'}]});
+    history.replaceState(null,'','?token='+t+'&tx='+tx);
+    u.innerHTML='Payment sent (<a href="https://basescan.org/tx/'+tx+'" target="_blank" rel="noopener">'+tx.slice(0,12)+'...</a>). Verifying on Base...';
+    await finishUnlock(t,tx,u);
+  }catch(e){u.innerHTML='Wallet error: '+esc0(String(e&&e.message||e))}
+}
+async function finishUnlock(t,tx,u){
+  for(var i=0;i<16;i++){
+    await new Promise(function(r){setTimeout(r,2500)});
+    var r=await fetch('/gate/swap/unlock?token='+t+'&notional_usd=100&tx='+tx);
+    if(r.status===202){u.textContent='Waiting for the transaction to confirm on Base...';continue}
+    var j=await r.json();
+    if(r.ok){
+      var dec=String(j.decision||'').toUpperCase();
+      u.innerHTML='<div class="v '+(dec==='DANGER'?'DANGER':dec==='CAUTION'?'CAUTION':'SAFE')+'">'+esc0(dec||'DONE')+'</div>'
+        +'<p>Unlocked - paid 0.01 USDC. '+esc0(j.reason||'')+'</p>'
+        +'<ul><li>Price impact (sized $100): '+esc0(j.price_impact_pct!=null?j.price_impact_pct+'%':'n/a')+'</li>'
+        +'<li>Flags: '+(((j.flags||[]).map(esc0)).join('; ')||'none')+'</li></ul>';
+      return;
+    }
+    u.innerHTML='Verification: <b>'+esc0(j.error||'failed')+'</b>';return;
+  }
+  u.innerHTML='Still confirming on Base - your payment is on-chain. Reload this page (the tx is in the URL) to finish the unlock.';
+}
+// If the page is reopened with &tx=<hash> after an out-of-band payment, finish the unlock.
+(function(){var sp=new URLSearchParams(location.search),tx=sp.get('tx'),t=sp.get('token');
+  if(tx&&t&&/^0x[0-9a-fA-F]{40}$/.test(t)){var c=document.getElementById('card');c.style.display='block';
+    c.innerHTML='<div id="ures">Resuming unlock for your payment...</div>';finishUnlock(t,tx,document.getElementById('ures'))}})();
 </script></body></html>`;
 app.get("/check", (c) => {
   const t = c.req.query("token") ?? "";
