@@ -424,6 +424,24 @@ type AppEnv = {
 const app = new Hono<AppEnv>();
 
 // ---------------------------------------------------------------------------
+// Baseline security headers on every response (additive — no CSP, so inline
+// scripts on /check, /miniapp etc. are unaffected). Closes the self-assessment
+// finding: product surfaces served zero standard security headers. HSTS +
+// nosniff + SAMEORIGIN framing + referrer/permissions hardening.
+// ---------------------------------------------------------------------------
+app.use("*", async (c, next) => {
+  await next();
+  const h = c.res.headers;
+  if (!h.has("strict-transport-security"))
+    h.set("strict-transport-security", "max-age=31536000; includeSubDomains; preload");
+  if (!h.has("x-content-type-options")) h.set("x-content-type-options", "nosniff");
+  if (!h.has("x-frame-options")) h.set("x-frame-options", "SAMEORIGIN");
+  if (!h.has("referrer-policy")) h.set("referrer-policy", "strict-origin-when-cross-origin");
+  if (!h.has("permissions-policy"))
+    h.set("permissions-policy", "geolocation=(), microphone=(), camera=(), usb=()");
+});
+
+// ---------------------------------------------------------------------------
 // Free health endpoint
 // ---------------------------------------------------------------------------
 
