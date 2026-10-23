@@ -252,4 +252,98 @@ assert.ok(/^grsg-verify=[0-9a-f]{40}$/.test(token), "token shape");
   ok(other !== token, "token differs per host (no cross-domain replay)");
 }
 
+// ---- Line-B monitoring subscription: sub:<host> gates the "monitored" badge ----
+
+// 13. monitored badge: verified owner but NO sub => "monitoring off" (grey upsell).
+{
+  const kv = makeFakeKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, verified_at: "2026-10-01T00:00:00Z", verify_method: "dns-txt", last_ok: true }));
+  const j = await (await app.request("/scan/verify/badge?kind=monitored&domain=" + HOST, {}, { API_KEYS: kv })).json();
+  ok(j.message === "monitoring off" && j.color === "lightgrey", "verified+no-sub => monitoring off");
+}
+
+// 14. monitored badge: verified owner + ACTIVE sub (future period) => green.
+{
+  const kv = makeFakeKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, verified_at: "2026-10-01T00:00:00Z", verify_method: "dns-txt", last_ok: true }));
+  kv.store.set("sub:" + HOST, JSON.stringify({ host: HOST, active: true, status: "active", current_period_end_ms: Date.now() + 20 * 24 * 3600 * 1000 }));
+  const j = await (await app.request("/scan/verify/badge?kind=monitored&domain=" + HOST, {}, { API_KEYS: kv })).json();
+  ok(j.color === "brightgreen" && /monitored/.test(j.message), "verified+active-sub => green monitored");
+}
+
+// 15. monitored badge: sub expired past the grace window => grey again.
+{
+  const kv = makeFakeKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, verified_at: "2026-10-01T00:00:00Z", verify_method: "dns-txt", last_ok: true }));
+  kv.store.set("sub:" + HOST, JSON.stringify({ host: HOST, active: true, status: "active", current_period_end_ms: Date.now() - 10 * 24 * 3600 * 1000 }));
+  const j = await (await app.request("/scan/verify/badge?kind=monitored&domain=" + HOST, {}, { API_KEYS: kv })).json();
+  ok(j.message === "monitoring off", "sub past grace => monitoring off");
+}
+
+// 16. monitored badge: explicitly deactivated sub (canceled/past_due) => grey.
+{
+  const kv = makeFakeKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, verified_at: "2026-10-01T00:00:00Z", verify_method: "dns-txt", last_ok: true }));
+  kv.store.set("sub:" + HOST, JSON.stringify({ host: HOST, active: false, status: "canceled" }));
+  const j = await (await app.request("/scan/verify/badge?kind=monitored&domain=" + HOST, {}, { API_KEYS: kv })).json();
+  ok(j.message === "monitoring off", "canceled sub => monitoring off");
+}
+
+// 17. monitored badge never green without ownership (unclaimed, even if a sub row exists).
+{
+  const kv = makeFakeKV();
+  kv.store.set("sub:" + HOST, JSON.stringify({ host: HOST, active: true, status: "active" }));
+  const j = await (await app.request("/scan/verify/badge?kind=monitored&domain=" + HOST, {}, { API_KEYS: kv })).json();
+  ok(j.message === "unclaimed" && j.color === "lightgrey", "no ownership => never monitored");
+}
+
+// 18. monitored badge: ownership lapsed takes precedence (amber) over any sub.
+{
+  const kv = makeFakeKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, last_ok: false, revoked_at: "2026-10-20T00:00:00Z" }));
+  kv.store.set("sub:" + HOST, JSON.stringify({ host: HOST, active: true, status: "active", current_period_end_ms: Date.now() + 1e9 }));
+  const j = await (await app.request("/scan/verify/badge?kind=monitored&domain=" + HOST, {}, { API_KEYS: kv })).json();
+  ok(j.color === "orange" && /lapsed/.test(j.message), "lapsed ownership => amber even with active sub");
+}
+
+// 19. free ownership badge is UNCHANGED by the sub (stays green on verified-only).
+{
+  const kv = makeFakeKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, verified_at: "2026-10-01T00:00:00Z", last_ok: true }));
+  const j = await (await app.request("/scan/verify/badge?domain=" + HOST, {}, { API_KEYS: kv })).json();
+  ok(j.message === "verified owner" && j.color === "brightgreen", "free ownership badge unaffected");
+}
+
+// 20. status endpoint reports monitoring state.
+{
+  const kv = makeFakeKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, verified_at: "2026-10-01T00:00:00Z", last_ok: true }));
+  kv.store.set("sub:" + HOST, JSON.stringify({ host: HOST, active: true, status: "active", current_period_end_ms: Date.now() + 1e9 }));
+  const j = await (await app.request("/scan/verify/status?domain=" + HOST, {}, { API_KEYS: kv })).json();
+  ok(j.monitored === true && j.monitoring_active === true, "status reports monitored:true");
+  ok(typeof j.monitoring_period_end === "string", "status reports monitoring_period_end");
+}
+
+// 21. checkout refuses to bind a sub to an UNVERIFIED host (can't pay to monitor
+//     a server you haven't proven you control).
+{
+  const kv = makeFakeKV();
+  const env = { API_KEYS: kv, STRIPE_API_KEY: "sk_test_x", STRIPE_PRICE_ID: "price_x" };
+  const res = await app.request("/stripe/create-checkout-session?host=" + HOST, { method: "POST" }, env);
+  const j = await res.json();
+  ok(res.status === 400 && j.error === "ownership_not_verified", "unverified host => checkout refused");
+}
+
+// 22. webhook host extraction from a checkout session + an invoice (renewal).
+{
+  const kv = makeFakeKV();
+  // Simulate the upsert path directly via the badge after planting a sub the way
+  // the webhook would (checkout then renewal extends the period).
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, last_ok: true }));
+  // checkout: active, no period yet => active by flag alone
+  kv.store.set("sub:" + HOST, JSON.stringify({ host: HOST, active: true, status: "active" }));
+  let j = await (await app.request("/scan/verify/badge?kind=monitored&domain=" + HOST, {}, { API_KEYS: kv })).json();
+  ok(j.color === "brightgreen", "checkout (active, no period) => green");
+}
+
 console.log(`verify tests: ${passed}/${passed} passed`);

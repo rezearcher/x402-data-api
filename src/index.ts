@@ -3936,8 +3936,50 @@ app.post("/stripe/create-checkout-session", async (c) => {
     params.append("mode", "subscription");
     params.append("line_items[0][price]", c.env.STRIPE_PRICE_ID);
     params.append("line_items[0][quantity]", "1");
-    params.append("success_url", `${BASE}/?session_id={CHECKOUT_SESSION_ID}`);
-    params.append("cancel_url", `${BASE}/`);
+
+    // Line-B monitoring sub: if the caller passes a host to monitor (?host= /
+    // ?url= on GET, or JSON {host|url} on POST), bind the subscription to that
+    // host so the "monitored" badge goes green. We only bind a host whose
+    // ownership is already verified (DNS/file control) — you can only pay to
+    // monitor a server you have proven you control. Without a host it is the
+    // plain Pro API-key subscription (unchanged).
+    let bindHost: string | null = null;
+    const qHost = c.req.query("host") || c.req.query("url") || c.req.query("domain") || "";
+    let bodyHost = "";
+    try {
+      const ct = c.req.header("content-type") || "";
+      if (ct.includes("application/json")) {
+        const b = (await c.req.json().catch(() => ({}))) as any;
+        bodyHost = b?.host || b?.url || b?.domain || "";
+      }
+    } catch { /* no/invalid body — fine */ }
+    const rawHost = qHost || bodyHost;
+    if (rawHost) {
+      const h = verifyHost(rawHost);
+      if (h) {
+        const vrec = await grsgVerifyRecord(c, h);
+        if (vrec && vrec.last_ok !== false) bindHost = h;
+        else {
+          return c.json(
+            { error: "ownership_not_verified", host: h, how: `Prove control of ${h} first at /scan/verify?domain=${h}, then subscribe to monitor it.` },
+            { status: 400 },
+          );
+        }
+      }
+    }
+    if (bindHost) {
+      // client_reference_id rides the checkout.session; subscription_data.metadata
+      // rides every renewal invoice — bind both so first charge AND renewals map
+      // back to the host.
+      params.append("client_reference_id", bindHost);
+      params.append("metadata[grsg_host]", bindHost);
+      params.append("subscription_data[metadata][grsg_host]", bindHost);
+      params.append("success_url", `${BASE}/scan/report?url=${encodeURIComponent("https://" + bindHost)}&session_id={CHECKOUT_SESSION_ID}`);
+      params.append("cancel_url", `${BASE}/scan/verify?domain=${encodeURIComponent(bindHost)}`);
+    } else {
+      params.append("success_url", `${BASE}/?session_id={CHECKOUT_SESSION_ID}`);
+      params.append("cancel_url", `${BASE}/`);
+    }
 
     const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
       method: "POST",
@@ -4089,6 +4131,21 @@ app.post("/stripe/webhook", async (c) => {
       c,
       recordFiatSettlement(makeUsageCounter(c.env), "checkout_paid", session.amount_total || 0),
     );
+
+    // Line-B monitoring sub: if this checkout was bound to a host, activate its
+    // "monitored" badge. The sub:<host> record is the green-state gate the
+    // badge reads. Renewals extend it via invoice.paid below.
+    const subHost = grsgHostFromStripe(session);
+    if (subHost) {
+      fireAndForget(c, grsgSubUpsert(c, subHost, {
+        active: true,
+        status: "active",
+        source: "checkout.session.completed",
+        stripe_customer: session.customer || null,
+        stripe_subscription: session.subscription || null,
+        activated_at: new Date().toISOString(),
+      }));
+    }
   }
 
   // invoice.paid = a recurring subscription renewal — the REPEAT dollar that
@@ -4107,9 +4164,42 @@ app.post("/stripe/webhook", async (c) => {
           c,
           recordFiatSettlement(makeUsageCounter(c.env), "invoice_paid", invoice?.amount_paid || 0),
         );
+
+        // Line-B monitoring sub renewal: a paid invoice keeps the badge green.
+        // Extend the paid period from Stripe's line period (unix seconds → ms).
+        const subHost = grsgHostFromStripe(invoice);
+        if (subHost) {
+          const periodEndSec = invoice?.lines?.data?.[0]?.period?.end || invoice?.period_end || 0;
+          fireAndForget(c, grsgSubUpsert(c, subHost, {
+            active: true,
+            status: "active",
+            source: "invoice.paid",
+            stripe_customer: invoice?.customer || null,
+            stripe_subscription: invoice?.subscription || null,
+            last_invoice_id: invoiceId,
+            current_period_end_ms: periodEndSec ? periodEndSec * 1000 : undefined,
+          }));
+        }
       } else {
         console.log(JSON.stringify({ event: "stripe_invoice_already_recorded", invoice_id: invoiceId }));
       }
+    }
+  }
+
+  // Monitoring lapse: a canceled subscription or a failed charge flips the
+  // "monitored" badge off (grey) — the honest drift signal and the renewal
+  // pressure. We never double-charge or mint on these; they only downgrade the
+  // badge gate. Dedup is unnecessary (idempotent downgrade).
+  if (event?.type === "customer.subscription.deleted" || event?.type === "invoice.payment_failed") {
+    const obj = event.data.object;
+    const subHost = grsgHostFromStripe(obj);
+    if (c.env.API_KEYS && subHost) {
+      fireAndForget(c, grsgSubUpsert(c, subHost, {
+        active: false,
+        status: event.type === "customer.subscription.deleted" ? "canceled" : "past_due",
+        source: event.type,
+        deactivated_at: new Date().toISOString(),
+      }));
     }
   }
 
@@ -9468,6 +9558,80 @@ async function grsgVerifyRecord(c: any, host: string): Promise<any | null> {
   }
 }
 
+// --- Line-B monitoring subscription: bind a Stripe sub to a verified host -----
+// The free "verified owner" badge (DNS/file control) is the funnel hook and
+// stays free forever. The PAID product is continuous monitoring: we keep the
+// green "monitored" badge live, re-verify + re-scan on a schedule, and send
+// drift alerts — only while the owner's Stripe subscription is active. The
+// sub:<host> KV record is the single source of truth for "monitoring is paid
+// up"; the webhook writes it, this reads it. A grace window after the paid
+// period keeps a badge from flickering grey on a late renewal webhook.
+const GRSG_SUB_GRACE_MS = 3 * 24 * 60 * 60 * 1000; // 3 days past period end
+
+async function grsgSubRecord(c: any, host: string): Promise<any | null> {
+  try {
+    const raw = await c.env.API_KEYS?.get("sub:" + host);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+// Monitoring is "active" when the subscription is marked active AND we are still
+// within the paid period (+ grace). A webhook can lag, so current_period_end is
+// authoritative when present; absent it (first checkout before any period data),
+// the active flag alone governs.
+function grsgSubActive(rec: any): boolean {
+  if (!rec || rec.active === false) return false;
+  if (rec.active !== true) return false;
+  const end = Number(rec.current_period_end_ms);
+  if (Number.isFinite(end) && end > 0) {
+    return Date.now() <= end + GRSG_SUB_GRACE_MS;
+  }
+  return true;
+}
+
+// Upsert the sub:<host> record on a settled Stripe event. Keeps first-seen time,
+// flips active/period, and records the source event for auditability. Degrades
+// open (an unreachable KV must never 500 the webhook → Stripe would retry).
+async function grsgSubUpsert(c: any, host: string, patch: any): Promise<void> {
+  try {
+    const existing = await grsgSubRecord(c, host);
+    const now = new Date().toISOString();
+    const rec = {
+      host,
+      ...(existing || { first_seen: now }),
+      ...patch,
+      last_event_at: now,
+    };
+    await c.env.API_KEYS?.put("sub:" + host, JSON.stringify(rec));
+    console.log(JSON.stringify({ event: "grsg_sub_upsert", host, active: rec.active, source: patch.source }));
+  } catch (e) {
+    console.log(JSON.stringify({ event: "grsg_sub_upsert_error", host, error: (e as Error).message }));
+  }
+}
+
+// Pull our host binding out of a Stripe object defensively — it can ride on the
+// checkout session (client_reference_id / metadata) or, for renewals, on the
+// subscription metadata surfaced via the invoice (subscription_details.metadata
+// or the first line item's metadata). Returns a verifyHost-normalized host.
+function grsgHostFromStripe(obj: any): string | null {
+  const cands = [
+    obj?.client_reference_id,
+    obj?.metadata?.grsg_host,
+    obj?.subscription_details?.metadata?.grsg_host,
+    obj?.lines?.data?.[0]?.metadata?.grsg_host,
+    obj?.parent?.subscription_details?.metadata?.grsg_host,
+  ];
+  for (const cand of cands) {
+    if (typeof cand === "string" && cand) {
+      const h = verifyHost(cand);
+      if (h) return h;
+    }
+  }
+  return null;
+}
+
 // Re-run the proof of control for an already-claimed host. Prefers the method
 // the owner originally used but falls back to the other (an operator may migrate
 // DNS <-> served-file). Returns the method that still proves control, or null if
@@ -9537,6 +9701,8 @@ app.get("/scan/verify/status", async (c) => {
   if (!host) return c.json({ error: "pass ?url=<mcp-server-url> or ?domain=<domain>" }, { status: 400 });
   const rec = await grsgVerifyRecord(c, host);
   grsgScheduleRevalidate(c, host, rec);
+  const srec = await grsgSubRecord(c, host);
+  const monitored = (!!rec && rec.last_ok !== false) && grsgSubActive(srec);
   return c.json({
     host,
     // A claimed record whose proof has since lapsed is still "claimed" (the
@@ -9549,6 +9715,10 @@ app.get("/scan/verify/status", async (c) => {
     authz_version: rec?.authz_version ?? null,
     last_checked: rec?.last_checked ?? null,
     revoked_at: rec?.revoked_at ?? null,
+    // Line-B monitoring subscription state (the paid layer on top of ownership).
+    monitored,
+    monitoring_active: grsgSubActive(srec),
+    monitoring_period_end: srec?.current_period_end_ms ? new Date(srec.current_period_end_ms).toISOString() : null,
   });
 });
 
@@ -9556,8 +9726,29 @@ app.get("/scan/verify/status", async (c) => {
 // verdict badge): green only when the domain owner has completed the DNS
 // challenge. The claimed-asset trust signal.
 app.get("/scan/verify/badge", async (c) => {
-  const base = { schemaVersion: 1, label: "ownership", cacheSeconds: 3600 };
+  const kind = (c.req.query("kind") || "").toLowerCase();
   const host = verifyHost(c.req.query("url") || c.req.query("domain") || "");
+
+  // kind=monitored → the PAID trust badge: green only when ownership is verified
+  // AND a monitoring subscription is active. This is the badge an author embeds
+  // to prove the server is under continuous watch; it goes grey the moment the
+  // sub lapses, which is the renewal hook. (The default badge below is the free
+  // ownership-only signal and is unchanged.)
+  if (kind === "monitored") {
+    const mbase = { schemaVersion: 1, label: "mcp security", cacheSeconds: 1800 };
+    if (!host) return c.json({ ...mbase, message: "unknown", color: "lightgrey" });
+    const vrec = await grsgVerifyRecord(c, host);
+    grsgScheduleRevalidate(c, host, vrec);
+    if (!vrec) return c.json({ ...mbase, message: "unclaimed", color: "lightgrey" });
+    if (vrec.last_ok === false)
+      return c.json({ ...mbase, message: "verification lapsed", color: "orange", cacheSeconds: 600 });
+    const srec = await grsgSubRecord(c, host);
+    if (!grsgSubActive(srec))
+      return c.json({ ...mbase, message: "monitoring off", color: "lightgrey", cacheSeconds: 600 });
+    return c.json({ ...mbase, message: "monitored · verified", color: "brightgreen" });
+  }
+
+  const base = { schemaVersion: 1, label: "ownership", cacheSeconds: 3600 };
   if (!host) return c.json({ ...base, message: "unknown", color: "lightgrey" });
   const rec = await grsgVerifyRecord(c, host);
   grsgScheduleRevalidate(c, host, rec);
@@ -9687,7 +9878,13 @@ app.get("/scan/verify/check", async (c) => {
     scan_badge_markdown: scanBadge
       ? `[![MCP security](${scanBadge})](${ORIGIN}/scan/report?url=${encodeURIComponent(url)})`
       : null,
-    monitor: "To keep the badge live, get drift alerts, and the full auditor-grade report, start a monitoring subscription at /scan/badge-gen.",
+    // The paid "monitored" badge markdown is handed over now so the author can
+    // drop it straight into their README; it renders grey ("monitoring off")
+    // until the subscription is active, then flips green on the first paid
+    // invoice. Subscribe binds the sub to THIS host.
+    monitored_badge_markdown: `[![MCP security: monitored](https://img.shields.io/endpoint?url=${encodeURIComponent(ORIGIN + "/scan/verify/badge?kind=monitored&domain=" + host)}&style=flat-square)](${ORIGIN}/scan/report?url=${encodeURIComponent(url || "https://" + host)})`,
+    subscribe_url: `${ORIGIN}/stripe/create-checkout-session?host=${encodeURIComponent(host)}`,
+    monitor: `To turn the badge green and keep it live with drift alerts + the full auditor-grade report, start monitoring for this host: POST ${ORIGIN}/stripe/create-checkout-session?host=${host} ($9.99/mo). The badge goes grey if the subscription lapses.`,
   });
 });
 
@@ -9782,7 +9979,11 @@ if(chk)chk.onclick=async function(){
         "<div class=row style=\\"margin-top:.6rem\\"><strong style=font-size:.85rem>Owner badge</strong></div>"+
         "<pre>"+j.owner_badge_markdown+"</pre>"+
         (j.scan_badge_markdown?"<div class=row style=\\"margin-top:.6rem\\"><strong style=font-size:.85rem>Scan verdict badge</strong></div><pre>"+j.scan_badge_markdown+"</pre>":"")+
-        "<p class=muted style=\\"margin:.7rem 0 0\\">"+j.monitor+"</p>";
+        (j.monitored_badge_markdown?"<div class=row style=\\"margin-top:.9rem\\"><strong style=font-size:.85rem>Monitored badge</strong> <span class=muted style=font-size:.8rem>(grey until you start monitoring)</span></div><pre>"+j.monitored_badge_markdown+"</pre>":"")+
+        "<p class=muted style=\\"margin:.7rem 0 .4rem\\">"+j.monitor+"</p>"+
+        (j.subscribe_url?"<button id=sub style=\\"margin-top:.2rem\\">Start monitoring — $9.99/mo</button>":"");
+      var sb=document.getElementById("sub");
+      if(sb)sb.onclick=async function(){sb.disabled=true;sb.textContent="Opening checkout…";try{var sr=await fetch(j.subscribe_url,{method:"POST"});var sj=await sr.json();if(sj.url){location.href=sj.url;}else{sb.disabled=false;sb.textContent="Start monitoring — $9.99/mo";alert(sj.error||"Checkout unavailable");}}catch(e){sb.disabled=false;sb.textContent="Start monitoring — $9.99/mo";alert("Network error");}};
     } else if(j.pending){
       out.innerHTML="<strong style=\\"color:#ca8a04\\">Not found yet</strong> &mdash; add either proof above, then re-check. "+(j.note||"");
     } else {
@@ -11028,6 +11229,8 @@ ${ctaBlock}${scriptBlock}`);
   let ownerBlock = "";
   const ownerHost = verifyHost(target);
   const ownerRec = ownerHost ? await grsgVerifyRecord(c, ownerHost) : null;
+  const ownerSub = ownerHost ? await grsgSubRecord(c, ownerHost) : null;
+  const ownerMonitored = grsgSubActive(ownerSub);
   if (ownerRec && ownerRec.last_ok === false) {
     // Was claimed, but the DNS/file proof has since been removed — say so plainly.
     const lapsedAt = String(ownerRec.revoked_at || ownerRec.last_checked || "").slice(0, 19).replace("T", " ");
@@ -11039,10 +11242,17 @@ ${ctaBlock}${scriptBlock}`);
   } else if (ownerRec) {
     const claimedAt = String(ownerRec.verified_at || "").slice(0, 19).replace("T", " ");
     const via = ownerRec.verify_method === "http-file" ? "served-file" : "DNS";
+    // Monitored (paid) vs verified-only (free). A monitored server shows the
+    // green continuous-watch badge; a verified-only one shows an upsell to it.
+    const monitorRow = ownerMonitored
+      ? `<div class=badge-row style="margin-top:.5rem"><img alt="mcp security monitored" src="https://img.shields.io/endpoint?url=${encodeURIComponent(ORIGIN + "/scan/verify/badge?kind=monitored&domain=" + ownerHost)}&style=flat-square"></div>
+  <p class=summary style="margin:.5rem 0 0"><span class="pill clear">monitored</span> &nbsp;This server is under continuous monitoring — re-verified and re-scanned on a schedule with drift alerts.</p>`
+      : `<p class=summary style="margin:.5rem 0 0"><span class="pill unknown">monitoring off</span> &nbsp;Ownership is verified, but continuous monitoring is not active. <a href="/scan/verify?domain=${encodeURIComponent(ownerHost)}">Turn on monitoring</a> to keep a green badge with drift alerts.</p>`;
     ownerBlock = `<h2>Ownership</h2>
 <div class=card>
   <div class=badge-row><img alt="ownership verified" src="https://img.shields.io/endpoint?url=${encodeURIComponent(ORIGIN + "/scan/verify/badge?domain=" + ownerHost)}&style=flat-square"></div>
   <p class=summary style="margin:.5rem 0 0"><span class="pill clear">verified owner</span> &nbsp;The operator of <code>${esc(ownerHost)}</code> proved domain control (${esc(via)} challenge${claimedAt ? `, ${esc(claimedAt)} UTC` : ""}). This report is for a claimed server.</p>
+  ${monitorRow}
 </div>`;
   } else if (ownerHost) {
     ownerBlock = `<h2>Ownership</h2>
