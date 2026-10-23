@@ -25,8 +25,16 @@ import urllib.request
 import urllib.error
 import datetime
 
-METRICS_URL = "https://x402-data-api.sigrunner.workers.dev/metrics"
+METRICS_BASE = "https://x402-data-api.sigrunner.workers.dev/metrics"
 OUT = os.path.expanduser("~/.hermes/data/x402-revenue/fiat_latest.json")
+
+# The oracle must read GROUND TRUTH, not the public edge cache. /metrics carries
+# Cache-Control: public, max-age=3600 to bound crawler-driven DO reads; that edge
+# cache can also pin a transient 5xx for the whole hour (observed 2026-10-23). A
+# unique query param is a fresh CDN cache key -> always re-executes the worker.
+# Cost: one extra DO read per daily run — negligible vs the 24/day miss budget.
+def _fresh_url():
+    return f"{METRICS_BASE}?oracle={int(time.time() * 1000)}"
 
 # /metrics intermittently 500s under the CF free-tier DO-budget degraded read
 # (observed 2026-10-23). A once-daily poll that lands on a blip would mask real
@@ -50,7 +58,7 @@ def main() -> int:
     note = ""
     for attempt in range(1, RETRIES + 1):
         try:
-            req = urllib.request.Request(METRICS_URL, headers={"User-Agent": "greyridge-fiat-oracle/1"})
+            req = urllib.request.Request(_fresh_url(), headers={"User-Agent": "greyridge-fiat-oracle/1"})
             with urllib.request.urlopen(req, timeout=25) as r:
                 code = r.status
                 body = json.loads(r.read())
@@ -76,7 +84,7 @@ def main() -> int:
     out = {
         "fetched_at": now,
         "status": status,  # 'ok' only on a clean read; else 'read-failed'
-        "source": METRICS_URL,
+        "source": METRICS_BASE,
         "total_gross_usd": float(total or 0.0) if status == "ok" else 0.0,
         "checkout_paid": checkout,
         "invoice_paid": invoice,
