@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { RESPONSE_EXAMPLES } from "./examples";
 import {
   GAS_SUCCESS_SCHEMA, WALLET_SUCCESS_SCHEMA, toOpenApiSuccess, gasSuccess,
@@ -8001,6 +8001,91 @@ app.get("/gate/swap", async (c) => {
   }
 });
 
+// Browser-wallet unlock for the sized swap gate. A human (not an x402 agent) pays
+// a small direct USDC transfer to PAY_TO from their own wallet, then presents the
+// tx hash here; we verify on-chain that the transfer landed in our wallet for at
+// least the unlock price and, if so, serve the full sized /gate/swap result for
+// ANY Base token with no daily trial cap. This is the keyless, manifest-free,
+// zero-operator path that lets a human in a browser (or an in-feed Farcaster
+// webview) produce a real on-chain USDC settle — the x402 gate above only a
+// scripted agent client can satisfy. Self-verifying (reads the receipt from the
+// public chain), so it is intentionally NOT an x402-gated route.
+const UNLOCK_PRICE_USDC = 0.01;
+const USDC_TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+// Verify a Base USDC Transfer to PAY_TO of >= minUsdc inside a mined tx. Returns
+// the payer + amount on success, a reason on failure, or pending if not yet mined.
+async function verifyUsdcPaymentToPayTo(
+  c: Context<AppEnv>,
+  txHash: string,
+  minUsdc: number,
+): Promise<{ ok: true; from: string; amount_usdc: number } | { ok: false; pending?: boolean; error: string }> {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) return { ok: false, error: "tx must be a 0x-prefixed 32-byte transaction hash" };
+  let receipt: any;
+  try {
+    receipt = await baseRpc("eth_getTransactionReceipt", [txHash.toLowerCase()]);
+  } catch (e) {
+    return { ok: false, error: "receipt_read_failed: " + (e instanceof Error ? e.message : String(e)) };
+  }
+  if (receipt == null) return { ok: false, pending: true, error: "transaction not yet mined" };
+  if (String(receipt.status).toLowerCase() !== "0x1") return { ok: false, error: "transaction reverted on-chain" };
+  const payTo = (c.env.PAY_TO || "").toLowerCase();
+  const padTo = "0x" + payTo.replace(/^0x/, "").padStart(64, "0");
+  const usdc = USDC_BASE.toLowerCase();
+  for (const lg of (receipt.logs ?? []) as any[]) {
+    if (String(lg.address ?? "").toLowerCase() !== usdc) continue;
+    const topics: string[] = lg.topics ?? [];
+    if ((topics[0] ?? "").toLowerCase() !== USDC_TRANSFER_TOPIC) continue;
+    if ((topics[2] ?? "").toLowerCase() !== padTo) continue;
+    const amount = parseInt(String(lg.data ?? "0x0"), 16) / 1e6;
+    if (amount + 1e-9 >= minUsdc) {
+      const from = "0x" + String(topics[1] ?? "").slice(26);
+      return { ok: true, from, amount_usdc: amount };
+    }
+  }
+  return { ok: false, error: `no USDC transfer of >= ${minUsdc} USDC to the receiving wallet found in this transaction` };
+}
+
+app.get("/gate/swap/unlock", async (c) => {
+  const token = tokenQ(c);
+  if (!token || !ADDR_RE.test(token)) return c.json({ error: "token query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
+  const side = (c.req.query("side") ?? "buy").toLowerCase();
+  if (side !== "buy" && side !== "sell") return c.json({ error: "side must be buy or sell" }, { status: 400 });
+  const notional = Number(c.req.query("notional_usd") ?? c.req.query("notional") ?? "100");
+  if (!Number.isFinite(notional) || notional <= 0) return c.json({ error: "notional_usd must be a positive number" }, { status: 400 });
+  const tx = (c.req.query("tx") ?? "").trim();
+  if (!tx) {
+    // No proof presented: tell the caller exactly how to pay, from ground truth.
+    return c.json({
+      error: "payment_required",
+      how_to_pay: `Send ${UNLOCK_PRICE_USDC} USDC on Base (token ${USDC_BASE}) to ${c.env.PAY_TO}, then re-call this URL with &tx=<your transaction hash>.`,
+      price_usdc: String(UNLOCK_PRICE_USDC),
+      pay_to: c.env.PAY_TO,
+      usdc: USDC_BASE,
+      chain_id: 8453,
+    }, { status: 402 });
+  }
+  const v = await verifyUsdcPaymentToPayTo(c, tx, UNLOCK_PRICE_USDC);
+  if (!v.ok) {
+    if (v.pending) return c.json({ status: "pending", tx, note: "Transaction not yet mined on Base — retry in a few seconds." }, { status: 202 });
+    return c.json({ error: v.error, tx }, { status: 402 });
+  }
+  // Single-use: one payment unlocks one result. Dedup by tx hash so a settled
+  // payment can't be replayed for unlimited checks. Degrades open if KV is absent.
+  if (c.env.API_KEYS) {
+    const key = `unlock:${tx.toLowerCase()}`;
+    const seen = await c.env.API_KEYS.get(key);
+    if (seen) return c.json({ error: "this payment has already been redeemed", tx, redeemed_for: seen }, { status: 409 });
+    fireAndForget(c, c.env.API_KEYS.put(key, `${token}|${side}|${notional}`, { expirationTtl: 60 * 60 * 24 * 30 }));
+  }
+  try {
+    const out = await buildSwapGate(token, side as "buy" | "sell", notional);
+    fireAndForget(c, trackPaidRequest("GET /gate/swap", "x402-browser-unlock", makeUsageCounter(c.env)));
+    return c.json({ ...out, paid: { tx, payer: v.from, amount_usdc: v.amount_usdc, basescan: `https://basescan.org/tx/${tx}` } });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
 // Free preview — full real report for Base USDC (same depth as paid). ?token= is
 // honored only for the fixed demo set so the preview can't substitute the paid route.
 const TOKEN_REPORT_PREVIEW_TOKEN = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // USDC on Base
@@ -8175,7 +8260,7 @@ const MINIAPP_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8"
 <input id="t" placeholder="0x… Base token address" autocomplete="off" autocapitalize="off" spellcheck="false">
 <div class="row"><button onclick="go()">Check token</button></div>
 <div id="card"></div>
-<p><small>Free: 3 checks/day. Unlimited &amp; sized to your trade — humans: <a href="/pricing">$9.99/mo, pay by card</a> · agents: x402 <a href="/gate/swap">/gate/swap</a> ($0.008/call). Heuristic signal, not financial advice.</small></p>
+<p><small>Free: 3 checks/day. Want it sized to a real trade? Pay 0.01 USDC from your wallet for a one-off full check (button appears with each result) · unlimited by card: <a href="/pricing">$9.99/mo</a> · agents: x402 <a href="/gate/swap">/gate/swap</a> ($0.008/call). Heuristic signal, not financial advice.</small></p>
 <script type="module">
 let FC=null;
 try{const m=await import('https://esm.sh/@farcaster/miniapp-sdk');FC=m.sdk;await FC.actions.ready();}catch(e){FC=null;}
@@ -8214,9 +8299,59 @@ async function go(){
       +'<div>'+esc(m.symbol||'?')+(m.name?' · '+esc(m.name):'')+' · verdict '+esc(j.verdict||'?')+' · risk '+esc(j.risk_score)+'/100</div>'
       +'<p>'+esc(j.reason||'')+'</p>'
       +'<ul><li>Liquidity (WETH pool): '+liq+'</li><li>Flags: '+((j.flags||[]).map(esc).join('; ')||'none')+'</li></ul>'
-      +shareUI(t,j);
+      +unlockUI(t)+shareUI(t,j);
   }catch(e){c.textContent='Error: '+e;}
 }
+// Pay 0.01 USDC from the viewer's own wallet (in-feed Farcaster provider or a
+// browser wallet), then unlock the full sized gate with no daily cap. No account,
+// no manifest — a human in a browser settles on-chain directly to our wallet.
+var PAY_TO='0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10';
+var USDC='0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+function unlockUI(t){
+  var html='<div class="row" style="margin-top:.8rem"><button id="unlk">Unlock sized check — pay 0.01 USDC</button></div>'
+    +'<div id="ures" style="margin-top:.6rem"></div>'
+    +'<small>Out of free checks, or want it sized to a real trade? Pay 0.01 USDC from your wallet for a one-off full check of this token. No signup.</small>';
+  setTimeout(function(){var b=document.getElementById('unlk');if(b)b.onclick=function(){payUnlock(t);};},0);
+  return html;
+}
+async function getProvider(){
+  try{if(window.__FC&&window.__FC.wallet&&window.__FC.wallet.getEthereumProvider){var p=await window.__FC.wallet.getEthereumProvider();if(p)return p;}}catch(e){}
+  if(window.ethereum)return window.ethereum;
+  return null;
+}
+function pad32(h){h=h.replace(/^0x/,'').toLowerCase();while(h.length<64)h='0'+h;return h;}
+async function payUnlock(t){
+  var u=document.getElementById('ures');u.textContent='Opening wallet…';
+  var p=await getProvider();
+  if(!p){u.innerHTML='No wallet found. Open this in the Base app / a Farcaster client, or a browser with a Base wallet. You can also pay '+UNLOCK+' USDC to '+PAY_TO.slice(0,10)+'… and append &tx=<hash> to the unlock URL.';return;}
+  try{
+    var accts=await p.request({method:'eth_requestAccounts'});var from=accts&&accts[0];
+    try{await p.request({method:'wallet_switchEthereumChain',params:[{chainId:'0x2105'}]});}catch(e){}
+    // ERC-20 transfer(PAY_TO, 10000)  — 10000 = 0.01 USDC (6 decimals)
+    var data='0xa9059cbb'+pad32(PAY_TO)+pad32((10000).toString(16));
+    u.textContent='Confirm the 0.01 USDC payment in your wallet…';
+    var tx=await p.request({method:'eth_sendTransaction',params:[{from:from,to:USDC,data:data,value:'0x0'}]});
+    u.innerHTML='Payment sent (<a href="https://basescan.org/tx/'+tx+'" target="_blank" rel="noopener">'+tx.slice(0,12)+'…</a>). Verifying on-chain…';
+    var notional=100;
+    for(var i=0;i<12;i++){
+      await new Promise(r=>setTimeout(r,2500));
+      var r=await fetch('/gate/swap/unlock?token='+t+'&notional_usd='+notional+'&tx='+tx);
+      if(r.status===202){u.textContent='Waiting for the transaction to confirm on Base…';continue;}
+      var j=await r.json();
+      if(r.ok){
+        var dec=String(j.decision||'').toUpperCase();
+        u.innerHTML='<div class="v '+esc(String(j.decision||'').toLowerCase())+'">'+esc(dec)+'</div>'
+          +'<p>Unlocked — paid 0.01 USDC. '+esc(j.reason||'')+'</p>'
+          +'<ul><li>Price impact: '+esc(j.price_impact_pct!=null?j.price_impact_pct+'%':'n/a')+'</li>'
+          +'<li>Flags: '+((j.flags||[]).map(esc).join('; ')||'none')+'</li></ul>';
+        return;
+      }
+      u.innerHTML='Verification: <b>'+esc(j.error||'failed')+'</b>';return;
+    }
+    u.textContent='Still confirming — your payment is on-chain; reload with &tx='+tx+' to finish unlock.';
+  }catch(e){u.innerHTML='Wallet error: '+esc(String(e&&e.message||e));}
+}
+var UNLOCK='0.01';
 window.go=go;
 </script></body></html>`;
 

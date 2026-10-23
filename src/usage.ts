@@ -93,7 +93,7 @@ export type Route =
   | "GET /chain/wallet"
   | "POST /mcp";
 
-export type Rail = "x402-paid" | "rapidapi-bypass" | "api-key";
+export type Rail = "x402-paid" | "rapidapi-bypass" | "api-key" | "x402-browser-unlock";
 
 // Counter keys (mirrored in ARCHITECTURE.md and the 08-21 attribution card).
 export const ROUTE_KEY_PREFIX = "usage:paid:";
@@ -224,7 +224,7 @@ const ALL_ROUTES: Route[] = [
   "GET /chain/wallet",
   "POST /mcp",
 ];
-const ALL_RAILS: Rail[] = ["x402-paid", "rapidapi-bypass", "api-key"];
+const ALL_RAILS: Rail[] = ["x402-paid", "rapidapi-bypass", "api-key", "x402-browser-unlock"];
 
 /** Coerce a snapshot value (number from the DO, numeric string from old KV rows) to a count. */
 function toNumber(value: string | number | undefined): number {
