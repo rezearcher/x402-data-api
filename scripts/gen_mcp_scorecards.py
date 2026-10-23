@@ -357,7 +357,10 @@ Independent scans by [Grey Ridge Signals](https://github.com/rezearcher/greyridg
     open("/tmp/scorecard_slugs.txt", "w").write(
         "\n".join([f"mcp-{s}-mcp-security" for _, s, *_ in results] + ["mcp-server-scorecards"]))
     # regenerate the sitemap so every scorecard (curated + discovered) is crawlable
-    publish_sitemap(results, today)
+    ordered = publish_sitemap(results, today)
+    # actively notify IndexNow (Bing/Yandex -> Copilot/ChatGPT/Perplexity) so new pages
+    # surface in days, not weeks, without depending on a Googlebot crawl of this surface
+    ping_indexnow(ordered)
 
 
 SITE = "https://rezearcher.github.io/greyridge-x402-tools"
@@ -371,11 +374,28 @@ STATIC_PAGES = [
 ]
 
 
+def _all_published_scorecard_slugs():
+    # Ground-truth signal: enumerate every scorecard that actually exists in docs/ right now,
+    # not just the ones this (non-deterministic registry-walk) run happened to touch. Without
+    # this the sitemap silently drops pages from earlier runs and starves them of crawl signal.
+    try:
+        out = subprocess.check_output(
+            ["gh", "api", f"repos/{REPO}/contents/{DOCS}", "--paginate"],
+            stderr=subprocess.DEVNULL, env=ENV)
+        names = [x.get("name", "") for x in json.loads(out)]
+        return [n[:-3] for n in names
+                if n.startswith("mcp-") and n.endswith("-mcp-security.md")]
+    except Exception as e:
+        print(f"sitemap: could not list docs/ ({e}) -- using this run's results only")
+        return []
+
+
 def publish_sitemap(results, today):
     locs = [f"{SITE}/{p}" for p in STATIC_PAGES]
     locs.append(f"{SITE}/mcp-server-scorecards.html")
-    for _, slug, *_ in results:
-        locs.append(f"{SITE}/mcp-{slug}-mcp-security.html")
+    run_slugs = [f"mcp-{slug}-mcp-security" for _, slug, *_ in results]
+    for stem in sorted(set(run_slugs) | set(_all_published_scorecard_slugs())):
+        locs.append(f"{SITE}/{stem}.html")
     # dedup, preserve order
     seen, ordered = set(), []
     for loc in locs:
@@ -388,6 +408,52 @@ def publish_sitemap(results, today):
            f"{rows}\n</urlset>\n")
     gh_put(f"{DOCS}/sitemap.xml", xml, f"sitemap: {len(ordered)} URLs incl. all MCP scorecards ({today})")
     print(f"PUT {DOCS}/sitemap.xml ({len(ordered)} urls)")
+    return ordered
+
+
+# IndexNow key (verified file lives at {SITE}/{INDEXNOW_KEY}.txt, confirmed 200). Submitting
+# here actively notifies Bing + Yandex (which feed Copilot / ChatGPT search and Perplexity's
+# index) the moment a scorecard changes, instead of waiting on a Googlebot crawl that has not
+# been reaching this surface. keyLocation is in the same /greyridge-x402-tools/ subtree as every
+# submitted URL, so it satisfies the IndexNow directory-scope rule.
+INDEXNOW_HOST = "rezearcher.github.io"
+INDEXNOW_KEY = "aa3ee6fa313780532656391c0c73664f"
+
+
+def _load_indexnow_key():
+    # Prefer the on-disk key file so a rotation does not require a code edit; fall back to the
+    # verified constant. Degrades open — a missing file never silently skips the ping.
+    for p in ("outreach/indexnow.key", os.path.join(os.path.dirname(__file__), "..", "outreach", "indexnow.key")):
+        try:
+            v = open(p).read().strip()
+            if v:
+                return v
+        except OSError:
+            continue
+    return INDEXNOW_KEY
+
+
+def ping_indexnow(urls):
+    key = _load_indexnow_key()
+    payload = json.dumps({
+        "host": INDEXNOW_HOST,
+        "key": key,
+        "keyLocation": f"{SITE}/{key}.txt",
+        "urlList": urls,
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.indexnow.org/IndexNow",
+        data=payload,
+        headers={"Content-Type": "application/json; charset=utf-8", **UA},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            print(f"IndexNow: submitted {len(urls)} URLs -> HTTP {r.status}")
+            return True
+    except Exception as e:
+        print(f"IndexNow: submit failed ({e}) -- sitemap still updated, non-fatal")
+        return False
 
 
 if __name__ == "__main__":
