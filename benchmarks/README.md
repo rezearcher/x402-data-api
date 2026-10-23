@@ -25,3 +25,32 @@ tool object (`name`, `description`, `inputSchema`) with a `label` (good|bad),
   passing clean — the conceal rule required the target to be "the user". Fixed in
   src/mcp_scan.ts (concealInstr); regression test 4b in tests/mcp_scan.test.mjs.
 - License: MIT, same as the repo. No share-alike, no third-party per-line encumbrance.
+
+## Real-world precision — out-of-sample flag rate on live registry servers
+
+The corpus numbers above are in-sample (rules were tuned against them). The honest
+precision signal is the out-of-sample flag rate on servers we never tuned against.
+We ran the static analyzer against the public MCP registry
+(`benchmarks/registry_census/`, captured 2026-10-20):
+
+- **109 real public MCP servers returned a `tools/list` and were scanned** (137
+  of 246 probed were unreachable / returned no tools).
+- **987 real tool descriptions statically scanned.**
+- **3 servers flagged (2.8%); 106 verdict=clear.** No "find-a-vuln" framing — a
+  2.8% flag rate on real servers is the opposite of the ~78% false-positive rate
+  that third-party audits report for pattern-based MCP scanners.
+
+On re-examination of the 3 flags (the whole point of an out-of-sample run is to
+check them, not to brag about the rate):
+- **arclan.ai `query_registry` — confirmed FALSE POSITIVE, now fixed.** The only
+  match was the word "exec" inside filter prose ("restrict to servers with no
+  write or exec tools") — enumeration of *other* servers' capabilities, not this
+  tool executing. Fixed: the bare-`exec` branch now carries a negative lookahead
+  so capability-class nouns don't trip it (regression test 7b). Re-scan: 0 flags.
+- **agentsindex.ai `/mcp` — no longer reproduces** (0 flags on re-scan; either a
+  since-tightened rule or a server-side description change).
+- **aivikings.ai `/mcp` — could not re-verify** (now requires a session id).
+
+Methodology + raw capture are in `benchmarks/registry_census/`. Publish
+"2.8% out-of-sample flag rate on 109 live servers, 1 confirmed FP fixed,
+methodology in repo" — never a bare accuracy percentage.
