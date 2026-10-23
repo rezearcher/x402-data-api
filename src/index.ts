@@ -8064,12 +8064,36 @@ function sizedExecution(liquidityUsd: number | null, notional: number) {
   const tiers = [100, 1000, 10000, 50000].map((n) => ({ notional_usd: n, price_impact_pct: impactAt(n) }));
   // Largest order that stays under 2% of pool depth (our HOLD threshold); split anything larger.
   const maxSafe = Math.max(0, Math.round(liquidityUsd * 0.02));
+  // Exit simulation: how much USD you actually recover if you SELL `n` worth of the
+  // token into this pool right now. Constant-product (x*y=k) curve over the quote-side
+  // reserve (≈ half the measured WETH-pool TVL for a balanced position). This is the
+  // number a trader actually makes the call on — "dump $X, walk away with $Y, lose $Z
+  // to slippage" — which the free report's raw impact% does not spell out. Labelled as
+  // an approximation: real Uniswap v3 concentrated liquidity will differ near spot.
+  const quoteReserve = liquidityUsd / 2;
+  const netOut = (n: number) => (quoteReserve * n) / (quoteReserve + n);
+  const r2 = (x: number) => Math.round(x * 100) / 100;
+  const exitRow = (n: number) => {
+    const out = netOut(n);
+    return {
+      notional_usd: n,
+      net_recovered_usd: Math.round(out),
+      lost_to_slippage_usd: Math.round(n - out),
+      slippage_pct: n > 0 ? r2(((n - out) / n) * 100) : 0,
+    };
+  };
+  const exitThis = exitRow(notional);
   return {
     basis: "approx: price impact = trade notional / measured Uniswap v3 WETH-pool liquidity",
     max_safe_notional_usd: maxSafe,
     sizing_note: `Keep each order under ~$${maxSafe.toLocaleString()} to stay below 2% price impact on this pool; split larger trades.`,
     this_trade: { notional_usd: notional, price_impact_pct: impactAt(notional) },
     impact_tiers: tiers,
+    exit_sim: {
+      model: "constant-product (x*y=k) over the quote-side reserve (≈ half the measured WETH-pool TVL); approximation — real Uniswap v3 concentrated liquidity differs near spot",
+      this_trade: exitThis,
+      tiers: [100, 1000, 10000, 50000].map(exitRow),
+    },
   };
 }
 
@@ -8158,9 +8182,14 @@ function fmtUsd(n){return '$'+Math.round(n).toLocaleString()}
 function sizingHtml(j){var s=j.sizing;if(!s)return '';
   if(s.max_safe_notional_usd==null)return '<p><small>'+esc0(s.basis||'Trade sizing unavailable (no verifiable pool).')+'</small></p>';
   var rows=(s.impact_tiers||[]).map(function(t){return '<tr><td>'+fmtUsd(t.notional_usd)+'</td><td>'+esc0(t.price_impact_pct)+'%</td></tr>'}).join('');
+  var ex=s.exit_sim,exh='';
+  if(ex&&ex.tiers){var er=ex.tiers.map(function(t){return '<tr><td>'+fmtUsd(t.notional_usd)+'</td><td>'+fmtUsd(t.net_recovered_usd)+'</td><td>'+esc0(t.slippage_pct)+'%</td></tr>'}).join('');
+    exh='<p style="margin-top:.8rem"><b>Exit simulation</b> <small>(sell into this pool now)</small></p>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:.95rem"><thead><tr><td><small>Sell</small></td><td><small>You recover</small></td><td><small>Slippage</small></td></tr></thead><tbody>'+er+'</tbody></table>'
+      +'<p><small>'+esc0(ex.model)+'</small></p>';}
   return '<p><b>Max safe trade size: '+fmtUsd(s.max_safe_notional_usd)+'</b> <small>(&lt;2% price impact)</small></p>'
     +'<table style="width:100%;border-collapse:collapse;font-size:.95rem"><thead><tr><td><small>Trade</small></td><td><small>Price impact</small></td></tr></thead><tbody>'+rows+'</tbody></table>'
-    +'<p><small>'+esc0(s.sizing_note||'')+'</small></p>';}
+    +'<p><small>'+esc0(s.sizing_note||'')+'</small></p>'+exh;}
 // Pay 0.01 USDC from the visitor's own browser wallet (or an in-feed Farcaster
 // provider), then unlock the full trade-sized swap-execution check for this token.
 // No account, no manifest: a human settles USDC on Base directly to our wallet and
@@ -8171,7 +8200,7 @@ var UNLOCK='0.01';
 function unlockUI(t){
   var h='<div class="row" style="margin-top:.9rem"><button id="unlk" style="background:#1f6feb">Unlock sized trade check - pay 0.01 USDC</button></div>'
     +'<div id="ures" style="margin-top:.6rem"></div>'
-    +'<small>&#128274; Locked: max safe trade size for this token + price impact at $100 / $1k / $10k / $50k, sized to the measured pool. One-off, no signup. Agents pay inline via x402 at <a href="/gate/swap">/gate/swap</a>.</small>';
+    +'<small>&#128274; Locked: max safe trade size + price impact at $100 / $1k / $10k / $50k + exit simulation (the net USD you actually recover selling now, after slippage), sized to the measured pool. One-off, no signup. Agents pay inline via x402 at <a href="/gate/swap">/gate/swap</a>.</small>';
   setTimeout(function(){var b=document.getElementById('unlk');if(b)b.onclick=function(){payUnlock(t)}},0);
   return h;
 }
@@ -8367,9 +8396,14 @@ function fmtUsd(n){return '$'+Math.round(n).toLocaleString();}
 function sizingHtml(j){var s=j.sizing;if(!s)return '';
   if(s.max_safe_notional_usd==null)return '<p><small>'+esc(s.basis||'Trade sizing unavailable (no verifiable pool).')+'</small></p>';
   var rows=(s.impact_tiers||[]).map(function(t){return '<tr><td>'+fmtUsd(t.notional_usd)+'</td><td>'+esc(t.price_impact_pct)+'%</td></tr>';}).join('');
+  var ex=s.exit_sim,exh='';
+  if(ex&&ex.tiers){var er=ex.tiers.map(function(t){return '<tr><td>'+fmtUsd(t.notional_usd)+'</td><td>'+fmtUsd(t.net_recovered_usd)+'</td><td>'+esc(t.slippage_pct)+'%</td></tr>';}).join('');
+    exh='<p style="margin-top:.8rem"><b>Exit simulation</b> <small>(sell into this pool now)</small></p>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:.95rem"><thead><tr><td><small>Sell</small></td><td><small>You recover</small></td><td><small>Slippage</small></td></tr></thead><tbody>'+er+'</tbody></table>'
+      +'<p><small>'+esc(ex.model)+'</small></p>';}
   return '<p><b>Max safe trade size: '+fmtUsd(s.max_safe_notional_usd)+'</b> <small>(&lt;2% price impact)</small></p>'
     +'<table style="width:100%;border-collapse:collapse;font-size:.95rem"><thead><tr><td><small>Trade</small></td><td><small>Price impact</small></td></tr></thead><tbody>'+rows+'</tbody></table>'
-    +'<p><small>'+esc(s.sizing_note||'')+'</small></p>';}
+    +'<p><small>'+esc(s.sizing_note||'')+'</small></p>'+exh;}
 function shareUI(t,j){
   var sym=(j.token_meta&&j.token_meta.symbol)||'This Base token';
   var dec=String(j.decision||'').toUpperCase();
@@ -8411,7 +8445,7 @@ var USDC='0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 function unlockUI(t){
   var html='<div class="row" style="margin-top:.8rem"><button id="unlk">Unlock sized check — pay 0.01 USDC</button></div>'
     +'<div id="ures" style="margin-top:.6rem"></div>'
-    +'<small>&#128274; Locked: max safe trade size for this token + price impact at $100 / $1k / $10k / $50k, sized to the measured pool. One-off, no signup.</small>';
+    +'<small>&#128274; Locked: max safe trade size + price impact at $100 / $1k / $10k / $50k + exit simulation (the net USD you actually recover selling now, after slippage), sized to the measured pool. One-off, no signup.</small>';
   setTimeout(function(){var b=document.getElementById('unlk');if(b)b.onclick=function(){payUnlock(t);};},0);
   return html;
 }
