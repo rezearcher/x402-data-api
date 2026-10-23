@@ -347,3 +347,84 @@ export async function getFunnelMetrics(
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// Line-B fiat (Stripe) settled-revenue oracle (Phase-0 instrument).
+//
+// Same discipline as the funnel beacons above: a bounded enum of event kinds
+// (unlisted degrades open to "not counted"), fire-and-forget, never throws.
+// Two keys per event — a count and an accumulated cents total — so /metrics can
+// surface both the number of settled payments and the gross dollars, making a
+// real fiat subscription dollar loop-readable (mirroring Line A's latest.json).
+//
+// Idempotency lives at the CALL SITE (webhook dedups by Stripe session/invoice
+// id before bumping), not here — so a Stripe retry never inflates revenue.
+// ---------------------------------------------------------------------------
+
+export const FIAT_KEY_PREFIX = "fiat:";
+
+// checkout_paid = first payment at signup; invoice_paid = recurring renewal
+// (the REPEAT dollar — checkout.session.completed never fires on a renewal).
+export const FIAT_EVENTS = ["checkout_paid", "invoice_paid"] as const;
+export type FiatEvent = (typeof FIAT_EVENTS)[number];
+
+export function isFiatEvent(v: unknown): v is FiatEvent {
+  return typeof v === "string" && (FIAT_EVENTS as readonly string[]).includes(v);
+}
+
+/**
+ * Record one settled Stripe payment, fire-and-forget. Enum-validates the event
+ * FIRST (an unlisted event degrades open = not counted, no arbitrary key). The
+ * caller is responsible for idempotency (dedup by Stripe id) BEFORE calling, so
+ * this only ever runs once per real settlement. Never throws.
+ */
+export async function recordFiatSettlement(
+  counter: UsageCounterLike | undefined,
+  event: string,
+  amountCents: number,
+): Promise<void> {
+  if (!isFiatEvent(event)) return;
+  if (!counter) return;
+  const cents = Number.isFinite(amountCents) && amountCents > 0 ? Math.round(amountCents) : 0;
+  // Workers Logs line survives a DO outage — one JSON line per settlement.
+  console.log(JSON.stringify({ evt: "fiat_settlement", event, cents, ts: Math.floor(Date.now() / 1000) }));
+  try {
+    await counter.apply([
+      { kind: "increment", key: `${FIAT_KEY_PREFIX}count:${event}` },
+      { kind: "increment", key: `${FIAT_KEY_PREFIX}cents:${event}`, by: cents },
+    ]);
+  } catch (error) {
+    console.error("Error recording fiat settlement:", error);
+  }
+}
+
+export type FiatEventMetric = { count: number; gross_usd: number };
+export type FiatMetrics = Record<FiatEvent, FiatEventMetric> & { total_gross_usd: number };
+
+/** Aggregate the fiat settlement counters into a per-event + total gross map. */
+export async function getFiatMetrics(
+  counter: UsageCounterLike | undefined,
+): Promise<FiatMetrics> {
+  const out: FiatMetrics = {
+    checkout_paid: { count: 0, gross_usd: 0 },
+    invoice_paid: { count: 0, gross_usd: 0 },
+    total_gross_usd: 0,
+  };
+  if (!counter) return out;
+  try {
+    const snap = await counter.snapshot();
+    let totalCents = 0;
+    for (const e of FIAT_EVENTS) {
+      const cents = toNumber(snap[`${FIAT_KEY_PREFIX}cents:${e}`]);
+      out[e] = {
+        count: toNumber(snap[`${FIAT_KEY_PREFIX}count:${e}`]),
+        gross_usd: Math.round(cents) / 100,
+      };
+      totalCents += cents;
+    }
+    out.total_gross_usd = Math.round(totalCents) / 100;
+  } catch (error) {
+    console.error("Error fetching fiat metrics:", error);
+  }
+  return out;
+}

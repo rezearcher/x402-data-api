@@ -37,8 +37,15 @@ import { register } from "node:module";
 // (the import itself is dynamic, below, so the hook is live by then).
 register(new URL("./cfw-hooks.mjs", import.meta.url));
 
-const { trackPaidRequest, getMetrics, trackFunnelEvent, getFunnelMetrics } =
-  await import("../src/usage.ts");
+const {
+  trackPaidRequest,
+  getMetrics,
+  trackFunnelEvent,
+  getFunnelMetrics,
+  recordFiatSettlement,
+  getFiatMetrics,
+  isFiatEvent,
+} = await import("../src/usage.ts");
 const { default: app } = await import("../src/index.ts");
 
 // ---------------------------------------------------------------------------
@@ -749,7 +756,56 @@ async function main() {
     testMetricsEndpointReadsDoCounters,
     testConcurrentIncrementsLossless,
     testInternalCdpEndpointsGated,
+    testFiatSettlementTwoKeyBumpAndAggregate,
+    testFiatSettlementDegradesOpenAndNoCounter,
   ];
+
+// ---------------------------------------------------------------------------
+// Line-B fiat (Stripe) settled-revenue oracle.
+// ---------------------------------------------------------------------------
+async function testFiatSettlementTwoKeyBumpAndAggregate() {
+  const counter = makeFakeCounter();
+  // Two signups ($9.99 + $9.99) + one renewal ($9.99). Amounts in cents.
+  await recordFiatSettlement(counter, "checkout_paid", 999);
+  await recordFiatSettlement(counter, "checkout_paid", 999);
+  await recordFiatSettlement(counter, "invoice_paid", 999);
+
+  assert.strictEqual(counter.store.get("fiat:count:checkout_paid"), 2, "checkout count");
+  assert.strictEqual(counter.store.get("fiat:cents:checkout_paid"), 1998, "checkout cents");
+  assert.strictEqual(counter.store.get("fiat:count:invoice_paid"), 1, "invoice count");
+  assert.strictEqual(counter.store.get("fiat:cents:invoice_paid"), 999, "invoice cents");
+
+  const m = await getFiatMetrics(counter);
+  assert.strictEqual(m.checkout_paid.count, 2);
+  assert.strictEqual(m.checkout_paid.gross_usd, 19.98, "cents->usd");
+  assert.strictEqual(m.invoice_paid.count, 1);
+  assert.strictEqual(m.invoice_paid.gross_usd, 9.99);
+  assert.strictEqual(m.total_gross_usd, 29.97, "total gross across events");
+  console.log("  ok: fiat settlement bumps count+cents per event and getFiatMetrics aggregates gross USD");
+}
+
+async function testFiatSettlementDegradesOpenAndNoCounter() {
+  // Unlisted event = not counted (degrade-open, no arbitrary key written).
+  assert.strictEqual(isFiatEvent("checkout_paid"), true);
+  assert.strictEqual(isFiatEvent("invoice_paid"), true);
+  assert.strictEqual(isFiatEvent("refund"), false);
+  assert.strictEqual(isFiatEvent(undefined), false);
+
+  const counter = makeFakeCounter();
+  await recordFiatSettlement(counter, "refund", 999); // not an enum member
+  await recordFiatSettlement(counter, "checkout_paid", -50); // negative clamps to 0 cents
+  assert.strictEqual(counter.store.size, 2, "only checkout_paid count+cents keys exist");
+  assert.strictEqual(counter.store.get("fiat:count:checkout_paid"), 1);
+  assert.strictEqual(counter.store.get("fiat:cents:checkout_paid"), 0, "negative amount clamped");
+  assert.ok(!counter.store.has("fiat:count:refund"), "no key for unlisted event");
+
+  // No counter -> no throw, zeros back.
+  await recordFiatSettlement(undefined, "checkout_paid", 999);
+  const z = await getFiatMetrics(undefined);
+  assert.strictEqual(z.total_gross_usd, 0);
+  assert.strictEqual(z.checkout_paid.count, 0);
+  console.log("  ok: fiat recorder degrades open (unlisted event ignored, negative clamped, no-counter no-op)");
+}
 
   console.log("test_usage.js — paid-usage accounting (atomic DO counters + /metrics)\n");
   for (const t of tests) {

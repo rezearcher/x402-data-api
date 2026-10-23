@@ -46,6 +46,8 @@ import {
   getFunnelMetrics,
   isFunnelSurface,
   isFunnelEvent,
+  recordFiatSettlement,
+  getFiatMetrics,
   type Rail,
   type Route,
 } from "./usage.ts";
@@ -520,7 +522,13 @@ app.get("/metrics", async (c) => {
   // human pay path leaks instead of inferring 0% from a flat wallet. Same 1h TTL
   // tolerates staleness; a throw inside getFunnelMetrics is swallowed to zeros.
   const funnel = await getFunnelMetrics(makeUsageCounter(c.env));
-  const res = c.json({ ...metrics, net_external_paid_calls, net_external, funnel });
+  // Line-B fiat (Stripe) settled-revenue block — the loop's only readable view of
+  // subscription dollars. checkout_paid = signups, invoice_paid = recurring
+  // renewals (the REPEAT dollar). Same degrade-open discipline: a throw inside
+  // getFiatMetrics returns zeros, not an error. Shares the /metrics 1h TTL below
+  // (acceptable: a revenue oracle polled by cron tolerates ≤1h staleness).
+  const fiat = await getFiatMetrics(makeUsageCounter(c.env));
+  const res = c.json({ ...metrics, net_external_paid_calls, net_external, funnel, fiat });
   // Degraded snapshot = the counter read threw (metrics.degraded) OR the
   // net-external read threw. Both produce bogus zeros / an unavailable block. A 1h
   // edge cache PINS that degraded body for the whole hour on a public endpoint
@@ -4059,6 +4067,36 @@ app.post("/stripe/webhook", async (c) => {
       await c.env.CREDIT_LEDGER.get(id).seed(record.credits_remaining);
     }
     console.log(JSON.stringify({ event: "api_key_created", session_id: sessionId, email }));
+
+    // Line-B revenue oracle: record the settled signup dollar. Lives INSIDE the
+    // not-existing dedup branch (above we early-return on a replay/retry), so a
+    // Stripe retry can never double-count. amount_total is in cents.
+    fireAndForget(
+      c,
+      recordFiatSettlement(makeUsageCounter(c.env), "checkout_paid", session.amount_total || 0),
+    );
+  }
+
+  // invoice.paid = a recurring subscription renewal — the REPEAT dollar that
+  // checkout.session.completed never fires. Dedup by invoice id (Stripe retries
+  // the same invoice.id) so a renewal is counted exactly once.
+  if (event?.type === "invoice.paid") {
+    const invoice = event.data.object;
+    const invoiceId = invoice?.id;
+    if (c.env.API_KEYS && invoiceId) {
+      const inv_dedup = `stripe_invoice_${invoiceId}`;
+      const seen = await c.env.API_KEYS.get(inv_dedup);
+      if (!seen) {
+        await c.env.API_KEYS.put(inv_dedup, JSON.stringify({ recorded_at: Date.now() }));
+        console.log(JSON.stringify({ event: "stripe_invoice_paid", invoice_id: invoiceId, amount: invoice?.amount_paid }));
+        fireAndForget(
+          c,
+          recordFiatSettlement(makeUsageCounter(c.env), "invoice_paid", invoice?.amount_paid || 0),
+        );
+      } else {
+        console.log(JSON.stringify({ event: "stripe_invoice_already_recorded", invoice_id: invoiceId }));
+      }
+    }
   }
 
   return c.json({ received: true });
