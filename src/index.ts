@@ -491,7 +491,13 @@ app.get("/metrics", async (c) => {
   const cacheKey = new Request(new URL(c.req.url).toString());
   if (cache) {
     const hit = await cache.match(cacheKey);
-    if (hit) return hit;
+    // Only EVER serve a cached 200. A transient 5xx (e.g. a cold DO or free-tier
+    // DO-budget throw in the window right after a deploy) must never be pinned on
+    // this public trust surface for the whole max-age. Observed 2026-10-23: a 500
+    // cached with max-age=3600 served as a HIT for ~an hour while fresh execution
+    // returned a healthy 200 — a conversion/oracle killer. Dropping a non-200 hit
+    // forces a re-execute, which self-heals immediately (fresh exec is 200).
+    if (hit && hit.status === 200) return hit;
   }
   const metrics = await getMetrics(makeUsageCounter(c.env));
   // Augment the GROSS counter with a payer-aware net-external block from
@@ -541,7 +547,10 @@ app.get("/metrics", async (c) => {
   const degraded = metrics.degraded === true || net_external_degraded;
   const maxAge = degraded ? 60 : 3600;
   res.headers.set("Cache-Control", `public, max-age=${maxAge}`);
-  if (cache) fireAndForget(c, cache.put(cacheKey, res.clone()));
+  // Never store a non-200 (pairs with the 200-only serve guard above so a 5xx can
+  // never be pinned for the TTL). res is always a 200 from c.json today; this
+  // keeps that invariant explicit for any future non-200 path on this handler.
+  if (cache && res.status === 200) fireAndForget(c, cache.put(cacheKey, res.clone()));
   return res;
 });
 

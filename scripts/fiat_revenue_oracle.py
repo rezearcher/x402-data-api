@@ -20,12 +20,19 @@ Cron (daily, offset from the Line A sensor and uptime probe):
 """
 import json
 import os
+import time
 import urllib.request
 import urllib.error
 import datetime
 
 METRICS_URL = "https://x402-data-api.sigrunner.workers.dev/metrics"
 OUT = os.path.expanduser("~/.hermes/data/x402-revenue/fiat_latest.json")
+
+# /metrics intermittently 500s under the CF free-tier DO-budget degraded read
+# (observed 2026-10-23). A once-daily poll that lands on a blip would mask real
+# revenue, so retry a few times before honestly reporting read-failed.
+RETRIES = 4
+BACKOFF_S = 3
 
 
 def _event(block, key):
@@ -37,24 +44,28 @@ def _event(block, key):
 
 
 def main() -> int:
-    now = datetime.datetime.utcnow().isoformat() + "Z"
+    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
     status = "read-failed"
     fiat = {}
     note = ""
-    try:
-        req = urllib.request.Request(METRICS_URL, headers={"User-Agent": "greyridge-fiat-oracle/1"})
-        with urllib.request.urlopen(req, timeout=25) as r:
-            code = r.status
-            body = json.loads(r.read())
-        if code == 200 and isinstance(body.get("fiat"), dict):
-            fiat = body["fiat"]
-            status = "ok"
-        else:
+    for attempt in range(1, RETRIES + 1):
+        try:
+            req = urllib.request.Request(METRICS_URL, headers={"User-Agent": "greyridge-fiat-oracle/1"})
+            with urllib.request.urlopen(req, timeout=25) as r:
+                code = r.status
+                body = json.loads(r.read())
+            if code == 200 and isinstance(body.get("fiat"), dict):
+                fiat = body["fiat"]
+                status = "ok"
+                note = f"attempt={attempt}"
+                break
             note = f"http={code} fiat_block_present={isinstance(body.get('fiat'), dict)}"
-    except urllib.error.HTTPError as e:
-        note = f"HTTPError {e.code}"
-    except Exception as e:  # noqa: BLE001 — any failure is a read-failed, never a $0 claim
-        note = f"{type(e).__name__}: {e}"
+        except urllib.error.HTTPError as e:
+            note = f"HTTPError {e.code} (attempt {attempt})"
+        except Exception as e:  # noqa: BLE001 — any failure is a read-failed, never a $0 claim
+            note = f"{type(e).__name__}: {e} (attempt {attempt})"
+        if attempt < RETRIES:
+            time.sleep(BACKOFF_S)
 
     checkout = _event(fiat, "checkout_paid")
     invoice = _event(fiat, "invoice_paid")
