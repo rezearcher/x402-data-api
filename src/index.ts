@@ -1708,6 +1708,7 @@ app.get("/sitemap.xml", (c) => {
     { path: "/pricing", priority: "0.9", changefreq: "weekly" },
     { path: "/scan/mcp-scanner", priority: "0.9", changefreq: "weekly" },
     { path: "/scan/badge-gen", priority: "0.8", changefreq: "weekly" },
+    { path: "/scan/verify", priority: "0.8", changefreq: "weekly" },
     { path: "/scan/directory", priority: "0.9", changefreq: "daily" },
     { path: "/scan/census", priority: "0.9", changefreq: "weekly" },
     { path: "/learn/mcp-tool-poisoning", priority: "0.9", changefreq: "monthly" },
@@ -9360,6 +9361,272 @@ app.get("/scan/mcp/badge", async (c) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Ownership verification — Authorization Standard, Tier 1 (docs/AUTHORIZATION_STANDARD.md).
+// Fully automated DNS-01-style domain-control challenge + click-through legal
+// authorization. No email, no human, no support ticket (the ACME DNS-01 /
+// Search Console / ACM primitive). The security property comes from CONTROL of
+// the target's DNS, not from token secrecy, so the token is deterministic per
+// host — which lets the monitoring subscription re-verify on a schedule without
+// storing per-challenge state. This is the gate that turns the free, read-only
+// public-metadata scan into a *claimed* asset: a verified-owner badge kept live,
+// drift alerts, and the full auditor-grade report (the Line-B subscription hook).
+// Mirrors Detectify / Probely / Astra ownership gating.
+// ---------------------------------------------------------------------------
+
+const GRSG_VERIFY_AUTHZ_VERSION = "2026-10-23";
+const GRSG_VERIFY_AUTHZ_TEXT =
+  "I warrant that I own the named target or hold current authorization, granted by " +
+  "someone with authority over it, scoped to the non-intrusive static MCP tool-metadata " +
+  "scan Grey Ridge Signals performs. I am solely responsible for this authorization and " +
+  "indemnify Grey Ridge Signals Group LLC against any claim arising from it. " +
+  `(Grey Ridge authorization standard v${GRSG_VERIFY_AUTHZ_VERSION}.)`;
+
+async function sha256Hex(s: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Full hostname of an MCP URL (strictest, unambiguous). The TXT record lives at
+// _grsg-verify.<host>. Returns null for anything that is not a resolvable host.
+function verifyHost(input: string): string | null {
+  let host = (input || "").trim();
+  try {
+    if (/^https?:\/\//i.test(host)) host = new URL(host).hostname;
+  } catch {
+    return null;
+  }
+  host = host.replace(/\.$/, "").toLowerCase();
+  if (host.length > 253 || !/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(host)) return null;
+  return host;
+}
+
+// Deterministic per-host challenge value. Not a secret — DNS control is the gate.
+async function grsgVerifyToken(host: string): Promise<string> {
+  const h = await sha256Hex("grsg-mcp-verify:v1:" + host);
+  return "grsg-verify=" + h.slice(0, 40);
+}
+
+// Poll the target's DNS TXT for the challenge token via our DoH resolver. A TXT
+// value may be returned quoted and/or chunked; normalize before matching.
+async function grsgVerifyDnsHit(host: string, token: string): Promise<boolean> {
+  const name = "_grsg-verify." + host;
+  try {
+    const res = await fetch(`${DOH_URL}?name=${encodeURIComponent(name)}&type=TXT`, {
+      headers: { accept: "application/dns-json" },
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { Answer?: { data: string }[] };
+    const want = token.toLowerCase();
+    return (data.Answer ?? []).some((r) =>
+      String(r.data).replace(/\\"/g, "").replace(/"/g, "").replace(/\s+/g, "").toLowerCase().includes(want),
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function grsgVerifyRecord(c: any, host: string): Promise<any | null> {
+  try {
+    const raw = await c.env.API_KEYS?.get("verify:" + host);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+// JSON: machine-readable verification state / challenge for a host. The monitoring
+// subscription polls this; so can CI. Pass ?url= or ?domain=.
+app.get("/scan/verify/status", async (c) => {
+  const input = c.req.query("url") || c.req.query("domain") || "";
+  const host = verifyHost(input);
+  if (!host) return c.json({ error: "pass ?url=<mcp-server-url> or ?domain=<domain>" }, { status: 400 });
+  const rec = await grsgVerifyRecord(c, host);
+  return c.json({
+    host,
+    verified: !!rec,
+    verified_at: rec?.verified_at ?? null,
+    mcp_url: rec?.mcp_url ?? null,
+    authz_version: rec?.authz_version ?? null,
+  });
+});
+
+// Shields endpoint badge that reflects *ownership* (separate from the scan
+// verdict badge): green only when the domain owner has completed the DNS
+// challenge. The claimed-asset trust signal.
+app.get("/scan/verify/badge", async (c) => {
+  const base = { schemaVersion: 1, label: "ownership", cacheSeconds: 3600 };
+  const host = verifyHost(c.req.query("url") || c.req.query("domain") || "");
+  if (!host) return c.json({ ...base, message: "unknown", color: "lightgrey" });
+  const rec = await grsgVerifyRecord(c, host);
+  return rec
+    ? c.json({ ...base, message: "verified owner", color: "brightgreen" })
+    : c.json({ ...base, message: "unclaimed", color: "lightgrey" });
+});
+
+// Run the DNS check + record the click-through authorization. Headless claim.
+// Requires authorize=1 (the versioned authorization the caller affirmatively
+// accepts); the acceptance is the legal artifact (IP + UA + timestamp logged,
+// retained in KV for recordkeeping). JSON only — it is an API action.
+app.get("/scan/verify/check", async (c) => {
+  const url = c.req.query("url") || "";
+  const input = url || c.req.query("domain") || "";
+  const host = verifyHost(input);
+  if (!host) return c.json({ verified: false, error: "pass ?url=<mcp-server-url> or ?domain=<domain>" }, { status: 400 });
+  const token = await grsgVerifyToken(host);
+  const authorize = c.req.query("authorize");
+  if (authorize !== "1" && authorize !== "true") {
+    return c.json(
+      {
+        verified: false,
+        error: "authorization_required",
+        authorization: GRSG_VERIFY_AUTHZ_TEXT,
+        authz_version: GRSG_VERIFY_AUTHZ_VERSION,
+        how: "re-call with &authorize=1 to affirmatively accept the authorization above",
+      },
+      { status: 400 },
+    );
+  }
+  const hit = await grsgVerifyDnsHit(host, token);
+  if (!hit) {
+    return c.json({
+      verified: false,
+      pending: true,
+      host,
+      add_record: { type: "TXT", name: "_grsg-verify." + host, value: token },
+      note: "TXT record not found yet. DNS can take a few minutes to propagate; add the record above then re-check.",
+    });
+  }
+  const rec = {
+    host,
+    mcp_url: /^https?:\/\//i.test(url) ? url : null,
+    verified_at: new Date().toISOString(),
+    authz_accepted: true,
+    authz_version: GRSG_VERIFY_AUTHZ_VERSION,
+    ip: c.req.header("cf-connecting-ip") || null,
+    ua: c.req.header("user-agent") || null,
+    token,
+  };
+  try {
+    await c.env.API_KEYS?.put("verify:" + host, JSON.stringify(rec));
+  } catch {
+    /* degrade-open: verification still reported true for this call */
+  }
+  const ORIGIN = new URL(c.req.url).origin;
+  const ownerBadge = `https://img.shields.io/endpoint?url=${encodeURIComponent(ORIGIN + "/scan/verify/badge?domain=" + host)}&style=flat-square`;
+  const scanBadge = url
+    ? `https://img.shields.io/endpoint?url=${encodeURIComponent(ORIGIN + "/scan/mcp/badge?url=" + url)}&style=flat-square`
+    : null;
+  return c.json({
+    verified: true,
+    host,
+    verified_at: rec.verified_at,
+    authz_version: GRSG_VERIFY_AUTHZ_VERSION,
+    owner_badge_markdown: `[![MCP ownership verified](${ownerBadge})](${ORIGIN}/scan/report?url=${encodeURIComponent(url || "https://" + host)})`,
+    scan_badge_markdown: scanBadge
+      ? `[![MCP security](${scanBadge})](${ORIGIN}/scan/report?url=${encodeURIComponent(url)})`
+      : null,
+    monitor: "To keep the badge live, get drift alerts, and the full auditor-grade report, start a monitoring subscription at /scan/badge-gen.",
+  });
+});
+
+// Human-facing claim page: shows the exact TXT record to add, the authorization
+// to accept, and a Check button. Pass ?url= or ?domain=.
+app.get("/scan/verify", async (c) => {
+  const input = c.req.query("url") || c.req.query("domain") || "";
+  const host = input ? verifyHost(input) : null;
+  const token = host ? await grsgVerifyToken(host) : "";
+  const recName = host ? "_grsg-verify." + host : "_grsg-verify.your-domain.example";
+  const u = (s: string) =>
+    String(s ?? "").replace(/[<>&"']/g, (ch) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;" }[ch] as string));
+  const html = `<!doctype html><html lang=en><meta charset=utf-8>
+<title>Claim your MCP server — ownership verification · Grey Ridge Signals</title>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=description content="Prove you control your MCP server's domain with a one-time DNS TXT record, then claim a verified-owner security badge and continuous monitoring. Fully automated — no email, no human.">
+<style>
+:root{--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#0f766e;--bg:#fafafa}
+*{box-sizing:border-box}
+body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.55;max-width:720px;margin:0 auto;padding:2.5rem 1.25rem}
+h1{font-size:1.55rem;margin:0 0 .35rem}
+.sub{color:var(--muted);margin:0 0 2rem}
+h2{font-size:1.05rem;margin:2rem 0 .6rem}
+label{font-weight:600;font-size:.9rem;display:block;margin:0 0 .4rem}
+input{width:100%;padding:.6rem .7rem;font-size:1rem;border:1px solid var(--line);border-radius:8px}
+button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:.6rem 1.1rem;font-size:.95rem;font-weight:600;cursor:pointer;margin-top:.7rem}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:1.1rem 1.2rem;margin:1rem 0}
+pre{background:#0b1021;color:#e6edf3;padding:.8rem;border-radius:8px;overflow:auto;font-size:.82rem;white-space:pre-wrap;word-break:break-all;margin:.5rem 0 0}
+code{background:#eef2f7;padding:.1rem .35rem;border-radius:4px;font-size:.85em}
+.muted{color:var(--muted);font-size:.9rem}
+.authz{font-size:.86rem;background:#f7f7f5;border:1px solid var(--line);border-radius:8px;padding:.8rem;margin:.5rem 0 0}
+.row{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+a{color:var(--accent)}
+#out{display:none}
+table{border-collapse:collapse;width:100%;font-size:.86rem;margin:.4rem 0 0}
+td{border:1px solid var(--line);padding:.4rem .5rem;vertical-align:top}
+td:first-child{color:var(--muted);width:7rem}
+footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);color:var(--muted);font-size:.82rem}
+</style>
+<body>
+<h1>Claim your MCP server</h1>
+<p class=sub>Prove you control the domain, then get a verified-owner badge and continuous monitoring. One-time DNS record &mdash; fully automated, no email, no account.</p>
+
+<label for=u>Your MCP server URL</label>
+<input id=u placeholder="https://your-server.example/mcp" autocomplete=off value="${u(input)}">
+<button id=load>Get my verification record</button>
+
+<div class=card id=inst${host ? "" : " style=display:none"}>
+  <h2 style="margin-top:0">1 &middot; Add this DNS record</h2>
+  <p class=muted style="margin:.2rem 0 0">Add a TXT record on <code id=host>${u(host || "")}</code>. This proves control of the domain &mdash; the standard ACME DNS-01 / Search Console primitive.</p>
+  <table>
+    <tr><td>Type</td><td><code>TXT</code></td></tr>
+    <tr><td>Name / host</td><td><code id=rn>${u(recName)}</code></td></tr>
+    <tr><td>Value</td><td><code id=rv>${u(token)}</code></td></tr>
+  </table>
+
+  <h2>2 &middot; Accept the authorization</h2>
+  <div class=authz id=authz>${u(GRSG_VERIFY_AUTHZ_TEXT)}</div>
+  <label class=row style="font-weight:400;margin-top:.6rem"><input type=checkbox id=ok style="width:auto;margin:0"> I accept the authorization above.</label>
+
+  <h2>3 &middot; Verify</h2>
+  <p class=muted style="margin:.2rem 0 0">We check your DNS over our resolver. DNS can take a few minutes to propagate.</p>
+  <button id=chk>Check &amp; claim</button>
+  <div id=out class=card style="margin-top:1rem"></div>
+</div>
+
+<h2>What you get</h2>
+<p class=muted>A verified-owner badge for your README, a public report page, re-scans every six hours, and &mdash; with a monitoring subscription &mdash; drift alerts and the full auditor-grade report. Static MCP tool-metadata analysis (OWASP LLM01/LLM08); &ldquo;clear&rdquo; is not a guarantee of safety. Browse the free scan first at <a href="/scan/badge-gen">the badge generator</a>.</p>
+
+<footer>Grey Ridge Signals Group LLC &middot; Ownership is verified by DNS control; we never scan a submitted third-party asset without it. <a href="/scan/badge-gen">Badge generator</a> &middot; <a href="/scan/directory">MCP security directory</a> &middot; <a href="/">greyridgesignals.ai</a></footer>
+
+<script>
+var ORIGIN=location.origin;
+function val(){return document.getElementById("u").value.trim();}
+document.getElementById("load").onclick=function(){var t=val();if(!/^https?:\\/\\//.test(t)&&!/^[a-z0-9.-]+\\.[a-z]{2,}$/i.test(t)){document.getElementById("u").focus();return;}
+location.search="?url="+encodeURIComponent(t);};
+var chk=document.getElementById("chk");
+if(chk)chk.onclick=async function(){
+  if(!document.getElementById("ok").checked){document.getElementById("ok").focus();return;}
+  var t=val();var out=document.getElementById("out");out.style.display="block";out.textContent="Checking DNS…";
+  try{
+    var r=await fetch(ORIGIN+"/scan/verify/check?authorize=1&url="+encodeURIComponent(t));
+    var j=await r.json();
+    if(j.verified){
+      out.innerHTML="<strong style=\\"color:#16a34a\\">Verified ✓</strong> &mdash; "+j.host+" claimed."+
+        "<div class=row style=\\"margin-top:.6rem\\"><strong style=font-size:.85rem>Owner badge</strong></div>"+
+        "<pre>"+j.owner_badge_markdown+"</pre>"+
+        (j.scan_badge_markdown?"<div class=row style=\\"margin-top:.6rem\\"><strong style=font-size:.85rem>Scan verdict badge</strong></div><pre>"+j.scan_badge_markdown+"</pre>":"")+
+        "<p class=muted style=\\"margin:.7rem 0 0\\">"+j.monitor+"</p>";
+    } else if(j.pending){
+      out.innerHTML="<strong style=\\"color:#ca8a04\\">Not found yet</strong> &mdash; add the TXT record above, then re-check. "+(j.note||"");
+    } else {
+      out.textContent=j.error||"Could not verify.";
+    }
+  }catch(e){out.textContent="Network error — try again.";}
+};
+</script>`;
+  return c.html(html);
+});
+
 // Self-serve badge generator page: paste an MCP URL, see the live verdict, copy README markdown.
 // The adoption surface for the free hook — renders a working live demo on load (external public
 // server) so a visitor sees proof the scan works before pasting their own URL.
@@ -9409,6 +9676,12 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
   <pre id=md></pre>
 </div>
 
+<h2>Claim your server &amp; monitor it</h2>
+<div class=card>
+  <p style="margin:0 0 .6rem">The badge above works on any public server. To claim a <strong>verified-owner</strong> badge, continuous monitoring and drift alerts, prove you control the domain with a one-time DNS record — fully automated, no email, no account.</p>
+  <a id=claim href="/scan/verify"><button class=ghost style="font-size:.9rem;padding:.45rem .9rem">Claim this server &rarr;</button></a>
+</div>
+
 <h2>What the verdict means</h2>
 <p class=muted><strong style="color:#16a34a">clear</strong> — no injection/poisoning patterns in any advertised tool. <strong style="color:#ca8a04">review</strong> — suspicious metadata worth a human look. <strong style="color:#dc2626">block</strong> — do not admit this server until resolved.</p>
 <p class=muted>Want the itemized findings — which tool, the injected text, the OWASP mapping (LLM01/LLM08) and remediation? That's the full audit: <code>GET /scan/mcp?url=…</code> ($0.05 USDC via x402), or zero-egress <code>POST /scan/mcp</code> with your <code>tools/list</code> for private servers.</p>
@@ -9435,6 +9708,7 @@ var md=document.getElementById("md"),out=document.getElementById("out");
 function go(){var t=document.getElementById("u").value.trim();if(!/^https?:\\/\\//.test(t)){document.getElementById("u").focus();return;}
 out.style.display="block";var src=render(document.getElementById("img"),t,true);
 var rep=document.getElementById("rep");if(rep)rep.href=reportUrl(t);
+var cl=document.getElementById("claim");if(cl)cl.href=ORIGIN+"/scan/verify?url="+encodeURIComponent(t);
 md.textContent="[![MCP security]("+src+")]("+reportUrl(t)+")";}
 document.getElementById("b").onclick=go;
 document.getElementById("u").addEventListener("keydown",function(e){if(e.key==="Enter")go();});
