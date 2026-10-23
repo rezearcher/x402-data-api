@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grey Ridge · Loop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0E1522; --panel:#16202E; --panel2:#1B2838; --line:#243245;
+    --txt:#C9D4E0; --muted:#6E8099; --jade:#54B98A; --amber:#E8B04B; --cyan:#5BC9D6; --rust:#D4694A;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ink);color:var(--txt);font-family:'Space Grotesk',system-ui,sans-serif;
+       font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  .mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+  a{color:var(--cyan);text-decoration:none} a:hover{text-decoration:underline}
+  .wrap{max-width:1500px;margin:0 auto;padding:16px}
+  /* status bar */
+  .bar{display:flex;align-items:center;gap:22px;flex-wrap:wrap;border:1px solid var(--line);
+       background:linear-gradient(180deg,var(--panel2),var(--panel));border-radius:10px;padding:14px 18px}
+  .brand{font-weight:700;letter-spacing:.14em;font-size:15px}
+  .brand .r{color:var(--amber)}
+  .chain{display:flex;align-items:center;gap:8px;font-size:12.5px}
+  .node{padding:4px 11px;border:1px solid var(--line);border-radius:999px;color:var(--muted);transition:.3s}
+  .node.active{color:var(--ink);background:var(--jade);border-color:var(--jade);font-weight:600}
+  .node.rest{color:var(--amber);border-color:#3a3320}
+  .arrow{color:var(--muted)}
+  .lamps{display:flex;gap:18px;margin-left:auto;align-items:center}
+  .lamp{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+  .lamp b{color:var(--txt);font-weight:500}
+  .dot{width:11px;height:11px;border-radius:50%;background:#33404f;box-shadow:none}
+  .lamp.on .dot{background:var(--jade);box-shadow:0 0 10px rgba(84,185,138,.7)}
+  .ring{width:14px;height:14px;border-radius:50%;border:2px solid #33404f;position:relative}
+  .lamp.on .ring{border-color:var(--jade)} .lamp.on .ring:after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--jade)}
+  .rev{display:flex;gap:16px;font-size:12px;color:var(--muted)}
+  .rev b{color:var(--txt)} .rev .pos{color:var(--jade)}
+  .mon{display:flex;align-items:center;gap:9px}
+  .toggle{width:46px;height:24px;border-radius:999px;background:#2a3645;border:1px solid var(--line);position:relative;cursor:pointer;transition:.25s}
+  .toggle.on{background:var(--jade)} .knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#dfe8f2;transition:.25s}
+  .toggle.on .knob{left:24px}
+  /* ever-green waveform */
+  .wave{height:30px;width:150px}
+  /* grid */
+  .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:12px}
+  .col{border:1px solid var(--line);background:var(--panel);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;min-height:360px}
+  .col h3{margin:0;padding:11px 14px;font-size:12px;letter-spacing:.12em;color:var(--muted);border-bottom:1px solid var(--line);
+          display:flex;justify-content:space-between;align-items:center;font-weight:600}
+  .live{display:inline-flex;align-items:center;gap:6px;color:var(--jade);font-size:11px}
+  .live i{width:7px;height:7px;border-radius:50%;background:var(--jade);animation:pulse 1.4s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+  .now{padding:13px 14px;border-bottom:1px solid var(--line);background:var(--panel2);min-height:74px;font-size:13px;color:#dfe7f0}
+  .now .k{font-size:10.5px;letter-spacing:.1em;color:var(--muted);display:block;margin-bottom:5px}
+  .hist{padding:6px 0;overflow:auto;flex:1;max-height:420px}
+  .ev{padding:8px 14px;border-bottom:1px solid #1d2838}
+  .ev .t{font-size:10.5px;color:var(--muted)} .ev .d{font-size:12.5px;margin-top:2px}
+  .ev .n{font-size:11.5px;color:var(--muted);margin-top:3px}
+  .ev .atom{font-size:11px;color:var(--amber);margin-top:3px}
+  /* bottom panels */
+  .btm{display:grid;grid-template-columns:1.4fr 1fr;gap:12px;margin-top:12px}
+  .box{border:1px solid var(--line);background:var(--panel);border-radius:10px}
+  .box h4{margin:0;padding:11px 14px;font-size:12px;letter-spacing:.12em;color:var(--muted);border-bottom:1px solid var(--line);font-weight:600}
+  .box .body{padding:8px 14px;max-height:230px;overflow:auto}
+  .lk{display:flex;gap:9px;align-items:baseline;padding:5px 0;border-bottom:1px solid #1d2838;font-size:12.5px}
+  .chip{font-size:10px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .chip.ok{color:var(--jade);border-color:#2b4a3c} .chip.commit{color:var(--cyan);border-color:#234048}
+  .feedline{font-size:12px;color:var(--muted);padding:4px 0;border-bottom:1px solid #1d2838}
+  .off{color:var(--muted);font-style:italic}
+  .stamp{color:var(--muted);font-size:11px;margin-top:10px;text-align:right}
+  @media(max-width:1000px){.grid{grid-template-columns:1fr}.btm{grid-template-columns:1fr}.lamps{margin-left:0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <div class="brand">GREY RIDGE<span class="r">·</span>LOOP</div>
+    <div class="chain" id="chain"></div>
+    <div class="lamps" id="lamps"></div>
+    <div class="rev" id="rev"></div>
+    <div class="mon">
+      <span style="font-size:12px;color:var(--muted)">monitor</span>
+      <div class="toggle" id="toggle" onclick="toggleMon()"><div class="knob"></div></div>
+    </div>
+  </div>
+
+  <div class="grid" id="agents"></div>
+
+  <div class="btm">
+    <div class="box">
+      <h4>WORK SHIPPED</h4>
+      <div class="body" id="links"></div>
+    </div>
+    <div class="box">
+      <h4>MONITOR CONSOLE</h4>
+      <div class="body" id="feed"></div>
+    </div>
+  </div>
+  <div class="stamp" id="stamp"></div>
+</div>
+
+<script>
+const AG=['research','builder','marketing'], LABEL={research:'RESEARCH · GM',builder:'BUILDER',marketing:'MARKETING'};
+let monOn=false;
+
+function esc(s){return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+
+function waveSVG(runs,rests){
+  // interleave run (jade) + rest (amber) as a tempo trace
+  const seq=[]; const n=Math.max(runs.length,rests.length);
+  for(let i=0;i<n;i++){ if(runs[i]!=null)seq.push({v:runs[i],k:'run'}); if(rests[i]!=null)seq.push({v:rests[i],k:'rest'}); }
+  const s=seq.slice(-14); if(!s.length) return '';
+  const W=150,Hh=30,max=Math.max(22,...s.map(x=>x.v)); const step=W/Math.max(1,s.length-1);
+  let d='',pts=s.map((x,i)=>[i*step, Hh-(x.v/max)*(Hh-4)-2]);
+  pts.forEach((p,i)=>d+=(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)+' ');
+  const dots=s.map((x,i)=>`<circle cx="${pts[i][0].toFixed(1)}" cy="${pts[i][1].toFixed(1)}" r="2" fill="${x.k==='run'?'#54B98A':'#E8B04B'}"/>`).join('');
+  return `<svg class="wave" viewBox="0 0 ${W} ${Hh}"><path d="${d}" fill="none" stroke="#5BC9D6" stroke-width="1.5" opacity=".85"/>${dots}</svg>`;
+}
+
+function render(d){
+  // chain
+  document.getElementById('chain').innerHTML = AG.map((a,i)=>
+    `<span class="node ${d.engine.stage===a?'active':''}">${a}</span>${i<2?'<span class="arrow">▸</span>':''}`
+  ).join('') + `<span class="arrow">▸</span><span class="node ${d.engine.stage==='rest'?'rest active':'rest'}">rest ∿</span>`
+    + ` <span style="color:var(--muted);font-size:11px" class="mono">pass ${d.engine.pass??'—'}</span>`;
+  // lamps (form encodes state: dot / ring / wave)
+  const h=d.health||{}; const L=(id,el)=>`<div class="lamp ${h[id]&&h[id].ok?'on':''}" title="${esc(h[id]&&h[id].why)}">${el}</div>`;
+  document.getElementById('lamps').innerHTML =
+     L('green',`<span class="dot"></span><b>green</b>`)
+   + L('super_green',`<span class="ring"></span><b>super-green</b>`)
+   + `<div class="lamp ${h.ever_green&&h.ever_green.ok?'on':''}" title="${esc(h.ever_green&&h.ever_green.why)}">${waveSVG(d.rhythm.runs,d.rhythm.rests)||'<span class="dot"></span>'}<b>ever-green</b></div>`;
+  // revenue
+  const r=d.revenue||{}; const pos=v=>v&&v>0?'pos':'';
+  document.getElementById('rev').innerHTML =
+    `<span>Line A <b class="mono ${pos(r.line_a_external_usdc)}">$${(r.line_a_external_usdc??0).toFixed(3)}</b> ext</span>`
+   +`<span>Line B <b class="mono ${pos(r.line_b_fiat_usd)}">$${(r.line_b_fiat_usd??0).toFixed(2)}</b></span>`;
+  // agents
+  document.getElementById('agents').innerHTML = AG.map(a=>{
+    const ag=d.agents[a]||{}; const hist=(ag.history||[]).slice().reverse();
+    return `<div class="col"><h3>${LABEL[a]} ${ag.live?'<span class="live"><i></i>live</span>':''}</h3>
+      <div class="now"><span class="k">NOW</span>${esc(ag.now)||'<span class="off">idle — waiting for its turn</span>'}</div>
+      <div class="hist">${hist.map(e=>`<div class="ev"><div class="t mono">${esc((e.ts||'').replace('T',' ').replace('Z',''))}</div>
+        <div class="d">${esc(e.did)||'—'}</div>${e.next?`<div class="n">→ ${esc(e.next)}</div>`:''}
+        ${e.atom&&e.atom.toLowerCase()!=='none'&&e.atom!=='none non-gated this cycle. standing rez-only'?`<div class="atom">ATOM: ${esc(e.atom)}</div>`:''}</div>`).join('')||'<div class="ev off" style="padding:12px 14px">no history yet</div>'}</div></div>`;
+  }).join('');
+  // links
+  document.getElementById('links').innerHTML = (d.links||[]).map(l=>{
+    const chip = l.type==='commit'?'<span class="chip commit">commit</span>':(l.verified?'<span class="chip ok">live ✓</span>':'<span class="chip">unverified</span>');
+    const body = l.url?`<a href="${l.url}" target="_blank" rel="noopener">${esc(l.label)}</a>`:`<span class="mono" style="font-size:11.5px">${esc(l.label)}</span>`;
+    return `<div class="lk">${chip}${body}</div>`;
+  }).join('')||'<div class="off" style="padding:8px 0">nothing shipped yet</div>';
+  // monitor
+  monOn = !!(d.monitor&&d.monitor.on);
+  document.getElementById('toggle').className = 'toggle'+(monOn?' on':'');
+  const feed=(d.monitor&&d.monitor.feed)||[];
+  document.getElementById('feed').innerHTML = monOn
+    ? (feed.map(f=>`<div class="feedline mono">${esc(f)}</div>`).join('')||'<div class="off">monitor on — first check pending…</div>')
+    : '<div class="off">monitor off — hermes-self-heal is the floor</div>';
+  document.getElementById('stamp').textContent = 'updated '+new Date(d.generated_at).toLocaleTimeString();
+}
+
+async function tick(){ try{ const r=await fetch('/api/state',{cache:'no-store'}); render(await r.json()); }catch(e){} }
+async function toggleMon(){ try{ await fetch('/api/monitor',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({on:!monOn})}); tick(); }catch(e){} }
+tick(); setInterval(tick, 4000);
+</script>
+</body>
+</html>
