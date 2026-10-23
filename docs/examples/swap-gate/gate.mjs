@@ -16,14 +16,24 @@ const out = await res.json();
 //   sizing: {                                  // the paid add — absent from the free preview
 //     max_safe_notional_usd,                   // largest order under 2% price impact; split above this
 //     this_trade: { price_impact_pct },
-//     exit_sim: {                              // bounds your worst-case loss BEFORE you buy
+//     entry_sim: {                             // the BUY leg — what getting in costs you
+//       this_trade: { tokens_value_at_spot_usd, lost_to_entry_slippage_usd, entry_slippage_pct, roundtrip_breakeven_pct },
+//       tiers: [ { notional_usd, lost_to_entry_slippage_usd, entry_slippage_pct, roundtrip_breakeven_pct } ]  // $100/$1k/$10k/$50k
+//     },
+//     exit_sim: {                              // the SELL leg — bounds your worst-case loss
 //       this_trade: { net_recovered_usd, lost_to_slippage_usd, slippage_pct },
 //       tiers: [ { notional_usd, net_recovered_usd, lost_to_slippage_usd, slippage_pct } ]  // $100/$1k/$10k/$50k
 //     } } }
 console.log(JSON.stringify(out, null, 2));
 if (out.decision !== "go") process.exit(1); // guard: skip the trade
 
-// Size the position off the exit simulation: don't enter a trade you can't exit cheaply.
+// Size the position off BOTH legs: don't enter a trade whose round-trip friction eats your thesis,
+// and don't enter one you can't exit cheaply.
+const en = out.sizing?.entry_sim?.this_trade;
+if (en && en.roundtrip_breakeven_pct > 15) {
+  console.error(`round-trip breakeven ${en.roundtrip_breakeven_pct}% on $${usd} — price must move that far just to clear friction; skipping`);
+  process.exit(1);
+}
 const ex = out.sizing?.exit_sim?.this_trade;
 if (ex && ex.slippage_pct > 10) {
   console.error(`exit slippage ${ex.slippage_pct}% on $${usd} — recover only $${ex.net_recovered_usd}; skipping`);

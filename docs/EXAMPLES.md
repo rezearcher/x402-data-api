@@ -35,13 +35,15 @@ sized to your trade (honeypot/sellability + liquidity price impact):
 ```js
 const r = await f("https://x402-data-api.sigrunner.workers.dev/gate/swap?token=0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed&side=buy&notional_usd=500");
 const { decision, sizing } = await r.json(); // decision: "go"|"hold"|"block" — act only on "go"
-// The paid call adds `sizing` (the free /gate/swap/preview withholds it): an EXIT SIMULATION
-// that bounds your worst case before you buy —
-//   sizing.max_safe_notional_usd                      // largest order under 2% price impact
-//   sizing.exit_sim.this_trade.net_recovered_usd      // USD you get back selling your $500 now
-//   sizing.exit_sim.this_trade.slippage_pct           // what that exit costs you
-//   sizing.exit_sim.tiers[]                            // the same at $100/$1k/$10k/$50k
-// Size (or skip) off the recoverable number, not just the go/hold/block flag.
+// The paid call adds `sizing` (the free /gate/swap/preview withholds it): ENTRY + EXIT
+// simulations that price both legs of the trade before you commit —
+//   sizing.max_safe_notional_usd                            // largest order under 2% price impact
+//   sizing.entry_sim.this_trade.lost_to_entry_slippage_usd  // USD you overpay getting into your $500
+//   sizing.entry_sim.this_trade.roundtrip_breakeven_pct     // move needed just to clear in+out friction
+//   sizing.exit_sim.this_trade.net_recovered_usd            // USD you get back selling your $500 now
+//   sizing.exit_sim.this_trade.slippage_pct                 // what that exit costs you
+//   sizing.entry_sim.tiers[] / sizing.exit_sim.tiers[]      // the same at $100/$1k/$10k/$50k
+// Size (or skip) off the breakeven + recoverable numbers, not just the go/hold/block flag.
 ```
 Deeper verdict: `/chain/token-report` ($0.01) returns SAFE|CAUTION|AVOID + risk_score 0-100 + reasons.
 Both are also MCP tools (`gate_swap`, `chain_token_report`) at `/mcp`.

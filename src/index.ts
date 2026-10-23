@@ -8129,12 +8129,42 @@ function sizedExecution(liquidityUsd: number | null, notional: number) {
     };
   };
   const exitThis = exitRow(notional);
+  // Entry simulation: the BUY leg, the question an agent asks BEFORE committing capital.
+  // Spending `n` USD buys tokens worth (at pre-trade spot) netOut(n); the gap `n-netOut(n)`
+  // is what you overpay to enter (entry slippage), i.e. you are underwater by that much the
+  // instant you fill. round_trip_breakeven_pct is the minimum favorable price move needed to
+  // clear BOTH friction legs (enter now + unwind later) — the single number a trader sizes a
+  // thesis against ("is my expected move bigger than my round-trip cost?"). exit_sim answers
+  // "if I dump what do I recover"; entry_sim answers "what does getting in actually cost me" —
+  // complementary legs a trading agent needs both of.
+  const entryRow = (n: number) => {
+    const valueAtSpot = netOut(n);
+    const lost = n - valueAtSpot;
+    const entrySlip = n > 0 ? r2((lost / n) * 100) : 0;
+    // Round-trip: entry friction now + exit friction unwinding the ~valueAtSpot position later.
+    // Approx: sum of the two slippage legs; ignores pool-depth change between legs.
+    const exitLost = valueAtSpot - netOut(valueAtSpot);
+    const breakeven = n > 0 ? r2(((lost + exitLost) / n) * 100) : 0;
+    return {
+      notional_usd: n,
+      tokens_value_at_spot_usd: Math.round(valueAtSpot),
+      lost_to_entry_slippage_usd: Math.round(lost),
+      entry_slippage_pct: entrySlip,
+      roundtrip_breakeven_pct: breakeven,
+    };
+  };
+  const entryThis = entryRow(notional);
   return {
     basis: "approx: price impact = trade notional / measured Uniswap v3 WETH-pool liquidity",
     max_safe_notional_usd: maxSafe,
     sizing_note: `Keep each order under ~$${maxSafe.toLocaleString()} to stay below 2% price impact on this pool; split larger trades.`,
     this_trade: { notional_usd: notional, price_impact_pct: impactAt(notional) },
     impact_tiers: tiers,
+    entry_sim: {
+      model: "constant-product (x*y=k) over the quote-side reserve (≈ half the measured WETH-pool TVL); roundtrip_breakeven_pct sums the entry and exit slippage legs and ignores pool-depth change between them — approximation",
+      this_trade: entryThis,
+      tiers: [100, 1000, 10000, 50000].map(entryRow),
+    },
     exit_sim: {
       model: "constant-product (x*y=k) over the quote-side reserve (≈ half the measured WETH-pool TVL); approximation — real Uniswap v3 concentrated liquidity differs near spot",
       this_trade: exitThis,
@@ -8228,6 +8258,11 @@ function fmtUsd(n){return '$'+Math.round(n).toLocaleString()}
 function sizingHtml(j){var s=j.sizing;if(!s)return '';
   if(s.max_safe_notional_usd==null)return '<p><small>'+esc0(s.basis||'Trade sizing unavailable (no verifiable pool).')+'</small></p>';
   var rows=(s.impact_tiers||[]).map(function(t){return '<tr><td>'+fmtUsd(t.notional_usd)+'</td><td>'+esc0(t.price_impact_pct)+'%</td></tr>'}).join('');
+  var en=s.entry_sim,enh='';
+  if(en&&en.tiers){var nr=en.tiers.map(function(t){return '<tr><td>'+fmtUsd(t.notional_usd)+'</td><td>'+fmtUsd(t.lost_to_entry_slippage_usd)+'</td><td>'+esc0(t.roundtrip_breakeven_pct)+'%</td></tr>'}).join('');
+    enh='<p style="margin-top:.8rem"><b>Entry simulation</b> <small>(cost to buy in now)</small></p>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:.95rem"><thead><tr><td><small>Buy</small></td><td><small>Lost to slippage</small></td><td><small>Round-trip breakeven</small></td></tr></thead><tbody>'+nr+'</tbody></table>'
+      +'<p><small>'+esc0(en.model)+'</small></p>';}
   var ex=s.exit_sim,exh='';
   if(ex&&ex.tiers){var er=ex.tiers.map(function(t){return '<tr><td>'+fmtUsd(t.notional_usd)+'</td><td>'+fmtUsd(t.net_recovered_usd)+'</td><td>'+esc0(t.slippage_pct)+'%</td></tr>'}).join('');
     exh='<p style="margin-top:.8rem"><b>Exit simulation</b> <small>(sell into this pool now)</small></p>'
@@ -8235,7 +8270,7 @@ function sizingHtml(j){var s=j.sizing;if(!s)return '';
       +'<p><small>'+esc0(ex.model)+'</small></p>';}
   return '<p><b>Max safe trade size: '+fmtUsd(s.max_safe_notional_usd)+'</b> <small>(&lt;2% price impact)</small></p>'
     +'<table style="width:100%;border-collapse:collapse;font-size:.95rem"><thead><tr><td><small>Trade</small></td><td><small>Price impact</small></td></tr></thead><tbody>'+rows+'</tbody></table>'
-    +'<p><small>'+esc0(s.sizing_note||'')+'</small></p>'+exh;}
+    +'<p><small>'+esc0(s.sizing_note||'')+'</small></p>'+enh+exh;}
 // Pay 0.01 USDC from the visitor's own browser wallet (or an in-feed Farcaster
 // provider), then unlock the full trade-sized swap-execution check for this token.
 // No account, no manifest: a human settles USDC on Base directly to our wallet and
@@ -8587,6 +8622,11 @@ function fmtUsd(n){return '$'+Math.round(n).toLocaleString();}
 function sizingHtml(j){var s=j.sizing;if(!s)return '';
   if(s.max_safe_notional_usd==null)return '<p><small>'+esc(s.basis||'Trade sizing unavailable (no verifiable pool).')+'</small></p>';
   var rows=(s.impact_tiers||[]).map(function(t){return '<tr><td>'+fmtUsd(t.notional_usd)+'</td><td>'+esc(t.price_impact_pct)+'%</td></tr>';}).join('');
+  var en=s.entry_sim,enh='';
+  if(en&&en.tiers){var nr=en.tiers.map(function(t){return '<tr><td>'+fmtUsd(t.notional_usd)+'</td><td>'+fmtUsd(t.lost_to_entry_slippage_usd)+'</td><td>'+esc(t.roundtrip_breakeven_pct)+'%</td></tr>';}).join('');
+    enh='<p style="margin-top:.8rem"><b>Entry simulation</b> <small>(cost to buy in now)</small></p>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:.95rem"><thead><tr><td><small>Buy</small></td><td><small>Lost to slippage</small></td><td><small>Round-trip breakeven</small></td></tr></thead><tbody>'+nr+'</tbody></table>'
+      +'<p><small>'+esc(en.model)+'</small></p>';}
   var ex=s.exit_sim,exh='';
   if(ex&&ex.tiers){var er=ex.tiers.map(function(t){return '<tr><td>'+fmtUsd(t.notional_usd)+'</td><td>'+fmtUsd(t.net_recovered_usd)+'</td><td>'+esc(t.slippage_pct)+'%</td></tr>';}).join('');
     exh='<p style="margin-top:.8rem"><b>Exit simulation</b> <small>(sell into this pool now)</small></p>'
@@ -8594,7 +8634,7 @@ function sizingHtml(j){var s=j.sizing;if(!s)return '';
       +'<p><small>'+esc(ex.model)+'</small></p>';}
   return '<p><b>Max safe trade size: '+fmtUsd(s.max_safe_notional_usd)+'</b> <small>(&lt;2% price impact)</small></p>'
     +'<table style="width:100%;border-collapse:collapse;font-size:.95rem"><thead><tr><td><small>Trade</small></td><td><small>Price impact</small></td></tr></thead><tbody>'+rows+'</tbody></table>'
-    +'<p><small>'+esc(s.sizing_note||'')+'</small></p>'+exh;}
+    +'<p><small>'+esc(s.sizing_note||'')+'</small></p>'+enh+exh;}
 function shareUI(t,j){
   var sym=(j.token_meta&&j.token_meta.symbol)||'This Base token';
   var dec=String(j.decision||'').toUpperCase();
@@ -8768,10 +8808,11 @@ function upgradeCTA(paidUrl: string, price: string, adds: string, extra?: Record
 // teaser never leaks the gated value (it only names it, in the agent's terms).
 function paidSwapAdds(notional: number) {
   return {
-    exit_simulation: `net USD you recover (and lose to slippage) selling $100 / $1k / $10k / $50k of this token into its measured Uniswap v3 WETH pool — bounds your worst-case loss on a rug or thin pool BEFORE you buy`,
-    for_this_trade: `the recovered-vs-lost USD and slippage % for your exact notional_usd=${notional}`,
+    entry_simulation: `the BUY leg: tokens-value-at-spot you actually receive, USD lost to entry slippage, and the round-trip breakeven move % for $100 / $1k / $10k / $50k — tells you the price appreciation needed just to clear in-and-out friction BEFORE you commit`,
+    exit_simulation: `net USD you recover (and lose to slippage) selling $100 / $1k / $10k / $50k of this token into its measured Uniswap v3 WETH pool — bounds your worst-case loss on a rug or thin pool`,
+    for_this_trade: `the entry-slippage, round-trip breakeven, and recovered-vs-lost USD for your exact notional_usd=${notional}`,
     trade_sizing: `max_safe_notional_usd (largest order under 2% price impact) + per-size impact tiers, so the agent can split or skip instead of eating slippage`,
-    why_pay: `$${(0.008).toFixed(3)} to quantify the downside of a $${notional} position — the free verdict says buy/avoid, the paid call says how much you can get back out`,
+    why_pay: `$${(0.008).toFixed(3)} to quantify both legs of a $${notional} position — the free verdict says buy/avoid, the paid call says what getting in costs you and how much you can get back out`,
   };
 }
 
