@@ -343,8 +343,28 @@ def post_site(slug: str, title: str, description: str | None, md_body: str, publ
                             "--binding=API_KEYS", "--remote"],
                            cwd=str(REPO), capture_output=True, text=True, timeout=180, env=env)
         if r.returncode != 0:
-            raise RuntimeError(f"wrangler kv put failed for {key}: {(r.stderr or r.stdout)[:240]}")
-    return {"result": "ok", "channel": "site", "target": slug, "url": url}
+            return {"result": "failed", "channel": "site", "target": slug, "url": url,
+                    "error": f"wrangler kv put failed for {key}: {(r.stderr or r.stdout)[:240]}"}
+    # SUPER-GREEN GATE: a publish is NOT "ok" until the page is verified LIVE (HTTP 200).
+    # KV writes can lag a few seconds, so retry briefly. Never report success on a page
+    # that isn't actually served — "green" must mean a real, live asset (not a log line).
+    import time as _t
+    import urllib.request as _u
+    verified = False
+    for _ in range(6):
+        try:
+            _req = _u.Request(f"{url}?v={int(_t.time())}", headers={"User-Agent": "greyridge-verify"})
+            with _u.urlopen(_req, timeout=15) as resp:
+                if resp.status == 200:
+                    verified = True
+                    break
+        except Exception:
+            pass
+        _t.sleep(5)
+    if not verified:
+        return {"result": "failed", "channel": "site", "target": slug, "url": url,
+                "error": "KV put returned ok but /research page not HTTP 200 after retries — publish NOT verified live"}
+    return {"result": "ok", "channel": "site", "target": slug, "url": url, "verified_live": True}
 
 
 def cmd_post(a) -> int:
@@ -385,6 +405,9 @@ def cmd_post(a) -> int:
         print(f"ERROR — {row['error']}")
         return 1
     row = {**base, **res}
+    # Honest: "published" is True ONLY on a verified-live publish (result==ok), not merely
+    # because --publish was passed. A failed/errored attempt must never read as green.
+    row["published"] = (res.get("result") == "ok")
     _ledger_append(row)
     if res["result"] == "dryrun":
         print(f"DRY-RUN ok ({a.channel}/{target}) — would post:\n  title: {a.title}")
