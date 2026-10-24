@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ATOMS = Path.home() / ".claude" / "agent-chains" / "atoms.json"
+ATOMS_LEDGER = Path.home() / ".claude" / "agent-chains" / "atoms_ledger.jsonl"  # append-only clear/reopen history
 
 
 def add(text: str, agent: str = "agent", steps: list[str] | None = None) -> str | None:
@@ -54,6 +55,24 @@ def _load():
     return json.loads(ATOMS.read_text()) if ATOMS.exists() else {"atoms": []}
 
 
+def _ledger_cleared():
+    """Cleared gates derived from the append-only ledger (latest event per id wins).
+    This is what the loop reads — the complete, durable record, not the lean live store."""
+    latest = {}
+    if ATOMS_LEDGER.exists():
+        for line in ATOMS_LEDGER.read_text().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                ev = json.loads(line)
+            except Exception:
+                continue
+            if ev.get("id"):
+                latest[ev["id"]] = ev
+    return [ev for ev in latest.values() if ev.get("event") == "done"]
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("usage:\n"
@@ -63,10 +82,9 @@ if __name__ == "__main__":
         sys.exit(1)
     cmd = sys.argv[1]
     if cmd == "done":
-        # cleared gates Rez has checked off — the loop reads these to know a gate is UNBLOCKED
-        for a in _load().get("atoms", []):
-            if a.get("done"):
-                print(f"[CLEARED {a.get('done_at','')[:19]}] {a['text']}")
+        # cleared gates Rez checked off — read from the append-only ledger (the durable record)
+        for ev in sorted(_ledger_cleared(), key=lambda e: e.get("ts", "")):
+            print(f"[CLEARED {ev.get('ts','')[:19]}] {ev.get('text','')}")
     elif cmd == "open":
         for a in _load().get("atoms", []):
             if not a.get("done"):
