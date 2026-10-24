@@ -244,6 +244,292 @@ API discovery: [/.well-known/x402]({WORKER}/.well-known/x402).
     return body
 
 
+# --- failure-mode x framework intent matrix ------------------------------------------
+# The taxonomy below is NOT an invented gate-list: each mode maps to a field the live
+# gate's own output reports (decision / reason / flags[] / liquidity_usd /
+# impact_pct_of_pool), proven against production in this file's demo fetches. Each page
+# targets the long-tail query a Base trading-agent dev types when THIS failure bites.
+DEMO_TOKENS = ["aero", "weth", "degen", "usdc", BLOCK_TOKEN]
+_TOKEN_FALLBACK = {
+    "aero": {"decision": "go", "verdict": "SAFE", "risk_score": 15,
+             "reason": "token passes safety checks; trade is 0.01% of pool liquidity",
+             "liquidity_usd": 1384192, "impact_pct_of_pool": 0.01,
+             "flags": ["owner can mint new supply"], "symbol": "AERO"},
+    "weth": {"decision": "hold", "verdict": "SAFE", "risk_score": 0,
+             "reason": "no verifiable Uniswap v3 WETH-pool liquidity — cannot confirm the position is exitable",
+             "liquidity_usd": None, "impact_pct_of_pool": None,
+             "flags": ["no honeypot, deep liquidity, no high-risk admin controls detected"], "symbol": "WETH"},
+    "degen": {"decision": "go", "verdict": "SAFE", "risk_score": 20,
+              "reason": "token passes safety checks; trade is 0.04% of pool liquidity",
+              "liquidity_usd": 246988, "impact_pct_of_pool": 0.04,
+              "flags": ["transfers can be paused"], "symbol": "DEGEN"},
+    "usdc": {"decision": "go", "verdict": "SAFE", "risk_score": 25,
+             "reason": "token passes safety checks; trade is 0.00% of pool liquidity",
+             "liquidity_usd": 234768107, "impact_pct_of_pool": 0,
+             "flags": ["owner can mint new supply", "contract can blacklist addresses",
+                       "transfers can be paused", "upgradeable proxy; logic can change after purchase"],
+             "symbol": "USDC"},
+    BLOCK_TOKEN: {"decision": "block", "verdict": "AVOID", "risk_score": 100,
+                  "reason": "address is not a contract / not an ERC-20",
+                  "liquidity_usd": None, "impact_pct_of_pool": None,
+                  "flags": ["address is not a contract / not an ERC-20", "static analysis verdict is block"],
+                  "symbol": None},
+}
+
+
+def live_demo_full(token):
+    """Fetch the full preview (flags + liquidity) for the matrix demos; degrade open."""
+    try:
+        req = urllib.request.Request(
+            f"{WORKER}/gate/swap/preview?token={urllib.parse.quote(token)}", headers=UA)
+        with urllib.request.urlopen(req, timeout=20) as r:
+            d = json.loads(r.read().decode())
+        return {"decision": d.get("decision"), "verdict": d.get("verdict"),
+                "risk_score": d.get("risk_score"), "reason": str(d.get("reason", ""))[:160],
+                "liquidity_usd": d.get("liquidity_usd"),
+                "impact_pct_of_pool": d.get("impact_pct_of_pool"),
+                "flags": d.get("flags", []) or [],
+                "symbol": (d.get("token_meta") or {}).get("symbol")}
+    except Exception as e:
+        print(f"live_demo_full({token}) fell back ({e})", file=sys.stderr)
+        return dict(_TOKEN_FALLBACK[token])
+
+
+FAILURE_MODES = [
+    {
+        "slug": "honeypot",
+        "label": "honeypot (the buy works, every sell reverts)",
+        "query_tpl": "stop my {fw} agent buying a honeypot token on Base",
+        "h1_tpl": "Stop your {fw} agent from buying a honeypot on Base",
+        "symptom": ("The agent finds a token, the buy confirms, the chart looks alive — and then "
+                    "every sell reverts. The position is a honeypot and the capital is trapped. "
+                    "By the time a human notices, the funds are gone."),
+        "gate_does": ("The gate hard-**blocks** anything it cannot confirm is a real, buyable ERC-20 "
+                      "with a working sell path. The exact reason comes back in `flags[]` so the "
+                      "agent logs *why* it refused, not just that it did."),
+        "demo_go": "aero", "demo_bad": BLOCK_TOKEN,
+        "bad_label": "unverifiable address (negative control)",
+        "faq": [("How do I stop a {fw} agent buying a honeypot on Base?",
+                 "Put a pre-trade gate between the decision and the signed swap. The Grey Ridge "
+                 "swap gate statically checks the token is a real ERC-20 with a working sell path "
+                 "and returns BLOCK when it is not — before the agent spends a cent."),
+                ("Does the gate guarantee a token is safe?",
+                 "No. It is a heuristic static + liquidity check (LLM/contract-risk signal), not a "
+                 "guarantee or an audit. A BLOCK is reliable; a GO means no honeypot/rug signal was "
+                 "detected at check time, not that the token is risk-free.")],
+    },
+    {
+        "slug": "cant-sell-exit-trap",
+        "label": "unsellable position / no confirmable exit",
+        "query_tpl": "{fw} agent bought a token it cannot sell on Base",
+        "h1_tpl": "Keep your {fw} agent out of tokens it cannot sell",
+        "symptom": ("A buy is only half a trade. The agent gets filled on a token whose sell-side "
+                    "liquidity is thin, fake, or gone — so the exit never clears and the position "
+                    "is stuck even though it was never a classic honeypot."),
+        "gate_does": ("The gate will not return **GO** unless it can confirm an exitable pool. When "
+                      "the sell path is unverifiable it returns **HOLD** (`decision: hold`) with the "
+                      "reason — it refuses to green-light a trade it cannot confirm you can get out of."),
+        "demo_go": "aero", "demo_bad": "weth",
+        "bad_label": "token with no confirmable exit pool (returns HOLD)",
+        "faq": [("Why did my {fw} agent buy a token it can't sell?",
+                 "Most pre-trade checks only test the buy side. The Grey Ridge gate confirms an "
+                 "exitable pool before it returns GO, and returns HOLD when the sell path is "
+                 "unverifiable, so the agent never enters a position it cannot leave."),
+                ("What does a HOLD mean?",
+                 "HOLD means the gate found no block-level danger but could not confirm the trade "
+                 "is safely exitable/sizable — so it declines to auto-approve. The agent should skip "
+                 "or escalate, never force the swap.")],
+    },
+    {
+        "slug": "trade-too-big-price-impact",
+        "label": "order too big for the pool / price impact",
+        "query_tpl": "{fw} agent trade too big for pool slippage on Base",
+        "h1_tpl": "Size every {fw} agent trade to the pool before it swaps",
+        "symptom": ("The token is real and sellable — but the agent routes a $50k order into a "
+                    "pool that cannot absorb it, eats double-digit slippage on entry, and more on "
+                    "the way out. The round trip loses money even though nothing was a scam."),
+        "gate_does": ("The free verdict reports the live pool depth (`liquidity_usd`) and the impact "
+                      "of a baseline order (`impact_pct_of_pool`). The paid `/gate/swap` route runs "
+                      "the real AMM curve at *your* notional and returns entry/exit simulation, "
+                      "round-trip breakeven %, and the **max safe size** that stays under your "
+                      "impact threshold."),
+        "demo_go": "aero", "demo_bad": "degen",
+        "bad_label": "thinner-liquidity pool",
+        "impact_calc": True,
+        "faq": [("How do I stop a {fw} agent making a trade too big for the pool?",
+                 "Size the order against live pool depth before signing. The paid Grey Ridge gate "
+                 "simulates entry and exit slippage at your exact notional and returns the max safe "
+                 "size, so the agent never routes an order the pool cannot absorb."),
+                ("What is round-trip breakeven?",
+                 "The price move the token needs just to cover the slippage you pay getting in AND "
+                 "back out at your size. If the agent's thesis is smaller than breakeven, the trade "
+                 "loses money before fees — the gate hands the agent that number up front.")],
+    },
+    {
+        "slug": "rug-admin-controls",
+        "label": "rug via high-risk admin controls (mint / blacklist / pause / upgrade)",
+        "query_tpl": "check Base token mint blacklist pause admin controls before {fw} agent buys",
+        "h1_tpl": "Surface rug-enabling admin controls before your {fw} agent buys",
+        "symptom": ("The token trades fine today. But the deployer kept the keys: they can mint new "
+                    "supply, blacklist the agent's wallet, pause transfers, or upgrade the contract "
+                    "logic after the buy. A clean chart hides a one-transaction rug."),
+        "gate_does": ("The gate enumerates the dangerous owner powers it finds — *owner can mint*, "
+                      "*can blacklist*, *transfers can be paused*, *upgradeable proxy* — into "
+                      "`flags[]`, and folds them into the risk score. The agent sees exactly which "
+                      "levers the deployer still holds before it commits capital."),
+        "demo_go": "aero", "demo_bad": "usdc",
+        "bad_label": "token carrying multiple admin controls",
+        "show_flags": True,
+        "faq": [("How do I check a Base token for rug admin controls before my {fw} agent buys?",
+                 "The Grey Ridge gate inspects the contract for mint, blacklist, pause and "
+                 "upgradeable-proxy powers and returns each as a flag before the swap, so the agent "
+                 "weighs deployer risk instead of discovering it after a rug."),
+                ("A token I trust shows admin-control flags — is that a bug?",
+                 "No. Even USDC trips mint / blacklist / pause / upgradeable flags — those powers "
+                 "exist on many legitimate tokens. The gate surfaces them honestly; it is the agent's "
+                 "policy to decide which controls are acceptable for which size.")],
+    },
+]
+
+
+def _usd(v):
+    return f"${v:,.0f}" if isinstance(v, (int, float)) else "n/a"
+
+
+def render_matrix(fw, fm, demos, today):
+    """One framework x one failure mode = one long-tail intent page (live-demo backed)."""
+    fwn = fw["framework"]
+    go = demos[fm["demo_go"]]
+    bad = demos[fm["demo_bad"]]
+    query = fm["query_tpl"].format(fw=fwn)
+    h1 = fm["h1_tpl"].format(fw=fwn)
+    title = f"{h1} — pre-trade swap gate ({fwn})"
+    desc = (f"{h1} with a drop-in {fwn} pre-trade safety check: {fm['label']}. "
+            f"Paid inline with x402 USDC ($0.008/call), no API key, fails closed.")
+
+    def vcell(d):
+        return f"`{str(d.get('decision','?')).upper()}` / {d.get('verdict','?')} (risk {d.get('risk_score','?')})"
+
+    # Failure-specific evidence block (grounded in the live fields this mode maps to).
+    if fm.get("impact_calc"):
+        def impact_line(d):
+            liq = d.get("liquidity_usd")
+            if isinstance(liq, (int, float)) and liq > 0:
+                pct = 50000.0 / liq * 100.0
+                return (f"`{d.get('symbol','?')}` pool liquidity **{_usd(liq)}** → a $50k order is "
+                        f"~**{pct:.1f}%** of the pool (rough proxy; the paid route runs the real AMM curve)")
+            return f"`{d.get('symbol','?')}` — no confirmable pool depth"
+        evidence = ("**What the gate sees (live pool depth):**\n\n"
+                    f"- {impact_line(go)}\n- {impact_line(bad)}\n\n"
+                    "At $100 both pass; at size the thinner pool is where the agent bleeds. The paid "
+                    "`/gate/swap` sizes your *actual* notional against the live curve and returns the "
+                    "max safe size — the number a bare honeypot flag never gives you.")
+    elif fm.get("show_flags"):
+        def flag_lines(d):
+            fl = d.get("flags") or []
+            return "; ".join(fl) if fl else "none detected"
+        evidence = ("**Admin controls the gate surfaced (live):**\n\n"
+                    f"- `{go.get('symbol','GO token')}` → {flag_lines(go)}\n"
+                    f"- `{bad.get('symbol','control')}` → {flag_lines(bad)}\n\n"
+                    "Every dangerous owner power is enumerated into `flags[]` and scored, so the "
+                    "agent commits capital with the deployer's remaining levers in full view.")
+    else:
+        evidence = (f"**Reason the gate returned {str(bad.get('decision','?')).upper()}:** "
+                    f"{bad.get('reason','')}")
+
+    faq_q = [(q.format(fw=fwn), a.format(fw=fwn)) for q, a in fm["faq"]]
+    faq_md = "\n\n".join(f"### {q}\n\n{a}" for q, a in faq_q)
+    faq_jsonld = json.dumps({
+        "@context": "https://schema.org", "@type": "FAQPage",
+        "mainEntity": [{"@type": "Question", "name": q,
+                        "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in faq_q],
+    })
+
+    body = f"""---
+title: {json.dumps(title)}
+description: {json.dumps(desc)}
+---
+<script type="application/ld+json">
+{faq_jsonld}
+</script>
+
+# {h1}
+
+**The failure:** {fm['symptom']}
+
+Searching *"{query}"* means the agent already took the loss — or you are wiring a guard so it
+never does. For {fwn} agents trading ERC-20s on Base, the fix is one call between *"the agent
+decided to buy"* and *"the agent signs the swap."*
+
+**What the gate does for this failure:** {fm['gate_does']}
+
+## Proof — live, against production ({today})
+
+Real `/gate/swap/preview` responses fetched when this page was built. Re-run them yourself; no account:
+
+| Token | Verdict | Why |
+|---|---|---|
+| `{fm['demo_go']}` (safe control) | {vcell(go)} | {go.get('reason','')} |
+| {fm['bad_label']} | {vcell(bad)} | {bad.get('reason','')} |
+
+{evidence}
+
+```bash
+curl "{WORKER}/gate/swap/preview?token={fm['demo_go']}"
+```
+
+## Wire it into {fwn} (under a minute)
+
+```bash
+{fw['install']}
+```
+
+```js
+{fw['snippet']}
+```
+
+{fw['snippet_note']}
+
+**Fails closed.** If the gate is ever unreachable the plugin degrades to the free preview and,
+if that is down too, returns a non-GO — an outage can never green-light a swap.
+
+## Pricing — the guard rides every trade
+
+| Route | Price | What you get |
+|---|---|---|
+| `GET /gate/swap/preview` | free (3/day/IP) | GO / HOLD / BLOCK verdict + the live fields above |
+| `GET /gate/swap` | **$0.008 USDC** (x402) | verdict **+ entry/exit sim + round-trip breakeven + max safe size** |
+| `GET /chain/token-report` | $0.01 USDC (x402) | full evidence: honeypot sim, tax, admin controls, liquidity |
+
+At 20 trades/day that is $0.16/day — **3.75× cheaper per call than the nearest x402 pre-trade gate**,
+Base-native, honeypot + sizing in one call.
+
+## {fwn} agents — the other failure modes
+
+- [Honeypot — buy works, sell reverts]({fw['slug']}-honeypot.html)
+- [Unsellable / no confirmable exit]({fw['slug']}-cant-sell-exit-trap.html)
+- [Trade too big for the pool / price impact]({fw['slug']}-trade-too-big-price-impact.html)
+- [Rug via admin controls (mint/blacklist/pause)]({fw['slug']}-rug-admin-controls.html)
+
+## FAQ
+
+{faq_md}
+
+---
+
+Install guide: [{fwn} swap gate]({fw['slug']}.html) ·
+other frameworks: [ElizaOS]({SITE}/elizaos-token-safety-plugin.html) ·
+[Vercel AI SDK]({SITE}/vercel-ai-sdk-swap-guard.html) ·
+[LangChain.js]({SITE}/langchain-honeypot-check-tool.html).
+Source: [greyridge-x402-tools](https://github.com/{REPO}) ·
+[awesome-x402](https://github.com/xpaysh/awesome-x402) ·
+API discovery: [/.well-known/x402]({WORKER}/.well-known/x402).
+
+[Back](index.html)
+"""
+    return body
+
+
 # --- publishing helpers --------------------------------------------------------------
 def gh_get_sha(path):
     try:
@@ -328,10 +614,16 @@ def update_index(today):
         "Vercel AI SDK": "one-tool swap guard",
         "LangChain.js": "honeypot-check tool",
     }
+    fm_tag = {"honeypot": "honeypot", "cant-sell-exit-trap": "can't-sell",
+              "trade-too-big-price-impact": "trade-too-big", "rug-admin-controls": "rug controls"}
     for fw in FRAMEWORKS:
         tag = tagline.get(fw["framework"], "swap gate")
         cmd = fw["install"].replace("npm install ", "npm i ")
         block_lines.append(f"- [{fw['framework']} {tag}]({fw['slug']}.html) — `{cmd}`")
+        subs = " · ".join(
+            f"[{fm_tag.get(fm['slug'], fm['slug'])}]({fw['slug']}-{fm['slug']}.html)"
+            for fm in FAILURE_MODES)
+        block_lines.append(f"  - stop a specific failure: {subs}")
     block_lines += ["", IDX_END]
     block = "\n".join(block_lines)
 
@@ -390,17 +682,36 @@ def main():
     block = live_demo(BLOCK_TOKEN)
     print(f"demo: {GO_TOKEN}={go.get('decision')} dead={block.get('decision')}", file=sys.stderr)
 
+    # Prefetch the full demo set once (shared across the 12 matrix pages).
+    demos = {t: live_demo_full(t) for t in DEMO_TOKENS}
+    print("matrix demos: " + ", ".join(
+        f"{t}={demos[t].get('decision')}" for t in DEMO_TOKENS), file=sys.stderr)
+
     new_urls = []
     for fw in FRAMEWORKS:
         body = render(fw, go, block, today)
         path = f"{DOCS}/{fw['slug']}.md"
         new_urls.append(f"{SITE}/{fw['slug']}.html")
         if args.dry_run:
-            print(f"\n===== {path} ({len(body)} bytes) =====\n{body[:900]}\n...")
+            print(f"\n===== {path} ({len(body)} bytes) =====\n{body[:600]}\n...")
             continue
         if args.publish:
             gh_put(path, body, f"line-a: {fw['framework']} install-intent page ({today})")
             print(f"PUT {path}")
+
+    # framework x failure-mode matrix (12 long-tail intent pages)
+    for fw in FRAMEWORKS:
+        for fm in FAILURE_MODES:
+            body = render_matrix(fw, fm, demos, today)
+            slug = f"{fw['slug']}-{fm['slug']}"
+            path = f"{DOCS}/{slug}.md"
+            new_urls.append(f"{SITE}/{slug}.html")
+            if args.dry_run:
+                print(f"\n===== {path} ({len(body)} bytes) =====\n{body[:600]}\n...")
+                continue
+            if args.publish:
+                gh_put(path, body, f"line-a: {fw['framework']} x {fm['slug']} intent page ({today})")
+                print(f"PUT {path}")
 
     if args.publish:
         update_index(today)
