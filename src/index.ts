@@ -7904,25 +7904,47 @@ app.get("/chain/token-security", async (c) => {
   }
 });
 
-// Free preview — runs the FULL real analysis (not a withheld/partial result) on
-// a fixed well-known token (Base WETH) so an agent can see the real product
-// before paying. To analyze an arbitrary token, pay for GET /chain/token-security.
+// Free preview — runs the FULL real analysis (not a withheld/partial result).
+// With NO ?token= it is pinned to a fixed well-known token (Base WETH) so an
+// agent (and our A0 correctness canary) always sees the same known-good sample.
+// With ?token=<0x…> it honors the caller's OWN token under the same bounded
+// 3-real-tokens/IP/day trial the gate/report previews use (trialToken) — a dev
+// evaluating us can try THEIR token for free, matching rivals' free tiers, while
+// the daily cap protects the paid product. Demo tokens (usdc|weth|…) are
+// un-metered. Exhausting the trial returns a paste-ready paid CTA, never a
+// silently-wrong result for the token they asked about.
 const TOKEN_SECURITY_PREVIEW_TOKEN = "0x4200000000000000000000000000000000000006"; // WETH on Base
 app.get("/chain/token-security/preview", async (c) => {
+  const tq = tokenQ(c);
+  if (tq !== undefined && !ADDR_RE.test(tq) && !PREVIEW_DEMO_TOKENS[tq.toLowerCase()]) {
+    return c.json({ error: "token must be a 0x-prefixed 20-byte Base address (or demo: usdc|weth|cbbtc|aero|degen)" }, { status: 400 });
+  }
   try {
-    const result = await analyzeTokenSecurity(TOKEN_SECURITY_PREVIEW_TOKEN);
-    console.log(
-      JSON.stringify({
-        event: "free_preview",
-        endpoint: "/chain/token-security/preview",
-        token: TOKEN_SECURITY_PREVIEW_TOKEN,
-        verdict: result.verdict,
-        ts: result.analyzed_at,
-      }),
-    );
+    // No token → the canary-stable WETH demo (unchanged, same depth as paid).
+    if (tq === undefined) {
+      const result = await analyzeTokenSecurity(TOKEN_SECURITY_PREVIEW_TOKEN);
+      console.log(JSON.stringify({ event: "free_preview", endpoint: "/chain/token-security/preview", token: TOKEN_SECURITY_PREVIEW_TOKEN, verdict: result.verdict, ts: result.analyzed_at }));
+      return c.json({
+        ...result,
+        note: "Free live sample — full real analysis of a well-known token (Base WETH), same depth as the paid endpoint. Pass ?token=<0x…> to analyze YOUR token free (3/IP/day), or GET /chain/token-security?token=<0x…> ($0.009) for unmetered any-token access.",
+        upgrade: upgradeCTA(paidUrlFrom(c), "0.009", "Unmetered, any Base ERC-20 (this free preview is capped at 3 real tokens/IP/day)."),
+      });
+    }
+    // Token supplied → honor it under the shared free-trial cap.
+    const t = await trialToken(c, tq);
+    if (t.exhausted) {
+      const pu = paidUrlFrom(c);
+      return c.json({ error: "free real-token trial exhausted (3/day/IP) - this is NOT a result for the token you asked about", trial: { real_token_checks_left_today: 0 }, paid: pu, paid_url: pu, price_usdc: "0.009", pay_with: `x402: npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f("${pu}") - pays USDC on Base automatically. Docs: https://api.greyridgesignals.ai/llms.txt` }, { status: 429 });
+    }
+    const result = await analyzeTokenSecurity(t.token);
+    console.log(JSON.stringify({ event: "free_preview", endpoint: "/chain/token-security/preview", token: t.token, verdict: result.verdict, ts: result.analyzed_at }));
     return c.json({
       ...result,
-      note: "Free live sample — full real analysis of a well-known token (Base WETH), same depth as the paid endpoint. Full: GET /chain/token-security?token=<0x…> ($0.009) to analyze ANY Base ERC-20 token.",
+      ...(t.left !== null ? { trial: { real_token_checks_left_today: t.left } } : {}),
+      note: t.left !== null
+        ? `Free real-token trial (${t.left} left today, 3/IP/day). Full: GET /chain/token-security?token=<0x…> ($0.009) for unmetered any-token access.`
+        : "Free live sample — same depth as the paid endpoint. Full: GET /chain/token-security?token=<0x…> ($0.009) to analyze ANY Base ERC-20 token.",
+      upgrade: upgradeCTA(paidUrlFrom(c), "0.009", "Unmetered, any Base ERC-20 (this free preview is capped at 3 real tokens/IP/day)."),
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
