@@ -442,6 +442,10 @@ STATIC_PAGES = [
     "mcp-registry-census-2026-10-20.html", "honeypot-check-api-base.html",
     "pre-trade-safety-gate-ai-agents.html", "x402-token-risk-api.html",
     "base-token-safety-price-comparison.html",
+    # Line-A per-framework install-intent pages (scripts/gen_line_a_pages.py) — listed here
+    # so a scorecard-only sitemap rebuild never starves them of crawl signal.
+    "elizaos-token-safety-plugin.html", "vercel-ai-sdk-swap-guard.html",
+    "langchain-honeypot-check-tool.html",
 ]
 
 
