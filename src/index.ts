@@ -9970,6 +9970,32 @@ async function grsgPostureDriftCheck(
   const fp = await grsgPostureFingerprint(summary);
   const now = new Date().toISOString();
   const prev = vrec?.posture;
+  let kind: "baseline" | "changed" | "unchanged";
+  if (!prev || !prev.fp) kind = "baseline";
+  else if (prev.fp !== fp) kind = "changed";
+  else kind = "unchanged";
+  // Append transitions (baseline + verdict/posture CHANGES) to a bounded history
+  // ring so a subscriber can see a posture TIMELINE, not just the latest snapshot
+  // — the continuous-monitoring value Detectify/Probely sell (a "monitoring
+  // history", not a single re-check). Unchanged re-scans are intentionally NOT
+  // recorded: they add no signal and would bloat KV at 4 checks/day — "still
+  // clear as of <checked_at>" is already carried by posture.checked_at. The ring
+  // is capped so the verify record can never grow unbounded.
+  const priorHist = Array.isArray(vrec?.posture_history) ? vrec.posture_history : [];
+  const posture_history =
+    kind === "unchanged"
+      ? priorHist
+      : [
+          ...priorHist,
+          {
+            at: now,
+            kind,
+            verdict: summary.verdict,
+            risk_score: summary.risk_score,
+            tools_scanned: summary.tools_scanned,
+            by_severity: summary.by_severity,
+          },
+        ].slice(-50);
   const updated: any = {
     ...vrec,
     posture: {
@@ -9980,12 +10006,9 @@ async function grsgPostureDriftCheck(
       by_severity: summary.by_severity,
       checked_at: now,
     },
+    posture_history,
   };
   delete updated.posture_last_error;
-  let kind: "baseline" | "changed" | "unchanged";
-  if (!prev || !prev.fp) kind = "baseline";
-  else if (prev.fp !== fp) kind = "changed";
-  else kind = "unchanged";
   try {
     await c.env.API_KEYS?.put("verify:" + host, JSON.stringify(updated));
   } catch {
@@ -10127,6 +10150,7 @@ app.get("/scan/verify/status", async (c) => {
   grsgScheduleRevalidate(c, host, rec);
   const srec = await grsgSubRecord(c, host);
   const monitored = (!!rec && rec.last_ok !== false) && grsgSubActive(srec);
+  const postureHistory = Array.isArray(rec?.posture_history) ? rec.posture_history : [];
   return c.json({
     host,
     // A claimed record whose proof has since lapsed is still "claimed" (the
@@ -10156,6 +10180,18 @@ app.get("/scan/verify/status", async (c) => {
           checked_at: rec.posture.checked_at ?? null,
         }
       : null,
+    // Posture TIMELINE — the continuous-monitoring layer (Detectify/Probely
+    // parity). The event count + last-change date are free so a prospect can SEE
+    // there is history worth unlocking; the full event list is the paid feature,
+    // released only while a monitoring subscription is active. Machine-consumers
+    // get a stable shape: posture_history is always an array (empty when locked),
+    // with posture_history_locked signalling why it is empty.
+    posture_events: postureHistory.length,
+    posture_first_checked: postureHistory[0]?.at ?? null,
+    posture_last_change:
+      [...postureHistory].reverse().find((h: any) => h?.kind === "changed")?.at ?? null,
+    posture_history_locked: !monitored && postureHistory.length > 0,
+    posture_history: monitored ? postureHistory : [],
   });
 });
 
@@ -10505,7 +10541,7 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
 </div>
 
 <h2>What you get</h2>
-<p class=muted>A verified-owner badge for your README, a public report page, re-scans every six hours, and &mdash; with a monitoring subscription &mdash; drift alerts and the full auditor-grade report. Static MCP tool-metadata analysis (OWASP LLM01/LLM08); &ldquo;clear&rdquo; is not a guarantee of safety. Browse the free scan first at <a href="/scan/badge-gen">the badge generator</a>.</p>
+<p class=muted>A verified-owner badge for your README, a public report page, re-scans every six hours, and &mdash; with a monitoring subscription &mdash; drift alerts, a full posture-history timeline (every verdict change, dated), and the full auditor-grade report. Static MCP tool-metadata analysis (OWASP LLM01/LLM08); &ldquo;clear&rdquo; is not a guarantee of safety. Browse the free scan first at <a href="/scan/badge-gen">the badge generator</a>.</p>
 
 <footer>Grey Ridge Signals Group LLC &middot; Ownership is verified by DNS control; we never scan a submitted third-party asset without it. <a href="/scan/badge-gen">Badge generator</a> &middot; <a href="/scan/directory">MCP security directory</a> &middot; <a href="/">greyridgesignals.ai</a></footer>
 

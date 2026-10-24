@@ -683,4 +683,52 @@ const POISONED_TOOLS = [
   ok(j.posture_baselined === 0 && j.posture_changed === 0, "no posture work on a lapsed host");
 }
 
+// 36. Posture TIMELINE: baseline + a later drift record TWO history entries
+//     (unchanged ticks add none), and /scan/verify/status returns the full
+//     event list to an ACTIVE subscriber. This is the Detectify/Probely parity
+//     feature — a monitoring history, not just the latest snapshot.
+{
+  const kv = makeSweepKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, mcp_url: MCP_URL, last_ok: true, verify_method: "dns-txt", notify_url: NOTIFY_URL, notify_secret: "s" }));
+  kv.store.set("sub:" + HOST, JSON.stringify({ host: HOST, active: true, status: "active" }));
+  installPostureStub(HOST, token, { dns: true, tools: CLEAN_TOOLS });
+  await app.request("/scan/verify/sweep", {}, { API_KEYS: kv }); // baseline
+  installPostureStub(HOST, token, { dns: true, tools: CLEAN_TOOLS });
+  await app.request("/scan/verify/sweep", {}, { API_KEYS: kv }); // unchanged — no new entry
+  installPostureStub(HOST, token, { dns: true, tools: POISONED_TOOLS });
+  await app.request("/scan/verify/sweep", {}, { API_KEYS: kv }); // drift — one new entry
+  const rec = JSON.parse(kv.store.get("verify:" + HOST));
+  ok(Array.isArray(rec.posture_history) && rec.posture_history.length === 2, "history ring records baseline + change only (unchanged ticks skipped)");
+  ok(rec.posture_history[0].kind === "baseline" && rec.posture_history[1].kind === "changed", "history entries carry their transition kind in order");
+  installPostureStub(HOST, token, { dns: true, tools: POISONED_TOOLS });
+  const st = await (await app.request("/scan/verify/status?domain=" + HOST, {}, { API_KEYS: kv })).json();
+  ok(st.monitored === true, "status: host is monitored (owned + active sub)");
+  ok(st.posture_events === 2, "status: posture_events counts the timeline");
+  ok(Array.isArray(st.posture_history) && st.posture_history.length === 2, "status: active subscriber gets the full posture timeline");
+  ok(st.posture_history_locked === false, "status: timeline is not locked for a subscriber");
+  ok(typeof st.posture_last_change === "string", "status: last-change date is surfaced");
+}
+
+// 37. Gating: the SAME populated history is WITHHELD from a non-subscriber —
+//     posture_history is empty + locked, but the count + last-change date stay
+//     visible so a prospect can see there is history worth unlocking (the
+//     conversion hook). The free ownership read is otherwise unchanged.
+{
+  const kv = makeSweepKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, mcp_url: MCP_URL, last_ok: true, verify_method: "dns-txt", notify_url: NOTIFY_URL, notify_secret: "s" }));
+  kv.store.set("sub:" + HOST, JSON.stringify({ host: HOST, active: true, status: "active" }));
+  installPostureStub(HOST, token, { dns: true, tools: CLEAN_TOOLS });
+  await app.request("/scan/verify/sweep", {}, { API_KEYS: kv }); // baseline
+  installPostureStub(HOST, token, { dns: true, tools: POISONED_TOOLS });
+  await app.request("/scan/verify/sweep", {}, { API_KEYS: kv }); // drift → 2 entries
+  // subscription lapses
+  kv.store.set("sub:" + HOST, JSON.stringify({ host: HOST, active: false, status: "canceled" }));
+  installPostureStub(HOST, token, { dns: true, tools: POISONED_TOOLS });
+  const st = await (await app.request("/scan/verify/status?domain=" + HOST, {}, { API_KEYS: kv })).json();
+  ok(st.monitored === false, "status: not monitored once the sub lapses");
+  ok(st.posture_events === 2, "status: event COUNT stays visible to a non-subscriber");
+  ok(Array.isArray(st.posture_history) && st.posture_history.length === 0, "status: full timeline withheld from a non-subscriber");
+  ok(st.posture_history_locked === true, "status: timeline is flagged locked (the upgrade hook)");
+}
+
 console.log(`verify tests: ${passed}/${passed} passed`);
