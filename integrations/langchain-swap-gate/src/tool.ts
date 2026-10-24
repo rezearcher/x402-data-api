@@ -1,0 +1,102 @@
+import { tool } from "@langchain/core/tools";
+import { z } from "zod";
+import { makePayFetch, type PayFetch } from "./client.js";
+// Core money-logic lives in a dependency-free module so it is unit-tested
+// without the LangChain runtime. Imported with the .mjs extension on purpose.
+import { runGuard, GATE_BASE, type GuardResult } from "./gate.mjs";
+
+export interface SwapGuardOptions {
+  /** Pre-built x402-paying fetch; overrides `privateKey`. Mainly for tests. */
+  payFetch?: PayFetch;
+  /** Hex private key of the agent's Base wallet; signs the $0.008 USDC x402 payment. Omit for the free preview path only. */
+  privateKey?: string;
+  /** Override the gate base URL (defaults to the hosted Grey Ridge Worker). */
+  base?: string;
+  /** Default trade size (USD) for the liquidity / price-impact / sizing checks. */
+  defaultNotionalUsd?: number;
+  /** Skip a trade whose round-trip friction (entry+exit) exceeds this percent. */
+  maxBreakevenPct?: number;
+  /** Skip a trade whose modelled exit slippage exceeds this percent. */
+  maxExitSlippagePct?: number;
+}
+
+/**
+ * Build a LangChain tool that gates a Base swap on token safety.
+ *
+ * Wraps Grey Ridge `/gate/swap` (honeypot + sellability + admin-control +
+ * liquidity-vs-size), paid inline per call via x402 USDC ($0.008) — no API key,
+ * no subscription. The tool returns the full verdict plus a sizing-aware
+ * `proceed` boolean the model can branch on, and fails CLOSED (`proceed:false`)
+ * if the gate is ever unreachable, so an outage can never green-light a swap.
+ *
+ * Uses `responseFormat: "content_and_artifact"` so the agent gets a readable
+ * string AND the structured guard object (`.artifact`) in one call.
+ *
+ * ```ts
+ * import { createSwapGuard } from "@grey-ridge/langchain-swap-gate";
+ * import { createReactAgent } from "@langchain/langgraph/prebuilt";
+ * const swapGuard = createSwapGuard({ privateKey: process.env.PRIVATE_KEY });
+ * const agent = createReactAgent({ llm, tools: [swapGuard] });
+ * await agent.invoke({ messages: [{ role: "user", content: "Buy $50 of 0x… on Base" }] });
+ * ```
+ */
+export function createSwapGuard(opts: SwapGuardOptions = {}) {
+  const base = opts.base || GATE_BASE;
+  const payFetch: PayFetch = opts.payFetch || makePayFetch(opts.privateKey);
+  const defaultNotionalUsd =
+    typeof opts.defaultNotionalUsd === "number" && opts.defaultNotionalUsd > 0
+      ? opts.defaultNotionalUsd
+      : 100;
+  const maxBreakevenPct = opts.maxBreakevenPct ?? 15;
+  const maxExitSlippagePct = opts.maxExitSlippagePct ?? 10;
+
+  return tool(
+    async ({
+      token,
+      side,
+      notional_usd,
+    }: {
+      token: string;
+      side?: "buy" | "sell";
+      notional_usd?: number;
+    }): Promise<[string, GuardResult]> => {
+      const out = await runGuard(
+        payFetch,
+        { token, side, notionalUsd: notional_usd, base },
+        { maxBreakevenPct, maxExitSlippagePct }
+      );
+      // content (for the model) + artifact (structured, for the app).
+      return [JSON.stringify(out), out];
+    },
+    {
+      name: "swap_guard",
+      description:
+        "Pre-trade safety gate for a Base ERC-20: honeypot, sellability, admin-control and liquidity-vs-size checks via Grey Ridge /gate/swap ($0.008 USDC/call, paid inline with x402). Call BEFORE every swap. Returns the full verdict plus a sizing-aware `proceed` boolean; fails closed (proceed:false) if the gate is unreachable.",
+      schema: z.object({
+        token: z
+          .string()
+          .describe("Base ERC-20 contract address (0x followed by 40 hex chars) to check."),
+        side: z
+          .enum(["buy", "sell"])
+          .default("buy")
+          .describe("Trade direction: buy (default) or sell."),
+        notional_usd: z
+          .number()
+          .positive()
+          .default(defaultNotionalUsd)
+          .describe("Trade size in USD, used for the liquidity / price-impact / sizing checks."),
+      }),
+      responseFormat: "content_and_artifact",
+    }
+  );
+}
+
+/**
+ * Zero-config tool: reads `PRIVATE_KEY` (the agent's Base wallet) and the
+ * optional `SWAP_GATE_BASE_URL` from the environment. Import and drop straight
+ * into an agent's `tools` array.
+ */
+export const swapGuard = createSwapGuard({
+  privateKey: typeof process !== "undefined" ? process.env?.PRIVATE_KEY : undefined,
+  base: typeof process !== "undefined" ? process.env?.SWAP_GATE_BASE_URL : undefined,
+});
