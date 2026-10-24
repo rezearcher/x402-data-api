@@ -11760,6 +11760,63 @@ ${faqHtml}
 // every embed is a backlink that brings the server's own audience to Grey Ridge. The
 // scanned server's tool text and the url query are attacker-controllable — everything
 // reflected into the page is HTML-escaped. Carries the continuous-monitoring CTA.
+// Render the security-posture TIMELINE card for /scan/report from a verify record's
+// posture_history ring (the continuous-monitoring history Detectify/Probely sell).
+// Exported + self-contained (own escaping) so it is unit-testable off a mock record and
+// reused without coupling to the handler-local esc. Gating mirrors /scan/verify/status:
+//   monitored (paid)      -> full dated timeline (last 12 transitions + latest snapshot)
+//   verified-only (free)  -> locked teaser: count + current verdict + monitoring upsell
+//   unclaimed/no history  -> "" (nothing — never fabricate a timeline)
+export function renderPostureTimeline(opts: {
+  ownerRec: any;
+  monitored: boolean;
+  ownerHost: string | null;
+}): string {
+  const { ownerRec, monitored, ownerHost } = opts;
+  const esc = (s: string) =>
+    String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m] as string);
+  const hist: any[] = Array.isArray(ownerRec?.posture_history) ? ownerRec.posture_history : [];
+  if (hist.length === 0 || !ownerHost) return "";
+  const snap = ownerRec?.posture && typeof ownerRec.posture === "object" ? ownerRec.posture : null;
+  const vcls = (x: string) => (({ clear: "clear", review: "review", block: "block" } as Record<string, string>)[x] || "unknown");
+  const fmt = (iso: string) => String(iso || "").slice(0, 16).replace("T", " ");
+  const changes = hist.filter((e) => e.kind === "changed").length;
+  if (monitored) {
+    const sevLine = (bs: any) => {
+      if (!bs || typeof bs !== "object") return "no issues";
+      const parts = (["critical", "high", "medium", "low"] as const)
+        .map((k) => (Number(bs[k]) > 0 ? `${bs[k]} ${k}` : null))
+        .filter(Boolean);
+      return parts.length ? parts.join(", ") : "no issues";
+    };
+    const rows = [...hist]
+      .reverse()
+      .slice(0, 12)
+      .map((e) => {
+        const ev = e.kind === "baseline" ? "baseline" : e.kind === "changed" ? "changed" : esc(String(e.kind || ""));
+        const evCls = e.kind === "changed" ? "review" : "unknown";
+        return `<tr><td class=muted style="white-space:nowrap">${esc(fmt(e.at))} UTC</td><td><span class="pill ${evCls}" style="font-size:.7rem">${ev}</span></td><td><span class="pill ${vcls(String(e.verdict))}" style="font-size:.7rem">${esc(String(e.verdict))}</span></td><td>${Number.isFinite(Number(e.risk_score)) ? Number(e.risk_score) + "/100" : "?"}</td><td class=muted>${esc(sevLine(e.by_severity))}</td></tr>`;
+      })
+      .join("");
+    const lastSeen = snap?.checked_at
+      ? `<p class=muted style="margin:.7rem 0 0">Last re-checked ${esc(fmt(snap.checked_at))} UTC — currently <strong>${esc(String(snap.verdict))}</strong> at risk ${Number(snap.risk_score)}/100.</p>`
+      : "";
+    return `<h2>Security posture over time</h2>
+<div class=card>
+  <p class=summary><span class="pill clear">monitored</span> &nbsp;${hist.length} recorded transition(s), ${changes} verdict/risk change(s) since baseline. Each row is a point where the advertised manifest's posture actually moved — unchanged re-scans aren't logged.</p>
+  <table><thead><tr><th>When</th><th>Event</th><th>Verdict</th><th>Risk</th><th>Severity mix</th></tr></thead><tbody>
+  ${rows}
+  </tbody></table>${lastSeen}
+</div>`;
+  }
+  const latestV = snap?.verdict ? String(snap.verdict) : (hist[hist.length - 1]?.verdict ? String(hist[hist.length - 1].verdict) : "unknown");
+  return `<h2>Security posture over time</h2>
+<div class=card>
+  <p class=summary><span class="pill unknown">timeline locked</span> &nbsp;Grey Ridge has recorded <strong>${hist.length}</strong> posture transition(s) for <code>${esc(ownerHost)}</code> (${changes} verdict/risk change(s)); current verdict <span class="pill ${vcls(latestV)}" style="font-size:.7rem">${esc(latestV)}</span>. The dated monitoring timeline — every change, when it happened, and the severity mix — is part of continuous monitoring.</p>
+  <p class=muted style="margin:.6rem 0 0"><a href="/scan/verify?domain=${encodeURIComponent(ownerHost)}">Turn on monitoring — $9.99/mo</a> to unlock the full dated posture history with drift alerts.</p>
+</div>`;
+}
+
 app.get("/scan/report", async (c) => {
   const esc = (s: string) =>
     String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m] as string);
@@ -11887,6 +11944,14 @@ ${ctaBlock}${scriptBlock}`);
 </div>`;
   }
 
+  // Security posture over time — the continuous-monitoring TIMELINE Detectify/Probely sell:
+  // not a single re-check but a dated history of every verdict/risk transition. The ring lives
+  // on the verify record (grsgPostureDriftCheck appends baseline + changes). Gating mirrors
+  // /scan/verify/status: a monitored (paid) server shows the full dated timeline; a
+  // verified-only (free) server sees the COUNT + latest verdict with the dated list locked
+  // behind monitoring; an unclaimed/unscanned server sees nothing (no teaser to fabricate).
+  const postureBlock = renderPostureTimeline({ ownerRec, monitored: ownerMonitored, ownerHost });
+
   // Point-in-time safety is only half the picture: a manifest that scans clear today can be
   // silently re-poisoned tomorrow. Dominion Observatory (dominionobservatory.com) watches MCP
   // tool manifests for drift over time and exposes a free, stable, unauthenticated read. We
@@ -11939,6 +12004,7 @@ ${ctaBlock}${scriptBlock}`);
 <p class=muted style="margin:-1rem 0 1.6rem;font-size:.82rem">Grade on the familiar A (best) – F (worst) scale, from our risk_score — the Grey Ridge Signals grade, not a third-party certification. A 0–9 · B 10–29 · C 30–49 · D 50–69 · F 70+ or any critical finding.</p>
 ${ownerBlock}
 ${findingsBlock}
+${postureBlock}
 ${driftBlock}
 ${badgeBlock}
 ${ctaBlock}
