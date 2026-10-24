@@ -207,10 +207,28 @@ def readiness_line(d):
                 "structural rules Anthropic's published review criteria check for (names, annotations, "
                 "permission hints, no catch-all read+write tool, no unsupported capability).")
     bc = dr.get("blocker_count", 0)
-    return (f"**Claude Connector Directory readiness: {bc} blocker(s).** This server advertises {bc} "
-            "tool definition(s) that would likely fail Anthropic's structural review criteria. The "
-            "Connector Directory review runs about 20 days, so a rejection is expensive — the itemized "
-            "list of which criteria fail, and how to fix each, is one paid call away.")
+    # Severity-aware (Claims Law): distinguish hard rejects from quality-polish mediums,
+    # matching the live /scan/mcp/preview teaser. Calling a soft-only result a "blocker that
+    # would fail" is an oversell — the Directory reviews those items for quality, not rejection.
+    hard = dr.get("hard_blockers")
+    soft = dr.get("soft_blockers")
+    status = dr.get("status")
+    if hard is None and soft is None:  # older scan payload — degrade to the count-only form
+        return (f"**Claude Connector Directory readiness: {bc} item(s) to review.** This server advertises "
+                f"{bc} tool definition(s) that miss Anthropic's structural review criteria. The Connector "
+                "Directory review runs about 20 days — the itemized list of which criteria and how to fix "
+                "each is one paid call away.")
+    if status == "needs_polish" or (hard == 0 and (soft or 0) > 0):
+        return (f"**Claude Connector Directory readiness: {soft} quality item(s) to polish.** No hard "
+                "rejects — but this server advertises tool definition(s) that miss quality criteria "
+                "Anthropic reviews (titles, read-only hints, descriptions). These don't auto-reject, yet "
+                "the review runs about 20 days, so polishing them first avoids a slow round-trip. The "
+                "itemized list and how to fix each is one paid call away.")
+    return (f"**Claude Connector Directory readiness: {hard} likely reject(s).** This server advertises "
+            f"{hard} tool definition(s) that would likely fail Anthropic's structural review criteria"
+            + (f" (plus {soft} quality item(s) to polish)" if soft else "")
+            + ". The Connector Directory review runs about 20 days, so a rejection is expensive — the "
+            "itemized list of which criteria fail, and how to fix each, is one paid call away.")
 
 
 _MCP_HDRS = {
@@ -388,7 +406,16 @@ def render(name, slug, url, vendor, d, today):
     dr = d.get("directory_readiness") or {}
     ready = dr.get("ready")
     bc = dr.get("blocker_count", 0)
-    ready_txt = "ready for the Claude Connector Directory" if ready else f"{bc} Claude Directory blocker(s)"
+    _hard = dr.get("hard_blockers")
+    _soft = dr.get("soft_blockers")
+    if ready:
+        ready_txt = "ready for the Claude Connector Directory"
+    elif _hard == 0 and (_soft or 0) > 0:
+        ready_txt = f"{_soft} Claude Directory quality item(s) to polish (no hard rejects)"
+    elif _hard:
+        ready_txt = f"{_hard} likely Claude Directory reject(s)"
+    else:
+        ready_txt = f"{bc} Claude Directory item(s) to review"
     # Enrich the SEO meta description (the snippet Google shows) with the real advertised
     # tool names when we have them — unique per server, and it matches the long-tail intent
     # ("what does <server> mcp do / is it safe"). Degrade-open to the count-only form.
