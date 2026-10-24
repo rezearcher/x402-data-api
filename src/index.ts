@@ -8198,8 +8198,8 @@ app.get("/gate/swap", async (c) => {
   }
   const side = (c.req.query("side") ?? "buy").toLowerCase();
   if (side !== "buy" && side !== "sell") return c.json({ error: "side must be buy or sell" }, { status: 400 });
-  const notional = Number(c.req.query("notional_usd") ?? c.req.query("notional") ?? "100");
-  if (!Number.isFinite(notional) || notional <= 0) return c.json({ error: "notional_usd must be a positive number" }, { status: 400 });
+  const notional = notionalQ(c);
+  if (notional === null) return c.json({ error: "notional_usd must be a positive number" }, { status: 400 });
   try {
     const out = await buildSwapGate(token, side as "buy" | "sell", notional);
     // Deliver the paid value the free preview's upgrade.paid_adds promises: the
@@ -8389,8 +8389,8 @@ app.get("/gate/swap/unlock", async (c) => {
   if (!token || !ADDR_RE.test(token)) return c.json({ error: "token query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
   const side = (c.req.query("side") ?? "buy").toLowerCase();
   if (side !== "buy" && side !== "sell") return c.json({ error: "side must be buy or sell" }, { status: 400 });
-  const notional = Number(c.req.query("notional_usd") ?? c.req.query("notional") ?? "100");
-  if (!Number.isFinite(notional) || notional <= 0) return c.json({ error: "notional_usd must be a positive number" }, { status: 400 });
+  const notional = notionalQ(c);
+  if (notional === null) return c.json({ error: "notional_usd must be a positive number" }, { status: 400 });
   const tx = (c.req.query("tx") ?? "").trim();
   if (!tx) {
     // No proof presented: tell the caller exactly how to pay, from ground truth.
@@ -9047,6 +9047,21 @@ function tokenQ(c: any): string | undefined {
   }
   return undefined;
 }
+// Read the intended trade size under any of the names a caller (or our own
+// plugins' internal arg shape) might use. notional drives the pool-depth /
+// price-impact decision, so silently defaulting a mis-cased param to $100 would
+// return a dangerously-wrong GO for a large trade; accept the camelCase alias
+// too. Returns null for a present-but-invalid value so the handler can 400.
+export function notionalQ(c: any): number | null {
+  for (const k of ["notional_usd", "notional", "notionalUsd"]) {
+    const v = c.req.query(k);
+    if (v !== undefined && v !== "") {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    }
+  }
+  return 100;
+}
 app.get("/chain/token-report/preview", async (c) => {
   const tq = tokenQ(c);
   if (tq !== undefined && !ADDR_RE.test(tq) && !PREVIEW_DEMO_TOKENS[tq.toLowerCase()]) return c.json({ error: "token must be a 0x-prefixed 20-byte Base address (or demo: usdc|weth|cbbtc|aero|degen)" }, { status: 400 });
@@ -9088,8 +9103,7 @@ app.get("/gate/swap/preview", async (c) => {
     const t = await trialToken(c, tq);
     if (t.exhausted) { const pu = paidUrlFrom(c); return c.json({ error: "free real-token trial exhausted (3/day/IP) - this is NOT a result for the token you asked about", trial: { real_token_checks_left_today: 0 }, paid: pu, paid_url: pu, price_usdc: "0.008", pay_with: `x402: npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f("${pu}") - pays USDC on Base automatically. Docs: https://api.greyridgesignals.ai/llms.txt` }, { status: 429 }); }
     const pSide = c.req.query("side") === "sell" ? "sell" : "buy";
-    const pNotional = Number(c.req.query("notional_usd") ?? "100");
-    const effNotional = Number.isFinite(pNotional) && pNotional > 0 ? pNotional : 100;
+    const effNotional = notionalQ(c) ?? 100;
     const out = await buildSwapGate(t.token, pSide, effNotional);
     const swapUpgrade = upgradeCTA(
       paidUrlFrom(c),
