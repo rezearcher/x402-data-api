@@ -174,10 +174,173 @@ def readiness_line(d):
             "list of which criteria fail, and how to fix each, is one paid call away.")
 
 
+_MCP_HDRS = {
+    "Content-Type": "application/json",
+    "Accept": "application/json, text/event-stream",
+    "User-Agent": UA["User-Agent"],
+}
+
+
+def _mcp_post(url, payload, session_id=None, timeout=20):
+    """POST one JSON-RPC message to an MCP Streamable-HTTP endpoint. Returns
+    (parsed_result_dict_or_None, session_id). Parses both plain-JSON and SSE
+    (`event: message\\ndata: {...}`) response bodies. Degrade-open: any failure
+    returns (None, session_id)."""
+    hdrs = dict(_MCP_HDRS)
+    if session_id:
+        hdrs["Mcp-Session-Id"] = session_id
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(url, data=data, headers=hdrs, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            sid = r.headers.get("Mcp-Session-Id") or session_id
+            raw = r.read().decode("utf-8", "replace")
+    except Exception:
+        return None, session_id
+    # Collect every JSON object carried on a `data:` line (SSE) or the whole body (plain JSON).
+    objs = []
+    saw_sse = False
+    for line in raw.splitlines():
+        line = line.strip()
+        if line.startswith("data:"):
+            saw_sse = True
+            frag = line[5:].strip()
+            if frag and frag != "[DONE]":
+                try:
+                    objs.append(json.loads(frag))
+                except Exception:
+                    pass
+    if not saw_sse:
+        try:
+            objs.append(json.loads(raw))
+        except Exception:
+            pass
+    for o in objs:
+        if isinstance(o, dict) and "result" in o:
+            return o["result"], sid
+    return None, sid
+
+
+def fetch_tools(url):
+    """Fetch a server's advertised tool list + self-description via the SAME public
+    unauthenticated read the scan performs (initialize -> tools/list). Read-only, no
+    auth bypass. Returns (tools:list, instructions:str). Degrade-open: ([], '')."""
+    init, sid = _mcp_post(url, {
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {"protocolVersion": "2024-11-05", "capabilities": {},
+                   "clientInfo": {"name": "greyridge-scorecards", "version": "1.0"}},
+    })
+    instructions = ""
+    if isinstance(init, dict):
+        instructions = (init.get("instructions") or "").strip()
+    # Best-effort initialized notification (some servers require it before tools/list).
+    try:
+        _mcp_post(url, {"jsonrpc": "2.0", "method": "notifications/initialized"}, session_id=sid, timeout=10)
+    except Exception:
+        pass
+    res, _ = _mcp_post(url, {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}, session_id=sid)
+    tools = []
+    if isinstance(res, dict) and isinstance(res.get("tools"), list):
+        tools = res["tools"]
+    return tools, instructions
+
+
+def _clean(s, n=160):
+    """Sanitise third-party text for safe inline-Markdown embedding on our page:
+    collapse whitespace, strip angle brackets/backticks (no HTML/code-fence injection),
+    truncate to n chars. Returns '' for empty."""
+    if not s:
+        return ""
+    s = str(s).replace("`", "'").replace("<", "").replace(">", "")
+    s = " ".join(s.split())
+    if len(s) > n:
+        s = s[: n - 1].rstrip() + "…"
+    return s
+
+
+def tools_section(name, tools, instructions):
+    """Unique, per-server Markdown: the real advertised tool names + one-line
+    descriptions (Glama-parity depth) plus a self-description line where present.
+    This is public tools/list metadata, non-cannibalising (injection FINDINGS and
+    directory REMEDIATION stay paid-gated). Returns '' when no tools were fetched
+    (generator then falls back to the count-only template, still publishes)."""
+    if not tools:
+        return ""
+    lines = [f"## Tools the {name} server advertises", ""]
+    desc0 = _clean(instructions, 260)
+    if desc0:
+        lines.append(f"The server describes itself to connecting agents as: *{desc0}*")
+        lines.append("")
+    lines.append(
+        f"These are the {len(tools)} tool definition(s) any agent reads before it acts — the exact "
+        "surface this scan inspects for tool-poisoning and hidden-instruction patterns. Names and "
+        "descriptions are read verbatim from the server's public `tools/list`:")
+    lines.append("")
+    for t in tools:
+        if not isinstance(t, dict):
+            continue
+        tname = _clean(t.get("name"), 80) or "(unnamed)"
+        tdesc = _clean(t.get("description"), 180)
+        params = []
+        schema = t.get("inputSchema") or t.get("input_schema") or {}
+        props = schema.get("properties") if isinstance(schema, dict) else None
+        if isinstance(props, dict):
+            params = [p for p in list(props.keys())[:6] if isinstance(p, str)]
+        row = f"- **`{tname}`**"
+        if tdesc:
+            row += f" — {tdesc}"
+        if params:
+            row += f" _(parameters: {', '.join(_clean(p, 40) for p in params)})_"
+        lines.append(row)
+    lines.append("")
+    return "\n".join(lines)
+
+
+_WRITE_VERBS = ("create", "update", "delete", "remove", "write", "send", "set", "manage",
+                "edit", "post", "put", "patch", "add", "execute", "run", "deploy", "install",
+                "modify", "upload", "cancel", "publish", "assign", "revoke", "trigger")
+
+
+def surface_line(tools):
+    """Unique per-server read/write-surface analysis derived from the real tool
+    names — content no competitor publishes. Returns '' when no tools."""
+    if not tools:
+        return ""
+    names = [str(t.get("name", "")).lower() for t in tools if isinstance(t, dict)]
+    write = [n for n in names if any(v in n for v in _WRITE_VERBS)]
+    total = len(names)
+    if write:
+        ex = ", ".join(f"`{w}`" for w in write[:4])
+        return (f"**{len(write)} of {total} advertised tool(s) name a state-changing action** "
+                f"({ex}{'…' if len(write) > 4 else ''}). Write-capable tools are the higher-impact "
+                "surface if a description is ever poisoned, so they are the ones to re-check on every drift alert.")
+    return (f"**All {total} advertised tool(s) read-only by name** — no create/update/delete verbs in "
+            "the tool names. A lower-impact surface, though a poisoned read tool can still exfiltrate "
+            "or mislead, which is why the static read still matters.")
+
+
 def render(name, slug, url, vendor, d, today):
     tools = d.get("tools_scanned", 0)
     v = d.get("verdict", "unknown")
     host = urllib.parse.urlparse(url).netloc or url
+    # Per-server UNIQUE content (the de-rank fix): fetch the real advertised tool
+    # names + descriptions via the same public tools/list read the scan performs.
+    # Reuse a pre-fetched list if the caller attached one to d; else fetch here.
+    tool_list = d.get("_tools")
+    instr = d.get("_instructions", "")
+    if tool_list is None:
+        try:
+            tool_list, instr = fetch_tools(url)
+        except Exception:
+            tool_list, instr = [], ""
+    tools_block = tools_section(name, tool_list, instr)
+    surf = surface_line(tool_list)
+    surf_bullet = f"- {surf}\n" if surf else ""
+    rsum = _clean(d.get("risk_summary"), 240)
+    grade = (d.get("grade") or "").strip()
+    grade_lead = f"Grade `{grade}` — {rsum}".strip() if grade else (rsum or "").strip()
+    if grade_lead and not grade_lead.endswith((".", "!", "?")):
+        grade_lead += "."
     # Match the live verify/check output exactly: the badge endpoint returns shields JSON,
     # so it must be wrapped in img.shields.io/endpoint to render as an image in a README.
     badge_endpoint = urllib.parse.quote(f"{BASE}/scan/verify/badge?domain={host}", safe="")
@@ -204,64 +367,45 @@ description: {desc}
 
 {vendor_para}
 
-Before an agent — or a user — connects it, every tool definition it advertises is read
-by the model, so a poisoned description or a hidden instruction can steer the agent before any
-tool runs. This scorecard is an independent, static read of that advertised metadata, run against
-the {name} server on the date above.
+When an agent connects {name}, the model reads all {tools} of its advertised tool definition(s)
+before any tool runs — so a poisoned description or a hidden instruction in any one of them can steer
+the agent first. This scorecard is an independent, static read of exactly that advertised metadata for
+`{host}`, scanned {today}; the verdict below is `{v}`.
 
-## What the scan found
+## What the scan found on {name}
 
 - {verdict_line(d)}
 - {readiness_line(d)}
+{surf_bullet}
+{grade_lead} The scan is **static analysis of the advertised `tools/list` metadata only**:
+it never invokes a tool and never sends data anywhere. It is a point-in-time read of the {name} server
+on {today}; an MCP server's tool definitions can change at any time (the "drift" risk this scorecard
+makes visible), so a clean result today is not a guarantee for tomorrow.
 
-The scan is **static analysis of the advertised `tools/list` metadata only** — it never invokes a
-tool and never sends data anywhere. It is a point-in-time read: an MCP server's tool definitions can
-change at any time (that is the "drift" risk this scorecard exists to make visible), so a clean result
-today is not a guarantee for tomorrow.
+{tools_block}
+## Scan {name} yourself, or claim its badge
 
-## Re-run this scan yourself
-
-No account, no key:
+Re-run this exact {name} check yourself, keyless — the free response carries the verdict and the
+directory-blocker count for `{host}`:
 
 ```bash
 curl "{BASE}/scan/mcp/preview?url={url}&directory=true"
 ```
 
-That free response gives you the verdict and the directory blocker **count**. For the **itemized
-findings** — which tools, which OWASP LLM01/LLM08 pattern, and for the directory check *which* criteria
-fail and how to fix each — the zero-egress paid report is one call:
-
-```bash
-curl -s -X POST {BASE}/scan/mcp -H 'content-type: application/json' \\
-  -d '{{"directory":true,"url":"{url}"}}'
-```
-
-`$0.05 USDC` via [x402](https://x402.org) on Base, no account. To keep a server honest as it changes,
-continuous drift monitoring with alerts is `$9.99/mo` — see [pricing]({BASE}/pricing).
-
-## Run {name}? Claim its verified badge — free
-
-If this is your server, you can put a measured security badge on your own README. Prove you
-control `{host}` once — a single DNS TXT record, checked automatically, no email thread and no
-human review — and the claim is yours:
-
-```bash
-# start the one-time ownership check (DNS TXT, fully automated)
-open {BASE}/scan/verify?domain={host}
-```
-
-Once the domain is verified, you get an embeddable **verified-owner** badge for your README and a
-public report page — both free. The badge renders live from the latest scan, so it stays honest:
+For the itemized findings on {name} — which tool, which OWASP LLM01/LLM08 pattern, and which Claude
+Directory criteria fail and how to fix each — the zero-egress paid report is one `$0.05 USDC`
+[x402](https://x402.org) call: `POST {BASE}/scan/mcp` with `{{"directory":true,"url":"{url}"}}`. If you
+run `{host}`, [claim a measured verified-owner badge for {name} free]({BASE}/scan/verify?domain={host})
+(one automated DNS-TXT check, no human review) and drop it in your README:
 
 ```markdown
 {badge_md}
 ```
 
-Keeping the badge **green as your tools change** — re-scans every six hours, drift alerts the moment
-a tool definition shifts, the dated posture-history timeline, and the full itemized report — is the
-`$9.99/mo` monitoring subscription. The claim and the badge cost nothing; monitoring is what you pay
-for. A green badge means this scan found no injection patterns on the dates shown — it is a measured
-signal, not a warranty of safety.
+Keeping the {name} badge green as its tools change — six-hourly re-scans of `{host}`, drift alerts, the
+dated posture-history timeline and the full report — is the `$9.99/mo`
+[monitoring subscription]({BASE}/pricing). The claim and the badge are free; a green badge means no
+injection patterns were found on the dates shown — a measured signal, not a warranty of safety.
 
 ## More
 
@@ -269,8 +413,8 @@ signal, not a warranty of safety.
 - [Why was my Claude connector rejected? — directory readiness criteria](claude-connector-directory-readiness.html)
 - [All scanned MCP servers](mcp-server-scorecards.html)
 
-Independent scan by [Grey Ridge Signals](https://github.com/rezearcher/greyridge-x402-tools).
-Measured on {today}; re-run the command above for a current result. Questions: contact@greyridgesignals.ai
+Independent scan of `{host}` by [Grey Ridge Signals](https://github.com/rezearcher/greyridge-x402-tools),
+measured {today}; re-run the command above for a current result. Questions: contact@greyridgesignals.ai
 """
     return body, desc
 
