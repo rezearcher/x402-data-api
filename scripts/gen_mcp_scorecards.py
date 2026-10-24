@@ -350,9 +350,16 @@ def render(name, slug, url, vendor, d, today):
     ready = dr.get("ready")
     bc = dr.get("blocker_count", 0)
     ready_txt = "ready for the Claude Connector Directory" if ready else f"{bc} Claude Directory blocker(s)"
+    # Enrich the SEO meta description (the snippet Google shows) with the real advertised
+    # tool names when we have them — unique per server, and it matches the long-tail intent
+    # ("what does <server> mcp do / is it safe"). Degrade-open to the count-only form.
+    _names = [_clean(t.get("name"), 48).replace(":", "").replace('"', "")
+              for t in (tool_list or []) if isinstance(t, dict)]
+    _names = [n for n in _names if n][:3]
+    tool_phrase = f"advertises {', '.join(_names)}; " if _names else ""
     desc = (f"Independent, measured security and Claude Connector Directory readiness scan of the "
-            f"{name} MCP server ({url}), run {today}: {tools} tools scanned, injection verdict "
-            f"'{v}', {ready_txt}. Re-run it yourself in one keyless call.")
+            f"{name} MCP server ({url}), run {today}: {tool_phrase}{tools} tools scanned, injection "
+            f"verdict '{v}', {ready_txt}. Re-run it yourself in one keyless call.")
     vendor_para = vendor.strip()
     if vendor_para and vendor_para[-1] not in ".!?":
         vendor_para += "."
