@@ -73,11 +73,23 @@
   .atoms{margin-top:12px;border:1px solid #3a3320;background:#1b1a12;border-radius:10px;padding:10px 14px}
   .ahead{font-size:11px;letter-spacing:.1em;color:var(--amber);font-weight:600;margin-bottom:6px}
   .acount{color:var(--muted);font-weight:400;letter-spacing:0;margin-left:6px}
-  .atom{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px solid #2a2718}
+  .atom{display:block;padding:6px 0;border-bottom:1px solid #2a2718}
   .atom:last-child{border-bottom:none}
+  .atom .arow{display:flex;gap:10px;align-items:flex-start}
   .atom input{margin-top:3px;accent-color:var(--jade);width:15px;height:15px;cursor:pointer;flex:none}
   .atom .atxt{font-size:13px;color:#e5dcc4;line-height:1.4} .atom .asrc{font-size:10.5px;color:var(--muted);margin-left:auto;flex:none;padding-top:2px}
   .atom.done .atxt{text-decoration:line-through;color:var(--muted)}
+  .howto{margin:5px 0 0 25px}
+  .howto summary{font-size:11px;color:var(--jade);cursor:pointer;user-select:none;list-style:none;opacity:.85}
+  .howto summary::-webkit-details-marker{display:none}
+  .howto summary::before{content:'▸ steps to complete'}
+  .howto[open] summary::before{content:'▾ steps to complete'}
+  .howto summary{font-size:0}  /* hide the literal summary text; show only the ::before label */
+  .howto summary::before{font-size:11px}
+  .steps{position:relative;margin-top:6px}
+  .steps pre{background:#11100a;border:1px solid #2a2718;border-radius:6px;padding:9px 11px;font-size:11.5px;color:#d9e8d2;white-space:pre-wrap;word-break:break-word;margin:0;font-family:ui-monospace,SFMono-Regular,monospace;line-height:1.55}
+  .copybtn{position:absolute;top:6px;right:6px;background:#1b1a12;border:1px solid #3a3320;color:var(--muted);font-size:10px;padding:2px 8px;border-radius:5px;cursor:pointer}
+  .copybtn:hover{color:var(--jade);border-color:var(--jade)}
   .anone{color:var(--jade);font-size:12.5px;padding:2px 0}
   .btm{display:grid;grid-template-columns:1.4fr 1fr;gap:12px;margin-top:12px}
   .box{border:1px solid var(--line);background:var(--panel);border-radius:10px;overflow:hidden}
@@ -243,7 +255,12 @@ function render(d){
   document.getElementById('stamp').textContent = 'updated '+new Date(d.generated_at).toLocaleTimeString();
 }
 
-function atomRow(a,done){ return `<div class="atom ${done?'done':''}"><input type="checkbox" ${done?'checked':''} onchange="checkAtom('${a.id}',this.checked)"><span class="atxt">${esc(a.text)}</span><span class="asrc">${esc(a.agent)}</span></div>`; }
+function atomRow(a,done){
+  const steps=(a.steps||[]);
+  const drop = steps.length ? `<details class="howto"><summary>steps</summary><div class="steps"><button class="copybtn" onclick="copySteps(this)">copy all</button><pre>${esc(steps.join('\n'))}</pre></div></details>` : '';
+  return `<div class="atom ${done?'done':''}"><div class="arow"><input type="checkbox" ${done?'checked':''} onchange="checkAtom('${a.id}',this.checked)"><span class="atxt">${esc(a.text)}</span><span class="asrc">${esc(a.agent)}</span></div>${drop}</div>`;
+}
+function copySteps(btn){ const pre=btn.parentElement.querySelector('pre'); navigator.clipboard.writeText(pre.textContent).then(()=>{const o=btn.textContent;btn.textContent='copied ✓';setTimeout(()=>btn.textContent=o,1200);}).catch(()=>{}); }
 async function checkAtom(id,done){ try{ await fetch('/api/atom',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id,done})}); tick(); }catch(e){} }
 
 async function tick(){ try{ const r=await fetch('/api/state',{cache:'no-store'}); render(await r.json()); }catch(e){} }
