@@ -8314,6 +8314,12 @@ async function buildTokenReport(token: string) {
   if (caps?.has_blacklist) reasons.push("contract can blacklist addresses");
   if (caps?.can_pause) reasons.push("transfers can be paused");
   if (sec?.proxy.is_upgradeable) reasons.push("upgradeable proxy; logic can change after purchase");
+  // Supply concentration (GoPlus owner_percent) — text only; the risk-score
+  // contribution is already carried in sec.risk_score, do not re-add here.
+  const ownerPctBps = sec ? sec.ownership.owner_percent_bps : null;
+  if (ownerPctBps !== null && ownerPctBps >= 2000) {
+    reasons.push(`owner address holds ~${(ownerPctBps / 100).toFixed(1)}% of supply; concentrated holdings can be dumped`);
+  }
 
   if (liq?.checked) {
     if (liqUsd === null && liq.pools.length === 0) {
@@ -8377,6 +8383,9 @@ async function buildTokenReport(token: string) {
       taxNote: "buyTaxBps/sellTaxBps are the MEASURED pair-targeted fee-on-transfer — a simulated transfer to/from the token's deepest Uniswap-v3 WETH pool via eth_simulateV1 (what GoPlus reports as buy/sell tax; catches honeypots that exempt wallet-to-wallet transfers and tax only the LP pair). null = no pool, non-standard storage, or the pair transfer reverted/could not be simulated; it is NOT a full router swap (no V3 tick slippage). transferTaxBps is the plain wallet-to-wallet transfer() fee; taxMutable reflects whether the owner can change fees.",
       taxMutable: caps ? caps.has_fee_setter : null,
       ownerRenounced,
+      ownerPercentBps: sec ? sec.ownership.owner_percent_bps : null,
+      ownerPercentNote:
+        "ownerPercentBps = balanceOf(owner())/totalSupply in basis points (10000 = 100%) — single-owner supply concentration (GoPlus owner_percent). null = renounced/no owner, non-standard balanceOf, or totalSupply unavailable (never 0 by default). Aggregate top-holder concentration / holder_count across many addresses is NOT included (needs an off-chain indexer).",
       upgradeableProxy: sec ? sec.proxy.is_upgradeable : null,
       canMint: caps ? caps.can_mint : null,
       canPause: caps ? caps.can_pause : null,

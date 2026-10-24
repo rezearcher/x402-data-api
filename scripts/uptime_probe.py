@@ -148,7 +148,17 @@ try:
     decode_ok = bool(sj.get("is_contract") is True and str(meta.get("symbol")) == "WETH")
     sim_ok = bool(sim.get("sim_status") == "tested" and sim.get("transferable") is True)
     verdict_ok = bool(sj.get("verdict") == "clear" and int(sj.get("risk_score") or 0) <= 10)
-    security_detection_ok = bool(decode_ok and sim_ok and verdict_ok)
+    # owner supply-concentration (GoPlus owner_percent) sanity: Base WETH is the
+    # non-Ownable predeploy, so owner() reverts => owner_percent_bps must be null
+    # (never a fabricated 0 or a false concentration flag that would churn a payer).
+    # conc_ok is True for null (degrade-open) or an in-range measurement; only a
+    # garbage value (negative / >100%) or a non-null slice on WETH is a regression.
+    own = sj.get("ownership") or {}
+    opb = own.get("owner_percent_bps")
+    conc_ok = opb is None or (isinstance(opb, int) and 0 <= opb <= 10000)
+    security_detection_ok = bool(decode_ok and sim_ok and verdict_ok and conc_ok)
+    if not conc_ok:
+        degraded.append(f"/chain/token-security CONCENTRATION REGRESSION: WETH returned owner_percent_bps={opb} (expected null on the non-Ownable predeploy — concentration reader is fabricating a value)")
     if not decode_ok:
         degraded.append(f"/chain/token-security STRUCTURAL DECODE REGRESSION: WETH demo returned is_contract={sj.get('is_contract')} symbol={meta.get('symbol')} (metadata/contract reader broken — paid screening returns garbage)")
     if not sim_ok:
