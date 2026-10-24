@@ -82,8 +82,31 @@ try:
         degraded.append(f"/gate/swap FALSE-BLOCK REGRESSION: known-good usdc returned decision={neg.get('decision')} verdict={neg.get('verdict')} (customer friction)")
 except Exception:
     gate_detection_ok = None  # inconclusive — do not raise a false correctness alarm
+# Line-A A0 (2nd paid surface): verdict-sanity canary on /chain/token-report — the token SCREENING
+# route a screening-agent pays $0.01/call even when it never swaps. Covering only /gate/swap left
+# this 2nd paid surface unprotected: a silent false-SAFE here (honeypot screened as SAFE) churns a
+# payer just as permanently. Same engine as the paid route (per-token distinct risk_scores prove
+# it's not a canned map). Two un-metered controls: (1) negative — aero demo must stay SAFE & low
+# risk; (2) structural-block — the burn address is non-contract forever => must be AVOID risk=100.
+# Degrade OPEN: any probe error is inconclusive (None), never a false alarm.
+def _report(token):
+    req = urllib.request.Request(BASE + "/chain/token-report/preview?token=" + token, headers=ghdr)
+    return json.loads(urllib.request.urlopen(req, timeout=20).read())
+report_detection_ok = None  # inconclusive by default (degrade open)
+try:
+    rneg = _report("aero")                       # known-good token: must stay SAFE & low risk
+    rpos = _report(GATE_CANARY_BLOCK_ADDR)        # structural non-contract: must AVOID risk 100
+    rneg_ok = rneg.get("verdict") == "SAFE" and int(rneg.get("risk_score") or 0) <= 30
+    rpos_ok = rpos.get("verdict") == "AVOID" and int(rpos.get("risk_score") or 0) >= 90
+    report_detection_ok = bool(rneg_ok and rpos_ok)
+    if not rpos_ok:
+        degraded.append(f"/chain/token-report FALSE-SAFE REGRESSION: structural-block canary returned verdict={rpos.get('verdict')} risk={rpos.get('risk_score')} (honeypot would pass token screening)")
+    if not rneg_ok:
+        degraded.append(f"/chain/token-report FALSE-AVOID REGRESSION: known-good aero returned verdict={rneg.get('verdict')} risk={rneg.get('risk_score')} (good token mis-flagged)")
+except Exception:
+    report_detection_ok = None  # inconclusive — do not raise a false correctness alarm
 d = os.path.expanduser("~/.hermes/data/x402-data-api-uptime"); os.makedirs(d, exist_ok=True)
 alert = bool(degraded)
 summary = f"{len(S)} eps, n={sum(o['n'] for o in out.values())}" + (f" | ALERT degraded: {'; '.join(degraded)}" if degraded else "")
-json.dump({"fetched_at": now, "status": "ok", "summary": summary, "alert": alert, "degraded": degraded, "scan_detection_ok": detection_ok, "gate_detection_ok": gate_detection_ok, "endpoints": out}, open(d + "/latest.json", "w"), indent=1)
+json.dump({"fetched_at": now, "status": "ok", "summary": summary, "alert": alert, "degraded": degraded, "scan_detection_ok": detection_ok, "gate_detection_ok": gate_detection_ok, "report_detection_ok": report_detection_ok, "endpoints": out}, open(d + "/latest.json", "w"), indent=1)
 print(json.dumps(out, indent=1))
