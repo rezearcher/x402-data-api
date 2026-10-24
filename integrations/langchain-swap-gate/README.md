@@ -16,8 +16,10 @@ outage can never green-light a swap.
 ## Install
 
 ```bash
-npm install @grey-ridge/langchain-swap-gate @langchain/core zod
+npm install github:rezearcher/langchain-swap-gate @langchain/core zod
 ```
+
+The build is committed, so the git install needs no compile step. `@langchain/core` and `zod` are peer dependencies — the stack you already build your agent with.
 
 ## Use
 

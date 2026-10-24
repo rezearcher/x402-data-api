@@ -2,6 +2,7 @@ import type {
   Action,
   ActionResult,
   HandlerCallback,
+  HandlerOptions,
   IAgentRuntime,
   Memory,
   State,
@@ -45,13 +46,19 @@ export const checkTokenBeforeSwap: Action = {
     runtime: IAgentRuntime,
     message: Memory,
     _state?: State,
-    options?: { token?: string; side?: "buy" | "sell"; notional_usd?: number },
+    options?: HandlerOptions,
     callback?: HandlerCallback
   ): Promise<ActionResult> => {
     try {
+      // ElizaOS passes options as a HandlerOptions bag with an index signature,
+      // so caller-supplied token/side/notional arrive as `unknown` — read + narrow.
+      const optToken = typeof options?.token === "string" ? (options.token as string) : undefined;
+      const optSide = options?.side === "sell" || options?.side === "buy" ? (options.side as string) : undefined;
+      const optNotional = typeof options?.notional_usd === "number" ? (options.notional_usd as number) : undefined;
+
       const text = (message?.content?.text as string) || "";
       const token =
-        options?.token ||
+        optToken ||
         (runtime.getSetting("SWAP_GATE_TOKEN") as string) ||
         extractToken(text);
       if (!token) {
@@ -60,8 +67,8 @@ export const checkTokenBeforeSwap: Action = {
         return { success: false, text: msg };
       }
 
-      const side = options?.side === "sell" ? "sell" : "buy";
-      const notionalUsd = options?.notional_usd ?? num(runtime, "SWAP_GATE_NOTIONAL_USD", 100);
+      const side = optSide === "sell" ? "sell" : "buy";
+      const notionalUsd = optNotional ?? num(runtime, "SWAP_GATE_NOTIONAL_USD", 100);
       const base = (runtime.getSetting("SWAP_GATE_BASE_URL") as string) || GATE_BASE;
       const privateKey = runtime.getSetting("SWAP_GATE_PRIVATE_KEY") as string | undefined;
 

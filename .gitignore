@@ -25,3 +25,9 @@ data/bazaar_full_*.json
 scripts/__pycache__/
 data/*_scan.log
 data/*_demand_lane.log
+
+# scratch area for dependency/install probes (never commit)
+.scratch-x402/
+# plugin build artifacts + local lockfiles (standalone repos carry their own committed dist)
+integrations/*/dist/
+integrations/*/package-lock.json

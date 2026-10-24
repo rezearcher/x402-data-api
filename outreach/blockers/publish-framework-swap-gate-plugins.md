@@ -1,11 +1,30 @@
-# Rez atom — publish the three framework swap-gate plugins to npm
+# Rez atom (OPTIONAL now) — publish the three framework swap-gate plugins to the npm registry
 
-**Why this needs you:** `npm publish` requires *your* npm account identity. That is the
-only gate. All three packages are complete, offline-typechecked, and tested against the
-**live** deployed Worker (each suite requires a real x402 402 from production). This is
-Line A move **A1** — the install-once-pay-per-trade funnel that actually moves the USDC
-wallet oracle. Shipping to three ecosystems (ElizaOS, Vercel AI SDK, LangChain.js) widens
-the top of that funnel without new code per install.
+> **Update 2026-10-23: the npm gate is removed. All three plugins are installable TODAY**,
+> with no npm account, straight from their standalone GitHub repos (build committed, so no
+> compile step):
+>
+> ```bash
+> npm install github:rezearcher/plugin-swap-gate          # ElizaOS
+> npm install github:rezearcher/langchain-swap-gate        # LangChain.js
+> npm install github:rezearcher/vercel-ai-swap-gate        # Vercel AI SDK
+> ```
+>
+> Each was verified by a clean `npm install` from GitHub into an empty project + a runtime
+> import (plugin/tool object resolves, deps install). A latent blocker was also fixed this
+> pass: the `@x402/*` deps were pinned at a **nonexistent `^0.5.0`** so the packages could
+> never actually install — corrected to `^2.15.0` (the Worker's x402 v2 floor) and the full
+> payment path smoke-tested end-to-end against the live Worker (402→EIP-3009 sign→resubmit).
+>
+> So `npm publish` is no longer a gate for *using* the plugins — it is now only a
+> **discoverability upgrade** (registry search / the ElizaOS plugin registry). Do it when
+> convenient; nothing is blocked on it.
+
+**Why you'd still do it (optional):** `npm publish` + the ElizaOS registry PR put the plugins
+in the catalogs devs browse, which marketing can then point at. This is Line A move **A1** —
+the install-once-pay-per-trade funnel that moves the USDC wallet oracle. All three packages
+are complete, build clean against the real framework + x402 v2 deps, and are tested against
+the **live** deployed Worker (each suite requires a real x402 402 from production).
 
 ## What's done (builder, autonomous — all on `main`)
 
