@@ -33,7 +33,8 @@
   "homepage": "https://x402-data-api.sigrunner.workers.dev",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rezearcher/x402-data-api.git"
+    "url": "git+https://github.com/rezearcher/x402-data-api.git",
+    "directory": "integrations/elizaos-plugin-swap-gate"
   },
   "scripts": {
     "build": "tsup",
