@@ -32,8 +32,23 @@ def add(text: str, agent: str = "agent") -> str | None:
     return aid
 
 
+def _load():
+    return json.loads(ATOMS.read_text()) if ATOMS.exists() else {"atoms": []}
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("usage: note_atom.py '<one clean imperative atom>' [agent]")
+        print("usage: note_atom.py '<atom>' [agent]   |   note_atom.py done   |   note_atom.py open")
         sys.exit(1)
-    print(add(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else "agent") or "(skipped)")
+    cmd = sys.argv[1]
+    if cmd == "done":
+        # cleared gates Rez has checked off — the loop reads these to know a gate is UNBLOCKED
+        for a in _load().get("atoms", []):
+            if a.get("done"):
+                print(f"[CLEARED {a.get('done_at','')[:19]}] {a['text']}")
+    elif cmd == "open":
+        for a in _load().get("atoms", []):
+            if not a.get("done"):
+                print(f"[OPEN] {a['text']}")
+    else:
+        print(add(cmd, sys.argv[2] if len(sys.argv) > 2 else "agent") or "(skipped)")
