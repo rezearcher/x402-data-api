@@ -7481,6 +7481,11 @@ interface OwnerInfo {
   owner: string | null;
   ownership_renounced: boolean;
   owner_type: "none" | "renounced" | "eoa" | "contract";
+  // Raw balanceOf(owner()) as a decimal string, or null when there is no owner
+  // to measure (renounced/none) or balanceOf was non-standard. The percent of
+  // total supply (GoPlus owner_percent) is derived in analyzeTokenSecurity,
+  // where totalSupply is already resolved.
+  owner_balance_raw: string | null;
 }
 
 // Single-attempt-per-provider RPC call: unlike baseRpc(), a JSON-RPC "error"
@@ -7523,12 +7528,25 @@ async function baseRpcProbe(method: string, params: unknown[]): Promise<{ result
 
 async function getOwnerInfo(token: string): Promise<OwnerInfo> {
   const call = await baseRpcProbe("eth_call", [{ to: token, data: "0x8da5cb5b" }, "latest"]);
-  if (!call.result || call.result === "0x") return { owner: null, ownership_renounced: false, owner_type: "none" };
+  if (!call.result || call.result === "0x") return { owner: null, ownership_renounced: false, owner_type: "none", owner_balance_raw: null };
   const addr = storageWordToAddress(call.result);
-  if (!addr) return { owner: null, ownership_renounced: true, owner_type: "renounced" };
-  const codeCall = await baseRpcProbe("eth_getCode", [addr, "latest"]);
+  if (!addr) return { owner: null, ownership_renounced: true, owner_type: "renounced", owner_balance_raw: null };
+  // owner's own balance — one extra balanceOf(owner) read so the verdict can
+  // report supply concentration (GoPlus owner_percent). Runs alongside the
+  // owner-is-contract check; a revert/non-standard return degrades open to null.
+  const balData = `0x70a08231${addr.slice(2).toLowerCase().padStart(64, "0")}`;
+  const [codeCall, balCall] = await Promise.all([
+    baseRpcProbe("eth_getCode", [addr, "latest"]),
+    baseRpcProbe("eth_call", [{ to: token, data: balData }, "latest"]),
+  ]);
   const isContract = !!codeCall.result && codeCall.result !== "0x";
-  return { owner: addr, ownership_renounced: false, owner_type: isContract ? "contract" : "eoa" };
+  let owner_balance_raw: string | null = null;
+  try {
+    if (balCall.result && balCall.result !== "0x") owner_balance_raw = BigInt(balCall.result).toString();
+  } catch {
+    /* non-numeric balanceOf return — leave null */
+  }
+  return { owner: addr, ownership_renounced: false, owner_type: isContract ? "contract" : "eoa", owner_balance_raw };
 }
 
 // ---------------------------------------------------------------------------
@@ -7818,7 +7836,7 @@ interface TokenSecurityResult {
     detected_selectors: { selector: string; signature: string; category: SecurityCategory }[];
     scanned_address: string;
   };
-  ownership: OwnerInfo;
+  ownership: OwnerInfo & { owner_percent_bps: number | null; owner_percent_note: string };
   honeypot_sim: HoneypotSim;
   risk_score: number;
   verdict: Verdict;
@@ -7866,6 +7884,19 @@ async function analyzeTokenSecurity(token: string): Promise<TokenSecurityResult>
     /* non-numeric — leave null */
   }
 
+  // GoPlus owner_percent parity: single-owner supply concentration in basis
+  // points = balanceOf(owner())/totalSupply. Degrade-open to null whenever the
+  // owner balance or a positive total supply is unavailable (never fabricate 0).
+  let owner_percent_bps: number | null = null;
+  if (owner.owner_balance_raw !== null && totalSupplyRaw !== null && totalSupplyRaw > 0n) {
+    try {
+      const bal = BigInt(owner.owner_balance_raw);
+      if (bal >= 0n) owner_percent_bps = Number((bal * 10000n) / totalSupplyRaw);
+    } catch {
+      /* non-numeric owner balance — leave null */
+    }
+  }
+
   const flags: string[] = [];
   let score = 0;
 
@@ -7905,6 +7936,11 @@ async function analyzeTokenSecurity(token: string): Promise<TokenSecurityResult>
       score += 10;
       flags.push("ownership not renounced — a privileged admin account still controls this contract");
     }
+    const conc = ownerConcentrationRisk(owner_percent_bps, owner.owner_type);
+    if (conc.scoreAdd > 0) {
+      score += conc.scoreAdd;
+      flags.push(...conc.reasons);
+    }
   }
   score = Math.min(100, score);
   const verdict = verdictFromScore(score);
@@ -7930,7 +7966,12 @@ async function analyzeTokenSecurity(token: string): Promise<TokenSecurityResult>
     },
     proxy,
     capabilities: { ...categories, detected_selectors: detected, scanned_address: scanAddress },
-    ownership: owner,
+    ownership: {
+      ...owner,
+      owner_percent_bps,
+      owner_percent_note:
+        "owner_percent_bps = balanceOf(owner())/totalSupply in basis points (10000 = 100%). This is single-owner supply concentration (GoPlus owner_percent) — the share held by the privileged owner() address. null = ownership renounced/none, non-standard balanceOf, or totalSupply unavailable (never 0 by default). An EOA owner holding a large slice is weighted as dump risk; a contract owner (possible treasury/timelock/locker) is reported but weighted lower. Aggregate top-holder concentration and total holder_count across many addresses require an off-chain indexer and are NOT included.",
+    },
     honeypot_sim: sim,
     risk_score: score,
     verdict,
@@ -8510,6 +8551,35 @@ export function dexTaxRisk(
     return { reasons: [`measured DEX fee-on-transfer (${parts.join(", ")}); factor it into round-trip cost`], scoreFloor: null, scoreAdd: 8, highDexTax: false };
   }
   return { reasons: [], scoreFloor: null, scoreAdd: 0, highDexTax: false };
+}
+
+// Pure GoPlus-parity owner supply-concentration verdict mapping (extracted so it
+// is deterministically unit-testable without a live RPC). A deployer/owner EOA
+// sitting on a large slice of supply is the textbook dump/rug setup GoPlus flags
+// as owner_percent; a CONTRACT owner holding supply is far more often a
+// treasury/timelock/locker, so we still report the % for parity but weight the
+// risk much lower — never fabricate certainty. null percent (renounced/none/
+// non-standard balanceOf/no totalSupply) contributes nothing (degrade-open).
+// Data-parity only: adds score, never forces an AVOID floor (concentration
+// alone is not a honeypot).
+export function ownerConcentrationRisk(
+  ownerPercentBps: number | null,
+  ownerType: "none" | "renounced" | "eoa" | "contract",
+): { reasons: string[]; scoreAdd: number } {
+  if (ownerPercentBps === null || ownerPercentBps <= 0) return { reasons: [], scoreAdd: 0 };
+  const pct = (ownerPercentBps / 100).toFixed(1);
+  const isEoa = ownerType === "eoa";
+  const contractNote = isEoa ? "" : " (owner is a contract — may be a treasury/timelock/locker rather than a person)";
+  if (ownerPercentBps >= 5000) {
+    return { reasons: [`owner address holds ~${pct}% of total supply — a single sell could crash the price${contractNote}`], scoreAdd: isEoa ? 20 : 8 };
+  }
+  if (ownerPercentBps >= 2000) {
+    return { reasons: [`owner address holds ~${pct}% of total supply — concentrated supply, elevated dump risk${contractNote}`], scoreAdd: isEoa ? 12 : 5 };
+  }
+  if (ownerPercentBps >= 500) {
+    return { reasons: [`owner address holds ~${pct}% of total supply${contractNote}`], scoreAdd: isEoa ? 5 : 2 };
+  }
+  return { reasons: [], scoreAdd: 0 };
 }
 
 export function sizedExecution(liquidityUsd: number | null, notional: number) {
