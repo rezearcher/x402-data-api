@@ -8289,25 +8289,14 @@ async function buildTokenReport(token: string) {
     reasons.push("liquidity check unavailable");
   }
 
-  // Measured DEX fee-on-transfer. A high sell tax is an unambiguous scam signal —
-  // a real wallet keeps far less than it sells even when the honeypot sim shows the
-  // token is "transferable" (these tokens pass wallet-to-wallet and bleed only at the
-  // pair). Conservative threshold (15%) so legitimate 1-5% tax tokens are reported but
-  // not flagged AVOID; this can only RAISE risk (the safe direction). Canary-guarded
-  // against WETH/USDC/cbBTC/DEGEN/AERO reading ~0 so it never churns a clean token.
-  if (sellTaxBps !== null && sellTaxBps >= 1500) {
-    reasons.push(`measured DEX sell tax ~${(sellTaxBps / 100).toFixed(1)}% — a real wallet keeps far less than it sells`);
-    score = Math.max(score, 70);
-  } else if (buyTaxBps !== null && buyTaxBps >= 1500) {
-    reasons.push(`measured DEX buy tax ~${(buyTaxBps / 100).toFixed(1)}% — the pair takes a large cut on entry`);
-    score = Math.max(score, 55);
-  } else if ((sellTaxBps !== null && sellTaxBps >= 300) || (buyTaxBps !== null && buyTaxBps >= 300)) {
-    const parts: string[] = [];
-    if (buyTaxBps !== null && buyTaxBps >= 300) parts.push(`buy ~${(buyTaxBps / 100).toFixed(1)}%`);
-    if (sellTaxBps !== null && sellTaxBps >= 300) parts.push(`sell ~${(sellTaxBps / 100).toFixed(1)}%`);
-    reasons.push(`measured DEX fee-on-transfer (${parts.join(", ")}); factor it into round-trip cost`);
-    score += 8;
-  }
+  // Measured DEX fee-on-transfer — a high sell tax is an unambiguous scam signal even
+  // when the honeypot sim shows the token is "transferable" (these tokens pass
+  // wallet-to-wallet and bleed only at the pair). Canary-guarded against
+  // WETH/USDC/cbBTC/DEGEN/AERO reading ~0 so it never churns a clean token.
+  const dexTax = dexTaxRisk(buyTaxBps, sellTaxBps);
+  for (const r of dexTax.reasons) reasons.push(r);
+  if (dexTax.scoreFloor !== null) score = Math.max(score, dexTax.scoreFloor);
+  score += dexTax.scoreAdd;
 
   // Deep liquidity from a verified-transferable or long-established token offsets
   // admin-capability risk that static analysis alone over-weights (e.g. USDC).
@@ -8322,8 +8311,7 @@ async function buildTokenReport(token: string) {
   }
   // A measured high DEX tax must survive the deep-liquidity offset — a liquid token
   // that still takes 15%+ on a sell is a scam regardless of pool depth.
-  const highDexTax = (sellTaxBps !== null && sellTaxBps >= 1500) || (buyTaxBps !== null && buyTaxBps >= 1500);
-  if (!avoid && !highDexTax && deepLiquidity && (sellable || !simTested)) score = Math.min(score, 25);
+  if (!avoid && !dexTax.highDexTax && deepLiquidity && (sellable || !simTested)) score = Math.min(score, 25);
   if (avoid) score = Math.max(score, 85);
   score = Math.max(0, Math.min(100, Math.round(score)));
 
@@ -8500,6 +8488,30 @@ async function verifyUsdcPaymentToPayTo(
 // no added latency — so the paid result answers "how big can I trade this, and
 // what will each size cost me in slippage?", which the free teaser does not. Kept
 // out of buildSwapGate on purpose: that path is shared with the FREE preview.
+// Pure GoPlus-parity DEX-tax verdict mapping (extracted so it is deterministically
+// unit-testable without a live RPC). Conservative, safe-direction only: a measured
+// >=15% sell tax forces AVOID-floor and survives the deep-liquidity offset; >=15% buy
+// tax raises toward review; a 3-15% fee adds a small factor-it-in flag. null tax (no
+// pool / non-standard storage / pair revert) contributes nothing (degrade-open).
+export function dexTaxRisk(
+  buyTaxBps: number | null,
+  sellTaxBps: number | null,
+): { reasons: string[]; scoreFloor: number | null; scoreAdd: number; highDexTax: boolean } {
+  if (sellTaxBps !== null && sellTaxBps >= 1500) {
+    return { reasons: [`measured DEX sell tax ~${(sellTaxBps / 100).toFixed(1)}% — a real wallet keeps far less than it sells`], scoreFloor: 70, scoreAdd: 0, highDexTax: true };
+  }
+  if (buyTaxBps !== null && buyTaxBps >= 1500) {
+    return { reasons: [`measured DEX buy tax ~${(buyTaxBps / 100).toFixed(1)}% — the pair takes a large cut on entry`], scoreFloor: 55, scoreAdd: 0, highDexTax: true };
+  }
+  if ((sellTaxBps !== null && sellTaxBps >= 300) || (buyTaxBps !== null && buyTaxBps >= 300)) {
+    const parts: string[] = [];
+    if (buyTaxBps !== null && buyTaxBps >= 300) parts.push(`buy ~${(buyTaxBps / 100).toFixed(1)}%`);
+    if (sellTaxBps !== null && sellTaxBps >= 300) parts.push(`sell ~${(sellTaxBps / 100).toFixed(1)}%`);
+    return { reasons: [`measured DEX fee-on-transfer (${parts.join(", ")}); factor it into round-trip cost`], scoreFloor: null, scoreAdd: 8, highDexTax: false };
+  }
+  return { reasons: [], scoreFloor: null, scoreAdd: 0, highDexTax: false };
+}
+
 export function sizedExecution(liquidityUsd: number | null, notional: number) {
   if (liquidityUsd == null || liquidityUsd <= 0) {
     return {
