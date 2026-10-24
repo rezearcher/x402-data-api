@@ -1,7 +1,7 @@
 // ElizaOS-style action: call before any Base swap. Same x402 client setup as ../swap-gate/gate.mjs.
 // NOTE: this is the minimal teaching snippet. The real, installable, typed plugin
 // (with sizing-aware go/no-go, agentConfig params, tests and registry metadata)
-// lives at integrations/elizaos-plugin-swap-gate/ → `npm install @grey-ridge/elizaos-plugin-swap-gate`.
+// lives at integrations/elizaos-plugin-swap-gate/ → `npm install github:rezearcher/plugin-swap-gate`.
 import { wrapFetchWithPayment } from "@x402/fetch";
 import { x402Client } from "@x402/core/client";
 import { registerExactEvmScheme } from "@x402/evm/exact/client";

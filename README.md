@@ -167,11 +167,11 @@ Pre-trade token guard (`/gate/swap`, $0.008 USDC via x402 on Base) — drop-in, 
 
 | Framework | Install | Source |
 |-----------|---------|--------|
-| ElizaOS | `npm i @grey-ridge/elizaos-plugin-swap-gate` | [`integrations/elizaos-plugin-swap-gate`](./integrations/elizaos-plugin-swap-gate) |
-| LangChain.js | `npm i @grey-ridge/langchain-swap-gate` | [`integrations/langchain-swap-gate`](./integrations/langchain-swap-gate) |
-| Vercel AI SDK | `npm i @grey-ridge/vercel-ai-swap-gate` | [`integrations/vercel-ai-sdk-swap-gate`](./integrations/vercel-ai-sdk-swap-gate) |
+| ElizaOS | `npm i github:rezearcher/plugin-swap-gate` | [`integrations/elizaos-plugin-swap-gate`](./integrations/elizaos-plugin-swap-gate) |
+| LangChain.js | `npm i github:rezearcher/langchain-swap-gate @langchain/core zod` | [`integrations/langchain-swap-gate`](./integrations/langchain-swap-gate) |
+| Vercel AI SDK | `npm i github:rezearcher/vercel-ai-swap-gate ai zod` | [`integrations/vercel-ai-sdk-swap-gate`](./integrations/vercel-ai-sdk-swap-gate) |
 
-Each also exposes a `tokenReport` tool wrapping `/chain/token-report` for standalone token screening. Minimal copy-paste examples live under `docs/examples/{swap-gate,langchain,elizaos}/`.
+Install from git — this always pulls the current build (keyless free preview + inline x402, fails closed only if both are unreachable) and compiles on install via `prepare`. Each also exposes a `tokenReport` tool wrapping `/chain/token-report` for standalone token screening. Minimal copy-paste examples live under `docs/examples/{swap-gate,langchain,elizaos}/`.
 
 Market-data buyer (for agents that buy a price and must not present stale data as real-time — the Decision402 pattern): `examples/market-data-decision-buyer.mjs`. Runs the full agentic loop — reads the live 402 quote, enforces a per-call USDC budget, proves the feed via the free preview, pays `/crypto/prices` ($0.001 on Base), then **rejects any row older than `MAX_AGE_SECONDS`**. Steps 1-3 run with zero npm installs: `node examples/market-data-decision-buyer.mjs bitcoin,ethereum`.
 

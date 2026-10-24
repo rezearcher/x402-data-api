@@ -1,12 +1,19 @@
-# ✅ RESOLVED 2026-10-23 — all four @grey-ridge packages are published to npm
+# ⚠ PARTIAL — npm packages exist but STALE/BROKEN at 0.1.0; git-install is the working path
 
-> **DONE.** `npm login` + publish completed by Rez. Verified live on the registry at `0.1.0`:
-> `@grey-ridge/x402-data-api-mcp`, `@grey-ridge/elizaos-plugin-swap-gate`,
-> `@grey-ridge/langchain-swap-gate`, `@grey-ridge/vercel-ai-swap-gate` — each resolves via
-> `npm view <name> version`. Clean install path is now `npm i @grey-ridge/<plugin>` (no git
-> source needed). Future version bumps re-publish hands-off via `.github/workflows/publish-npm.yml`
-> (OIDC trusted publishing) once the per-package Trusted Publisher config is set on npmjs.com.
-> The historical git-install instructions below are retained for reference only.
+> **Reality (verified 2026-10-24):** the `@grey-ridge/*` packages resolve on npm but are pinned
+> at `0.1.0` — the **original fail-closed build**. Installed-from-npm 0.1.0 has **zero**
+> degrade-open markers (`fetchGateOrPreview`/`activation`/`preview` absent in its dist), so on a
+> keyless wallet it fails closed / 402s instead of returning the free preview. Local source is
+> `0.1.3` with the degrade-open fix. **`npm i @grey-ridge/<plugin>` currently installs the broken
+> build** — every install surface we control has been repointed to the git path below.
+>
+> **The real gate is npm 2FA (EOTP), not `npm login`.** Re-confirmed 2026-10-24: `npm whoami` =
+> `grey-ridge` (logged in), but `npm publish` **and** `npm deprecate` both return `code EOTP`
+> ("requires a one-time password from your authenticator"). `npm login` does NOT bypass this —
+> the account's 2FA is set to *auth-and-writes*. To unblock hands-free publishing of 0.1.3, Rez
+> must either (a) create a **Granular Automation token** (2FA-bypassing) and put it in `~/.npmrc`,
+> or (b) configure **Trusted Publishing (OIDC)** per package on npmjs.com so `publish-npm.yml`
+> can push. Until then git-install is canonical and nothing is blocked on npm.
 
 ---
 
@@ -53,7 +60,9 @@ proven across frameworks.
 ## Your steps (one-time, ~10 min total)
 
 ```bash
-npm login    # your npm identity  ← the only gate, do this once
+# Gate is npm 2FA (EOTP), not login. Pick ONE:
+#   (a) create a Granular Automation token (bypasses 2FA) → put in ~/.npmrc, OR
+#   (b) run each publish below interactively and pass --otp=<code> from your authenticator.
 
 # 1) ElizaOS (publishes to npm AND opens the elizaos-plugins/registry PR)
 cd ~/projects/x402-data-api/integrations/elizaos-plugin-swap-gate

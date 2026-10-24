@@ -18,19 +18,19 @@ EDITS = {
     "plugin-swap-gate": [
         (
             "```bash\nnpm install github:rezearcher/plugin-swap-gate\n# or: bun add github:rezearcher/plugin-swap-gate\n```\n\nInstalls directly from source — the build is committed, so there is nothing to compile.",
-            "```bash\nnpm install @grey-ridge/elizaos-plugin-swap-gate\n# or from git: npm install github:rezearcher/plugin-swap-gate\n```\n\nPublished on npm as **`@grey-ridge/elizaos-plugin-swap-gate`**. The build is committed to the git repo too, so the git fallback needs no compile step either.",
+            "```bash\nnpm install github:rezearcher/plugin-swap-gate\n```\n\nInstall from git — it always pulls the current build (keyless free preview + inline x402) and compiles on install. The scoped npm package **`@grey-ridge/elizaos-plugin-swap-gate`** exists but is pinned behind the git build during the 0.1.3 rollout; use the git install for the current behaviour.",
         )
     ],
     "langchain-swap-gate": [
         (
             "```bash\nnpm install github:rezearcher/langchain-swap-gate @langchain/core zod\n```\n\nThe build is committed, so the git install needs no compile step. `@langchain/core` and `zod` are peer dependencies — the stack you already build your agent with.",
-            "```bash\nnpm install @grey-ridge/langchain-swap-gate @langchain/core zod\n# or from git: npm install github:rezearcher/langchain-swap-gate @langchain/core zod\n```\n\nPublished on npm as **`@grey-ridge/langchain-swap-gate`**. `@langchain/core` and `zod` are peer dependencies — the stack you already build your agent with. The build is committed to the git repo too, so the git fallback needs no compile step.",
+            "```bash\nnpm install github:rezearcher/langchain-swap-gate @langchain/core zod\n```\n\nInstall from git — it always pulls the current build (keyless free preview + inline x402) and compiles on install. `@langchain/core` and `zod` are peer dependencies — the stack you already build your agent with. The scoped npm package **`@grey-ridge/langchain-swap-gate`** exists but is pinned behind the git build during the 0.1.3 rollout; use the git install for the current behaviour.",
         )
     ],
     "vercel-ai-swap-gate": [
         (
             "```bash\nnpm install github:rezearcher/vercel-ai-swap-gate ai zod\n# or: pnpm add github:rezearcher/vercel-ai-swap-gate ai zod\n```\n\nThe build is committed, so the git install needs no compile step.",
-            "```bash\nnpm install @grey-ridge/vercel-ai-swap-gate ai zod\n# or with pnpm: pnpm add @grey-ridge/vercel-ai-swap-gate ai zod\n# or from git: npm install github:rezearcher/vercel-ai-swap-gate ai zod\n```\n\nPublished on npm as **`@grey-ridge/vercel-ai-swap-gate`**. The build is committed to the git repo too, so the git fallback needs no compile step.",
+            "```bash\nnpm install github:rezearcher/vercel-ai-swap-gate ai zod\n# or with pnpm: pnpm add github:rezearcher/vercel-ai-swap-gate ai zod\n```\n\nInstall from git — it always pulls the current build (keyless free preview + inline x402) and compiles on install. The scoped npm package **`@grey-ridge/vercel-ai-swap-gate`** exists but is pinned behind the git build during the 0.1.3 rollout; use the git install for the current behaviour.",
         )
     ],
 }
