@@ -105,8 +105,25 @@ try:
         degraded.append(f"/chain/token-report FALSE-AVOID REGRESSION: known-good aero returned verdict={rneg.get('verdict')} risk={rneg.get('risk_score')} (good token mis-flagged)")
 except Exception:
     report_detection_ok = None  # inconclusive — do not raise a false correctness alarm
+# Telegram bot liveness: the Base token-gate bot is a top-of-funnel distribution surface (free
+# verdict + one-tap link to the paid 0.01-USDC miniapp unlock). The free /tg/status probe both
+# reports and self-heals the webhook registration. A provisioned bot whose webhook Telegram can no
+# longer reach (last_error set) or that drifted off our origin is a silently-dead channel. Degrade
+# OPEN three ways: not provisioned => inconclusive (the bot may be intentionally off); any probe
+# error => inconclusive; ok only when Telegram reports no delivery error on our canonical URL.
+tg_bot_ok = None  # inconclusive by default (degrade open)
+try:
+    treq = urllib.request.Request(BASE + "/tg/status", headers=ghdr)
+    tj = json.loads(urllib.request.urlopen(treq, timeout=20).read())
+    if tj.get("provisioned"):
+        w = tj.get("webhook") or {}
+        tg_bot_ok = bool(w.get("ok") and not w.get("last_error") and str(w.get("url", "")).endswith("/tg/webhook"))
+        if tg_bot_ok is False:
+            degraded.append(f"/tg/status BOT CHANNEL DOWN: webhook={w.get('url')} last_error={w.get('last_error')} ok={w.get('ok')} (Telegram cannot deliver — free verdict funnel dead)")
+except Exception:
+    tg_bot_ok = None  # inconclusive — do not raise a false alarm
 d = os.path.expanduser("~/.hermes/data/x402-data-api-uptime"); os.makedirs(d, exist_ok=True)
 alert = bool(degraded)
 summary = f"{len(S)} eps, n={sum(o['n'] for o in out.values())}" + (f" | ALERT degraded: {'; '.join(degraded)}" if degraded else "")
-json.dump({"fetched_at": now, "status": "ok", "summary": summary, "alert": alert, "degraded": degraded, "scan_detection_ok": detection_ok, "gate_detection_ok": gate_detection_ok, "report_detection_ok": report_detection_ok, "endpoints": out}, open(d + "/latest.json", "w"), indent=1)
+json.dump({"fetched_at": now, "status": "ok", "summary": summary, "alert": alert, "degraded": degraded, "scan_detection_ok": detection_ok, "gate_detection_ok": gate_detection_ok, "report_detection_ok": report_detection_ok, "tg_bot_ok": tg_bot_ok, "endpoints": out}, open(d + "/latest.json", "w"), indent=1)
 print(json.dumps(out, indent=1))
