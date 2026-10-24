@@ -857,6 +857,7 @@ ${provisionMeta}
     <li><a href="/.well-known/agent-card.json">A2A Agent Card</a></li>
     <li><a href="/mcp">/mcp</a></li>
     <li><a href="/miniapp">Base Token Gate &mdash; free GO/HOLD/BLOCK honeypot check (Farcaster Mini App)</a></li>
+    <li><a href="https://t.me/GreyRidgeGateBot">Telegram bot &mdash; paste a Base token, get GO/HOLD/BLOCK in-chat (@GreyRidgeGateBot)</a></li>
     <li><a href="/partners">Partner program &mdash; resell our verdicts</a></li>
   </ul>
 
@@ -8419,6 +8420,7 @@ const CHECK_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8"><
 <input id="t" placeholder="0x… token address" autocomplete="off"><button onclick="go()">Check token</button>
 <div id="card"></div>
 <p><small>Free: 3 checks/day. Unlimited for agents via x402 pay-per-call: <a href="/chain/token-report">/chain/token-report</a> ($0.01) · <a href="/chain/token-security">/chain/token-security</a> ($0.009) · <a href="/llms.txt">llms.txt</a>. Heuristic signal, not financial advice.</small></p>
+<p><small>In Telegram? Paste any Base token to <a href="https://t.me/GreyRidgeGateBot" target="_blank" rel="noopener">@GreyRidgeGateBot</a> for the same GO / HOLD / BLOCK verdict in-chat.</small></p>
 <script>
 const _sp=new URLSearchParams(location.search),q=_sp.get('token');if(q){document.getElementById('t').value=q;if(!_sp.get('tx'))go()}
 function share(t,j,m){const u=location.origin+'/check?token='+t,tx=encodeURIComponent((m.symbol||'Token')+' on Base: '+j.verdict+' (risk '+j.risk_score+'/100) via Base Token Check'),eu=encodeURIComponent(u);
@@ -8788,6 +8790,7 @@ const MINIAPP_BODY = `<style>body{max-width:40rem;margin:0 auto;padding:2rem 1.1
 <div class="row"><button onclick="go()">Check token</button></div>
 <div id="card"></div>
 <p><small>Free: 3 checks/day. Want it sized to a real trade? Pay 0.01 USDC from your wallet for a one-off full check (button appears with each result) · unlimited by card: <a href="/pricing">$9.99/mo</a> · agents: x402 <a href="/gate/swap">/gate/swap</a> ($0.008/call). Heuristic signal, not financial advice.</small></p>
+<p><small>Prefer Telegram? Message <a href="https://t.me/GreyRidgeGateBot" target="_blank" rel="noopener">@GreyRidgeGateBot</a> — paste a token, get the verdict in-chat.</small></p>
 <script type="module">
 let FC=null;
 try{const m=await import('https://esm.sh/@farcaster/miniapp-sdk');FC=m.sdk;await FC.actions.ready();}catch(e){FC=null;}
