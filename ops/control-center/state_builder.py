@@ -274,12 +274,13 @@ def health(rt: dict, rev: dict, hist: dict) -> dict:
     gate_ok = u.get("gate_detection_ok")      # True pass / False regression / None inconclusive
     scan_ok = u.get("scan_detection_ok")
     report_ok = u.get("report_detection_ok")  # 2nd Line-A paid surface (/chain/token-report)
+    security_ok = u.get("security_detection_ok")  # 3rd Line-A paid surface (/chain/token-security)
     degraded = u.get("degraded") or []
-    gate_degraded = [d for d in degraded if "/gate/swap" in d or "/scan/mcp" in d or "/chain/token-report" in d]
-    corr_regressed = gate_ok is False or scan_ok is False or report_ok is False or bool(gate_degraded)
+    gate_degraded = [d for d in degraded if "/gate/swap" in d or "/scan/mcp" in d or "/chain/token-report" in d or "/chain/token-security" in d]
+    corr_regressed = gate_ok is False or scan_ok is False or report_ok is False or security_ok is False or bool(gate_degraded)
     gate_health_ok = not corr_regressed       # inconclusive/missing => ok (degrade open)
     gate_why = ("; ".join(gate_degraded) if gate_degraded
-                else "money-gate + token-report + scanner canaries PASS" if gate_ok and scan_ok and report_ok
+                else "money-gate + token-report + token-security + scanner canaries PASS" if gate_ok and scan_ok and report_ok and security_ok
                 else "correctness inconclusive (probe not run yet / unreachable) — not alarming")
     return {
         "green": {"ok": green_ok, "why": f"engine {'alive' if green_ok else 'DOWN'} (pid {rt.get('pid')})"},

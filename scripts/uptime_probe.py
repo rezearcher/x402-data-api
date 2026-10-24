@@ -105,6 +105,34 @@ try:
         degraded.append(f"/chain/token-report FALSE-AVOID REGRESSION: known-good aero returned verdict={rneg.get('verdict')} risk={rneg.get('risk_score')} (good token mis-flagged)")
 except Exception:
     report_detection_ok = None  # inconclusive — do not raise a false correctness alarm
+# Line-A A0 (3rd paid surface): structural + simulation correctness canary on /chain/token-security —
+# the raw token-security route a screening-agent pays $0.009/call. Its preview is PINNED to Base WETH
+# (ignores ?token=), so there is no false-SAFE/false-BLOCK pair to vary; instead we assert the engine
+# still PRODUCES CORRECT data for a known-good token. HTTP-200 is not correctness here: if the RPC/ABI
+# decoder breaks (symbol/is_contract garbage) or the honeypot simulation regresses (storage-slot
+# override logic throws, or flips WETH to transferable=false), a paying agent silently gets wrong
+# security data or a false AVOID on a good token and churns — and availability alone never catches it.
+# Controls on the canonical WETH demo: (1) decode — is_contract=true & symbol=WETH; (2) simulation —
+# sim_status=tested & transferable=true (the sim engine actually ran and is right); (3) verdict —
+# clear & low risk. Degrade OPEN: any probe error is inconclusive (None), never a false alarm.
+security_detection_ok = None  # inconclusive by default (degrade open)
+try:
+    sreq = urllib.request.Request(BASE + "/chain/token-security/preview", headers=ghdr)
+    sj = json.loads(urllib.request.urlopen(sreq, timeout=20).read())
+    sim = sj.get("honeypot_sim") or {}
+    meta = sj.get("meta") or {}
+    decode_ok = bool(sj.get("is_contract") is True and str(meta.get("symbol")) == "WETH")
+    sim_ok = bool(sim.get("sim_status") == "tested" and sim.get("transferable") is True)
+    verdict_ok = bool(sj.get("verdict") == "clear" and int(sj.get("risk_score") or 0) <= 10)
+    security_detection_ok = bool(decode_ok and sim_ok and verdict_ok)
+    if not decode_ok:
+        degraded.append(f"/chain/token-security STRUCTURAL DECODE REGRESSION: WETH demo returned is_contract={sj.get('is_contract')} symbol={meta.get('symbol')} (metadata/contract reader broken — paid screening returns garbage)")
+    if not sim_ok:
+        degraded.append(f"/chain/token-security SIMULATION REGRESSION: WETH honeypot-sim returned sim_status={sim.get('sim_status')} transferable={sim.get('transferable')} (sim engine down or false AVOID on a good token — churns paying screening agent)")
+    if decode_ok and sim_ok and not verdict_ok:
+        degraded.append(f"/chain/token-security FALSE-RISK REGRESSION: known-good WETH returned verdict={sj.get('verdict')} risk={sj.get('risk_score')} (good token mis-flagged)")
+except Exception:
+    security_detection_ok = None  # inconclusive — do not raise a false correctness alarm
 # Telegram bot liveness: the Base token-gate bot is a top-of-funnel distribution surface (free
 # verdict + one-tap link to the paid 0.01-USDC miniapp unlock). The free /tg/status probe both
 # reports and self-heals the webhook registration. A provisioned bot whose webhook Telegram can no
@@ -125,5 +153,5 @@ except Exception:
 d = os.path.expanduser("~/.hermes/data/x402-data-api-uptime"); os.makedirs(d, exist_ok=True)
 alert = bool(degraded)
 summary = f"{len(S)} eps, n={sum(o['n'] for o in out.values())}" + (f" | ALERT degraded: {'; '.join(degraded)}" if degraded else "")
-json.dump({"fetched_at": now, "status": "ok", "summary": summary, "alert": alert, "degraded": degraded, "scan_detection_ok": detection_ok, "gate_detection_ok": gate_detection_ok, "report_detection_ok": report_detection_ok, "tg_bot_ok": tg_bot_ok, "endpoints": out}, open(d + "/latest.json", "w"), indent=1)
+json.dump({"fetched_at": now, "status": "ok", "summary": summary, "alert": alert, "degraded": degraded, "scan_detection_ok": detection_ok, "gate_detection_ok": gate_detection_ok, "report_detection_ok": report_detection_ok, "security_detection_ok": security_detection_ok, "tg_bot_ok": tg_bot_ok, "endpoints": out}, open(d + "/latest.json", "w"), indent=1)
 print(json.dumps(out, indent=1))
