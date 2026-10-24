@@ -363,9 +363,15 @@ def render(name, slug, url, vendor, d, today):
     vendor_para = vendor.strip()
     if vendor_para and vendor_para[-1] not in ".!?":
         vendor_para += "."
+    # Quote the frontmatter scalars: both the description and the title can contain a
+    # ": " (e.g. "...run <date>: advertises...") or a server name with a colon ("Plant
+    # Guide: Dubai..."), which silently breaks YAML parsing and makes jekyll-seo-tag fall
+    # back to the generic SITE description/title. Double-quote and escape internal quotes.
+    title_yaml = f"Is the {name} MCP server safe? Security & Claude Directory readiness scan".replace('"', "'")
+    desc_yaml = desc.replace('"', "'")
     body = f"""---
-title: Is the {name} MCP server safe? Security & Claude Directory readiness scan
-description: {desc}
+title: "{title_yaml}"
+description: "{desc_yaml}"
 ---
 # {name} MCP server — security & directory-readiness scorecard
 
