@@ -9864,12 +9864,20 @@ function computeDirectoryReadiness(
     x.rule.startsWith("tool-poisoning") || x.rule === "exfiltration-hint" ||
     x.rule === "cross-tool-shadowing" || x.rule === "invisible-unicode");
   const blockers = [...dirFindings, ...injectionRejects];
-  return { ready: blockers.length === 0, blocker_count: blockers.length, blockers };
+  // Severity-aware status so the free teaser does not cry "would FAIL" over a
+  // couple of medium annotation-hygiene items (missing title/hint/description).
+  // Anthropic hard-rejects on high/critical criteria (unsupported capability,
+  // mixed read/write, over-long names, injection); mediums are quality polish.
+  const hard_blockers = blockers.filter((b) => b.severity === "critical" || b.severity === "high").length;
+  const soft_blockers = blockers.length - hard_blockers;
+  const status: "ready" | "needs_polish" | "likely_reject" =
+    blockers.length === 0 ? "ready" : hard_blockers > 0 ? "likely_reject" : "needs_polish";
+  return { ready: blockers.length === 0, status, blocker_count: blockers.length, hard_blockers, soft_blockers, blockers };
 }
 
 function previewOf(
   r: McpScanResult,
-  dir?: { ready: boolean; blocker_count: number },
+  dir?: { ready: boolean; status?: "ready" | "needs_polish" | "likely_reject"; blocker_count: number; hard_blockers?: number; soft_blockers?: number },
 ) {
   const by = { critical: 0, high: 0, medium: 0, low: 0 } as Record<string, number>;
   for (const f of r.findings) by[f.severity]++;
@@ -9895,13 +9903,25 @@ function previewOf(
   // Withholds WHICH criteria fail and the remediation (that is the paid product),
   // but tells a connector author whether they would pass BEFORE a ~20-day review.
   if (dir) {
+    const status = dir.status ?? (dir.ready ? "ready" : "likely_reject");
+    const hard = dir.hard_blockers ?? dir.blocker_count;
+    const soft = dir.soft_blockers ?? 0;
+    const unlock =
+      " This teaser hides WHICH criteria and how to fix them. Unlock the itemized list + remediation + continuous per-release monitoring: subscribe by card at /pricing ($9.99/mo, no wallet — your key runs 100 scans across every endpoint, so you re-check each release before you resubmit). Agents can pay $0.05 per scan over x402 instead: POST /scan/mcp {\"directory\":true} (zero egress).";
+    const upsell =
+      status === "ready"
+        ? "No structural blockers against the PUBLISHED criteria on static checks. This teaser checks published rules only and cannot guarantee acceptance (privacy policy, OAuth 2.0 and DNS ownership are not checked here). Keep it compliant as tools change — continuous per-release monitoring at /pricing."
+        : status === "needs_polish"
+          ? `${dir.blocker_count} quality item(s) to polish before you submit (e.g. tool titles, read-only hints or descriptions) — mediums the Directory reviews for quality, not hard rejects, but worth fixing before a ~20-day queue.${unlock}`
+          : `${hard} issue(s) would likely FAIL Claude Directory review${soft ? ` (plus ${soft} quality item(s) to polish)` : ""} — the queue runs ~20 days, so a rejection is expensive.${unlock}`;
     out.directory_readiness = {
       ready: dir.ready,
+      status,
       blocker_count: dir.blocker_count,
+      hard_blockers: hard,
+      soft_blockers: soft,
       checked_against: "Anthropic Claude Connector Directory published review criteria",
-      upsell: dir.ready
-        ? "No structural blockers against the PUBLISHED criteria on static checks. This teaser checks published rules only and cannot guarantee acceptance (privacy policy, OAuth 2.0 and DNS ownership are not checked here). Keep it compliant as tools change — continuous per-release monitoring at /pricing."
-        : `${dir.blocker_count} issue(s) would likely FAIL Claude Directory review — the queue runs ~20 days, so a rejection is expensive. This teaser hides WHICH criteria fail and how to fix them. Unlock the itemized blocker list + remediation + continuous per-release monitoring: subscribe by card at /pricing ($9.99/mo, no wallet — your key runs 100 scans across every endpoint, so you re-check each release before you resubmit). Agents can pay $0.05 per scan over x402 instead: POST /scan/mcp {"directory":true} (zero egress).`,
+      upsell,
     };
   }
   return out;
@@ -11494,8 +11514,10 @@ function render(d){
   if(d.upsell){var up=el("p","muted",d.upsell);up.style.marginTop=".6rem";card.appendChild(up);}
   res.appendChild(card);
   if(d.directory_readiness){var dr=d.directory_readiness;var drw=el("div","card");drw.style.marginTop=".8rem";
-    var lbl=el("div",null,(dr.ready?"✓ Claude Connector Directory — no structural blockers on the published criteria":"⚠ "+(dr.blocker_count||0)+" issue(s) would likely FAIL Claude Connector Directory review"));
-    lbl.style.fontWeight="600";lbl.style.color=dr.ready?"#047857":"#b91c1c";drw.appendChild(lbl);
+    var st=dr.status||(dr.ready?"ready":"likely_reject");
+    var txt=st==="ready"?"✓ Claude Connector Directory — no structural blockers on the published criteria":st==="needs_polish"?"○ Claude Connector Directory — "+(dr.blocker_count||0)+" quality item(s) to polish before submitting":"⚠ Claude Connector Directory — "+(dr.hard_blockers||dr.blocker_count||0)+" issue(s) would likely FAIL review";
+    var col=st==="ready"?"#047857":st==="needs_polish"?"#b45309":"#b91c1c";
+    var lbl=el("div",null,txt);lbl.style.fontWeight="600";lbl.style.color=col;drw.appendChild(lbl);
     if(dr.upsell)drw.appendChild(el("p","muted",dr.upsell));
     res.appendChild(drw);}
 }
