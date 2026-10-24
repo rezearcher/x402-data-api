@@ -9699,7 +9699,7 @@ async function grsgSendDriftAlert(c: any, host: string, rec: any, event: string,
   if (!notifyUrl) return false;
   const payload: any = {
     service: "grey-ridge-mcp-monitoring",
-    event, // "test" | "ownership_lapsed" | "ownership_restored"
+    event, // "test" | "ownership_lapsed" | "ownership_restored" | "scan_verdict_changed"
     host,
     verify_method: rec?.verify_method ?? null,
     occurred_at: new Date().toISOString(),
@@ -9801,6 +9801,128 @@ function grsgScheduleRevalidate(c: any, host: string, rec: any): void {
   }
 }
 
+// --- Security-posture drift (the re-SCAN half of continuous monitoring) -------
+// Ownership revalidation (above) proves the badge still belongs to the operator;
+// posture-drift detection is the SECURITY half: we re-scan the monitored MCP
+// server on the same schedule and alert the subscriber when its verdict CHANGES
+// — a newly added tool carrying a prompt-injection payload, a detection rule
+// that newly fires, a severity shift, or the verdict moving clear->review->block.
+// This closes the one recorded residual vs full continuous-monitoring incumbents
+// (Detectify/Probely re-scan for NEW issues, not just re-check a claim). It rides
+// the same signed webhook built in db20fbc.
+//
+// The fingerprint is deliberately coarse: verdict + risk_score + tool count + the
+// sorted set of (tool|rule|severity) finding classes. It ignores evidence/detail
+// wording, so a cosmetic reword of the same finding does not page the owner, but
+// ANY new finding class, dropped finding, severity change, verdict change, or
+// tool-count change trips it. The baseline is established SILENTLY on the first
+// successful scan (establishing a baseline is not drift); a scan error NEVER
+// mutates the baseline and never fires an alert (a transient outage is not drift).
+function grsgPostureSummary(result: McpScanResult): {
+  verdict: string;
+  risk_score: number;
+  tools_scanned: number;
+  classes: string[];
+  by_severity: Record<string, number>;
+} {
+  const classes = result.findings.map((f) => `${f.tool}|${f.rule}|${f.severity}`).sort();
+  const by_severity: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0 };
+  for (const f of result.findings) by_severity[f.severity] = (by_severity[f.severity] ?? 0) + 1;
+  return {
+    verdict: String(result.verdict),
+    risk_score: result.risk_score,
+    tools_scanned: result.tools_scanned,
+    classes,
+    by_severity,
+  };
+}
+
+async function grsgPostureFingerprint(s: {
+  verdict: string;
+  risk_score: number;
+  tools_scanned: number;
+  classes: string[];
+}): Promise<string> {
+  const canon = `v=${s.verdict};r=${s.risk_score};t=${s.tools_scanned};c=${s.classes.join(",")}`;
+  return (await sha256Hex(canon)).slice(0, 32);
+}
+
+// Re-scan a monitored host's MCP server and alert on a security-posture change.
+// Only runs for a host that claimed with a full mcp_url (we need the JSON-RPC
+// endpoint, not just the domain). Persists the new baseline on the verify record.
+// Returns the transition kind for sweep accounting. Never throws.
+async function grsgPostureDriftCheck(
+  c: any,
+  host: string,
+  vrec: any,
+): Promise<"baseline" | "changed" | "unchanged" | "skipped" | "error"> {
+  const target = typeof vrec?.mcp_url === "string" && /^https?:\/\//i.test(vrec.mcp_url) ? vrec.mcp_url : null;
+  if (!target) return "skipped"; // claimed by domain only — no JSON-RPC endpoint to re-scan
+  let summary: ReturnType<typeof grsgPostureSummary>;
+  try {
+    const result = await scanMcpServer(target);
+    summary = grsgPostureSummary(result);
+  } catch {
+    // Unreachable target / scan error: record the timestamp but NEVER touch the
+    // baseline or alert — we cannot distinguish drift from a transient outage.
+    try {
+      await c.env.API_KEYS?.put("verify:" + host, JSON.stringify({ ...vrec, posture_last_error: new Date().toISOString() }));
+    } catch {
+      /* degrade-open */
+    }
+    return "error";
+  }
+  const fp = await grsgPostureFingerprint(summary);
+  const now = new Date().toISOString();
+  const prev = vrec?.posture;
+  const updated: any = {
+    ...vrec,
+    posture: {
+      fp,
+      verdict: summary.verdict,
+      risk_score: summary.risk_score,
+      tools_scanned: summary.tools_scanned,
+      by_severity: summary.by_severity,
+      checked_at: now,
+    },
+  };
+  delete updated.posture_last_error;
+  let kind: "baseline" | "changed" | "unchanged";
+  if (!prev || !prev.fp) kind = "baseline";
+  else if (prev.fp !== fp) kind = "changed";
+  else kind = "unchanged";
+  try {
+    await c.env.API_KEYS?.put("verify:" + host, JSON.stringify(updated));
+  } catch {
+    /* degrade-open: the in-memory outcome still drives the alert decision below */
+  }
+  if (kind === "changed" && updated.notify_url) {
+    try {
+      const srec = await grsgSubRecord(c, host);
+      if (grsgSubActive(srec)) {
+        await grsgSendDriftAlert(c, host, updated, "scan_verdict_changed", {
+          previous: {
+            verdict: prev.verdict ?? null,
+            risk_score: prev.risk_score ?? null,
+            tools_scanned: prev.tools_scanned ?? null,
+            by_severity: prev.by_severity ?? null,
+          },
+          current: {
+            verdict: summary.verdict,
+            risk_score: summary.risk_score,
+            tools_scanned: summary.tools_scanned,
+            by_severity: summary.by_severity,
+          },
+          scan_target: target,
+        });
+      }
+    } catch {
+      /* alert delivery must never break the sweep */
+    }
+  }
+  return kind;
+}
+
 // Continuous-monitoring sweep — the engine behind the recurring subscription.
 // The paid tier promises CONTINUOUS re-verification of a claimed host, not just
 // the lazy self-heal that runs when someone happens to read the badge. This
@@ -9819,9 +9941,29 @@ function grsgScheduleRevalidate(c: any, host: string, rec: any): void {
 async function grsgRunMonitoringSweep(
   env: Env,
   max = 500,
-): Promise<{ scanned: number; active: number; revalidated: number; lapsed: number; restored: number; errors: number }> {
+): Promise<{
+  scanned: number;
+  active: number;
+  revalidated: number;
+  lapsed: number;
+  restored: number;
+  errors: number;
+  posture_baselined: number;
+  posture_changed: number;
+  posture_errors: number;
+}> {
   const c: any = { env };
-  const summary = { scanned: 0, active: 0, revalidated: 0, lapsed: 0, restored: 0, errors: 0 };
+  const summary = {
+    scanned: 0,
+    active: 0,
+    revalidated: 0,
+    lapsed: 0,
+    restored: 0,
+    errors: 0,
+    posture_baselined: 0,
+    posture_changed: 0,
+    posture_errors: 0,
+  };
   if (!env.API_KEYS) return summary;
   let cursor: string | undefined = undefined;
   do {
@@ -9851,6 +9993,16 @@ async function grsgRunMonitoringSweep(
         const nowVerified = updated.last_ok !== false;
         if (prevVerified && !nowVerified) summary.lapsed++;
         else if (!prevVerified && nowVerified) summary.restored++;
+        // Security-posture re-scan — the SECURITY half of continuous monitoring.
+        // Gated on current ownership proof: AUTHORIZATION_STANDARD requires a live
+        // verified opt-in to actively re-scan the operator's server, so a lapsed
+        // host is not re-scanned until it re-verifies.
+        if (nowVerified) {
+          const pk = await grsgPostureDriftCheck(c, host, updated);
+          if (pk === "changed") summary.posture_changed++;
+          else if (pk === "baseline") summary.posture_baselined++;
+          else if (pk === "error") summary.posture_errors++;
+        }
       } catch {
         summary.errors++;
       }
@@ -9897,6 +10049,18 @@ app.get("/scan/verify/status", async (c) => {
     monitoring_active: grsgSubActive(srec),
     monitoring_period_end: srec?.current_period_end_ms ? new Date(srec.current_period_end_ms).toISOString() : null,
     notify_configured: !!rec?.notify_url,
+    // Security-posture baseline from the last continuous-monitoring re-scan (the
+    // source of scan_verdict_changed drift alerts). Null until the first sweep
+    // establishes it for a monitored host claimed with a full mcp_url.
+    posture: rec?.posture
+      ? {
+          verdict: rec.posture.verdict ?? null,
+          risk_score: rec.posture.risk_score ?? null,
+          tools_scanned: rec.posture.tools_scanned ?? null,
+          by_severity: rec.posture.by_severity ?? null,
+          checked_at: rec.posture.checked_at ?? null,
+        }
+      : null,
   });
 });
 
@@ -10031,7 +10195,7 @@ app.post("/scan/verify/notify", async (c) => {
   const srec = await grsgSubRecord(c, host);
   // Fire a signed test event so the owner can confirm the wiring + signature now.
   const testDelivered = await grsgSendDriftAlert(c, host, updated, "test", {
-    note: "Grey Ridge monitoring webhook registered. While your subscription is active you will receive ownership_lapsed / ownership_restored events here.",
+    note: "Grey Ridge monitoring webhook registered. While your subscription is active you will receive ownership_lapsed / ownership_restored and scan_verdict_changed events here.",
   });
   return c.json({
     host,
