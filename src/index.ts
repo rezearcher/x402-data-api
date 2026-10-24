@@ -8211,7 +8211,7 @@ app.get("/gate/swap", async (c) => {
     const sizing = sizedExecution(out.liquidity_usd, notional);
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /gate/swap", rail, makeUsageCounter(c.env)));
-    return c.json({ ...out, sizing });
+    return c.json({ ...out, sized_verdict: sizedVerdictLine(out, sizing), sizing });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
@@ -8267,7 +8267,7 @@ async function verifyUsdcPaymentToPayTo(
 // no added latency — so the paid result answers "how big can I trade this, and
 // what will each size cost me in slippage?", which the free teaser does not. Kept
 // out of buildSwapGate on purpose: that path is shared with the FREE preview.
-function sizedExecution(liquidityUsd: number | null, notional: number) {
+export function sizedExecution(liquidityUsd: number | null, notional: number) {
   if (liquidityUsd == null || liquidityUsd <= 0) {
     return {
       basis: "no verifiable Uniswap v3 WETH-pool liquidity — trade sizing unavailable for this token",
@@ -8343,6 +8343,47 @@ function sizedExecution(liquidityUsd: number | null, notional: number) {
   };
 }
 
+// Top-level, one-line sized verdict rendered from the PAID sizing numbers. A raw
+// LLM/agent caller — the segment that produced 100% of our historical external
+// revenue (365 raw x402 txs, not plugin installs) — parses the JSON response with
+// an LLM; a single salient flat field is read and acted on far more reliably than a
+// nested sizing.entry_sim.this_trade.roundtrip_breakeven_pct it must dig for. Pure
+// string assembly over already-computed values: zero marginal cost (no extra RPC, no
+// added latency) and version-proof — every existing/future plugin + raw caller that
+// echoes the paid body gets the moat without an npm republish. Degrade-open: missing
+// sizing collapses to verdict+reason, never throws. Added ONLY to the paid responses;
+// the free preview never calls sizedExecution so it cannot leak this.
+export function sizedVerdictLine(
+  out: {
+    decision: string;
+    reason: string;
+    side: string;
+    notional_usd: number;
+    token: string;
+  },
+  sizing: ReturnType<typeof sizedExecution>,
+): string {
+  const act = (out.decision || "hold").toUpperCase();
+  const amt = Number.isFinite(out.notional_usd) ? out.notional_usd.toLocaleString() : String(out.notional_usd);
+  const head = `${act} ${out.side} $${amt} of ${out.token}`;
+  const reason = (out.reason || "").trim().replace(/\.$/, "");
+  // No verifiable pool: sizing unavailable — say so plainly and stop.
+  if (!sizing || sizing.max_safe_notional_usd == null) {
+    return `${head}: ${reason}. Trade sizing unavailable (no verifiable Uniswap v3 WETH-pool liquidity).`;
+  }
+  const parts: string[] = [];
+  const impact = sizing.this_trade?.price_impact_pct;
+  if (typeof impact === "number") parts.push(`this trade is ${impact}% of pool depth`);
+  parts.push(`trade up to ~$${sizing.max_safe_notional_usd.toLocaleString()}/order to stay under 2% impact`);
+  const be = sizing.entry_sim?.this_trade?.roundtrip_breakeven_pct;
+  if (typeof be === "number") parts.push(`round-trip breakeven +${be}%`);
+  const ex = sizing.exit_sim?.this_trade;
+  if (ex && typeof ex.net_recovered_usd === "number") {
+    parts.push(`exit now recovers ~$${ex.net_recovered_usd.toLocaleString()} (−$${ex.lost_to_slippage_usd.toLocaleString()} to slippage)`);
+  }
+  return `${head}: ${reason}. ${parts.join("; ")}.`;
+}
+
 app.get("/gate/swap/unlock", async (c) => {
   const token = tokenQ(c);
   if (!token || !ADDR_RE.test(token)) return c.json({ error: "token query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
@@ -8379,7 +8420,7 @@ app.get("/gate/swap/unlock", async (c) => {
     const out = await buildSwapGate(token, side as "buy" | "sell", notional);
     const sizing = sizedExecution(out.liquidity_usd, notional);
     fireAndForget(c, trackPaidRequest("GET /gate/swap", "x402-browser-unlock", makeUsageCounter(c.env)));
-    return c.json({ ...out, sizing, paid: { tx, payer: v.from, amount_usdc: v.amount_usdc, basescan: `https://basescan.org/tx/${tx}` } });
+    return c.json({ ...out, sized_verdict: sizedVerdictLine(out, sizing), sizing, paid: { tx, payer: v.from, amount_usdc: v.amount_usdc, basescan: `https://basescan.org/tx/${tx}` } });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
@@ -12525,7 +12566,7 @@ const mcpHandler = createMcpHandler(() => {
         // notionals). sizedExecution is intentionally NOT inside buildSwapGate so
         // the free gate_swap_preview path below can never leak these numbers.
         const sizing = sizedExecution(result.liquidity_usd, notional);
-        return { content: [{ type: "text" as const, text: JSON.stringify({ ...result, sizing }, null, 2) }] };
+        return { content: [{ type: "text" as const, text: JSON.stringify({ ...result, sized_verdict: sizedVerdictLine(result, sizing), sizing }, null, 2) }] };
       } catch (e) {
         return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
       }
