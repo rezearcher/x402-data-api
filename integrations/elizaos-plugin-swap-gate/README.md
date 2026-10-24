@@ -69,7 +69,7 @@ Both are paid inline with x402 USDC and **fail closed** (skip / `safe:false`) if
 | `SWAP_GATE_MAX_EXIT_SLIPPAGE_PCT` | no | `10` | Skip a `GO` whose modelled exit slippage exceeds this %. |
 | `SWAP_GATE_BASE_URL` | no | hosted Worker | Override the gate endpoint. |
 
-\* Without a key the action still runs but only reaches the free preview; wire the key so paid calls return the full `sizing` block and a real paid verdict.
+\* Without a key — or with a key whose wallet is not yet funded — the action **degrades open**: it returns a real `GO`/`BLOCK` from the free preview (honeypot / sellability / liquidity are unchanged) and appends a one-line hint telling you to set `SWAP_GATE_PRIVATE_KEY` to a Base wallet holding ~1 USDC to unlock the paid `sizing` + exit-simulation. It never throws an opaque `HTTP 402`, so a fresh install still protects every trade while you wire the wallet.
 
 ## Use
 

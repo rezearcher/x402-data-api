@@ -116,7 +116,7 @@ A zero-config `tokenReport` is exported too (reads `PRIVATE_KEY` from env). Wire
 
 | Option | Default | Purpose |
 |---|---|---|
-| `privateKey` | — | Hex key of the agent's Base wallet; signs the x402 USDC payment. Omit → free preview path only. |
+| `privateKey` | — | Hex key of the agent's Base wallet; signs the x402 USDC payment. Omit (or leave the wallet unfunded) → the guard **degrades open**: a real `proceed` from the free preview plus a fund-onramp hint in `guard_reasons`, never an opaque `402` throw. Set it to a wallet holding ~1 USDC to unlock the paid `sizing` + exit-simulation. |
 | `defaultNotionalUsd` | `100` | Default trade size for the liquidity / sizing checks when the model omits `notional_usd`. |
 | `maxBreakevenPct` | `15` | Set `proceed:false` on a `go` whose round-trip friction exceeds this %. |
 | `maxExitSlippagePct` | `10` | Set `proceed:false` on a `go` whose modelled exit slippage exceeds this %. |

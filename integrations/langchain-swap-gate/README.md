@@ -106,6 +106,11 @@ curl "https://x402-data-api.sigrunner.workers.dev/gate/swap/preview?token=0x4200
 - **Payment isolated.** `client.ts` builds the x402-paying fetch from your
   private key; without a key it falls back to plain `fetch` (free preview path
   only).
+- **Degrades open, never opaque.** With no key — or a key whose wallet is not
+  yet funded (paid call `402`s) — `swapGuard` returns a real `proceed` from the
+  free preview and appends a fund-onramp hint to `guard_reasons`, instead of
+  throwing. A fresh install keeps blocking honeypots while you wire the wallet;
+  it fails **closed** only if both the paid route and the preview are down.
 
 ## What it is and isn't
 
