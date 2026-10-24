@@ -8394,6 +8394,15 @@ const PREVIEW_DEMO_TOKENS: Record<string, string> = {
   aero: "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
   degen: "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
 };
+// Detection-regression canary control (Line-A A0). A burn address holds no code and
+// no deployer key exists for it, so it is STRUCTURALLY non-contract forever => no pool =>
+// the gate must return decision=block / verdict=AVOID / risk=100 permanently. The uptime
+// canary asserts this to catch a silent false-SAFE regression (a paying agent buying a rug
+// = permanent churn). Exempt from the trial meter (below) so the canary never consumes a
+// visitor's 3/day quota and never flaps on quota exhaustion; it still runs the REAL
+// buildSwapGate path, not a canned reply. Negative control is the un-metered `usdc` demo
+// (must stay decision=go / SAFE) — a false-BLOCK there is the customer-friction regression.
+const GATE_CANARY_BLOCK_ADDR = "0x000000000000000000000000000000000000dEaD";
 function previewToken(q: string | undefined): string {
   const k = (q ?? "").trim().toLowerCase();
   if (PREVIEW_DEMO_TOKENS[k]) return PREVIEW_DEMO_TOKENS[k];
@@ -9017,6 +9026,9 @@ async function trialToken(c: any, q: string | undefined): Promise<{ token: strin
   const raw = (q ?? "").trim();
   if (!/^0x[0-9a-fA-F]{40}$/.test(raw) || !c.env.API_KEYS) return { token: previewToken(q), left: null };
   if (Object.values(PREVIEW_DEMO_TOKENS).some((a) => a.toLowerCase() === raw.toLowerCase())) return { token: raw, left: null };
+  // Un-metered detection-regression canary: the structural-block control must be assertable
+  // on every cron run without ever being rate-limited (a 429 here would make the canary flap).
+  if (raw.toLowerCase() === GATE_CANARY_BLOCK_ADDR.toLowerCase()) return { token: raw, left: null };
   const ip = c.req.header("cf-connecting-ip") ?? "unknown";
   const key = `trial:${ip}:${new Date().toISOString().slice(0, 10)}`;
   const used = parseInt((await c.env.API_KEYS.get(key)) ?? "0", 10) || 0;

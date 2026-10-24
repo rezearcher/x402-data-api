@@ -55,8 +55,35 @@ except Exception:
     detection_ok = None  # inconclusive — do not raise a false correctness alarm
 if detection_ok is False:
     degraded.append("/scan/mcp/preview CORRECTNESS: poisoned canary returned verdict=clear (detection regressed)")
+# Line-A A0: verdict-sanity canary on /gate/swap — the ONLY route that moves the ground-truth
+# USDC oracle. HTTP-200 availability is NOT correctness: a silent false-SAFE on a honeypot hands
+# a paying agent a rug (=> permanent churn of 1 of only 3 payers), a false-BLOCK on a good token
+# is customer friction. GoPlus/1inch/Nansen all run detection-regression suites pre-ship; we PROVE
+# it continuously and publish the flag (transparency edge). Two un-metered controls, both via the
+# REAL gate engine: (1) structural-block — a burn address is non-contract forever => must BLOCK
+# risk=100; (2) negative control — the usdc demo must stay decision=go / SAFE. Degrade OPEN: any
+# probe error is inconclusive (None), never a false alarm; anchored on structurally-permanent
+# fixtures so live on-chain drift cannot flap it.
+GATE_CANARY_BLOCK_ADDR = "0x000000000000000000000000000000000000dEaD"
+ghdr = {"User-Agent": "curl/8.5.0"}
+def _gate(token):
+    req = urllib.request.Request(BASE + "/gate/swap/preview?token=" + token, headers=ghdr)
+    return json.loads(urllib.request.urlopen(req, timeout=20).read())
+gate_detection_ok = None  # inconclusive by default (degrade open)
+try:
+    neg = _gate("usdc")            # known-good token: must PASS (go / SAFE)
+    pos = _gate(GATE_CANARY_BLOCK_ADDR)  # structural non-contract: must BLOCK (risk 100)
+    neg_ok = neg.get("decision") == "go" and neg.get("verdict") == "SAFE"
+    pos_ok = pos.get("decision") == "block" and int(pos.get("risk_score") or 0) >= 90 and pos.get("verdict") == "AVOID"
+    gate_detection_ok = bool(neg_ok and pos_ok)
+    if not pos_ok:
+        degraded.append(f"/gate/swap FALSE-SAFE REGRESSION: structural-block canary returned decision={pos.get('decision')} verdict={pos.get('verdict')} risk={pos.get('risk_score')} (honeypot would pass — paying agent loses funds)")
+    if not neg_ok:
+        degraded.append(f"/gate/swap FALSE-BLOCK REGRESSION: known-good usdc returned decision={neg.get('decision')} verdict={neg.get('verdict')} (customer friction)")
+except Exception:
+    gate_detection_ok = None  # inconclusive — do not raise a false correctness alarm
 d = os.path.expanduser("~/.hermes/data/x402-data-api-uptime"); os.makedirs(d, exist_ok=True)
 alert = bool(degraded)
 summary = f"{len(S)} eps, n={sum(o['n'] for o in out.values())}" + (f" | ALERT degraded: {'; '.join(degraded)}" if degraded else "")
-json.dump({"fetched_at": now, "status": "ok", "summary": summary, "alert": alert, "degraded": degraded, "scan_detection_ok": detection_ok, "endpoints": out}, open(d + "/latest.json", "w"), indent=1)
+json.dump({"fetched_at": now, "status": "ok", "summary": summary, "alert": alert, "degraded": degraded, "scan_detection_ok": detection_ok, "gate_detection_ok": gate_detection_ok, "endpoints": out}, open(d + "/latest.json", "w"), indent=1)
 print(json.dumps(out, indent=1))
