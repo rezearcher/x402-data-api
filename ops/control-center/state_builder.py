@@ -25,7 +25,9 @@ REPO = Path("/home/rez/projects/x402-data-api")
 MONITOR_FLAG = HOME / ".claude" / "agent-chains" / "monitor.flag"
 MONITOR_FEED = CHAIN / "monitor.feed.jsonl"
 SENSOR = HOME / ".hermes" / "data" / "loop-money" / "latest.json"
+UPTIME_SENSOR = HOME / ".hermes" / "data" / "x402-data-api-uptime" / "latest.json"  # uptime_probe.py correctness canaries
 ATOMS = HOME / ".claude" / "agent-chains" / "atoms.json"
+ATOMS_LEDGER = HOME / ".claude" / "agent-chains" / "atoms_ledger.jsonl"  # append-only completion history
 AGENTS = ["research", "builder", "marketing"]
 EXPECT_RUN = (12, 32)   # expected pass run minutes
 EXPECT_REST = (8, 20)   # expected rest minutes (target ~10)
@@ -194,31 +196,62 @@ def monitor_state() -> dict:
     return {"on": on, "feed": list(reversed(feed))}
 
 
+def _ledger_append(ev: dict) -> None:
+    try:
+        ATOMS_LEDGER.parent.mkdir(parents=True, exist_ok=True)
+        with open(ATOMS_LEDGER, "a") as f:
+            f.write(json.dumps(ev) + "\n")
+    except Exception:
+        pass
+
+
+def _ledger_cleared() -> list:
+    """Currently-cleared atoms derived from the append-only ledger (latest event per id wins).
+    Append-only → never mutated; state is DERIVED, so a re-open supersedes a done."""
+    latest: dict = {}
+    for line in _read(ATOMS_LEDGER).splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ev = json.loads(line)
+        except Exception:
+            continue
+        if ev.get("id"):
+            latest[ev["id"]] = ev
+    return [ev for ev in latest.values() if ev.get("event") == "done"]
+
+
 def harvest_atoms() -> dict:
-    """Read the clean, STRUCTURED atom store (populated by note_atom.py — agents log a
-    clean one-liner, never scraped from prose). Returns open + recently-done."""
+    """Read the clean, STRUCTURED atom store (populated by note_atom.py). Panel shows OPEN
+    only; cleared atoms live in the append-only ledger (the complete record the loop reads)."""
     store = _safe(lambda: json.loads(_read(ATOMS)), {}) or {"atoms": []}
-    atoms = store.get("atoms", [])
-    opens = [a for a in atoms if not a.get("done")]
-    done = [a for a in atoms if a.get("done")]
-    return {"open": opens, "done": done[-8:], "open_count": len(opens)}
+    opens = [a for a in store.get("atoms", []) if not a.get("done")]
+    cleared = sorted(_safe(_ledger_cleared, []), key=lambda e: e.get("ts", ""))
+    return {"open": opens, "open_count": len(opens),
+            "cleared": cleared[-20:], "cleared_count": len(cleared)}
 
 
 def mark_atom(aid: str, done: bool = True) -> bool:
-    """Called by the server when Rez checks an atom off (or re-opens it)."""
+    """Server calls this when Rez checks an atom off (or re-opens it). Marks the live store
+    AND appends a durable event to the completion ledger — so checked atoms leave the panel,
+    persist in the complete record, and the loop sees the clear."""
     store = _safe(lambda: json.loads(_read(ATOMS)), {}) or {"atoms": []}
-    hit = False
+    hit = None
     for a in store.get("atoms", []):
         if a.get("id") == aid:
             a["done"] = bool(done)
             a["done_at"] = datetime.now(timezone.utc).isoformat() if done else None
-            hit = True
-    if hit:
+            hit = a
+    if hit is not None:
         try:
             ATOMS.write_text(json.dumps(store, indent=0))
         except Exception:
             return False
-    return hit
+        _ledger_append({"ts": datetime.now(timezone.utc).isoformat(),
+                        "event": "done" if done else "reopen", "id": aid,
+                        "text": hit.get("text"), "agent": hit.get("agent"), "steps": hit.get("steps")})
+    return hit is not None
 
 
 def health(rt: dict, rev: dict, hist: dict) -> dict:
@@ -234,12 +267,26 @@ def health(rt: dict, rev: dict, hist: dict) -> dict:
     run_ok = bool(runs) and EXPECT_RUN[0] <= runs[-1] <= EXPECT_RUN[1] if runs else False
     rest_ok = bool(rests) and rests[-1] <= EXPECT_REST[1] if rests else True
     ever_ok = run_ok and rest_ok
+    # GATE: money-route correctness canary (uptime_probe.py). A false-SAFE on /gate/swap churns a
+    # paying agent — the one failure that silently kills Line-A revenue. Degrade OPEN: only an
+    # EXPLICIT regression trips it; missing/inconclusive (None) never fabricates an alarm.
+    u = _safe(lambda: json.loads(_read(UPTIME_SENSOR)), {})
+    gate_ok = u.get("gate_detection_ok")      # True pass / False regression / None inconclusive
+    scan_ok = u.get("scan_detection_ok")
+    degraded = u.get("degraded") or []
+    gate_degraded = [d for d in degraded if "/gate/swap" in d or "/scan/mcp" in d]
+    corr_regressed = gate_ok is False or scan_ok is False or bool(gate_degraded)
+    gate_health_ok = not corr_regressed       # inconclusive/missing => ok (degrade open)
+    gate_why = ("; ".join(gate_degraded) if gate_degraded
+                else "money-gate + scanner canaries PASS" if gate_ok and scan_ok
+                else "correctness inconclusive (probe not run yet / unreachable) — not alarming")
     return {
         "green": {"ok": green_ok, "why": f"engine {'alive' if green_ok else 'DOWN'} (pid {rt.get('pid')})"},
         "super_green": {"ok": super_ok, "why": ("builder shipped+verified, ATOM clean" if super_ok
                         else "no recently-verified shipped work / or an open ATOM — ran, not competitor-grade-proven")},
         "ever_green": {"ok": ever_ok, "why": (f"on tempo (run {runs[-1] if runs else '?'}m, rest {rests[-1] if rests else '?'}m)"
                         if ever_ok else "off-tempo (run/rest outside expected band)")},
+        "gate": {"ok": gate_health_ok, "why": gate_why},
     }
 
 
@@ -276,7 +323,7 @@ def emit_sensor(state: dict):
             "status": "ok" if not alerts else "alert",
             "alert": bool(alerts),
             "summary": f"loop green={h.get('green',{}).get('ok')} super={h.get('super_green',{}).get('ok')} "
-                       f"ever={h.get('ever_green',{}).get('ok')} | pass {state['engine'].get('pass')} "
+                       f"ever={h.get('ever_green',{}).get('ok')} gate={h.get('gate',{}).get('ok')} | pass {state['engine'].get('pass')} "
                        f"stage {state['engine'].get('stage')} | A_ext=${state['revenue'].get('line_a_external_usdc')} "
                        f"B=${state['revenue'].get('line_b_fiat_usd')}",
             "health": h, "revenue": state["revenue"], "engine": state["engine"],
