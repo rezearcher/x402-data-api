@@ -9030,6 +9030,7 @@ function upgradeCTA(paidUrl: string, price: string, adds: string, extra?: Record
 // teaser never leaks the gated value (it only names it, in the agent's terms).
 function paidSwapAdds(notional: number) {
   return {
+    sized_verdict: `a top-level one-line string folding the GO/HOLD/BLOCK decision together with this trade's pool-depth %, max-safe order size, round-trip breakeven %, and exit-recovery USD — one salient field to read/act on instead of digging through nested sizing.*`,
     entry_simulation: `the BUY leg: tokens-value-at-spot you actually receive, USD lost to entry slippage, and the round-trip breakeven move % for $100 / $1k / $10k / $50k — tells you the price appreciation needed just to clear in-and-out friction BEFORE you commit`,
     exit_simulation: `net USD you recover (and lose to slippage) selling $100 / $1k / $10k / $50k of this token into its measured Uniswap v3 WETH pool — bounds your worst-case loss on a rug or thin pool`,
     for_this_trade: `the entry-slippage, round-trip breakeven, and recovered-vs-lost USD for your exact notional_usd=${notional}`,
@@ -12547,7 +12548,7 @@ const mcpHandler = createMcpHandler(() => {
     "gate_swap",
     {
       description:
-        "Pre-trade GO / HOLD / BLOCK gate for a Base ERC-20 swap: honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your trade size. Returns the GO/HOLD/BLOCK decision AND decision-grade sizing — per $100 / $1k / $10k / $50k (and your exact notional_usd): entry-slippage + exit-simulation (net USD recovered vs lost to slippage), round-trip breakeven move %, and max_safe_notional_usd. Cost: $0.005 USDC per call via the shared MCP payment gate (the direct HTTP endpoint GET /gate/swap is $0.008 — MCP tools/call is gated at a flat $0.005 per request).",
+        "Pre-trade GO / HOLD / BLOCK gate for a Base ERC-20 swap: honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your trade size. Returns a top-level `sized_verdict` one-liner (decision + pool-depth % + max-safe size + round-trip breakeven + exit recovery, read in one shot) AND the full decision-grade sizing — per $100 / $1k / $10k / $50k (and your exact notional_usd): entry-slippage + exit-simulation (net USD recovered vs lost to slippage), round-trip breakeven move %, and max_safe_notional_usd. Cost: $0.005 USDC per call via the shared MCP payment gate (the direct HTTP endpoint GET /gate/swap is $0.008 — MCP tools/call is gated at a flat $0.005 per request).",
       inputSchema: {
         token: z.string().describe("0x-prefixed ERC-20 contract on Base mainnet"),
         side: z.enum(["buy", "sell"]).optional().describe("default buy"),
@@ -12577,7 +12578,7 @@ const mcpHandler = createMcpHandler(() => {
     "gate_swap_preview",
     {
       description:
-        "FREE live sample of the gate_swap pre-trade GO/HOLD/BLOCK decision for a demo Base token (usdc|weth|cbbtc|aero|degen), same shape as the paid gate_swap tool. The paid gate_swap tool additionally returns `sizing` (entry/exit slippage simulation + round-trip breakeven + max_safe_notional_usd); the `paid_adds` block here names those fields. No payment required.",
+        "FREE live sample of the gate_swap pre-trade GO/HOLD/BLOCK decision for a demo Base token (usdc|weth|cbbtc|aero|degen), same shape as the paid gate_swap tool. The paid gate_swap tool additionally returns a top-level `sized_verdict` one-liner plus the full `sizing` object (entry/exit slippage simulation + round-trip breakeven + max_safe_notional_usd); the `paid_adds` block here names those fields. No payment required.",
       inputSchema: {
         token: z.enum(["usdc", "weth", "cbbtc", "aero", "degen"]).optional().describe("demo token, default usdc"),
         side: z.enum(["buy", "sell"]).optional().describe("default buy"),
