@@ -97,6 +97,8 @@
   .citem{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--muted);padding:3px 0}
   .citem span:first-child{text-decoration:line-through;opacity:.85}
   .citem .t{font-size:10px;flex:none;padding-top:2px}
+  .citem .cby{font-size:10px;flex:none;color:var(--muted);padding-top:1px}
+  .citem.byagent{cursor:help} .citem.byagent .cby{color:var(--jade)}  /* agent-resolved: jade + hover shows evidence */
   .anone{color:var(--jade);font-size:12.5px;padding:2px 0}
   .btm{display:grid;grid-template-columns:1.4fr 1fr;gap:12px;margin-top:12px}
   .box{border:1px solid var(--line);background:var(--panel);border-radius:10px;overflow:hidden}
@@ -221,7 +223,12 @@ function render(d){
   document.getElementById('acount').textContent = at.open.length?`· ${at.open.length} open`:'· clear';
   let ahtml=(at.open||[]).map(a=>atomRow(a,false)).join('') || '<div class="anone">✓ nothing needs you right now</div>';
   if((at.cleared_count||0)>0){
-    const ci=(at.cleared||[]).slice().reverse().map(c=>`<div class="citem"><span>✓ ${esc(c.text)}</span><span class="t mono">${esc((c.ts||'').replace('T',' ').slice(0,16))}</span></div>`).join('');
+    const ci=(at.cleared||[]).slice().reverse().map(c=>{
+      const agent=(c.by&&c.by!=='rez');
+      const who=agent?('🤖 '+esc(c.by)):'👤 you';
+      const ev=c.evidence?` title="evidence: ${esc(c.evidence)}"`:'';
+      return `<div class="citem${agent?' byagent':''}"${ev}><span>✓ ${esc(c.text)}</span><span class="cby">${who}</span><span class="t mono">${esc((c.ts||'').replace('T',' ').slice(0,16))}</span></div>`;
+    }).join('');
     ahtml += `<details class="completed" ${openAtoms.has('__completed__')?'open':''} ontoggle="toggleAtom('__completed__',this.open)"><summary>✓ ${at.cleared_count} completed</summary>${ci}</details>`;
   }
   document.getElementById('atomlist').innerHTML = ahtml;

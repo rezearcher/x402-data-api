@@ -250,7 +250,8 @@ def mark_atom(aid: str, done: bool = True) -> bool:
             return False
         _ledger_append({"ts": datetime.now(timezone.utc).isoformat(),
                         "event": "done" if done else "reopen", "id": aid,
-                        "text": hit.get("text"), "agent": hit.get("agent"), "steps": hit.get("steps")})
+                        "text": hit.get("text"), "agent": hit.get("agent"), "steps": hit.get("steps"),
+                        "by": "rez", "evidence": ""})  # human checkbox (agent resolves carry by=<agent>+evidence)
     return hit is not None
 
 

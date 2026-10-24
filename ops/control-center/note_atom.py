@@ -55,6 +55,38 @@ def _load():
     return json.loads(ATOMS.read_text()) if ATOMS.exists() else {"atoms": []}
 
 
+def _ledger_append(ev: dict) -> None:
+    try:
+        ATOMS_LEDGER.parent.mkdir(parents=True, exist_ok=True)
+        with open(ATOMS_LEDGER, "a") as f:
+            f.write(json.dumps(ev) + "\n")
+    except Exception:
+        pass
+
+
+def resolve_atom(aid: str, agent: str, evidence: str) -> bool:
+    """An AGENT marks a blocker it completed as done — attributed + evidenced (never a
+    bare claim). Writes the store AND a ledger event carrying who resolved it + proof,
+    so the console shows agent-resolved atoms distinctly and Rez can audit them."""
+    from datetime import datetime, timezone
+    evidence = (evidence or "").strip()
+    if not evidence:
+        return False  # evidence is mandatory — no self-attestation without proof
+    store = json.loads(ATOMS.read_text()) if ATOMS.exists() else {"atoms": []}
+    for a in store.get("atoms", []):
+        if a["id"] == aid:
+            now = datetime.now(timezone.utc).isoformat()
+            a["done"] = True
+            a["done_at"] = now
+            a["resolved_by"] = agent
+            a["evidence"] = evidence[:400]
+            ATOMS.write_text(json.dumps(store, indent=0))
+            _ledger_append({"ts": now, "event": "done", "id": aid, "text": a.get("text"),
+                            "agent": a.get("agent"), "by": agent, "evidence": evidence[:400]})
+            return True
+    return False
+
+
 def _ledger_cleared():
     """Cleared gates derived from the append-only ledger (latest event per id wins).
     This is what the loop reads — the complete, durable record, not the lean live store."""
@@ -90,6 +122,13 @@ if __name__ == "__main__":
             if not a.get("done"):
                 tag = " (+steps)" if a.get("steps") else ""
                 print(f"[OPEN] {a['text']}{tag}")
+    elif cmd == "resolve":
+        # an AGENT checks off a blocker it completed — attributed + evidence-gated
+        if len(sys.argv) < 5:
+            print("usage: note_atom.py resolve <id> <agent> '<evidence: url/commit/verify-output>'")
+            sys.exit(1)
+        ok = resolve_atom(sys.argv[2], sys.argv[3], sys.argv[4])
+        print("resolved" if ok else "(no such atom id, or evidence empty — evidence is required)")
     elif cmd == "set-steps":
         if len(sys.argv) < 4:
             print("usage: note_atom.py set-steps <id> '<step1>' '<step2>' ...")
