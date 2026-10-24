@@ -1,4 +1,14 @@
-# Rez atom (OPTIONAL now) — publish the three framework swap-gate plugins to the npm registry
+# ✅ RESOLVED 2026-10-23 — all four @grey-ridge packages are published to npm
+
+> **DONE.** `npm login` + publish completed by Rez. Verified live on the registry at `0.1.0`:
+> `@grey-ridge/x402-data-api-mcp`, `@grey-ridge/elizaos-plugin-swap-gate`,
+> `@grey-ridge/langchain-swap-gate`, `@grey-ridge/vercel-ai-swap-gate` — each resolves via
+> `npm view <name> version`. Clean install path is now `npm i @grey-ridge/<plugin>` (no git
+> source needed). Future version bumps re-publish hands-off via `.github/workflows/publish-npm.yml`
+> (OIDC trusted publishing) once the per-package Trusted Publisher config is set on npmjs.com.
+> The historical git-install instructions below are retained for reference only.
+
+---
 
 > **Update 2026-10-23: the npm gate is removed. All three plugins are installable TODAY**,
 > with no npm account, straight from their standalone GitHub repos (build committed, so no

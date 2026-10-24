@@ -109,8 +109,9 @@ npm run build          # tsc → dist/server.js
 node dist/server.js    # start (or: npm start)
 ```
 
-**Intended path (once published):** `npx @grey-ridge/x402-data-api-mcp` (the package's `bin`
-target is `dist/server.js`, so `npx` runs the same server).
+**Published path (one line, no clone):** `npx @grey-ridge/x402-data-api-mcp` — the package is
+[live on npm](https://www.npmjs.com/package/@grey-ridge/x402-data-api-mcp); its `bin` target is
+`dist/server.js`, so `npx` runs the same server.
 
 **Configuration.** Copy [`mcp-client/.env.example`](./mcp-client/.env.example) to
 `.env` in `mcp-client/`: `WORKER_BASE_URL` defaults to the deployed Worker (set it
@@ -161,11 +162,16 @@ targets except the explicitly-scoped `/scan/mcp` and enrichment endpoints).
 
 MIT — see [LICENSE](./LICENSE).
 
-## Agent-framework examples
-Pre-trade token guard (`/gate/swap`, $0.008 USDC via x402 on Base). Free sample: `curl "https://x402-data-api.sigrunner.workers.dev/gate/swap/preview?token=degen"`
-- Node: `docs/examples/swap-gate/gate.mjs`
-- LangChain.js tool: `docs/examples/langchain/swapGuardTool.mjs`
-- ElizaOS action: `docs/examples/elizaos/swapGuardAction.mjs`
+## Agent-framework plugins (published)
+Pre-trade token guard (`/gate/swap`, $0.008 USDC via x402 on Base) — drop-in, fails closed, pays inline per call (no API key, no account). Free sample: `curl "https://x402-data-api.sigrunner.workers.dev/gate/swap/preview?token=degen"`
+
+| Framework | Install | Source |
+|-----------|---------|--------|
+| ElizaOS | `npm i @grey-ridge/elizaos-plugin-swap-gate` | [`integrations/elizaos-plugin-swap-gate`](./integrations/elizaos-plugin-swap-gate) |
+| LangChain.js | `npm i @grey-ridge/langchain-swap-gate` | [`integrations/langchain-swap-gate`](./integrations/langchain-swap-gate) |
+| Vercel AI SDK | `npm i @grey-ridge/vercel-ai-swap-gate` | [`integrations/vercel-ai-sdk-swap-gate`](./integrations/vercel-ai-sdk-swap-gate) |
+
+Each also exposes a `tokenReport` tool wrapping `/chain/token-report` for standalone token screening. Minimal copy-paste examples live under `docs/examples/{swap-gate,langchain,elizaos}/`.
 
 Market-data buyer (for agents that buy a price and must not present stale data as real-time — the Decision402 pattern): `examples/market-data-decision-buyer.mjs`. Runs the full agentic loop — reads the live 402 quote, enforces a per-call USDC budget, proves the feed via the free preview, pays `/crypto/prices` ($0.001 on Base), then **rejects any row older than `MAX_AGE_SECONDS`**. Steps 1-3 run with zero npm installs: `node examples/market-data-decision-buyer.mjs bitcoin,ethereum`.
 
