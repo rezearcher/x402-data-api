@@ -73,13 +73,24 @@ gate_detection_ok = None  # inconclusive by default (degrade open)
 try:
     neg = _gate("usdc")            # known-good token: must PASS (go / SAFE)
     pos = _gate(GATE_CANARY_BLOCK_ADDR)  # structural non-contract: must BLOCK (risk 100)
+    weth = _gate("weth")           # canonical WETH: measured via the WETH/USDC-pool branch
     neg_ok = neg.get("decision") == "go" and neg.get("verdict") == "SAFE"
     pos_ok = pos.get("decision") == "block" and int(pos.get("risk_score") or 0) >= 90 and pos.get("verdict") == "AVOID"
-    gate_detection_ok = bool(neg_ok and pos_ok)
+    # Canonical WETH has no WETH/WETH pair; it exercises the WETH/USDC-pool branch. A regression
+    # there (early-return null liquidity) silently flips the deepest-liquidity token on Base to a
+    # FALSE-HOLD. Guard it: must be go/SAFE with a real liquidity number in a structurally-permanent
+    # band ($1M–$1e9, wide enough that live drift never flaps it, tight enough to catch null / a
+    # decimals bug). Only enforced when the number is present so a transient read-miss degrades open.
+    weth_liq = weth.get("liquidity_usd")
+    weth_ok = (weth.get("decision") == "go" and weth.get("verdict") == "SAFE"
+               and isinstance(weth_liq, (int, float)) and 1_000_000 < weth_liq < 1_000_000_000)
+    gate_detection_ok = bool(neg_ok and pos_ok and weth_ok)
     if not pos_ok:
         degraded.append(f"/gate/swap FALSE-SAFE REGRESSION: structural-block canary returned decision={pos.get('decision')} verdict={pos.get('verdict')} risk={pos.get('risk_score')} (honeypot would pass — paying agent loses funds)")
     if not neg_ok:
         degraded.append(f"/gate/swap FALSE-BLOCK REGRESSION: known-good usdc returned decision={neg.get('decision')} verdict={neg.get('verdict')} (customer friction)")
+    if not weth_ok:
+        degraded.append(f"/gate/swap FALSE-HOLD REGRESSION: canonical WETH returned decision={weth.get('decision')} verdict={weth.get('verdict')} liquidity_usd={weth_liq} (WETH/USDC-pool depth branch broken — deepest token on Base mis-gated to HOLD)")
 except Exception:
     gate_detection_ok = None  # inconclusive — do not raise a false correctness alarm
 # Line-A A0 (2nd paid surface): verdict-sanity canary on /chain/token-report — the token SCREENING
@@ -94,7 +105,11 @@ def _report(token):
     return json.loads(urllib.request.urlopen(req, timeout=20).read())
 report_detection_ok = None  # inconclusive by default (degrade open)
 try:
-    rneg = _report("aero")                       # known-good token: must stay SAFE & low risk
+    # Negative control is usdc (deep, ~$235M pool — the same stable anchor the gate canary uses),
+    # NOT aero: aero's single-pool 2x-one-side proxy (~$1.37M) sits right on the deepLiquidity
+    # boundary (10x MIN_SAFE_LIQUIDITY_USD = $1M) and flaps SAFE<->CAUTION on live on-chain drift,
+    # firing a false FALSE-AVOID alarm. A canary must be anchored on a structurally-stable fixture.
+    rneg = _report("usdc")                        # known-good deep token: must stay SAFE & low risk
     rpos = _report(GATE_CANARY_BLOCK_ADDR)        # structural non-contract: must AVOID risk 100
     rneg_ok = rneg.get("verdict") == "SAFE" and int(rneg.get("risk_score") or 0) <= 30
     rpos_ok = rpos.get("verdict") == "AVOID" and int(rpos.get("risk_score") or 0) >= 90
@@ -102,7 +117,7 @@ try:
     if not rpos_ok:
         degraded.append(f"/chain/token-report FALSE-SAFE REGRESSION: structural-block canary returned verdict={rpos.get('verdict')} risk={rpos.get('risk_score')} (honeypot would pass token screening)")
     if not rneg_ok:
-        degraded.append(f"/chain/token-report FALSE-AVOID REGRESSION: known-good aero returned verdict={rneg.get('verdict')} risk={rneg.get('risk_score')} (good token mis-flagged)")
+        degraded.append(f"/chain/token-report FALSE-AVOID REGRESSION: known-good usdc returned verdict={rneg.get('verdict')} risk={rneg.get('risk_score')} (good token mis-flagged)")
 except Exception:
     report_detection_ok = None  # inconclusive — do not raise a false correctness alarm
 # Line-A A0 (3rd paid surface): structural + simulation correctness canary on /chain/token-security —
