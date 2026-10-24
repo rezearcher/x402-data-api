@@ -433,14 +433,26 @@ const app = new Hono<AppEnv>();
 // ---------------------------------------------------------------------------
 app.use("*", async (c, next) => {
   await next();
-  const h = c.res.headers;
-  if (!h.has("strict-transport-security"))
-    h.set("strict-transport-security", "max-age=31536000; includeSubDomains; preload");
-  if (!h.has("x-content-type-options")) h.set("x-content-type-options", "nosniff");
-  if (!h.has("x-frame-options")) h.set("x-frame-options", "SAMEORIGIN");
-  if (!h.has("referrer-policy")) h.set("referrer-policy", "strict-origin-when-cross-origin");
-  if (!h.has("permissions-policy"))
-    h.set("permissions-policy", "geolocation=(), microphone=(), camera=(), usb=()");
+  // Security headers on every response. A handler that returns a CACHED Response
+  // (e.g. /metrics' edge cache) hands us IMMUTABLE headers — `.set()` on those throws
+  // "Can't modify immutable headers" and 500s the route (observed on /metrics
+  // 2026-10-24). Fast path mutates in place; on an immutable response we rebuild a
+  // mutable copy so the headers still apply and the endpoint never hard-500s.
+  const SEC: [string, string][] = [
+    ["strict-transport-security", "max-age=31536000; includeSubDomains; preload"],
+    ["x-content-type-options", "nosniff"],
+    ["x-frame-options", "SAMEORIGIN"],
+    ["referrer-policy", "strict-origin-when-cross-origin"],
+    ["permissions-policy", "geolocation=(), microphone=(), camera=(), usb=()"],
+  ];
+  try {
+    const h = c.res.headers;
+    for (const [k, v] of SEC) if (!h.has(k)) h.set(k, v);
+  } catch {
+    const nh = new Headers(c.res.headers);
+    for (const [k, v] of SEC) if (!nh.has(k)) nh.set(k, v);
+    c.res = new Response(c.res.body, { status: c.res.status, statusText: c.res.statusText, headers: nh });
+  }
 });
 
 // ---------------------------------------------------------------------------
