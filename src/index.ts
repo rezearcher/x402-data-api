@@ -10036,6 +10036,13 @@ async function grsgPostureDriftCheck(
             risk_score: summary.risk_score,
             tools_scanned: summary.tools_scanned,
             by_severity: summary.by_severity,
+            // The sorted (tool|rule|severity) finding classes AT this transition.
+            // Storing them per entry is what lets the timeline show a per-RULE
+            // diff ("+ 1 new: untrusted-content on web_fetch / − 1 resolved: ...")
+            // instead of only a verdict/risk delta — the per-finding monitoring
+            // history Detectify/Probely surface. Capped to keep the KV record
+            // bounded even on a server that advertises an unusually large toolset.
+            classes: Array.isArray(summary.classes) ? summary.classes.slice(0, 60) : [],
           },
         ].slice(-50);
   const updated: any = {
@@ -10046,6 +10053,7 @@ async function grsgPostureDriftCheck(
       risk_score: summary.risk_score,
       tools_scanned: summary.tools_scanned,
       by_severity: summary.by_severity,
+      classes: Array.isArray(summary.classes) ? summary.classes.slice(0, 60) : [],
       checked_at: now,
     },
     posture_history,
@@ -11789,13 +11797,53 @@ export function renderPostureTimeline(opts: {
         .filter(Boolean);
       return parts.length ? parts.join(", ") : "no issues";
     };
-    const rows = [...hist]
+    // Turn a stored "tool|rule|severity" finding class into a human label for the
+    // per-rule diff ("untrusted-content (high · web_fetch)"). Degrades to the raw
+    // class string if it is not in the expected shape.
+    const clsLabel = (cx: string) => {
+      const [tool, rule, severity] = String(cx).split("|");
+      if (!rule) return esc(String(cx));
+      return `${esc(rule)} <span class=muted>(${esc(severity || "?")}${tool ? " · " + esc(tool) : ""})</span>`;
+    };
+    // Forward-ordered per-transition finding diffs: for each "changed" entry,
+    // compare its classes against the nearest prior entry that carried a classes
+    // array. added = findings that appeared, removed = findings that resolved.
+    // Older entries (pre-this-feature) have no classes → diff is simply omitted,
+    // never fabricated, so the card degrades cleanly on historical data.
+    const diffFor = (idx: number): { added: string[]; removed: string[] } | null => {
+      const e = hist[idx];
+      if (!e || e.kind !== "changed" || !Array.isArray(e.classes)) return null;
+      let prev: any = null;
+      for (let j = idx - 1; j >= 0; j--) {
+        if (Array.isArray(hist[j]?.classes)) { prev = hist[j]; break; }
+      }
+      if (!prev) return null;
+      const prevSet = new Set<string>(prev.classes);
+      const curSet = new Set<string>(e.classes);
+      const added = (e.classes as string[]).filter((x) => !prevSet.has(x));
+      const removed = (prev.classes as string[]).filter((x: string) => !curSet.has(x));
+      if (added.length === 0 && removed.length === 0) return null;
+      return { added, removed };
+    };
+    const diffDetail = (idx: number): string => {
+      const d = diffFor(idx);
+      if (!d) return "";
+      const line = (items: string[], verb: string, color: string, sign: string) =>
+        items.length
+          ? `<div style="margin:.15rem 0"><strong style="color:${color}">${sign} ${items.length} ${verb}</strong>: ${items.slice(0, 8).map(clsLabel).join(", ")}${items.length > 8 ? ` <span class=muted>+${items.length - 8} more</span>` : ""}</div>`
+          : "";
+      const body = line(d.added, "new finding(s)", "#b91c1c", "+") + line(d.removed, "resolved", "#15803d", "−");
+      return `<tr><td></td><td colspan=4 style="padding-top:0;border-bottom:1px solid var(--line)">${body}</td></tr>`;
+    };
+    const rows = hist
+      .map((e, i) => ({ e, i }))
+      .slice(-12)
       .reverse()
-      .slice(0, 12)
-      .map((e) => {
+      .map(({ e, i }) => {
         const ev = e.kind === "baseline" ? "baseline" : e.kind === "changed" ? "changed" : esc(String(e.kind || ""));
         const evCls = e.kind === "changed" ? "review" : "unknown";
-        return `<tr><td class=muted style="white-space:nowrap">${esc(fmt(e.at))} UTC</td><td><span class="pill ${evCls}" style="font-size:.7rem">${ev}</span></td><td><span class="pill ${vcls(String(e.verdict))}" style="font-size:.7rem">${esc(String(e.verdict))}</span></td><td>${Number.isFinite(Number(e.risk_score)) ? Number(e.risk_score) + "/100" : "?"}</td><td class=muted>${esc(sevLine(e.by_severity))}</td></tr>`;
+        const mainRow = `<tr><td class=muted style="white-space:nowrap">${esc(fmt(e.at))} UTC</td><td><span class="pill ${evCls}" style="font-size:.7rem">${ev}</span></td><td><span class="pill ${vcls(String(e.verdict))}" style="font-size:.7rem">${esc(String(e.verdict))}</span></td><td>${Number.isFinite(Number(e.risk_score)) ? Number(e.risk_score) + "/100" : "?"}</td><td class=muted>${esc(sevLine(e.by_severity))}</td></tr>`;
+        return mainRow + diffDetail(i);
       })
       .join("");
     const lastSeen = snap?.checked_at
@@ -11803,7 +11851,7 @@ export function renderPostureTimeline(opts: {
       : "";
     return `<h2>Security posture over time</h2>
 <div class=card>
-  <p class=summary><span class="pill clear">monitored</span> &nbsp;${hist.length} recorded transition(s), ${changes} verdict/risk change(s) since baseline. Each row is a point where the advertised manifest's posture actually moved — unchanged re-scans aren't logged.</p>
+  <p class=summary><span class="pill clear">monitored</span> &nbsp;${hist.length} recorded transition(s), ${changes} verdict/risk change(s) since baseline. Each row is a point where the advertised manifest's posture actually moved — expanded with the exact findings that <strong>appeared</strong> or <strong>resolved</strong> at that change. Unchanged re-scans aren't logged.</p>
   <table><thead><tr><th>When</th><th>Event</th><th>Verdict</th><th>Risk</th><th>Severity mix</th></tr></thead><tbody>
   ${rows}
   </tbody></table>${lastSeen}
@@ -11812,7 +11860,7 @@ export function renderPostureTimeline(opts: {
   const latestV = snap?.verdict ? String(snap.verdict) : (hist[hist.length - 1]?.verdict ? String(hist[hist.length - 1].verdict) : "unknown");
   return `<h2>Security posture over time</h2>
 <div class=card>
-  <p class=summary><span class="pill unknown">timeline locked</span> &nbsp;Grey Ridge has recorded <strong>${hist.length}</strong> posture transition(s) for <code>${esc(ownerHost)}</code> (${changes} verdict/risk change(s)); current verdict <span class="pill ${vcls(latestV)}" style="font-size:.7rem">${esc(latestV)}</span>. The dated monitoring timeline — every change, when it happened, and the severity mix — is part of continuous monitoring.</p>
+  <p class=summary><span class="pill unknown">timeline locked</span> &nbsp;Grey Ridge has recorded <strong>${hist.length}</strong> posture transition(s) for <code>${esc(ownerHost)}</code> (${changes} verdict/risk change(s)); current verdict <span class="pill ${vcls(latestV)}" style="font-size:.7rem">${esc(latestV)}</span>. The dated monitoring timeline — every change, when it happened, the severity mix, and the exact findings that appeared or resolved at each change — is part of continuous monitoring.</p>
   <p class=muted style="margin:.6rem 0 0"><a href="/scan/verify?domain=${encodeURIComponent(ownerHost)}">Turn on monitoring — $9.99/mo</a> to unlock the full dated posture history with drift alerts.</p>
 </div>`;
 }

@@ -91,4 +91,28 @@ check("baseline-only monitored shows single row, 0 changes", () => {
   assert.ok(html.includes("pill unknown\" style=\"font-size:.7rem\">baseline"), "baseline event pill");
 });
 
+// 7. Per-rule diff: monitored timeline expands each "changed" transition with the
+// exact findings that appeared / resolved (the Detectify-parity per-finding history).
+check("monitored renders per-rule added/resolved diff", () => {
+  const HC = [
+    { at: "2026-10-01T08:00:00.000Z", kind: "baseline", verdict: "clear", risk_score: 0, tools_scanned: 3, by_severity: {}, classes: [] },
+    { at: "2026-10-12T14:30:00.000Z", kind: "changed", verdict: "review", risk_score: 28, tools_scanned: 4, by_severity: { medium: 1 }, classes: ["web_fetch|untrusted-content|medium"] },
+    { at: "2026-10-20T06:00:00.000Z", kind: "changed", verdict: "block", risk_score: 72, tools_scanned: 4, by_severity: { critical: 1 }, classes: ["exec|shadowing|critical"] },
+  ];
+  const html = renderPostureTimeline({ ownerRec: { posture_history: HC, posture: { verdict: "block", risk_score: 72, checked_at: "2026-10-24T06:00:00.000Z" } }, monitored: true, ownerHost: "mcp.example.com" });
+  // change #1 added a finding that was not in the baseline
+  assert.ok(html.includes("1 new finding(s)"), "added-count rendered");
+  assert.ok(html.includes("untrusted-content"), "added rule label rendered");
+  // change #2 both added the critical AND resolved the medium from change #1
+  assert.ok(html.includes("shadowing"), "second-change added rule rendered");
+  assert.ok(html.includes("1 resolved"), "resolved-count rendered");
+});
+
+// 8. Degrade cleanly on legacy history that predates classes (no diff, no crash).
+check("legacy history without classes renders no diff rows, no throw", () => {
+  const html = renderPostureTimeline({ ownerRec: REC, monitored: true, ownerHost: "mcp.example.com" });
+  assert.match(html, /Security posture over time/);
+  assert.ok(!html.includes("new finding(s)"), "no diff fabricated when classes absent");
+});
+
 console.log(`\n${pass} checks passed`);
