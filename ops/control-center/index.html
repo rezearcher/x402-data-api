@@ -69,6 +69,16 @@
         background:var(--cyan);color:var(--ink);font-weight:600;font-size:11.5px;border:none;border-radius:999px;
         padding:5px 14px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4)}
   .pill.show{display:block}
+  /* Needs-Rez atoms (account/identity gates — his checklist) */
+  .atoms{margin-top:12px;border:1px solid #3a3320;background:#1b1a12;border-radius:10px;padding:10px 14px}
+  .ahead{font-size:11px;letter-spacing:.1em;color:var(--amber);font-weight:600;margin-bottom:6px}
+  .acount{color:var(--muted);font-weight:400;letter-spacing:0;margin-left:6px}
+  .atom{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px solid #2a2718}
+  .atom:last-child{border-bottom:none}
+  .atom input{margin-top:3px;accent-color:var(--jade);width:15px;height:15px;cursor:pointer;flex:none}
+  .atom .atxt{font-size:13px;color:#e5dcc4;line-height:1.4} .atom .asrc{font-size:10.5px;color:var(--muted);margin-left:auto;flex:none;padding-top:2px}
+  .atom.done .atxt{text-decoration:line-through;color:var(--muted)}
+  .anone{color:var(--jade);font-size:12.5px;padding:2px 0}
   .btm{display:grid;grid-template-columns:1.4fr 1fr;gap:12px;margin-top:12px}
   .box{border:1px solid var(--line);background:var(--panel);border-radius:10px;overflow:hidden}
   .box h4{margin:0;padding:11px 14px;font-size:12px;letter-spacing:.12em;color:var(--muted);border-bottom:1px solid var(--line);font-weight:600}
@@ -96,6 +106,11 @@
       <span style="font-size:12px;color:var(--muted)">monitor</span>
       <div class="toggle" id="toggle" onclick="toggleMon()"><div class="knob"></div></div>
     </div>
+  </div>
+
+  <div class="atoms" id="atomsbox">
+    <div class="ahead">NEEDS REZ — account / identity gates (not loop blockers)<span class="acount" id="acount"></span></div>
+    <div id="atomlist"></div>
   </div>
 
   <div class="grid" id="agents"></div>
@@ -182,6 +197,11 @@ function render(d){
   document.getElementById('rev').innerHTML =
     `<span>Line A <b class="mono ${pos(r.line_a_external_usdc)}">$${(r.line_a_external_usdc??0).toFixed(3)}</b> ext</span>`
    +`<span>Line B <b class="mono ${pos(r.line_b_fiat_usd)}">$${(r.line_b_fiat_usd??0).toFixed(2)}</b></span>`;
+  // atoms — Rez's checklist (account/identity gates)
+  const at=d.atoms||{open:[],done:[]};
+  document.getElementById('acount').textContent = at.open.length?`· ${at.open.length} open`:'· clear';
+  const arows=(at.open||[]).map(a=>atomRow(a,false)).concat((at.done||[]).slice(-4).map(a=>atomRow(a,true)));
+  document.getElementById('atomlist').innerHTML = arows.join('') || '<div class="anone">✓ nothing needs you right now</div>';
   // agents — NOW replaced freely; history updated IN PLACE (scroll preserved)
   const order=['research','builder','marketing'], cur=order.indexOf(d.engine.stage);
   AG.forEach((a,i)=>{
@@ -222,6 +242,9 @@ function render(d){
   setScroll('feed', fhtml, feed.length);
   document.getElementById('stamp').textContent = 'updated '+new Date(d.generated_at).toLocaleTimeString();
 }
+
+function atomRow(a,done){ return `<div class="atom ${done?'done':''}"><input type="checkbox" ${done?'checked':''} onchange="checkAtom('${a.id}',this.checked)"><span class="atxt">${esc(a.text)}</span><span class="asrc">${esc(a.agent)}</span></div>`; }
+async function checkAtom(id,done){ try{ await fetch('/api/atom',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id,done})}); tick(); }catch(e){} }
 
 async function tick(){ try{ const r=await fetch('/api/state',{cache:'no-store'}); render(await r.json()); }catch(e){} }
 async function toggleMon(){ try{ await fetch('/api/monitor',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({on:!monOn})}); tick(); }catch(e){} }

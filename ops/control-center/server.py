@@ -60,6 +60,14 @@ class H(BaseHTTPRequestHandler):
                 self._send(200, json.dumps({"on": on}).encode(), "application/json")
             except Exception as e:
                 self._send(500, json.dumps({"error": str(e)}).encode(), "application/json")
+        elif self.path == "/api/atom":
+            n = int(self.headers.get("content-length", 0) or 0)
+            try:
+                body = json.loads(self.rfile.read(n) or b"{}")
+                ok = state_builder.mark_atom(str(body.get("id", "")), bool(body.get("done", True)))
+                self._send(200, json.dumps({"ok": ok}).encode(), "application/json")
+            except Exception as e:
+                self._send(500, json.dumps({"error": str(e)}).encode(), "application/json")
         else:
             self._send(404, b"not found", "text/plain")
 

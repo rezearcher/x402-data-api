@@ -25,6 +25,7 @@ REPO = Path("/home/rez/projects/x402-data-api")
 MONITOR_FLAG = HOME / ".claude" / "agent-chains" / "monitor.flag"
 MONITOR_FEED = CHAIN / "monitor.feed.jsonl"
 SENSOR = HOME / ".hermes" / "data" / "loop-money" / "latest.json"
+ATOMS = HOME / ".claude" / "agent-chains" / "atoms.json"
 AGENTS = ["research", "builder", "marketing"]
 EXPECT_RUN = (12, 32)   # expected pass run minutes
 EXPECT_REST = (8, 20)   # expected rest minutes (target ~10)
@@ -97,7 +98,8 @@ def parse_routine() -> dict:
     alive, pid = False, None
     try:
         out = subprocess.run(["pgrep", "-f", r"agent_chain\.sh --chain"], capture_output=True, text=True, timeout=5).stdout.split()
-        alive = bool(out); pid = int(out[0]) if out else None
+        alive = bool(out)
+        pid = int(out[0]) if out else None
     except Exception:
         pass
     # current stage (which chain-money-* claude is running)
@@ -192,6 +194,33 @@ def monitor_state() -> dict:
     return {"on": on, "feed": list(reversed(feed))}
 
 
+def harvest_atoms() -> dict:
+    """Read the clean, STRUCTURED atom store (populated by note_atom.py — agents log a
+    clean one-liner, never scraped from prose). Returns open + recently-done."""
+    store = _safe(lambda: json.loads(_read(ATOMS)), {}) or {"atoms": []}
+    atoms = store.get("atoms", [])
+    opens = [a for a in atoms if not a.get("done")]
+    done = [a for a in atoms if a.get("done")]
+    return {"open": opens, "done": done[-8:], "open_count": len(opens)}
+
+
+def mark_atom(aid: str, done: bool = True) -> bool:
+    """Called by the server when Rez checks an atom off (or re-opens it)."""
+    store = _safe(lambda: json.loads(_read(ATOMS)), {}) or {"atoms": []}
+    hit = False
+    for a in store.get("atoms", []):
+        if a.get("id") == aid:
+            a["done"] = bool(done)
+            a["done_at"] = datetime.now(timezone.utc).isoformat() if done else None
+            hit = True
+    if hit:
+        try:
+            ATOMS.write_text(json.dumps(store, indent=0))
+        except Exception:
+            return False
+    return hit
+
+
 def health(rt: dict, rev: dict, hist: dict) -> dict:
     # GREEN: engine alive + a pass completed recently
     green_ok = bool(rt.get("alive"))
@@ -229,6 +258,7 @@ def build() -> dict:
         "revenue": rev,
         "links": _safe(links, []),
         "crew": _safe(crew, {}),
+        "atoms": _safe(harvest_atoms, {"open": [], "done": [], "open_count": 0}),
         "monitor": _safe(monitor_state, {"on": False, "feed": []}),
     }
     state["health"] = _safe(lambda: health(rt, rev, hist), {})
