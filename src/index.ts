@@ -7919,6 +7919,7 @@ app.get("/chain/token-security/preview", async (c) => {
   if (tq !== undefined && !ADDR_RE.test(tq) && !PREVIEW_DEMO_TOKENS[tq.toLowerCase()]) {
     return c.json({ error: "token must be a 0x-prefixed 20-byte Base address (or demo: usdc|weth|cbbtc|aero|degen)" }, { status: 400 });
   }
+  const ORIGIN = new URL(c.req.url).origin;
   try {
     // No token → the canary-stable WETH demo (unchanged, same depth as paid).
     if (tq === undefined) {
@@ -7926,6 +7927,7 @@ app.get("/chain/token-security/preview", async (c) => {
       console.log(JSON.stringify({ event: "free_preview", endpoint: "/chain/token-security/preview", token: TOKEN_SECURITY_PREVIEW_TOKEN, verdict: result.verdict, ts: result.analyzed_at }));
       return c.json({
         ...result,
+        badge: tokenBadgeEmbed(ORIGIN, TOKEN_SECURITY_PREVIEW_TOKEN),
         note: "Free live sample — full real analysis of a well-known token (Base WETH), same depth as the paid endpoint. Pass ?token=<0x…> to analyze YOUR token free (3/IP/day), or GET /chain/token-security?token=<0x…> ($0.009) for unmetered any-token access.",
         upgrade: upgradeCTA(paidUrlFrom(c), "0.009", "Unmetered, any Base ERC-20 (this free preview is capped at 3 real tokens/IP/day)."),
       });
@@ -7940,6 +7942,7 @@ app.get("/chain/token-security/preview", async (c) => {
     console.log(JSON.stringify({ event: "free_preview", endpoint: "/chain/token-security/preview", token: t.token, verdict: result.verdict, ts: result.analyzed_at }));
     return c.json({
       ...result,
+      badge: tokenBadgeEmbed(ORIGIN, t.token),
       ...(t.left !== null ? { trial: { real_token_checks_left_today: t.left } } : {}),
       note: t.left !== null
         ? `Free real-token trial (${t.left} left today, 3/IP/day). Full: GET /chain/token-security?token=<0x…> ($0.009) for unmetered any-token access.`
@@ -7948,6 +7951,53 @@ app.get("/chain/token-security/preview", async (c) => {
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+// Copy-paste embed snippet (markdown / HTML / raw urls) for the live token-safety
+// badge, so a dev who hits the free preview gets the README/dashboard snippet
+// without reading docs. The badge image links to the public /check verdict page.
+export function tokenBadgeEmbed(origin: string, token: string): { image_url: string; link: string; markdown: string; html: string } {
+  const image_url = `https://img.shields.io/endpoint?url=${encodeURIComponent(origin + "/chain/token/badge?token=" + token)}&style=flat-square`;
+  const link = `${origin}/check?token=${token}`;
+  return { image_url, link, markdown: `[![token-safety](${image_url})](${link})`, html: `<a href="${link}"><img alt="token-safety" src="${image_url}"></a>` };
+}
+
+// ---------------------------------------------------------------------------
+// Line-A shields.io endpoint badge for TOKEN SAFETY — the swap-gate analog of
+// /scan/mcp/badge. img.shields.io/endpoint?url=<BASE>/chain/token/badge?token=<0x…>
+// lets a token page, an agent dashboard, or a project README show a live
+// safe / caution / avoid verdict that links back to the paid gate. The verdict
+// WORD is free (GoPlus hands the same red/green signal away too); the detailed
+// flags, honeypot-sim detail, pool liquidity and trade sizing stay the paid
+// product. Compute is bounded two ways: shields caches the badge 6h, and a
+// per-token KV verdict cache (6h TTL) means a badge embedded on many pages
+// re-runs the on-chain analysis at most once per 6h per token. No ?token= →
+// the canary-stable WETH default (matches the preview), so an empty embed and
+// our uptime probe always see the same known-good sample.
+app.get("/chain/token/badge", async (c) => {
+  const base = { schemaVersion: 1, label: "token-safety", cacheSeconds: 21600 };
+  const tq = tokenQ(c);
+  let token: string | null = null;
+  if (tq === undefined) token = BASE_WETH;
+  else if (ADDR_RE.test(tq)) token = tq;
+  else if (PREVIEW_DEMO_TOKENS[tq.toLowerCase()]) token = PREVIEW_DEMO_TOKENS[tq.toLowerCase()];
+  if (!token) return c.json({ ...base, message: "pass ?token=0x…", color: "lightgrey" });
+  const cacheKey = `tokbadge:${token.toLowerCase()}`;
+  try {
+    if (c.env.API_KEYS) {
+      const cached = await c.env.API_KEYS.get(cacheKey);
+      if (cached) return c.json({ ...base, ...(JSON.parse(cached) as Record<string, unknown>) });
+    }
+    const r = await analyzeTokenSecurity(token);
+    const word = ({ clear: "safe", review: "caution", block: "avoid" } as Record<string, string>)[r.verdict] ?? "unknown";
+    const color = ({ clear: "brightgreen", review: "yellow", block: "red" } as Record<string, string>)[r.verdict] ?? "lightgrey";
+    const sym = (r.meta.symbol || "token").slice(0, 12);
+    const payload = { message: `${sym}: ${word} (risk ${r.risk_score}/100)`, color };
+    if (c.env.API_KEYS) fireAndForget(c, c.env.API_KEYS.put(cacheKey, JSON.stringify(payload), { expirationTtl: 21600 }));
+    return c.json({ ...base, ...payload });
+  } catch {
+    return c.json({ ...base, message: "unavailable", color: "lightgrey" });
   }
 });
 
@@ -9148,6 +9198,7 @@ app.get("/chain/token-report/preview", async (c) => {
     const result = await buildTokenReport(t.token);
     return c.json({
       ...result,
+      badge: tokenBadgeEmbed(new URL(c.req.url).origin, t.token),
       ...(t.left !== null ? { trial: { real_token_checks_left_today: t.left } } : {}),
       note: "Free live sample (Base USDC) — same depth as the paid route. Full: GET /chain/token-report?token=<0x…> ($0.01) for ANY Base ERC-20.",
       upgrade: upgradeCTA(paidUrlFrom(c), "0.01", "Unmetered, any Base ERC-20 (this free preview is capped at 3 real tokens/IP/day)."),
