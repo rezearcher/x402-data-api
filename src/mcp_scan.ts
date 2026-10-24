@@ -351,5 +351,51 @@ export function analyzeDirectoryReadiness(tool: McpToolLike): ScanFinding[] {
     add("high", "directory:unsupported-capability",
       "Tool appears to generate image/video/audio via an AI model — a documented Claude Directory auto-reject (diagram/chart/mock-up generation is allowed).", (low.match(aiMedia) || [""])[0]);
 
+  // 5. Narrow, accurate descriptions. Anthropic: "Each tool description should
+  // state precisely what the tool does and when to invoke it." The behaviour-match
+  // half needs a live call (out of static scope), but the deterministic minimal
+  // form is zero-FP: a tool advertised with NO description at all cannot state what
+  // it does, so a reviewer cannot pass it. Only fire on a truly empty/whitespace
+  // description — never second-guess the wording of a present one.
+  if (name !== "(unnamed)" && desc.trim() === "")
+    add("medium", "directory:missing-description",
+      "Tool advertises no description — Anthropic requires each tool to state precisely what it does and when to invoke it; an empty description cannot pass review.", name);
+
+  // 6. Reference API docs in custom query tools. Anthropic: "If a tool accepts
+  // freeform endpoint paths, query strings, or request bodies that the caller
+  // constructs, its description must include a link to or the explicit name of the
+  // target API." Their fail example is "Makes a request to the API" (no name/link);
+  // their pass is "Queries the Slack Web API, see https://api.slack.com/methods".
+  // So: fire ONLY when the input schema exposes a param that unambiguously builds an
+  // API request AND the description names no specific API and carries no URL.
+  // FP guard (Context7 bar): the trigger set is NARROW — only params that mean
+  // "you are constructing an HTTP/API request" (an endpoint/api-path, an HTTP
+  // method/verb, or a raw query body: graphql/sql/request_body/query_string).
+  // Deliberately NOT a bare `path`/`url`/`body`/`query`, which legitimately name a
+  // filesystem path, a page to fetch, an issue body or a search term and would
+  // false-flag clean tools. A tool that names its API ("GitHub API") or links docs
+  // passes untouched.
+  const REQUEST_PARAM = /^(method|http_?method|verb|endpoint|endpoints|request_?path|api_?path|graphql|gql|sql|request_?body|query_?string|querystring|raw_?request)$/i;
+  let hasRequestShapedParam = false;
+  if (schema && typeof schema === "object") {
+    const props = (schema as Record<string, unknown>).properties;
+    if (props && typeof props === "object") {
+      for (const k of Object.keys(props as Record<string, unknown>)) {
+        if (REQUEST_PARAM.test(k)) hasRequestShapedParam = true;
+      }
+    }
+  }
+  if (hasRequestShapedParam) {
+    const hasUrl = /https?:\/\//i.test(desc);
+    // A specific API named by a proper noun immediately before "API"/"endpoint":
+    // "Slack Web API", "GitHub API", "Stripe REST API", "Notion API endpoint".
+    const hasNamedApi = /\b[A-Z][\w.]*(?:\s+[A-Za-z][\w.]*){0,3}\s+(API|endpoint)s?\b/.test(desc) ||
+      /\bOpenAPI\b/.test(desc) || /\b[\w.-]+\.(com|org|io|net|dev|ai)\/[^\s)]+/i.test(desc);
+    if (!hasUrl && !hasNamedApi)
+      add("medium", "directory:custom-query-no-api-ref",
+        "Tool takes a caller-constructed request (freeform path/query/body) but its description names no specific target API and links no docs — a documented Claude Directory reject; name the API (e.g. \"Slack Web API\") and link its docs.",
+        name);
+  }
+
   return f;
 }

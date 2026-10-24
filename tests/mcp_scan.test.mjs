@@ -376,6 +376,87 @@ ok(!dirRules({
   annotations: { title: "Transfer File", destructiveHint: true },
 }).includes("directory:unsupported-capability"), "DIR-clean: non-financial 'transfer' stays clean");
 
+// Empty/whitespace description → missing-description.
+ok(dirRules({
+  name: "mystery_tool", description: "   ",
+  annotations: { title: "Mystery", readOnlyHint: true },
+}).includes("directory:missing-description"), "DIR: empty description flagged");
+
+// Present description → NOT missing-description.
+ok(!dirRules({
+  name: "get_weather", description: "Returns the current weather for a city.",
+  annotations: { title: "Get Weather", readOnlyHint: true },
+}).includes("directory:missing-description"), "DIR-clean: present description stays clean");
+
+// Custom query tool with a request-shaped `endpoint`+`method` param and a generic
+// "the API" description (Anthropic's documented FAIL example) → custom-query-no-api-ref.
+ok(dirRules({
+  name: "call_api",
+  description: "Makes a request to the API.",
+  inputSchema: { type: "object", properties: { endpoint: { type: "string" }, method: { type: "string" } } },
+  annotations: { title: "Call API", readOnlyHint: true },
+}).includes("directory:custom-query-no-api-ref"), "DIR: custom request with no named API flagged");
+
+// Request-shaped param but the description NAMES the API + links docs (Anthropic's
+// PASS example form) → must NOT flag.
+ok(!dirRules({
+  name: "slack_query",
+  description: "Queries the Slack Web API, see https://api.slack.com/methods for the available methods.",
+  inputSchema: { type: "object", properties: { endpoint: { type: "string" } } },
+  annotations: { title: "Slack Query", readOnlyHint: true },
+}).includes("directory:custom-query-no-api-ref"), "DIR-clean: named API + docs link passes");
+
+// Request-shaped param but the description names the API by proper noun, no URL →
+// PASS (naming the target API satisfies the rule even without a link).
+ok(!dirRules({
+  name: "gh_query",
+  description: "Sends a request to the GitHub API for the given endpoint.",
+  inputSchema: { type: "object", properties: { endpoint: { type: "string" } } },
+  annotations: { title: "GitHub Query", readOnlyHint: true },
+}).includes("directory:custom-query-no-api-ref"), "DIR-clean: proper-noun API name passes");
+
+// FP guard: a filesystem `path` param is NOT a request-shaped param → must NOT flag
+// (a read-file tool is not an API-request proxy).
+ok(!dirRules({
+  name: "read_file",
+  description: "Read the contents of a file at the given path.",
+  inputSchema: { type: "object", properties: { path: { type: "string" } } },
+  annotations: { title: "Read File", readOnlyHint: true },
+}).includes("directory:custom-query-no-api-ref"), "DIR-clean: filesystem path param stays clean");
+
+// FP guard: an issue `body` + `title` (not an HTTP request body) → must NOT flag.
+ok(!dirRules({
+  name: "create_issue",
+  description: "Create a new issue with a title and body.",
+  inputSchema: { type: "object", properties: { title: { type: "string" }, body: { type: "string" } } },
+  annotations: { title: "Create Issue", destructiveHint: true },
+}).includes("directory:custom-query-no-api-ref"), "DIR-clean: issue body param stays clean");
+
+// FP guard: a bare `query` param on a search tool → must NOT flag.
+ok(!dirRules({
+  name: "search_docs",
+  description: "Search the knowledge base for matching documents.",
+  inputSchema: { type: "object", properties: { query: { type: "string" } } },
+  annotations: { title: "Search Docs", readOnlyHint: true },
+}).includes("directory:custom-query-no-api-ref"), "DIR-clean: bare search query param stays clean");
+
+// A raw `graphql` query param with a generic description → flagged (raw query body).
+ok(dirRules({
+  name: "run_graphql",
+  description: "Runs a GraphQL query.",
+  inputSchema: { type: "object", properties: { graphql: { type: "string" } } },
+  annotations: { title: "Run GraphQL", readOnlyHint: true },
+}).includes("directory:custom-query-no-api-ref"), "DIR: raw graphql query with no named API flagged");
+
+// The earlier compliant read tool (address param, clear description) must still
+// produce ZERO directory findings with the two new rules added (no regression).
+ok(dirRules({
+  name: "get_token_price",
+  description: "Returns the current USD price for a Base token address from our market-data API.",
+  inputSchema: { type: "object", properties: { address: { type: "string" } } },
+  annotations: { title: "Get Token Price", readOnlyHint: true },
+}).length === 0, "DIR-clean: compliant read tool still clean after new rules");
+
 // ---------------------------------------------------------------------------
 console.log(`\nmcp_scan regression: ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
