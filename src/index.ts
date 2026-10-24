@@ -11399,7 +11399,7 @@ app.get("/research/:slug", async (c) => {
   const esc = (s: string) =>
     String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m] as string);
   const slug = (c.req.param("slug") || "").replace(/[^a-z0-9-]/gi, "").slice(0, 120);
-  const raw = slug ? await c.env.API_KEYS.get(`research:${slug}`) : null;
+  const raw = slug ? await c.env.API_KEYS?.get(`research:${slug}`) : null;
   if (!raw) return c.notFound();
   let p: { title: string; description?: string; created?: string; html: string };
   try { p = JSON.parse(raw); } catch { return c.notFound(); }
@@ -11431,10 +11431,10 @@ ${p.html}
 app.get("/research", async (c) => {
   const esc = (s: string) =>
     String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m] as string);
-  const listed = await c.env.API_KEYS.list({ prefix: "research:index:" });
+  const listed = await c.env.API_KEYS?.list({ prefix: "research:index:" });
   const items: { slug: string; title: string; created: string }[] = [];
-  for (const k of listed.keys) {
-    const v = await c.env.API_KEYS.get(k.name);
+  for (const k of listed?.keys ?? []) {
+    const v = await c.env.API_KEYS?.get(k.name);
     if (v) { try { items.push(JSON.parse(v)); } catch { /* skip */ } }
   }
   items.sort((a, b) => (b.created || "").localeCompare(a.created || ""));
@@ -11684,7 +11684,7 @@ ${ctaBlock}${scriptBlock}`);
   const ownerRec = ownerHost ? await grsgVerifyRecord(c, ownerHost) : null;
   const ownerSub = ownerHost ? await grsgSubRecord(c, ownerHost) : null;
   const ownerMonitored = grsgSubActive(ownerSub);
-  if (ownerRec && ownerRec.last_ok === false) {
+  if (ownerHost && ownerRec && ownerRec.last_ok === false) {
     // Was claimed, but the DNS/file proof has since been removed — say so plainly.
     const lapsedAt = String(ownerRec.revoked_at || ownerRec.last_checked || "").slice(0, 19).replace("T", " ");
     ownerBlock = `<h2>Ownership</h2>
@@ -11692,7 +11692,7 @@ ${ctaBlock}${scriptBlock}`);
   <div class=badge-row><img alt="ownership verification lapsed" src="https://img.shields.io/endpoint?url=${encodeURIComponent(ORIGIN + "/scan/verify/badge?domain=" + ownerHost)}&style=flat-square"></div>
   <p class=summary style="margin:.5rem 0 0"><span class="pill review">verification lapsed</span> &nbsp;<code>${esc(ownerHost)}</code> was claimed, but the ownership proof is no longer in place${lapsedAt ? ` (last confirmed removed ${esc(lapsedAt)} UTC)` : ""}. Re-add the DNS record or served file and <a href="/scan/verify/revalidate?url=${encodeURIComponent(target)}">re-check</a> to restore the verified-owner badge.</p>
 </div>`;
-  } else if (ownerRec) {
+  } else if (ownerHost && ownerRec) {
     const claimedAt = String(ownerRec.verified_at || "").slice(0, 19).replace("T", " ");
     const via = ownerRec.verify_method === "http-file" ? "served-file" : "DNS";
     // Monitored (paid) vs verified-only (free). A monitored server shows the
