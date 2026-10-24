@@ -76,7 +76,7 @@ FRAMEWORKS = [
                         "paid inline with x402 USDC ($0.008/call), no API key. Returns GO / "
                         "HOLD / BLOCK plus trade sizing."),
         "query": "elizaos token safety plugin / honeypot check action",
-        "install": "npm install @grey-ridge/elizaos-plugin-swap-gate",
+        "install": "npm install github:rezearcher/plugin-swap-gate",
         "snippet": (
             'import swapGatePlugin from "@grey-ridge/elizaos-plugin-swap-gate";\n'
             "\n"
@@ -100,7 +100,7 @@ FRAMEWORKS = [
                         "single `proceed` boolean. Paid inline x402 USDC $0.008/call, fails "
                         "closed. Drop into generateText."),
         "query": "vercel ai sdk swap guard / token safety tool",
-        "install": "npm install @grey-ridge/vercel-ai-swap-gate ai zod",
+        "install": "npm install github:rezearcher/vercel-ai-swap-gate ai zod",
         "snippet": (
             'import { generateText } from "ai";\n'
             'import { openai } from "@ai-sdk/openai";\n'
@@ -129,7 +129,7 @@ FRAMEWORKS = [
                         "Returns proceed:false / decision:block when the check does not "
                         "settle. Paid inline x402 USDC $0.008/call, no key."),
         "query": "langchain honeypot check tool / base token safety",
-        "install": "npm install @grey-ridge/langchain-swap-gate @langchain/core zod",
+        "install": "npm install github:rezearcher/langchain-swap-gate @langchain/core zod",
         "snippet": (
             'import { createSwapGuard } from "@grey-ridge/langchain-swap-gate";\n'
             'import { createReactAgent } from "@langchain/langgraph/prebuilt";\n'
