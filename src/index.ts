@@ -3370,10 +3370,10 @@ function makeRoutes(payTo: string) {
             security: {
               isHoneypot: false,
               sellable: true,
-              buyTaxBps: null,
-              sellTaxBps: null,
+              buyTaxBps: 0,
+              sellTaxBps: 0,
               transferTaxBps: 0,
-              taxNote: "buyTaxBps/sellTaxBps (DEX swap tax) are not measured; transferTaxBps is the MEASURED fee on a plain transfer() via eth_simulateV1 (null if the RPC could not simulate it); taxMutable reflects whether the owner can change fees",
+              taxNote: "buyTaxBps/sellTaxBps are the MEASURED pair-targeted fee-on-transfer — a simulated transfer to/from the token's deepest Uniswap-v3 WETH pool via eth_simulateV1 (what GoPlus reports as buy/sell tax; catches honeypots that exempt wallet-to-wallet transfers and tax only the LP pair). null = no pool, non-standard storage, or the pair transfer reverted/could not be simulated; it is NOT a full router swap (no V3 tick slippage). transferTaxBps is the plain wallet-to-wallet transfer() fee; taxMutable reflects whether the owner can change fees.",
               taxMutable: false,
               ownerRenounced: false,
               upgradeableProxy: true,
@@ -7639,6 +7639,67 @@ async function measureTransferTaxBps(token: string, key: string, amount: bigint)
   return null;
 }
 
+// Pair-targeted fee-on-transfer measurement — the GoPlus buy_tax/sell_tax signal.
+// Sophisticated honeypots exempt wallet-to-wallet transfers and tax ONLY transfers
+// touching the LP pair, so measureTransferTaxBps (holder->synthetic recipient)
+// reads 0 while a real buy/sell bleeds value. This reuses the SAME proven
+// eth_simulateV1 technique but makes the counterparty the real DEX pair:
+//   SELL tax: fund the holder, transfer holder -> pair, measure what the pair received.
+//   BUY  tax: fund the pair,   transfer pair   -> holder, measure what the holder received.
+// Overriding the SENDER's _balances slot funds it out-of-band (no funds move). Returns
+// bps lost in transit (0 = no tax), or null if the sim could not run or the transfer
+// reverted (revert is a liquidity/other signal handled elsewhere, not a clean tax %).
+// NOTE: this is a transfer-to/from-pair fee measurement, NOT a full router swap — it
+// captures pair-targeted fee-on-transfer (what GoPlus reports), not V3 tick slippage.
+async function measurePairTransferTaxBps(
+  token: string,
+  senderSlotKey: string,
+  sender: string,
+  recipient: string,
+  amount: bigint,
+): Promise<number | null> {
+  const word = (n: bigint) => n.toString(16).padStart(64, "0");
+  const pad = (a: string) => a.slice(2).toLowerCase().padStart(64, "0");
+  const bal = { to: token, data: `0x70a08231${pad(recipient)}` };
+  const body = JSON.stringify({
+    jsonrpc: "2.0", id: 1, method: "eth_simulateV1",
+    params: [{
+      blockStateCalls: [{
+        stateOverrides: { [token]: { stateDiff: { [senderSlotKey]: "0x" + word(PROBE_VALUE) } } },
+        calls: [bal,
+          { from: sender, to: token, data: `0xa9059cbb${pad(recipient)}${word(amount)}` },
+          bal],
+      }],
+      validation: false,
+    }, "latest"],
+  });
+  for (const url of rpcOrder().slice(0, 3)) {
+    try {
+      const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body, signal: AbortSignal.timeout(4000) });
+      if (!res.ok) continue;
+      const j = (await res.json()) as { result?: { calls?: { status?: string; returnData?: string }[] }[] };
+      const c = j.result?.[0]?.calls;
+      if (!c || c.length !== 3) continue;
+      if (c[1].status !== "0x1") return null; // transfer to/from the pair reverted — not a clean tax reading
+      const before = BigInt(c[0].returnData || "0x0"), after = BigInt(c[2].returnData || "0x0");
+      const received = after - before;
+      if (received < 0n || received > amount) return null;
+      return Number(((amount - received) * 10000n) / amount);
+    } catch { continue; }
+  }
+  return null;
+}
+
+// Rebuild the exact _balances mapping slot (as a bigint) that simulateTransferProbe
+// discovered, from the HoneypotSim it returned — so the DEX-tax sim can fund the
+// holder and the pair at the same slot without re-running slot discovery.
+function reconstructBalanceSlot(sim: HoneypotSim | null): bigint | null {
+  if (!sim) return null;
+  if (sim.slot_layout === "erc7201:openzeppelin.storage.ERC20") return ERC20_7201_BALANCES_SLOT;
+  const m = /^mapping@slot(\d+)$/.exec(sim.slot_layout ?? "");
+  return m ? BigInt(m[1]) : null;
+}
+
 async function simulateTransferProbe(token: string): Promise<HoneypotSim> {
   const balanceOfData = (holder: string) => `0x70a08231${holder.slice(2).toLowerCase().padStart(64, "0")}`;
   const transferData = (to: string, amount: bigint) =>
@@ -8168,6 +8229,28 @@ async function buildTokenReport(token: string) {
   const ownerRenounced = sec ? sec.ownership.ownership_renounced : null;
   const liqUsd = liq?.weth_pool_usd ?? null;
 
+  // GoPlus-parity: measure pair-targeted buy/sell fee-on-transfer tax (fills the
+  // previously-hard-null buyTaxBps/sellTaxBps). Only runs when a plain transfer
+  // already succeeds (sellable), we reconstructed the balance slot, and there is a
+  // real WETH pool to target — otherwise null (degrade-open, never fabricate 0).
+  let buyTaxBps: number | null = null;
+  let sellTaxBps: number | null = null;
+  const balSlot = reconstructBalanceSlot(sim);
+  const bestPool = liq?.pools?.length
+    ? liq.pools.reduce((a, b) => {
+        try { return BigInt(b.weth_raw) > BigInt(a.weth_raw) ? b : a; } catch { return a; }
+      })
+    : null;
+  if (balSlot !== null && bestPool && sellable === true) {
+    const amt = PROBE_VALUE / 2n;
+    const [st, bt] = await Promise.all([
+      measurePairTransferTaxBps(token, mappingSlotKey(PROBE_HOLDER, balSlot), PROBE_HOLDER, bestPool.pool, amt),
+      measurePairTransferTaxBps(token, mappingSlotKey(bestPool.pool, balSlot), bestPool.pool, PROBE_HOLDER, amt),
+    ]);
+    sellTaxBps = st;
+    buyTaxBps = bt;
+  }
+
   const reasons: string[] = [];
   let avoid = false;
   let score = sec ? sec.risk_score : 50;
@@ -8206,6 +8289,26 @@ async function buildTokenReport(token: string) {
     reasons.push("liquidity check unavailable");
   }
 
+  // Measured DEX fee-on-transfer. A high sell tax is an unambiguous scam signal —
+  // a real wallet keeps far less than it sells even when the honeypot sim shows the
+  // token is "transferable" (these tokens pass wallet-to-wallet and bleed only at the
+  // pair). Conservative threshold (15%) so legitimate 1-5% tax tokens are reported but
+  // not flagged AVOID; this can only RAISE risk (the safe direction). Canary-guarded
+  // against WETH/USDC/cbBTC/DEGEN/AERO reading ~0 so it never churns a clean token.
+  if (sellTaxBps !== null && sellTaxBps >= 1500) {
+    reasons.push(`measured DEX sell tax ~${(sellTaxBps / 100).toFixed(1)}% — a real wallet keeps far less than it sells`);
+    score = Math.max(score, 70);
+  } else if (buyTaxBps !== null && buyTaxBps >= 1500) {
+    reasons.push(`measured DEX buy tax ~${(buyTaxBps / 100).toFixed(1)}% — the pair takes a large cut on entry`);
+    score = Math.max(score, 55);
+  } else if ((sellTaxBps !== null && sellTaxBps >= 300) || (buyTaxBps !== null && buyTaxBps >= 300)) {
+    const parts: string[] = [];
+    if (buyTaxBps !== null && buyTaxBps >= 300) parts.push(`buy ~${(buyTaxBps / 100).toFixed(1)}%`);
+    if (sellTaxBps !== null && sellTaxBps >= 300) parts.push(`sell ~${(sellTaxBps / 100).toFixed(1)}%`);
+    reasons.push(`measured DEX fee-on-transfer (${parts.join(", ")}); factor it into round-trip cost`);
+    score += 8;
+  }
+
   // Deep liquidity from a verified-transferable or long-established token offsets
   // admin-capability risk that static analysis alone over-weights (e.g. USDC).
   const deepLiquidity = liqUsd !== null && liqUsd >= MIN_SAFE_LIQUIDITY_USD * 10;
@@ -8217,7 +8320,10 @@ async function buildTokenReport(token: string) {
         : "transfer simulation unavailable (non-standard storage layout); sellability unverified",
     );
   }
-  if (!avoid && deepLiquidity && (sellable || !simTested)) score = Math.min(score, 25);
+  // A measured high DEX tax must survive the deep-liquidity offset — a liquid token
+  // that still takes 15%+ on a sell is a scam regardless of pool depth.
+  const highDexTax = (sellTaxBps !== null && sellTaxBps >= 1500) || (buyTaxBps !== null && buyTaxBps >= 1500);
+  if (!avoid && !highDexTax && deepLiquidity && (sellable || !simTested)) score = Math.min(score, 25);
   if (avoid) score = Math.max(score, 85);
   score = Math.max(0, Math.min(100, Math.round(score)));
 
@@ -8236,10 +8342,10 @@ async function buildTokenReport(token: string) {
     security: {
       isHoneypot,
       sellable,
-      buyTaxBps: null as number | null,
-      sellTaxBps: null as number | null,
+      buyTaxBps,
+      sellTaxBps,
       transferTaxBps: simTested ? (sim!.transfer_tax_bps ?? null) : null,
-      taxNote: "buyTaxBps/sellTaxBps (DEX swap tax) are not measured; transferTaxBps is the MEASURED fee on a plain transfer() via eth_simulateV1 (null if the RPC could not simulate it); taxMutable reflects whether the owner can change fees",
+      taxNote: "buyTaxBps/sellTaxBps are the MEASURED pair-targeted fee-on-transfer — a simulated transfer to/from the token's deepest Uniswap-v3 WETH pool via eth_simulateV1 (what GoPlus reports as buy/sell tax; catches honeypots that exempt wallet-to-wallet transfers and tax only the LP pair). null = no pool, non-standard storage, or the pair transfer reverted/could not be simulated; it is NOT a full router swap (no V3 tick slippage). transferTaxBps is the plain wallet-to-wallet transfer() fee; taxMutable reflects whether the owner can change fees.",
       taxMutable: caps ? caps.has_fee_setter : null,
       ownerRenounced,
       upgradeableProxy: sec ? sec.proxy.is_upgradeable : null,

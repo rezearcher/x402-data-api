@@ -113,11 +113,20 @@ try:
     rpos = _report(GATE_CANARY_BLOCK_ADDR)        # structural non-contract: must AVOID risk 100
     rneg_ok = rneg.get("verdict") == "SAFE" and int(rneg.get("risk_score") or 0) <= 30
     rpos_ok = rpos.get("verdict") == "AVOID" and int(rpos.get("risk_score") or 0) >= 90
-    report_detection_ok = bool(rneg_ok and rpos_ok)
+    # DEX buy/sell-tax (GoPlus-parity) correctness: the pair-targeted fee-on-transfer sim must read
+    # ~0 on a clean deep token (usdc). A non-null, non-trivial tax on usdc = the sim mis-measures a
+    # legitimate token and would falsely raise its risk / flag AVOID — a silent payer-churn bug. null
+    # is fine (degrade-open: no pool/non-standard storage). Only a real >=3% misread trips the alarm.
+    rsec = rneg.get("security") or {}
+    bt, st = rsec.get("buyTaxBps"), rsec.get("sellTaxBps")
+    tax_clean = (bt is None or int(bt) < 300) and (st is None or int(st) < 300)
+    report_detection_ok = bool(rneg_ok and rpos_ok and tax_clean)
     if not rpos_ok:
         degraded.append(f"/chain/token-report FALSE-SAFE REGRESSION: structural-block canary returned verdict={rpos.get('verdict')} risk={rpos.get('risk_score')} (honeypot would pass token screening)")
     if not rneg_ok:
         degraded.append(f"/chain/token-report FALSE-AVOID REGRESSION: known-good usdc returned verdict={rneg.get('verdict')} risk={rneg.get('risk_score')} (good token mis-flagged)")
+    if not tax_clean:
+        degraded.append(f"/chain/token-report DEX-TAX MISREAD: clean usdc returned buyTaxBps={bt} sellTaxBps={st} (pair-targeted tax sim false-flagging a legit token — would churn payers)")
 except Exception:
     report_detection_ok = None  # inconclusive — do not raise a false correctness alarm
 # Line-A A0 (3rd paid surface): structural + simulation correctness canary on /chain/token-security —
