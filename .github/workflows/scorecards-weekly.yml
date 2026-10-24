@@ -19,11 +19,11 @@ on:
       scan_cap:
         description: "max NEW discovered scorecards to publish this run"
         required: false
-        default: "50"
+        default: "400"
       pages:
         description: "registry pages (x100) to walk while discovering"
         required: false
-        default: "12"
+        default: "20"
 jobs:
   grow:
     runs-on: ubuntu-latest
@@ -39,6 +39,9 @@ jobs:
             echo "::error::PAGES_PUBLISH_TOKEN secret is not set — a rezearcher PAT (public_repo) is required to publish to the Pages repo. See the operator atom."
             exit 1
           fi
-          CAP="${{ github.event.inputs.scan_cap }}"; CAP="${CAP:-50}"
-          PG="${{ github.event.inputs.pages }}"; PG="${PG:-12}"
+          # Full-registry coverage: walk the whole roster and publish every substantive
+          # server each run, so the rebuilt leaderboard index is COMPLETE (not shrunk to a
+          # partial slice). The substance floor in the generator drops the trivial tail.
+          CAP="${{ github.event.inputs.scan_cap }}"; CAP="${CAP:-400}"
+          PG="${{ github.event.inputs.pages }}"; PG="${PG:-20}"
           python3 scripts/gen_mcp_scorecards.py --from-registry --publish --scan-cap "$CAP" --pages "$PG"
