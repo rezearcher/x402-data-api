@@ -30,6 +30,14 @@ inputs:
     description: 'Token used to upload SARIF to the code-scanning REST API. Defaults to the job token.'
     required: false
     default: ${{ github.token }}
+  commit-badge:
+    description: 'When "true", insert/update the injection-security badge between <!-- grsg-badge:start --> and <!-- grsg-badge:end --> in README.md and commit it. Default false. Degrade-open: a commit failure never fails the build.'
+    required: false
+    default: 'false'
+  readme:
+    description: 'Path to the README to update when commit-badge=true.'
+    required: false
+    default: 'README.md'
 outputs:
   verdict:
     description: 'clear | review | block'
@@ -37,6 +45,18 @@ outputs:
   risk-score:
     description: '0-100'
     value: ${{ steps.scan.outputs.risk }}
+  grade:
+    description: 'A-F Grey Ridge MCP security grade'
+    value: ${{ steps.scan.outputs.grade }}
+  badge-url:
+    description: 'shields.io badge image URL (injection-security grade | verdict)'
+    value: ${{ steps.scan.outputs.badge_url }}
+  badge-markdown:
+    description: 'Copy-paste Markdown — the badge linked to the server''s live security report'
+    value: ${{ steps.scan.outputs.badge_md }}
+  scorecard-url:
+    description: 'Per-server live security report / funnel page (always resolves)'
+    value: ${{ steps.scan.outputs.report_url }}
   sarif-file:
     description: 'Path to the generated SARIF file (when sarif=true).'
     value: ${{ steps.scan.outputs.sarif_file }}
@@ -59,6 +79,8 @@ runs:
         WANT_SARIF: ${{ inputs.sarif }}
         GH_TOKEN: ${{ inputs.github-token }}
         EP: ${{ inputs.endpoint }}
+        COMMIT_BADGE: ${{ inputs.commit-badge }}
+        README_PATH: ${{ inputs.readme }}
       run: |
         set -euo pipefail
         dir_q=""; [ "$WANT_DIR" = "true" ] && dir_q="&directory=true"
@@ -73,12 +95,44 @@ runs:
         echo "$out"
         verdict=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("verdict","error"))' "$out")
         risk=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("risk_score",-1))' "$out")
-        echo "verdict=$verdict" >> "$GITHUB_OUTPUT"; echo "risk=$risk" >> "$GITHUB_OUTPUT"
+        grade=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("grade") or "?")' "$out" 2>/dev/null || echo "?")
+        echo "verdict=$verdict" >> "$GITHUB_OUTPUT"; echo "risk=$risk" >> "$GITHUB_OUTPUT"; echo "grade=$grade" >> "$GITHUB_OUTPUT"
+        # --- injection-security README badge (degrade-open: never fails the build) ---
+        case "$grade" in
+          A) color=brightgreen;; B) color=green;; C) color=yellow;; D) color=orange;; F) color=red;;
+          *) case "$verdict" in clear) color=brightgreen;; review) color=yellow;; block) color=red;; *) color=lightgrey;; esac;;
+        esac
+        gdisp="$grade"; [ "$gdisp" = "?" ] && gdisp="n%2Fa"
+        badge_url="https://img.shields.io/badge/MCP%20injection--security-${gdisp}%20%7C%20${verdict:-unknown}-${color}"
+        badge_target="${IN_URL:-}"
+        enc_url=$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$badge_target" 2>/dev/null || printf '%s' "$badge_target")
+        report_url="$EP/scan/mcp-scanner?url=${enc_url}"
+        badge_md="[![MCP injection-security](${badge_url})](${report_url})"
+        { echo "badge_url=$badge_url"; echo "report_url=$report_url"; echo "badge_md=$badge_md"; } >> "$GITHUB_OUTPUT"
         {
-          echo "### MCP scan: **$verdict** (risk $risk/100)"
+          echo "### MCP scan: grade **$grade** — **$verdict** (risk $risk/100)"
+          echo ""
+          echo "Copy this injection-security badge into your README (links to the live report):"
+          echo ""
+          echo '```markdown'
+          echo "$badge_md"
+          echo '```'
           echo ""
           echo "Itemized findings with evidence and OWASP mapping: x402 \`GET $EP/scan/mcp?url=...\` (\$0.05 USDC on Base). Measured accuracy and corpus size: https://github.com/rezearcher/x402-data-api/tree/main/benchmarks"
         } >> "$GITHUB_STEP_SUMMARY"
+        if [ "$COMMIT_BADGE" = "true" ] && [ -n "$badge_target" ]; then
+          set +e
+          BADGE_MD="$badge_md" README_PATH="$README_PATH" python3 "$GITHUB_ACTION_PATH/badge_insert.py"; rc=$?
+          if [ "$rc" = "0" ]; then
+            git config user.name "grsg-badge[bot]"; git config user.email "badge@greyridgesignals.ai"
+            git add "$README_PATH"
+            if git commit -m "chore: update MCP injection-security badge [skip ci]"; then
+              git push && echo "::notice::committed badge to $README_PATH" || echo "::warning::badge committed locally but push failed — markdown is in the step summary"
+            fi
+          elif [ "$rc" = "10" ]; then echo "::notice::README badge already current"
+          else echo "::warning::could not update $README_PATH (rc=$rc) — copy the markdown from the step summary"; fi
+          set -e
+        fi
         if [ "$WANT_DIR" = "true" ]; then
           dir_ready=$(python3 -c 'import json,sys;d=json.loads(sys.argv[1]).get("directory_readiness",{});print(str(d.get("ready","")).lower())' "$out")
           dir_blk=$(python3 -c 'import json,sys;d=json.loads(sys.argv[1]).get("directory_readiness",{});print(d.get("blocker_count",-1))' "$out")

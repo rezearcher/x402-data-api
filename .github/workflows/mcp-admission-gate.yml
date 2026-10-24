@@ -16,6 +16,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run the Grey Ridge MCP admission gate against a public server
-        uses: rezearcher/greyridge-x402-tools@v0.3.1
+        id: gate
+        uses: rezearcher/greyridge-x402-tools@v0.3.3
         with:
           url: https://mcp.deepwiki.com/mcp
+      - name: Show the emitted README injection-security badge (copy-paste example)
+        if: always()
+        run: |
+          echo "verdict=${{ steps.gate.outputs.verdict }} grade=${{ steps.gate.outputs.grade }} risk=${{ steps.gate.outputs.risk-score }}"
+          echo "badge markdown -> ${{ steps.gate.outputs.badge-markdown }}"

@@ -184,6 +184,6 @@ Market-data buyer (for agents that buy a price and must not present stale data a
 Agent skill (drop-in SKILL.md for OpenClaw/Hermes-style agents): https://github.com/rezearcher/greyridge-token-safety-skill
 
 ## CI gate for MCP servers
-`uses: rezearcher/greyridge-x402-tools@v0.3.2` with `url:` runs the free MCP tool-poisoning preview in CI and fails on a `block` verdict. Listed on the [GitHub Marketplace](https://github.com/marketplace/actions/mcp-server-tool-poisoning-scan). See `actions/mcp-scan/README.md`.
+`uses: rezearcher/greyridge-x402-tools@v0.3.3` with `url:` runs the free MCP tool-poisoning preview in CI and fails on a `block` verdict. Every run also emits a copy-paste **README injection-security badge** (`badge-markdown` output / step summary; `commit-badge: true` auto-commits it between `<!-- grsg-badge:start -->` markers, degrade-open) — the OWASP-MCP (LLM01/LLM08) dimension generic repo-quality badges omit, re-checked on every CI run and linked to the server's live security report. Listed on the [GitHub Marketplace](https://github.com/marketplace/actions/mcp-server-tool-poisoning-scan). See `actions/mcp-scan/README.md`.
 
 > Python note: the default `Python-urllib` User-Agent is rejected with 403 at the Cloudflare edge. Use `requests`/`httpx`, or set any custom `User-Agent` header.
