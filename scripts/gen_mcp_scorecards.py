@@ -104,10 +104,33 @@ def _fetch_registry(pages, per_page=100):
             return
 
 
+def _has_substance(tool_list):
+    """True when a discovered server advertises enough describable surface to make a
+    genuinely unique, non-boilerplate scorecard page. The bar: at least one tool with a
+    real name AND a non-trivial description, or at least two distinctly-named tools. A
+    server whose entire tools/list is one bare, undescribed name produces a page that is
+    ~all shared boilerplate — exactly the thin / scaled-content pattern Google de-ranks
+    at the site level, so we skip it rather than risk the valuable pages. Degrade-open:
+    an empty list (fetch failed) returns False (skip), never a crash."""
+    named = []
+    for t in (tool_list or []):
+        if not isinstance(t, dict):
+            continue
+        nm = str(t.get("name", "")).strip()
+        if not nm:
+            continue
+        named.append(nm)
+        desc = str(t.get("description", "")).strip()
+        if len(desc) >= 20:
+            return True
+    return len(set(n.lower() for n in named)) >= 2
+
+
 def discover_servers(scan_cap, pages, seen_urls, seen_slugs):
     """Discover live public MCP servers from the registry and keep only those that
-    answer an unauthenticated tools/list with at least one tool. Returns scored tuples
-    (name, slug, url, vendor) ready to render. Bounded by scan_cap."""
+    answer an unauthenticated tools/list with describable surface (see _has_substance).
+    Returns scored tuples (name, slug, url, vendor, d) ready to render; d carries the
+    pre-fetched _tools/_instructions so render() does not re-fetch. Bounded by scan_cap."""
     out = []
     checked = 0
     for title, desc, url in _fetch_registry(pages):
@@ -133,6 +156,22 @@ def discover_servers(scan_cap, pages, seen_urls, seen_slugs):
             print(f"  discover SKIP {host}: {e}", file=sys.stderr)
             continue
         if d.get("tools_scanned", 0) < 1:
+            continue
+        # Substance floor (anti-thin-content / scaled-content-abuse guard): a scorecard
+        # earns a crawlable page only if the server advertises real, describable surface.
+        # We fetch the tools/list ONCE here and attach it to d so render() reuses it (no
+        # double MCP round-trip), then require at least one named+described tool OR two
+        # named tools — a page whose entire uniqueness is a single bare tool name is pure
+        # boilerplate and only adds Google scaled-content risk to the whole Pages site.
+        try:
+            tool_list, instr = fetch_tools(url)
+        except Exception:
+            tool_list, instr = [], ""
+        d["_tools"] = tool_list
+        d["_instructions"] = instr
+        if not _has_substance(tool_list):
+            print(f"  discover THIN-SKIP {name} ({host}): "
+                  f"{len(tool_list)} tool(s), no describable surface", file=sys.stderr)
             continue
         seen_slugs.add(slug)
         out.append((name, slug, url, vendor, d))
