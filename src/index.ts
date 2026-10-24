@@ -9915,8 +9915,12 @@ app.get("/scan/mcp/preview", async (c) => {
   try {
     const result = await scanMcpServer(target);
     console.log(JSON.stringify({ event: "free_preview", endpoint: "/scan/mcp/preview", target, issues: result.findings.length, ts: result.scanned_at }));
-    const wantDir = c.req.query("directory") === "true" || c.req.query("mode") === "directory";
-    const dir = wantDir ? computeDirectoryReadiness(result.tools ?? [], result.findings) : undefined;
+    // Claude Connector Directory readiness is our unique wedge (no competing MCP
+    // scanner checks it), and "would my server pass the ~20-day Directory review?"
+    // is the exact high-intent question our Line-B buyer has. So the teaser ships
+    // in EVERY free scan now (count + ready only; itemized blockers stay paid).
+    // The ?directory=true / mode=directory params are kept as back-compat no-ops.
+    const dir = computeDirectoryReadiness(result.tools ?? [], result.findings);
     return c.json(previewOf(result, dir));
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -11489,6 +11493,11 @@ function render(d){
   if(d.risk_summary)card.appendChild(el("p",null,d.risk_summary));
   if(d.upsell){var up=el("p","muted",d.upsell);up.style.marginTop=".6rem";card.appendChild(up);}
   res.appendChild(card);
+  if(d.directory_readiness){var dr=d.directory_readiness;var drw=el("div","card");drw.style.marginTop=".8rem";
+    var lbl=el("div",null,(dr.ready?"✓ Claude Connector Directory — no structural blockers on the published criteria":"⚠ "+(dr.blocker_count||0)+" issue(s) would likely FAIL Claude Connector Directory review"));
+    lbl.style.fontWeight="600";lbl.style.color=dr.ready?"#047857":"#b91c1c";drw.appendChild(lbl);
+    if(dr.upsell)drw.appendChild(el("p","muted",dr.upsell));
+    res.appendChild(drw);}
 }
 btn.onclick=async function(){
   clrErr();res.innerHTML="";
@@ -12461,8 +12470,9 @@ app.post("/scan/mcp/preview", async (c) => {
   const weight = { critical: 40, high: 20, medium: 8, low: 3 } as const;
   const risk_score = Math.min(100, findings.reduce((s, x) => s + weight[x.severity], 0));
   const { verdict, risk_summary } = mcpScanVerdict(findings, tools.length, risk_score);
-  const wantDir = body?.directory === true || body?.mode === "directory";
-  const dir = wantDir ? computeDirectoryReadiness(tools, findings) : undefined;
+  // Directory-readiness teaser ships by default (our wedge; see GET handler note).
+  // ?directory / mode params kept as back-compat no-ops.
+  const dir = computeDirectoryReadiness(tools, findings);
   return c.json(previewOf({ target: "(pasted tools/list)", tools_scanned: tools.length, findings, risk_score, verdict, risk_summary, scanned_at: new Date().toISOString() }, dir));
 });
 
@@ -12554,11 +12564,12 @@ const mcpHandler = createMcpHandler(() => {
     },
     async ({ url }) => {
       const result = await scanMcpServer(url);
+      const dir = computeDirectoryReadiness(result.tools ?? [], result.findings);
       return {
         content: [
           {
             type: "text" as const,
-            text: JSON.stringify(previewOf(result), null, 2),
+            text: JSON.stringify(previewOf(result, dir), null, 2),
           },
         ],
       };
