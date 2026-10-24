@@ -1,4 +1,4 @@
-# plugin-swap-gate
+# @grey-ridge/elizaos-plugin-swap-gate
 
 **Pre-trade token-safety gate for Base trading agents.** One action your ElizaOS agent runs *before every swap*: is this token a honeypot, can you actually sell it, do its admin controls let the deployer rug it, and is your order too big for the pool? You get a `GO` / `HOLD` / `BLOCK` decision and a round-trip-friction-aware go/no-go in a single fast call.
 

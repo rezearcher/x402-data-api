@@ -37,3 +37,6 @@
 [ok]   GET /chain/token-report: advertised example matches live output shape (31 keys)
 [ok]   GET /gate/swap: advertised example matches live output shape (16 keys)
 [ok]   GET /chain/token-security: advertised example matches live output shape (44 keys)
+[ok]   GET /chain/token-report: advertised example matches live output shape (31 keys)
+[ok]   GET /gate/swap: advertised example matches live output shape (16 keys)
+[ok]   GET /chain/token-security: advertised example matches live output shape (44 keys)

@@ -29,7 +29,7 @@
   "homepage": "https://x402-data-api.sigrunner.workers.dev",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rezearcher/plugin-swap-gate.git"
+    "url": "git+https://github.com/rezearcher/x402-data-api.git"
   },
   "scripts": {
     "build": "tsup",

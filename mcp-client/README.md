@@ -1,4 +1,4 @@
-  x402-data-api-mcp# x402-data-api-mcp
+# @grey-ridge/x402-data-api-mcp
 
 MCP stdio server for the [x402-data-api](https://x402-data-api.sigrunner.workers.dev) Worker. Exposes 22 tools covering blockchain data, crypto prices, DeFi yields, prediction markets, and enrichment endpoints via the [Model Context Protocol](https://modelcontextprotocol.io).
 

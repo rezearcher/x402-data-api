@@ -1,3 +1,4 @@
+https://github.com/cdf-eagles/mcp-allowlist-proxy/issues/2
 https://github.com/calbebop/batesian/issues/545
 https://github.com/Observal/Observal/issues/1950
 https://github.com/aklivity/zilla/issues/2751

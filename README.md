@@ -109,7 +109,7 @@ npm run build          # tsc → dist/server.js
 node dist/server.js    # start (or: npm start)
 ```
 
-**Intended path (once published):** `npx x402-data-api-mcp` (the package's `bin`
+**Intended path (once published):** `npx @grey-ridge/x402-data-api-mcp` (the package's `bin`
 target is `dist/server.js`, so `npx` runs the same server).
 
 **Configuration.** Copy [`mcp-client/.env.example`](./mcp-client/.env.example) to
