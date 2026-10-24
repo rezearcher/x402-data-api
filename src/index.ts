@@ -9091,10 +9091,69 @@ async function tgSend(token: string, chatId: number | string, text: string, extr
   } catch { /* best-effort: we still 200 the update so Telegram doesn't retry-loop */ }
 }
 
+// The public URL Telegram POSTs updates to. Pinned to the workers.dev origin
+// (no Cloudflare bot-challenge, unlike the apex) so Telegram's servers are never
+// 403'd. The cron self-registers against exactly this value.
+const TG_PUBLIC_BASE = "https://x402-data-api.sigrunner.workers.dev";
+
+// Resolve the secret_token that authenticates Telegram's webhook POSTs. The
+// value we REGISTER with Telegram (setWebhook) and the value we VALIDATE on each
+// update are computed identically, so the bot self-provisions from the single
+// TELEGRAM_BOT_TOKEN secret — no second hand-set secret is required to go live.
+// An explicitly-set TELEGRAM_WEBHOOK_SECRET still wins (lets an operator rotate
+// independently). Derived as an HMAC of the bot token so it is unguessable
+// without the token and hex-only (Telegram's secret_token charset constraint).
+async function tgResolveSecret(env: Env): Promise<string | null> {
+  const token = env.TELEGRAM_BOT_TOKEN;
+  if (!token) return null;
+  if (env.TELEGRAM_WEBHOOK_SECRET) return env.TELEGRAM_WEBHOOK_SECRET;
+  return grsgHmacHex(token, "grsg-tg-webhook-v1");
+}
+
+// Idempotent, self-healing webhook registration. getWebhookInfo first; only
+// setWebhook when the registered URL has drifted from ours (or was never set),
+// so a spammed trigger never hammers Telegram's setWebhook rate limit. Called
+// from the 6h cron (so a dropped webhook re-heals) and from the read-only
+// /tg/status probe (so a fresh deploy activates immediately, not after ≤6h).
+// Only ever points the webhook at our own canonical origin — never at
+// caller-supplied input — so it is safe to trigger without an admin gate.
+async function tgEnsureWebhook(env: Env): Promise<Record<string, unknown>> {
+  const token = env.TELEGRAM_BOT_TOKEN;
+  if (!token) return { ok: false, reason: "no_token" };
+  const secret = await tgResolveSecret(env);
+  if (!secret) return { ok: false, reason: "no_secret" };
+  const want = `${TG_PUBLIC_BASE}/tg/webhook`;
+  let info: Record<string, any> | null = null;
+  try {
+    const r = await fetch(tgApi(token, "getWebhookInfo"));
+    const j = (await r.json()) as Record<string, any>;
+    info = j?.result ?? null;
+    if (j && j.ok === false) return { ok: false, action: "getinfo", description: j?.description ?? null };
+  } catch (e) {
+    return { ok: false, action: "getinfo", error: (e as Error).message };
+  }
+  const current = String(info?.url || "");
+  if (current === want) {
+    return { ok: true, action: "noop", url: want, pending_update_count: info?.pending_update_count ?? 0, last_error: info?.last_error_message ?? null };
+  }
+  try {
+    const r = await fetch(tgApi(token, "setWebhook"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url: want, secret_token: secret, allowed_updates: ["message"], max_connections: 20, drop_pending_updates: false }),
+    });
+    const j = (await r.json()) as Record<string, any>;
+    return { ok: !!j?.ok, action: "set", url: want, was: current || null, description: j?.description ?? null };
+  } catch (e) {
+    return { ok: false, action: "set", error: (e as Error).message };
+  }
+}
+
 app.post("/tg/webhook", async (c) => {
   const token = c.env.TELEGRAM_BOT_TOKEN;
-  const secret = c.env.TELEGRAM_WEBHOOK_SECRET;
-  if (!token || !secret) return c.json({ ok: true }); // inert until provisioned
+  if (!token) return c.json({ ok: true }); // inert until provisioned
+  const secret = await tgResolveSecret(c.env);
+  if (!secret) return c.json({ ok: true });
   if (c.req.header("X-Telegram-Bot-Api-Secret-Token") !== secret) return c.json({ ok: false }, 403);
 
   let update: Record<string, any>;
@@ -9149,6 +9208,19 @@ app.post("/tg/webhook", async (c) => {
     await tgSend(token, chatId, "Couldn't read that token on-chain right now — try again in a moment.");
   }
   return c.json({ ok: true });
+});
+
+// Read-only activation probe + on-demand self-heal. Reports whether the bot is
+// provisioned and whether Telegram currently points at our webhook, and triggers
+// an idempotent re-register (only sets when drifted). Never returns the token or
+// the webhook secret. Lets a fresh deploy go live immediately instead of waiting
+// for the next 6h cron tick, and gives an external uptime check a verdict.
+app.get("/tg/status", async (c) => {
+  if (!c.env.TELEGRAM_BOT_TOKEN) {
+    return c.json({ provisioned: false, reason: "TELEGRAM_BOT_TOKEN not set — bot inert" });
+  }
+  const r = await tgEnsureWebhook(c.env);
+  return c.json({ provisioned: true, webhook: r });
 });
 
 // ---------------------------------------------------------------------------
@@ -12544,6 +12616,15 @@ const scheduled = async (event: ScheduledController, env: Env, ctx: ExecutionCon
     grsgRunMonitoringSweep(env).then(
       (s) => console.log(JSON.stringify({ event: "grsg_monitoring_sweep", cron: event.cron, ...s })),
       (e) => console.log(JSON.stringify({ event: "grsg_monitoring_sweep_error", error: (e as Error).message })),
+    ),
+  );
+  // Keep the Telegram Base-token-gate bot's webhook registered (self-heal if it
+  // drifts or was never set). No-op + no Telegram call when the bot token is
+  // unset, so this costs nothing until the bot is provisioned.
+  ctx.waitUntil(
+    tgEnsureWebhook(env).then(
+      (s) => console.log(JSON.stringify({ event: "tg_ensure_webhook", cron: event.cron, ...s })),
+      (e) => console.log(JSON.stringify({ event: "tg_ensure_webhook_error", error: (e as Error).message })),
     ),
   );
 };
