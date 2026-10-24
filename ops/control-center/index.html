@@ -43,7 +43,14 @@
   .toggle.on .knob{left:24px}
   .wave{height:30px;width:150px}
   .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:12px}
-  .col{border:1px solid var(--line);background:var(--panel);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;min-height:380px}
+  .col{border:1px solid var(--line);background:var(--panel);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;min-height:380px;
+       transition:opacity .4s,border-color .4s,box-shadow .4s;opacity:.5}
+  .col.working{opacity:1;border-color:var(--jade);box-shadow:0 0 0 1px var(--jade),0 6px 24px rgba(84,185,138,.14)}
+  .col.done{opacity:.72} .col.waiting{opacity:.42}
+  .badge{font-size:10.5px;letter-spacing:.08em;padding:2px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted);font-weight:600}
+  .badge.working{color:var(--ink);background:var(--jade);border-color:var(--jade)}
+  .badge.done{color:var(--jade);border-color:#2b4a3c}
+  .badge.working i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ink);margin-right:5px;animation:pulse 1.2s infinite;vertical-align:middle}
   .col h3{margin:0;padding:11px 14px;font-size:12px;letter-spacing:.12em;color:var(--muted);border-bottom:1px solid var(--line);
           display:flex;justify-content:space-between;align-items:center;font-weight:600}
   .live{display:inline-flex;align-items:center;gap:6px;color:var(--jade);font-size:11px}
@@ -149,8 +156,8 @@ function reflectPaused(){
 
 function buildSkeleton(){
   document.getElementById('agents').innerHTML = AG.map(a=>`
-    <div class="col">
-      <h3>${LABEL[a]} <span id="live-${a}"></span></h3>
+    <div class="col" id="col-${a}">
+      <h3>${LABEL[a]} <span class="badge" id="badge-${a}">·</span></h3>
       <div class="now" id="now-${a}"><span class="k">NOW</span></div>
       <div class="scrollwrap"><div class="hist" id="hist-${a}"></div>
         <button class="pill" data-k="${a}" onclick="jump('hist-${a}')">↓ new updates</button></div>
@@ -176,10 +183,21 @@ function render(d){
     `<span>Line A <b class="mono ${pos(r.line_a_external_usdc)}">$${(r.line_a_external_usdc??0).toFixed(3)}</b> ext</span>`
    +`<span>Line B <b class="mono ${pos(r.line_b_fiat_usd)}">$${(r.line_b_fiat_usd??0).toFixed(2)}</b></span>`;
   // agents — NOW replaced freely; history updated IN PLACE (scroll preserved)
-  AG.forEach(a=>{
+  const order=['research','builder','marketing'], cur=order.indexOf(d.engine.stage);
+  AG.forEach((a,i)=>{
     const ag=d.agents[a]||{};
-    document.getElementById('live-'+a).innerHTML = ag.live?'<span class="live"><i></i>live</span>':'';
-    document.getElementById('now-'+a).innerHTML = `<span class="k">NOW</span>${esc(ag.now)||'<span class="off">idle — waiting for its turn</span>'}`;
+    // phase is driven by the ENGINE's real current stage — only ONE agent is ever "working"
+    let phase,label;
+    if(d.engine.stage===a){phase='working';label='<i></i>working';}
+    else if(d.engine.stage==='rest'){phase='done';label='done';}
+    else if(i<cur){phase='done';label='✓ handed off';}
+    else {phase='waiting';label='waiting';}
+    document.getElementById('col-'+a).className='col '+phase;
+    const b=document.getElementById('badge-'+a); b.className='badge '+phase; b.innerHTML=label;
+    const nowtxt = phase==='working' ? (esc(ag.now)||'working…')
+                 : phase==='waiting' ? '<span class="off">waiting for its turn</span>'
+                 : `<span class="off">handed off — ${esc((ag.now||'').slice(0,110))||'done this pass'}</span>`;
+    document.getElementById('now-'+a).innerHTML = `<span class="k">NOW</span>${nowtxt}`;
     const chrono=(ag.history||[]).slice();  // oldest→newest (newest at bottom)
     const html = chrono.map(e=>`<div class="ev"><div class="t mono">${esc((e.ts||'').replace('T',' ').replace('Z',''))}</div>
       <div class="d">${esc(e.did)||'—'}</div>${e.next?`<div class="n">→ ${esc(e.next)}</div>`:''}
