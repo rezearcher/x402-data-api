@@ -7936,6 +7936,7 @@ app.get("/chain/token-security/preview", async (c) => {
 // verdict. Every sub-fetch degrades to null; the paid call never fails on one.
 // ---------------------------------------------------------------------------
 const BASE_WETH = "0x4200000000000000000000000000000000000006";
+const BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 const UNIV3_FACTORY_BASE = "0x33128a8fC17869897dcE68Ed026d694621f6FDfD";
 const UNIV3_FEE_TIERS = [100, 500, 3000, 10000];
 const MIN_SAFE_LIQUIDITY_USD = 100_000;
@@ -7973,9 +7974,63 @@ async function baseRpcBatch(calls: { method: string; params: unknown[] }[]): Pro
   return null;
 }
 
+// WETH has no WETH/WETH pair, so its canonical depth comes from the WETH/USDC
+// pool: we measure the USDC side (6-decimals, already ≈ USD, no ethUsd price
+// dependency) and apply the same 2x-one-side TVL proxy as the WETH-side path.
+// Fails closed to null (→ HOLD) and never fabricates a number: a >$1e9 result is
+// treated as a decimals/scaling bug and degraded.
+async function getWethUsdcLiquidity(): Promise<WethLiquidity> {
+  const pad = (a: string) => a.slice(2).toLowerCase().padStart(64, "0");
+  const lookups = await baseRpcBatch(
+    UNIV3_FEE_TIERS.map((fee) => ({
+      method: "eth_call",
+      params: [{ to: UNIV3_FACTORY_BASE, data: `0x1698ee82${pad(BASE_WETH)}${pad(BASE_USDC)}${fee.toString(16).padStart(64, "0")}` }, "latest"],
+    })),
+  );
+  if (!lookups) return { checked: false, pools: [], weth_pool_usd: null, note: "WETH/USDC pool lookup unavailable" };
+  const found = UNIV3_FEE_TIERS.map((fee, i) => {
+    const r = lookups[i];
+    const addr = r && r.length >= 66 ? `0x${r.slice(-40)}` : null;
+    return { fee, addr: addr && BigInt(addr) !== 0n ? addr : null };
+  }).filter((p): p is { fee: number; addr: string } => p.addr !== null);
+  if (found.length === 0) {
+    const anyAnswered = lookups.some((r) => r !== null);
+    return {
+      checked: anyAnswered,
+      pools: [],
+      weth_pool_usd: null,
+      note: anyAnswered ? "no Uniswap v3 WETH/USDC pool found" : "WETH/USDC pool lookup unavailable",
+    };
+  }
+  // USDC balanceOf(pool): 6-decimals, read directly as USD.
+  const balances = await baseRpcBatch(found.map((p) => ({ method: "eth_call", params: [{ to: BASE_USDC, data: `0x70a08231${pad(p.addr)}` }, "latest"] })));
+  if (!balances) return { checked: false, pools: [], weth_pool_usd: null, note: "WETH/USDC pool liquidity read unavailable" };
+  const pools = found.flatMap((p, i) => {
+    const r = balances[i];
+    if (!r || r === "0x") return [];
+    const raw = BigInt(r);
+    return [{ fee_tier: p.fee, pool: p.addr, weth_raw: raw.toString(), weth_side_usd: Number(raw) / 1e6 }];
+  });
+  const best = pools.reduce<number | null>(
+    (m, p) => (p.weth_side_usd !== null && (m === null || p.weth_side_usd > m) ? p.weth_side_usd : m),
+    null,
+  );
+  const tvl = best !== null ? Math.round(best * 2) : null;
+  if (tvl !== null && tvl > 1_000_000_000) {
+    // Implausibly large — signals a decimals/scaling bug. Degrade rather than fabricate.
+    return { checked: true, pools: [], weth_pool_usd: null, note: "WETH/USDC liquidity read implausible (>$1e9); degraded" };
+  }
+  return {
+    checked: true,
+    pools,
+    weth_pool_usd: tvl,
+    note: pools.length === 0 ? "WETH/USDC pool balance read unavailable" : "canonical depth measured from the WETH/USDC pool (USDC side); weth_raw is the raw USDC balance",
+  };
+}
+
 async function getWethLiquidity(token: string): Promise<WethLiquidity> {
   if (token.toLowerCase() === BASE_WETH) {
-    return { checked: false, pools: [], weth_pool_usd: null, note: "token is WETH itself; no WETH pair applies" };
+    return getWethUsdcLiquidity();
   }
   const pad = (a: string) => a.slice(2).toLowerCase().padStart(64, "0");
   const lookups = await baseRpcBatch(
