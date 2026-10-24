@@ -26,7 +26,7 @@ only those that actually answer an unauthenticated tools/list. This is how the A
 moat scales — one crawlable, measured long-tail page per real public server — without a
 brittle hardcoded roster that silently rots as servers come and go.
 """
-import argparse, base64, json, subprocess, sys, urllib.parse, urllib.request, datetime, os
+import argparse, base64, json, re, subprocess, sys, urllib.parse, urllib.request, datetime, os
 
 BASE = os.environ.get("X402_BASE", "https://x402-data-api.sigrunner.workers.dev")
 REPO = "rezearcher/greyridge-x402-tools"
@@ -491,6 +491,135 @@ def gh_put(path, content, msg):
     subprocess.check_output(args, stderr=subprocess.STDOUT, env=ENV)
 
 
+def gh_get_text(path):
+    """Fetch and decode a file's content from the publish repo, or None if absent."""
+    try:
+        out = subprocess.check_output(
+            ["gh", "api", f"repos/{REPO}/contents/{path}"],
+            stderr=subprocess.DEVNULL, env=ENV)
+        j = json.loads(out)
+        return base64.b64decode(j.get("content", "")).decode("utf-8", "replace")
+    except Exception:
+        return None
+
+
+# --- Leaderboard carry-forward ---------------------------------------------
+# The ranked index page is a UNION of every scorecard ever published, not just the
+# ones this (non-deterministic registry-walk) run happened to reach. Without this a
+# server that 502s for one run silently drops off the ranked hub while its page +
+# sitemap entry persist (a sitemap-only orphan) — the leaderboard flaps and shrinks
+# run to run. State lives in docs/scorecard-index.json in the publish repo (the only
+# place that survives across the stateless weekly cron); each run merges this-run
+# cards OVER the prior map, so the hub only ever grows. Every row carries its OWN
+# scan date, so carried-forward rows are honestly dated (Claims Law) — point-in-time,
+# not a fresh claim.
+_GRADE_RANK = {"A": 0, "B": 1, "C": 2, "D": 3, "F": 4}
+LEADER_STATE = f"{DOCS}/scorecard-index.json"
+
+
+def card_from_result(name, slug, url, d, today):
+    """Normalize a live scan result into the compact leaderboard card shape."""
+    dr = d.get("directory_readiness") or {}
+    rs = d.get("risk_score")
+    return {
+        "name": name, "slug": slug, "url": url,
+        "grade": ((d.get("grade") or "").strip() or None),
+        "verdict": (d.get("verdict") or None),
+        "tools": d.get("tools_scanned", 0),
+        "ready": bool(dr.get("ready")),
+        "blocker_count": dr.get("blocker_count"),
+        "risk_score": rs if isinstance(rs, (int, float)) else None,
+        "grade_scale": d.get("grade_scale") or "",
+        "scanned": (d.get("scanned_at") or today)[:10],
+    }
+
+
+def parse_published_card(slug, text):
+    """Recover a leaderboard card from an already-published scorecard page.
+
+    Parses the stable rendered lines (`**Scanned:** ... · **Tools advertised:** ...
+    · **Injection verdict:** `v` · **Directory:** ...` and a `Grade `X`` lead).
+    Degrades open: any field it cannot read is None/0 and the row still lists
+    (sorted last), never a crash or a fabricated value."""
+    name, url, grade, verdict, scanned = slug, None, None, None, None
+    tools, ready, bc = 0, False, None
+    m = re.search(r"^# (.+?) MCP server\b", text, re.M)
+    if m:
+        name = m.group(1).strip()
+    m = re.search(r"\*\*Server:\*\*\s*`([^`]+)`", text)
+    if m:
+        url = m.group(1).strip()
+    m = re.search(
+        r"\*\*Scanned:\*\*\s*([\d-]+)\s*·\s*\*\*Tools advertised:\*\*\s*(\d+)\s*·\s*"
+        r"\*\*Injection verdict:\*\*\s*`([^`]*)`\s*·\s*\*\*Directory:\*\*\s*(.+)", text)
+    if m:
+        scanned, tools, verdict = m.group(1), int(m.group(2)), m.group(3)
+        dirtxt = m.group(4).strip()
+        if dirtxt.lower().startswith("ready"):
+            ready, bc = True, 0
+        else:
+            mm = re.match(r"(\d+)", dirtxt)
+            bc = int(mm.group(1)) if mm else None
+    m = re.search(r"Grade `([A-F])`", text)
+    if m:
+        grade = m.group(1)
+    return {
+        "name": name, "slug": slug, "url": url, "grade": grade, "verdict": verdict,
+        "tools": tools, "ready": ready, "blocker_count": bc,
+        "risk_score": None, "grade_scale": "", "scanned": scanned,
+    }
+
+
+def rank_key_card(c):
+    g = (c.get("grade") or "").strip().upper()
+    rs = c.get("risk_score")
+    bc = c.get("blocker_count")
+    return (
+        _GRADE_RANK.get(g, 99),
+        0 if c.get("ready") else 1,
+        rs if isinstance(rs, (int, float)) else 10 ** 9,
+        bc if isinstance(bc, (int, float)) else 10 ** 9,
+    )
+
+
+def _load_leader_state():
+    t = gh_get_text(LEADER_STATE)
+    if not t:
+        return {}
+    try:
+        d = json.loads(t)
+        cards = d.get("cards", d) if isinstance(d, dict) else {}
+        return cards if isinstance(cards, dict) else {}
+    except Exception:
+        return {}
+
+
+def build_leaderboard(run_cards, publish, today):
+    """Merge this run's cards over the persisted state (+ one-time/self-healing
+    backfill from any published page missing from state), newest wins. Returns
+    (merged_cards_by_slug, did_backfill). Dry-run stays offline → run cards only."""
+    if not publish:
+        return dict(run_cards), False
+    state = _load_leader_state()
+    known = set(state) | set(run_cards)
+    backfilled = False
+    for stem in _all_published_scorecard_slugs():
+        # stem == f"mcp-{slug}-mcp-security"
+        if not (stem.startswith("mcp-") and stem.endswith("-mcp-security")):
+            continue
+        slug = stem[len("mcp-"):-len("-mcp-security")]
+        if slug in known:
+            continue
+        txt = gh_get_text(f"{DOCS}/{stem}.md")
+        if not txt:
+            continue
+        state[slug] = parse_published_card(slug, txt)
+        backfilled = True
+    merged = dict(state)
+    merged.update(run_cards)  # this run's fresh data wins on conflict
+    return merged, backfilled
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--publish", action="store_true")
@@ -532,42 +661,35 @@ def main():
 
     # index page: a ranked A–F security leaderboard (category-discovery + status-competition
     # surface). Sort BEST-first — grade A>B>C>D>F, then directory-ready before blockers, then
-    # lower risk_score. Degrade-open: a result missing grade/risk_score still lists, sorted last,
-    # never a broken row. The registry stays the ground-truth roster; the table renders whatever
-    # results exist (no hardcoded leaderboard order).
-    _GRADE_RANK = {"A": 0, "B": 1, "C": 2, "D": 3, "F": 4}
+    # lower risk_score. Degrade-open: a card missing grade/risk_score still lists, sorted last,
+    # never a broken row. The leaderboard is the UNION of every scorecard ever published
+    # (persisted state + this run), so a server that 502s for one run is carried forward with
+    # its last measured data + date rather than vanishing from the hub.
+    run_cards = {slug: card_from_result(name, slug, url, d, today)
+                 for name, slug, url, d, body, desc in results}
+    merged, backfilled = build_leaderboard(run_cards, args.publish and not args.dry_run, today)
+    if backfilled:
+        print(f"leaderboard: backfilled prior-published servers into state "
+              f"({len(merged)} total)", file=sys.stderr)
 
-    def _rank_key(item):
-        rd = item[3]
-        g = (rd.get("grade") or "").strip().upper()
-        dr = rd.get("directory_readiness") or {}
-        rs = rd.get("risk_score")
-        bc = dr.get("blocker_count")
-        return (
-            _GRADE_RANK.get(g, 99),
-            0 if dr.get("ready") else 1,
-            rs if isinstance(rs, (int, float)) else 10 ** 9,
-            bc if isinstance(bc, (int, float)) else 10 ** 9,
-        )
-
-    ranked = sorted(results, key=_rank_key)
+    ranked = sorted(merged.values(), key=rank_key_card)
     grade_scale = ""
     table_rows = []
-    for name, slug, url, d, body, desc in ranked:
-        dr = d.get("directory_readiness") or {}
-        grade = (d.get("grade") or "").strip() or "—"
-        verdict = d.get("verdict") or "—"
-        tools = d.get("tools_scanned", 0)
-        if dr.get("ready"):
+    for c in ranked:
+        grade = (c.get("grade") or "").strip() or "—"
+        verdict = c.get("verdict") or "—"
+        tools = c.get("tools", 0)
+        if c.get("ready"):
             directory = "ready"
         else:
-            bc = dr.get("blocker_count", 0)
+            bc = c.get("blocker_count")
+            bc = bc if isinstance(bc, int) else 0
             directory = f"{bc} blocker{'s' if bc != 1 else ''}"
-        scanned = (d.get("scanned_at") or today)[:10]
-        grade_scale = grade_scale or (d.get("grade_scale") or "")
+        scanned = (c.get("scanned") or today)[:10]
+        grade_scale = grade_scale or (c.get("grade_scale") or "")
         table_rows.append(
-            f"| [{name}](mcp-{slug}-mcp-security.html) | {grade} | `{verdict}` | "
-            f"{tools} | {directory} | {scanned} |")
+            f"| [{c.get('name') or c['slug']}](mcp-{c['slug']}-mcp-security.html) | {grade} | "
+            f"`{verdict}` | {tools} | {directory} | {scanned} |")
     table = ("| Server | Grade | Injection | Tools | Claude Directory | Scanned |\n"
              "|---|:--:|---|:--:|---|---|\n" + "\n".join(table_rows))
     grade_scale = grade_scale or (
@@ -580,11 +702,11 @@ description: Ranked A–F security leaderboard of public MCP servers — static 
 ---
 # MCP server security ranking
 
-A ranked, A–F security read of {len(results)} well-known public MCP servers — graded on the
+A ranked, A–F security read of {len(merged)} well-known public MCP servers — graded on the
 tool-poisoning / prompt-injection patterns each server advertises (OWASP LLM01/LLM08) and on whether
 those tools would pass the Anthropic Claude Connector Directory review criteria. Sorted best-first.
 Every row is measured, dated and re-runnable by you in one keyless call; results are point-in-time
-(tool definitions drift).
+(tool definitions drift) — each row shows the date it was last scanned.
 
 Last generated {today}.
 
@@ -618,8 +740,15 @@ Independent scans by [Grey Ridge Signals](https://github.com/rezearcher/greyridg
         gh_put(path, body, f"scorecards: {name} MCP server security + directory-readiness scan ({today})")
         print(f"PUT {path}")
     gh_put(f"{DOCS}/mcp-server-scorecards.md", index,
-           f"scorecards: index of {len(results)} MCP server security scorecards ({today})")
-    print(f"PUT {DOCS}/mcp-server-scorecards.md")
+           f"scorecards: ranked leaderboard of {len(merged)} MCP server security scorecards "
+           f"({len(run_cards)} re-scanned this run, {today})")
+    print(f"PUT {DOCS}/mcp-server-scorecards.md ({len(merged)} ranked, {len(run_cards)} fresh)")
+    # Persist the merged leaderboard so the next (stateless cron) run carries forward every
+    # server, not just the ones its registry walk happens to reach — the hub only grows.
+    gh_put(LEADER_STATE,
+           json.dumps({"updated": today, "cards": merged}, sort_keys=True, indent=0),
+           f"scorecards: leaderboard index state — {len(merged)} servers ({today})")
+    print(f"PUT {LEADER_STATE} ({len(merged)} cards)")
     # emit slugs for sitemap update
     open("/tmp/scorecard_slugs.txt", "w").write(
         "\n".join([f"mcp-{s}-mcp-security" for _, s, *_ in results] + ["mcp-server-scorecards"]))
