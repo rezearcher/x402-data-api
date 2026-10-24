@@ -177,6 +177,12 @@ def readiness_line(d):
 def render(name, slug, url, vendor, d, today):
     tools = d.get("tools_scanned", 0)
     v = d.get("verdict", "unknown")
+    host = urllib.parse.urlparse(url).netloc or url
+    # Match the live verify/check output exactly: the badge endpoint returns shields JSON,
+    # so it must be wrapped in img.shields.io/endpoint to render as an image in a README.
+    badge_endpoint = urllib.parse.quote(f"{BASE}/scan/verify/badge?domain={host}", safe="")
+    badge_md = (f"[![MCP security: verified](https://img.shields.io/endpoint?url={badge_endpoint}"
+                f"&style=flat-square)]({BASE}/scan/report?url={url})")
     dr = d.get("directory_readiness") or {}
     ready = dr.get("ready")
     bc = dr.get("blocker_count", 0)
@@ -232,6 +238,30 @@ curl -s -X POST {BASE}/scan/mcp -H 'content-type: application/json' \\
 
 `$0.05 USDC` via [x402](https://x402.org) on Base, no account. To keep a server honest as it changes,
 continuous drift monitoring with alerts is `$9.99/mo` — see [pricing]({BASE}/pricing).
+
+## Run {name}? Claim its verified badge — free
+
+If this is your server, you can put a measured security badge on your own README. Prove you
+control `{host}` once — a single DNS TXT record, checked automatically, no email thread and no
+human review — and the claim is yours:
+
+```bash
+# start the one-time ownership check (DNS TXT, fully automated)
+open {BASE}/scan/verify?domain={host}
+```
+
+Once the domain is verified, you get an embeddable **verified-owner** badge for your README and a
+public report page — both free. The badge renders live from the latest scan, so it stays honest:
+
+```markdown
+{badge_md}
+```
+
+Keeping the badge **green as your tools change** — re-scans every six hours, drift alerts the moment
+a tool definition shifts, the dated posture-history timeline, and the full itemized report — is the
+`$9.99/mo` monitoring subscription. The claim and the badge cost nothing; monitoring is what you pay
+for. A green badge means this scan found no injection patterns on the dates shown — it is a measured
+signal, not a warranty of safety.
 
 ## More
 

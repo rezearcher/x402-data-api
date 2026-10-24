@@ -1,0 +1,44 @@
+name: scorecards-weekly
+# LINE B / B2 — keep the ONLY Google-crawlable Grey Ridge inbound channel growing
+# with ZERO operator time. Each run discovers live public MCP servers from the
+# official registry (the ground-truth roster, not a hand list), scans each with our
+# own keyless scanner, and publishes a measured/dated per-server security scorecard
+# plus a free verified-badge claim offer to the Pages site
+# (rezearcher.github.io/greyridge-x402-tools). Rebuilds the sitemap and pings IndexNow
+# so new long-tail "<server> mcp security" pages surface in days, not weeks.
+#
+# The generator publishes to a DIFFERENT repo (greyridge-x402-tools) via the GitHub
+# contents API, so the default per-repo GITHUB_TOKEN cannot write there. It needs a
+# rezearcher PAT (scope: public_repo / repo) exposed as the GH_TOKEN env — gh_token.sh
+# falls through to ambient GH_TOKEN and uses it only if it authenticates as rezearcher.
+on:
+  schedule:
+    - cron: "17 7 * * 1"   # Mondays 07:17 UTC — weekly, off peak
+  workflow_dispatch:
+    inputs:
+      scan_cap:
+        description: "max NEW discovered scorecards to publish this run"
+        required: false
+        default: "50"
+      pages:
+        description: "registry pages (x100) to walk while discovering"
+        required: false
+        default: "12"
+jobs:
+  grow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish scorecard corpus from the live MCP registry
+        env:
+          # rezearcher PAT with public_repo scope — required to write the Pages repo.
+          GH_TOKEN: ${{ secrets.PAGES_PUBLISH_TOKEN }}
+          X402_BASE: https://x402-data-api.sigrunner.workers.dev
+        run: |
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "::error::PAGES_PUBLISH_TOKEN secret is not set — a rezearcher PAT (public_repo) is required to publish to the Pages repo. See the operator atom."
+            exit 1
+          fi
+          CAP="${{ github.event.inputs.scan_cap }}"; CAP="${CAP:-50}"
+          PG="${{ github.event.inputs.pages }}"; PG="${PG:-12}"
+          python3 scripts/gen_mcp_scorecards.py --from-registry --publish --scan-cap "$CAP" --pages "$PG"
