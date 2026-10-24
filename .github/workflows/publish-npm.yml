@@ -1,0 +1,62 @@
+name: Publish npm packages
+
+# Hands-off re-publish for the @grey-ridge packages via npm "trusted publishing"
+# (OIDC) — NO stored npm token. Each job publishes its package only when the
+# version in package.json is not already on the registry, so a version bump +
+# merge is all it takes; unchanged versions are skipped (no republish error).
+#
+# PREREQUISITE (one-time, per package, on npmjs.com → package → Settings →
+# "Trusted Publisher"): add this repo (rezearcher/x402-data-api) + workflow
+# file "publish-npm.yml". Until that is set, these jobs will fail auth — that is
+# the tracked Rez atom. See docs and the console checklist.
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - "mcp-client/**"
+      - "integrations/**"
+
+permissions:
+  contents: read
+  id-token: write        # required for npm trusted publishing (OIDC)
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dir: mcp-client
+            name: "@grey-ridge/x402-data-api-mcp"
+          - dir: integrations/elizaos-plugin-swap-gate
+            name: "@grey-ridge/elizaos-plugin-swap-gate"
+          - dir: integrations/langchain-swap-gate
+            name: "@grey-ridge/langchain-swap-gate"
+          - dir: integrations/vercel-ai-sdk-swap-gate
+            name: "@grey-ridge/vercel-ai-swap-gate"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      - name: Ensure npm >= 11.5.1 (trusted publishing)
+        run: npm install -g npm@latest
+      - name: Install & build
+        working-directory: ${{ matrix.dir }}
+        run: |
+          npm ci || npm install
+          npm run build
+      - name: Publish if version is new
+        working-directory: ${{ matrix.dir }}
+        run: |
+          V=$(node -p "require('./package.json').version")
+          if npm view "${{ matrix.name }}@$V" version >/dev/null 2>&1; then
+            echo "::notice::${{ matrix.name }}@$V already published — skipping"
+            exit 0
+          fi
+          echo "publishing ${{ matrix.name }}@$V"
+          npm publish --access public
