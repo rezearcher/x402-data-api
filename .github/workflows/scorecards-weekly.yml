@@ -24,6 +24,10 @@ on:
         description: "registry pages (x100) to walk while discovering"
         required: false
         default: "20"
+      rescan_stale:
+        description: "also re-scan the N stalest carried-forward scorecards (freshness rotation)"
+        required: false
+        default: "40"
 jobs:
   grow:
     runs-on: ubuntu-latest
@@ -44,4 +48,8 @@ jobs:
           # partial slice). The substance floor in the generator drops the trivial tail.
           CAP="${{ github.event.inputs.scan_cap }}"; CAP="${CAP:-400}"
           PG="${{ github.event.inputs.pages }}"; PG="${PG:-20}"
-          python3 scripts/gen_mcp_scorecards.py --from-registry --publish --scan-cap "$CAP" --pages "$PG"
+          # Freshness rotation: re-scan the N stalest carried cards each run so the whole
+          # corpus stays current (SEO freshness + the continuous-monitoring claim is true,
+          # not just asserted). 40/week rotates all ~144 cards fresh about monthly.
+          RS="${{ github.event.inputs.rescan_stale }}"; RS="${RS:-40}"
+          python3 scripts/gen_mcp_scorecards.py --from-registry --publish --scan-cap "$CAP" --pages "$PG" --rescan-stale "$RS"

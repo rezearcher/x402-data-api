@@ -594,6 +594,24 @@ def _load_leader_state():
         return {}
 
 
+def select_stale_rescan(state, done_slugs, limit):
+    """Pick the stalest carried-forward cards to re-scan this run. Pure + testable.
+
+    - only cards with a usable http(s) url (we need something live to re-scan);
+    - never a slug already scanned this run (no double work, discovery wins);
+    - stalest first: oldest `scanned` date ascending; a missing/blank date sorts
+      OLDEST (it is maximally stale), slug as the deterministic tie-break.
+    Returns a list of card dicts, length <= max(limit, 0).
+    """
+    if limit <= 0:
+        return []
+    done = set(done_slugs or ())
+    cands = [c for s, c in (state or {}).items()
+             if s not in done and str(c.get("url") or "").startswith("http")]
+    cands.sort(key=lambda c: (str(c.get("scanned") or ""), str(c.get("slug") or "")))
+    return cands[:limit]
+
+
 def build_leaderboard(run_cards, publish, today):
     """Merge this run's cards over the persisted state (+ one-time/self-healing
     backfill from any published page missing from state), newest wins. Returns
@@ -630,6 +648,11 @@ def main():
                     help="max NEW discovered scorecards to publish this run")
     ap.add_argument("--pages", type=int, default=12,
                     help="registry pages (x100) to walk while discovering")
+    ap.add_argument("--rescan-stale", type=int, default=0,
+                    help="also re-scan the N stalest carried-forward scorecards this run "
+                         "(freshness rotation: keeps the whole corpus current for SEO + makes "
+                         "the continuous-monitoring claim true on the public hub, not just "
+                         "claimed; also catches tool-definition drift). Needs --publish; 0 off.")
     args = ap.parse_args()
     today = datetime.date.today().isoformat()
 
@@ -658,6 +681,36 @@ def main():
         for name, slug, url, vendor, d in discover_servers(args.scan_cap, args.pages, seen_urls, seen_slugs):
             body, desc = render(name, slug, url, vendor, d, today)
             results.append((name, slug, url, d, body, desc))
+
+    # Freshness rotation: re-scan the stalest carried-forward cards so the WHOLE corpus
+    # stays current, not just the handful a given registry walk reaches. This sustains SEO
+    # ranking (Google de-ranks a page that is a static photo of an old scan), makes the
+    # continuous-monitoring claim true on the public hub rather than merely asserted, and
+    # catches tool-definition drift (a server that changed its tools gets a fresh verdict).
+    # Degrade-open: a card that 502s or returns no tools stays carried with its prior data
+    # and date — never dropped, never a fabricated fresh date. Needs state (publish repo).
+    if args.publish and not args.dry_run and args.rescan_stale > 0:
+        state = _load_leader_state()
+        done_slugs = {slug for _, slug, *_ in results}
+        stale = select_stale_rescan(state, done_slugs, args.rescan_stale)
+        print(f"freshness: {len(stale)} stalest card(s) selected to re-scan "
+              f"(of {len(state)} carried)", file=sys.stderr)
+        for c in stale:
+            slug = c["slug"]
+            url = c["url"]
+            name = c.get("name") or slug
+            try:
+                d = scan(url)
+            except Exception as e:
+                print(f"STALE-SKIP {name} ({url}): {e} — carried", file=sys.stderr)
+                continue
+            if d.get("tools_scanned", 0) < 1:
+                print(f"STALE-SKIP {name}: no tools returned — carried", file=sys.stderr)
+                continue
+            body, desc = render(name, slug, url, c.get("vendor") or "", d, today)
+            results.append((name, slug, url, d, body, desc))
+            print(f"RESCAN {name}: {c.get('scanned')} -> {today} "
+                  f"verdict={d.get('verdict')} grade={d.get('grade')}")
 
     # index page: a ranked A–F security leaderboard (category-discovery + status-competition
     # surface). Sort BEST-first — grade A>B>C>D>F, then directory-ready before blockers, then
