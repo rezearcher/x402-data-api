@@ -1543,7 +1543,7 @@ If you build, ship, or operate MCP servers and tools, this is the fast path — 
 - Scan free, in your browser: ${BASE}/scan/mcp-scanner — paste your server's \`tools/list\` (private/local servers never leave your side) or scan a public server by URL. Instant verdict: clear | review | block, with the exact injected text and which tool carries it.
 - Per-server trust report (shareable, crawlable): ${BASE}/scan/report?url=<your-mcp-server> — point-in-time injection verdict plus a live manifest-drift read, one page.
 - Subscribe by card — $9.99/mo: ${BASE}/pricing. Gives you an API key for 100 scans/month across any Grey Ridge endpoint, so you can gate your CI (fail the build on \`block\`) and re-scan continuously. Card only — no wallet, no USDC, no on-chain anything. Checkout is Stripe; your key is shown on the success page and at ${BASE}/api-key.
-- CI gate (GitHub Action): \`uses: rezearcher/x402-data-api/actions/mcp-scan@main\` — runs the scan on every push and fails the build on a \`block\` verdict.
+- CI gate (GitHub Action): \`uses: rezearcher/greyridge-x402-tools@v0.3.2\` — on the GitHub Marketplace (https://github.com/marketplace/actions/mcp-server-tool-poisoning-scan); runs the scan on every push and fails the build on a \`block\` verdict.
 - Why this and not a free token checker: token-safety has free multi-chain scanners; MCP tool-poisoning / prompt-injection detection does not. This is the differentiated, paid-worthy lane.
 
 ## For security & platform teams — hands-on assessments (engagement, not per-call)
@@ -1578,7 +1578,7 @@ Already run a generic x402 buyer adapter? This API is wire-compatible with OpenA
 Before your agent trusts an MCP server's tools, scan them for hidden-instruction / tool-poisoning attacks (OWASP LLM01/LLM08). Zero-egress by design: for private or OAuth-gated servers you POST only the tools/list JSON — nothing else leaves your side. Unlike token-safety (where free multi-chain scanners exist), there is no free equivalent for this.
 - POST ${BASE}/scan/mcp — $0.05 — itemized findings (which tool, the injected text, remediation) + risk score + verdict clear|review|block. Body: {"tools":[…]} from your server's tools/list (or GET ?url=<public-mcp-server>).
 - Free preview: POST ${BASE}/scan/mcp/preview with {"tools":[…]} → counts + severity + risk score + verdict (detail withheld). One-liner that pulls an auth'd server's tools/list over Streamable-HTTP: https://github.com/rezearcher/x402-data-api/blob/main/examples/mcp-scan-preview.sh
-- CI gate: uses: rezearcher/x402-data-api/actions/mcp-scan@main — runs the scan in CI and fails the build on a block verdict.
+- CI gate: uses: rezearcher/greyridge-x402-tools@v0.3.2 — listed on the GitHub Marketplace (https://github.com/marketplace/actions/mcp-server-tool-poisoning-scan); runs the scan in CI and fails the build on a block verdict.
 
 ### 2. Pre-trade decision gate for Base trading agents — a decision, not raw flags
 Raw honeypot-flag APIs make your agent interpret the flags; this returns ONE decision sized to YOUR trade. Base-native (Base ERC-20s) — if you trade other chains, keep your multi-chain scanner and use this where you're on Base.
@@ -10820,7 +10820,7 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
     <ul>
       <li>API key with <strong>100 scans / month</strong> across every Grey Ridge endpoint</li>
       <li>Full audit detail: which tool, the exact injected text, OWASP LLM01/LLM08 mapping and remediation</li>
-      <li>Gate CI on the verdict — the GitHub Action fails the build on <code>block</code></li>
+      <li>Gate CI on the verdict — our <a href="https://github.com/marketplace/actions/mcp-server-tool-poisoning-scan">GitHub Marketplace Action</a> fails the build on <code>block</code></li>
       <li>Continuous re-scans so a server that was clean can't drift to poisoned unnoticed</li>
       <li>No wallet, no crypto — Stripe checkout, key shown on the success page and at <code>/api-key</code></li>
     </ul>
