@@ -334,27 +334,68 @@ def main():
             body, desc = render(name, slug, url, vendor, d, today)
             results.append((name, slug, url, d, body, desc))
 
-    # index page listing every scorecard
-    rows = []
-    for name, slug, url, d, body, desc in results:
-        dr = d.get("directory_readiness") or {}
-        rdy = "directory-ready" if dr.get("ready") else f"{dr.get('blocker_count',0)} directory blocker(s)"
-        rows.append(f"- [{name}](mcp-{slug}-mcp-security.html) — `{d.get('verdict')}` injection verdict, "
-                    f"{d.get('tools_scanned')} tools, {rdy}")
-    index = f"""---
-title: MCP server security scorecards — independent injection & directory-readiness scans
-description: Independent, measured security and Claude Connector Directory readiness scans of well-known public MCP servers. Static tool-poisoning / prompt-injection analysis plus directory-readiness, each re-runnable keyless in one call.
----
-# MCP server security scorecards
+    # index page: a ranked A–F security leaderboard (category-discovery + status-competition
+    # surface). Sort BEST-first — grade A>B>C>D>F, then directory-ready before blockers, then
+    # lower risk_score. Degrade-open: a result missing grade/risk_score still lists, sorted last,
+    # never a broken row. The registry stays the ground-truth roster; the table renders whatever
+    # results exist (no hardcoded leaderboard order).
+    _GRADE_RANK = {"A": 0, "B": 1, "C": 2, "D": 3, "F": 4}
 
-Independent, static security reads of well-known public MCP servers — each one scans the tool
-definitions the server advertises for prompt-injection / tool-poisoning patterns (OWASP LLM01/LLM08)
-and checks them against the Anthropic Claude Connector Directory review criteria. Every scorecard is
-dated and re-runnable by you in one keyless call; results are point-in-time (tool definitions drift).
+    def _rank_key(item):
+        rd = item[3]
+        g = (rd.get("grade") or "").strip().upper()
+        dr = rd.get("directory_readiness") or {}
+        rs = rd.get("risk_score")
+        bc = dr.get("blocker_count")
+        return (
+            _GRADE_RANK.get(g, 99),
+            0 if dr.get("ready") else 1,
+            rs if isinstance(rs, (int, float)) else 10 ** 9,
+            bc if isinstance(bc, (int, float)) else 10 ** 9,
+        )
+
+    ranked = sorted(results, key=_rank_key)
+    grade_scale = ""
+    table_rows = []
+    for name, slug, url, d, body, desc in ranked:
+        dr = d.get("directory_readiness") or {}
+        grade = (d.get("grade") or "").strip() or "—"
+        verdict = d.get("verdict") or "—"
+        tools = d.get("tools_scanned", 0)
+        if dr.get("ready"):
+            directory = "ready"
+        else:
+            bc = dr.get("blocker_count", 0)
+            directory = f"{bc} blocker{'s' if bc != 1 else ''}"
+        scanned = (d.get("scanned_at") or today)[:10]
+        grade_scale = grade_scale or (d.get("grade_scale") or "")
+        table_rows.append(
+            f"| [{name}](mcp-{slug}-mcp-security.html) | {grade} | `{verdict}` | "
+            f"{tools} | {directory} | {scanned} |")
+    table = ("| Server | Grade | Injection | Tools | Claude Directory | Scanned |\n"
+             "|---|:--:|---|:--:|---|---|\n" + "\n".join(table_rows))
+    grade_scale = grade_scale or (
+        "Grey Ridge Signals MCP security grade (A best – F worst), from our risk_score. "
+        "Our grade, not a third-party certification.")
+
+    index = f"""---
+title: MCP server security ranking — A–F injection & Claude Directory readiness leaderboard
+description: Ranked A–F security leaderboard of public MCP servers — static prompt-injection / tool-poisoning grade (OWASP LLM01/LLM08) plus Anthropic Claude Connector Directory readiness, each measured, dated and re-runnable keyless in one call.
+---
+# MCP server security ranking
+
+A ranked, A–F security read of {len(results)} well-known public MCP servers — graded on the
+tool-poisoning / prompt-injection patterns each server advertises (OWASP LLM01/LLM08) and on whether
+those tools would pass the Anthropic Claude Connector Directory review criteria. Sorted best-first.
+Every row is measured, dated and re-runnable by you in one keyless call; results are point-in-time
+(tool definitions drift).
 
 Last generated {today}.
 
-{chr(10).join(rows)}
+{table}
+
+*{grade_scale}* A `clear` injection verdict means no static tool-poisoning pattern was found — it is
+not a guarantee of safety.
 
 Scan a server not listed here:
 
