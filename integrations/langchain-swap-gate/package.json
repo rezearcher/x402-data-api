@@ -1,6 +1,6 @@
 {
   "name": "@grey-ridge/langchain-swap-gate",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Pre-trade token-safety gate for Base trading agents (LangChain.js tool): honeypot, sellability, admin-control and liquidity-vs-size checks via Grey Ridge /gate/swap, paid inline with x402 USDC ($0.008/call). Fails closed. Call before every swap.",
   "type": "module",
   "main": "dist/index.js",
