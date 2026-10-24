@@ -9216,11 +9216,19 @@ app.post("/tg/webhook", async (c) => {
 // the webhook secret. Lets a fresh deploy go live immediately instead of waiting
 // for the next 6h cron tick, and gives an external uptime check a verdict.
 app.get("/tg/status", async (c) => {
-  if (!c.env.TELEGRAM_BOT_TOKEN) {
+  const token = c.env.TELEGRAM_BOT_TOKEN;
+  if (!token) {
     return c.json({ provisioned: false, reason: "TELEGRAM_BOT_TOKEN not set — bot inert" });
   }
   const r = await tgEnsureWebhook(c.env);
-  return c.json({ provisioned: true, webhook: r });
+  // Public bot identity (getMe) so a surface can render the discoverable t.me
+  // link without anyone hand-copying the @username. Never exposes the token.
+  let username: string | null = null;
+  try {
+    const me = (await (await fetch(tgApi(token, "getMe"))).json()) as Record<string, any>;
+    username = me?.result?.username ?? null;
+  } catch { /* best effort */ }
+  return c.json({ provisioned: true, username, link: username ? `https://t.me/${username}` : null, webhook: r });
 });
 
 // ---------------------------------------------------------------------------
