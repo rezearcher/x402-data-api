@@ -52,6 +52,29 @@ import { swapGuard } from "@grey-ridge/langchain-swap-gate";
 const agent = createReactAgent({ llm, tools: [swapGuard] });
 ```
 
+## Second tool: `token_report` (token screening)
+
+`swapGuard` is the final gate *at the moment you swap*, sized to a notional.
+`createTokenReport()` is the companion for **screening a candidate token
+earlier** — a research or watchlist step that answers "is this token worth
+trading at all?" without a trade size. It wraps `/chain/token-report`
+(**$0.01 USDC/call**) and returns a `SAFE | CAUTION | AVOID` verdict with
+`risk_score`, the full security breakdown, and a single `safe` boolean. It uses
+the same `content_and_artifact` response format and **fails closed**
+(`safe: false`, verdict `AVOID`) if the route is unreachable.
+
+```ts
+import { createSwapGuard, createTokenReport } from "@grey-ridge/langchain-swap-gate";
+
+const tokenReport = createTokenReport({ privateKey: process.env.PRIVATE_KEY });
+const swapGuard = createSwapGuard({ privateKey: process.env.PRIVATE_KEY });
+
+// Wire BOTH into one agent: token_report to screen candidates, swap_guard to clear the order.
+const agent = createReactAgent({ llm, tools: [tokenReport, swapGuard] });
+```
+
+A zero-config `tokenReport` is exported too (reads `PRIVATE_KEY` from env).
+
 ## What the tool returns
 
 The tool is registered with `responseFormat: "content_and_artifact"`, so the
