@@ -115,4 +115,28 @@ check("legacy history without classes renders no diff rows, no throw", () => {
   assert.ok(!html.includes("new finding(s)"), "no diff fabricated when classes absent");
 });
 
+// 9. Risk-score sparkline: monitored timeline with >=2 datapoints renders an inline
+// SVG trend (the Detectify/Probely at-a-glance posture graph) with the correct
+// trend verb; the free locked view and <2-point histories render no SVG.
+check("monitored renders risk-score sparkline SVG with trend", () => {
+  const html = renderPostureTimeline({ ownerRec: REC, monitored: true, ownerHost: "mcp.example.com" });
+  assert.ok(html.includes("<svg"), "inline SVG sparkline present");
+  assert.ok(html.includes("<polyline"), "trend polyline present");
+  assert.ok(html.includes("Risk score (0–100) over the last"), "sparkline caption present");
+  // HIST goes 0 -> 28 -> 72, so posture worsened.
+  assert.ok(html.includes("worsened"), "trend verb reflects rising risk");
+  assert.ok(html.includes("<strong>72/100</strong>"), "latest risk in caption");
+});
+
+check("locked (free) view renders no sparkline SVG", () => {
+  const html = renderPostureTimeline({ ownerRec: REC, monitored: false, ownerHost: "mcp.example.com" });
+  assert.ok(!html.includes("<svg"), "no SVG in locked teaser");
+});
+
+check("baseline-only (single datapoint) renders no sparkline", () => {
+  const rec = { posture_history: [HIST[0]], posture: { verdict: "clear", risk_score: 0, checked_at: "2026-10-01T08:05:00.000Z" } };
+  const html = renderPostureTimeline({ ownerRec: rec, monitored: true, ownerHost: "mcp.example.com" });
+  assert.ok(!html.includes("<svg"), "no sparkline with <2 datapoints");
+});
+
 console.log(`\n${pass} checks passed`);

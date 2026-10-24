@@ -11918,9 +11918,40 @@ export function renderPostureTimeline(opts: {
     const lastSeen = snap?.checked_at
       ? `<p class=muted style="margin:.7rem 0 0">Last re-checked ${esc(fmt(snap.checked_at))} UTC — currently <strong>${esc(String(snap.verdict))}</strong> at risk ${Number(snap.risk_score)}/100.</p>`
       : "";
+    // Visual risk-score trend (the at-a-glance posture graph Detectify/Probely show
+    // above their history list). Chronological left→right over the same last-12 window
+    // as the table; risk 0 at the floor, 100 at the top, so a rising line = worsening.
+    // Pure inline SVG (no JS, survives a strict CSP); degrades to "" under 2 datapoints.
+    const riskSpark = (() => {
+      const pts = hist
+        .slice(-12)
+        .map((e) => (Number.isFinite(Number(e?.risk_score)) ? Math.max(0, Math.min(100, Number(e.risk_score))) : null))
+        .filter((n): n is number => n !== null);
+      if (pts.length < 2) return "";
+      const W = 320, H = 46, PAD = 5, n = pts.length;
+      const sevColor = (v: number) => (v >= 60 ? "#b91c1c" : v >= 25 ? "#a16207" : "#15803d");
+      const px = (i: number) => (PAD + (i * (W - 2 * PAD)) / (n - 1)).toFixed(1);
+      const py = (v: number) => (PAD + (1 - v / 100) * (H - 2 * PAD)).toFixed(1);
+      const linePts = pts.map((v, i) => `${px(i)},${py(v)}`).join(" ");
+      const areaPts = `${PAD},${(H - PAD).toFixed(1)} ${linePts} ${(W - PAD).toFixed(1)},${(H - PAD).toFixed(1)}`;
+      const dots = pts.map((v, i) => `<circle cx="${px(i)}" cy="${py(v)}" r="2" fill="${sevColor(v)}"/>`).join("");
+      const last = pts[pts.length - 1];
+      const first = pts[0];
+      const trend = last > first ? "worsened" : last < first ? "improved" : "held steady";
+      return `<div style="margin:.5rem 0 .3rem">
+    <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Risk score trend: ${first} to ${last} out of 100 across ${n} recorded scans, posture ${trend}" style="max-width:100%;height:auto">
+      <polyline points="${areaPts}" fill="rgba(15,118,110,.08)" stroke="none"/>
+      <polyline points="${linePts}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+      ${dots}
+      <circle cx="${px(n - 1)}" cy="${py(last)}" r="3.2" fill="${sevColor(last)}"/>
+    </svg>
+    <div class=muted style="font-size:.72rem;margin-top:.1rem">Risk score (0–100) over the last ${n} recorded scans — lower is better; posture ${trend} to <strong>${last}/100</strong>.</div>
+  </div>`;
+    })();
     return `<h2>Security posture over time</h2>
 <div class=card>
   <p class=summary><span class="pill clear">monitored</span> &nbsp;${hist.length} recorded transition(s), ${changes} verdict/risk change(s) since baseline. Each row is a point where the advertised manifest's posture actually moved — expanded with the exact findings that <strong>appeared</strong> or <strong>resolved</strong> at that change. Unchanged re-scans aren't logged.</p>
+  ${riskSpark}
   <table><thead><tr><th>When</th><th>Event</th><th>Verdict</th><th>Risk</th><th>Severity mix</th></tr></thead><tbody>
   ${rows}
   </tbody></table>${lastSeen}
