@@ -1,4 +1,4 @@
-# x402-data-api-mcp
+  x402-data-api-mcp# x402-data-api-mcp
 
 MCP stdio server for the [x402-data-api](https://x402-data-api.sigrunner.workers.dev) Worker. Exposes 22 tools covering blockchain data, crypto prices, DeFi yields, prediction markets, and enrichment endpoints via the [Model Context Protocol](https://modelcontextprotocol.io).
 
@@ -6,7 +6,7 @@ MCP stdio server for the [x402-data-api](https://x402-data-api.sigrunner.workers
 
 ```bash
 # Install
-npm install -g x402-data-api-mcp
+npm install -g @grey-ridge/x402-data-api-mcp
 
 # Run for free/preview tools (no wallet needed)
 x402-data-api-mcp
@@ -18,7 +18,7 @@ X402_WALLET_PRIVATE_KEY=0x... x402-data-api-mcp
 Or run directly from the repo:
 
 ```bash
-npx x402-data-api-mcp
+npx @grey-ridge/x402-data-api-mcp
 ```
 
 ## Setup

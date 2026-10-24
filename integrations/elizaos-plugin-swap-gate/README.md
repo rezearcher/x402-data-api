@@ -30,8 +30,8 @@ This is a **heuristic pre-trade risk signal**, not financial advice and not a gu
 ## Install
 
 ```bash
-npm install github:rezearcher/plugin-swap-gate
-# or: bun add github:rezearcher/plugin-swap-gate
+npm install @grey-ridge/elizaos-plugin-swap-gate
+# or: bun add @grey-ridge/elizaos-plugin-swap-gate
 ```
 
 Installs directly from source — the build is committed, so there is nothing to compile.
@@ -39,7 +39,7 @@ Installs directly from source — the build is committed, so there is nothing to
 Add it to your character/agent plugins:
 
 ```ts
-import swapGatePlugin from "plugin-swap-gate";
+import swapGatePlugin from "@grey-ridge/elizaos-plugin-swap-gate";
 
 export const character = {
   name: "MyTrader",
