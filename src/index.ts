@@ -10211,7 +10211,7 @@ async function grsgSendDriftAlert(c: any, host: string, rec: any, event: string,
   if (!notifyUrl) return false;
   const payload: any = {
     service: "grey-ridge-mcp-monitoring",
-    event, // "test" | "ownership_lapsed" | "ownership_restored" | "scan_verdict_changed"
+    event, // "test" | "ownership_lapsed" | "ownership_restored" | "scan_verdict_changed" | "directory_readiness_changed" | "scan_posture_and_directory_changed"
     host,
     verify_method: rec?.verify_method ?? null,
     occurred_at: new Date().toISOString(),
@@ -10336,16 +10336,46 @@ function grsgPostureSummary(result: McpScanResult): {
   tools_scanned: number;
   classes: string[];
   by_severity: Record<string, number>;
+  directory: {
+    status: "ready" | "needs_polish" | "likely_reject";
+    blocker_count: number;
+    hard_blockers: number;
+    soft_blockers: number;
+    // The Directory-specific structural blocker classes (tool|rule) at this
+    // snapshot — lets the monitored timeline show a per-RULE diff when a new
+    // release silently adds a structural reject (e.g. a new write-capable tool
+    // without a destructiveHint). Injection rejects are already carried by the
+    // security `classes` above, so we only track the directory:* rules here to
+    // avoid double-counting the same finding on both axes.
+    classes: string[];
+  };
 } {
   const classes = result.findings.map((f) => `${f.tool}|${f.rule}|${f.severity}`).sort();
   const by_severity: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0 };
   for (const f of result.findings) by_severity[f.severity] = (by_severity[f.severity] ?? 0) + 1;
+  // Claude Connector Directory readiness on the live tools/list. This is the
+  // continuous-monitoring value a one-shot scan cannot match and no competing
+  // MCP scanner re-checks: "a new tool in your next release silently broke your
+  // Directory readiness." Computed from the same fetched tools + findings, so
+  // it adds no extra network round-trip to the sweep.
+  const dir = computeDirectoryReadiness(result.tools ?? [], result.findings);
+  const dirClasses = dir.blockers
+    .filter((b) => typeof b.rule === "string" && b.rule.startsWith("directory:"))
+    .map((b) => `${b.tool}|${b.rule}`)
+    .sort();
   return {
     verdict: String(result.verdict),
     risk_score: result.risk_score,
     tools_scanned: result.tools_scanned,
     classes,
     by_severity,
+    directory: {
+      status: dir.status,
+      blocker_count: dir.blocker_count,
+      hard_blockers: dir.hard_blockers,
+      soft_blockers: dir.soft_blockers,
+      classes: dirClasses,
+    },
   };
 }
 
@@ -10355,8 +10385,42 @@ async function grsgPostureFingerprint(s: {
   tools_scanned: number;
   classes: string[];
 }): Promise<string> {
+  // SECURITY-posture fingerprint only (verdict/risk/tool-count/finding classes).
+  // Directory-readiness drift is tracked SEPARATELY against the prior directory
+  // snapshot (see grsgDirectoryDrift) rather than folded in here, so existing
+  // baselines — written before the directory field existed — do not all hash
+  // differently on first re-scan and fire a false "security changed" alert.
   const canon = `v=${s.verdict};r=${s.risk_score};t=${s.tools_scanned};c=${s.classes.join(",")}`;
   return (await sha256Hex(canon)).slice(0, 32);
+}
+
+// Rank the Directory-readiness status so we can tell a REGRESSION (ready ->
+// needs_polish -> likely_reject) from an improvement. A new release that adds a
+// structural reject is the paid-tier signal: "your next release silently broke
+// Directory readiness." Returns the drift decision + a human reason, or null
+// when there is no prior directory snapshot to compare against (first upgrade;
+// we baseline silently, never alert on the baseline itself).
+export function grsgDirectoryDrift(
+  prev: { status?: string; blocker_count?: number; classes?: string[] } | undefined,
+  cur: { status: string; blocker_count: number; classes: string[] },
+): { drifted: boolean; worsened: boolean; reason: string } | null {
+  if (!prev || typeof prev.status !== "string") return null; // no comparable baseline yet
+  const rank: Record<string, number> = { ready: 0, needs_polish: 1, likely_reject: 2 };
+  const pr = rank[prev.status] ?? 0;
+  const cr = rank[cur.status] ?? 0;
+  const prevClasses = new Set(Array.isArray(prev.classes) ? prev.classes : []);
+  const appeared = cur.classes.filter((cls) => !prevClasses.has(cls));
+  const curSet = new Set(cur.classes);
+  const resolved = (Array.isArray(prev.classes) ? prev.classes : []).filter((cls) => !curSet.has(cls));
+  const statusWorsened = cr > pr;
+  const drifted = cr !== pr || appeared.length > 0 || resolved.length > 0;
+  const worsened = statusWorsened || appeared.length > 0;
+  let reason = "";
+  if (statusWorsened) reason = `Claude Directory readiness regressed ${prev.status} -> ${cur.status}`;
+  else if (cr < pr) reason = `Claude Directory readiness improved ${prev.status} -> ${cur.status}`;
+  else if (appeared.length) reason = `New Directory structural blocker(s): ${appeared.slice(0, 5).join(", ")}`;
+  else if (resolved.length) reason = `Directory structural blocker(s) resolved: ${resolved.slice(0, 5).join(", ")}`;
+  return { drifted, worsened, reason };
 }
 
 // Re-scan a monitored host's MCP server and alert on a security-posture change.
@@ -10387,9 +10451,18 @@ async function grsgPostureDriftCheck(
   const fp = await grsgPostureFingerprint(summary);
   const now = new Date().toISOString();
   const prev = vrec?.posture;
+  // Directory-readiness drift is a SEPARATE axis from the security fingerprint:
+  // a release can break Directory readiness (new write-capable tool, dropped
+  // hint) while the injection-security posture is unchanged. We detect it
+  // against the prior directory snapshot so an upgrade from a pre-directory
+  // baseline silently re-baselines (no false alert) and only a REAL readiness
+  // change on a host that already had a snapshot counts as drift.
+  const dirDrift = grsgDirectoryDrift(prev?.directory, summary.directory);
+  const securityChanged = !!prev && !!prev.fp && prev.fp !== fp;
+  const directoryChanged = !!dirDrift && dirDrift.drifted;
   let kind: "baseline" | "changed" | "unchanged";
   if (!prev || !prev.fp) kind = "baseline";
-  else if (prev.fp !== fp) kind = "changed";
+  else if (securityChanged || directoryChanged) kind = "changed";
   else kind = "unchanged";
   // Append transitions (baseline + verdict/posture CHANGES) to a bounded history
   // ring so a subscriber can see a posture TIMELINE, not just the latest snapshot
@@ -10418,6 +10491,17 @@ async function grsgPostureDriftCheck(
             // history Detectify/Probely surface. Capped to keep the KV record
             // bounded even on a server that advertises an unusually large toolset.
             classes: Array.isArray(summary.classes) ? summary.classes.slice(0, 60) : [],
+            // Directory-readiness snapshot at this transition so the timeline can
+            // show a readiness regression ("ready -> likely_reject: new
+            // directory:mixed-read-write on transfer_funds") alongside the
+            // security diff — the per-release Directory monitoring no one-shot
+            // scan and no competing scanner offers.
+            directory: {
+              status: summary.directory.status,
+              hard_blockers: summary.directory.hard_blockers,
+              soft_blockers: summary.directory.soft_blockers,
+              classes: summary.directory.classes.slice(0, 40),
+            },
           },
         ].slice(-50);
   const updated: any = {
@@ -10429,6 +10513,16 @@ async function grsgPostureDriftCheck(
       tools_scanned: summary.tools_scanned,
       by_severity: summary.by_severity,
       classes: Array.isArray(summary.classes) ? summary.classes.slice(0, 60) : [],
+      // Persist the Directory-readiness snapshot so the NEXT sweep can diff
+      // against it (grsgDirectoryDrift) and so the badge/report can surface the
+      // current readiness without a re-scan.
+      directory: {
+        status: summary.directory.status,
+        blocker_count: summary.directory.blocker_count,
+        hard_blockers: summary.directory.hard_blockers,
+        soft_blockers: summary.directory.soft_blockers,
+        classes: summary.directory.classes.slice(0, 40),
+      },
       checked_at: now,
     },
     posture_history,
@@ -10443,19 +10537,47 @@ async function grsgPostureDriftCheck(
     try {
       const srec = await grsgSubRecord(c, host);
       if (grsgSubActive(srec)) {
-        await grsgSendDriftAlert(c, host, updated, "scan_verdict_changed", {
+        // Event type reflects the axis that actually moved so a subscriber's
+        // automation can route it: a security-posture change, a Directory-
+        // readiness change, or both. Directory-only drift (a new release that
+        // breaks the Directory checklist without touching the injection posture)
+        // is the per-release signal no one-shot scan can give — surface it as a
+        // first-class event, not buried in a "verdict changed" payload.
+        const eventType = securityChanged && directoryChanged
+          ? "scan_posture_and_directory_changed"
+          : directoryChanged
+            ? "directory_readiness_changed"
+            : "scan_verdict_changed";
+        await grsgSendDriftAlert(c, host, updated, eventType, {
           previous: {
             verdict: prev.verdict ?? null,
             risk_score: prev.risk_score ?? null,
             tools_scanned: prev.tools_scanned ?? null,
             by_severity: prev.by_severity ?? null,
+            directory: prev.directory
+              ? { status: prev.directory.status ?? null, blocker_count: prev.directory.blocker_count ?? null, hard_blockers: prev.directory.hard_blockers ?? null }
+              : null,
           },
           current: {
             verdict: summary.verdict,
             risk_score: summary.risk_score,
             tools_scanned: summary.tools_scanned,
             by_severity: summary.by_severity,
+            directory: {
+              status: summary.directory.status,
+              blocker_count: summary.directory.blocker_count,
+              hard_blockers: summary.directory.hard_blockers,
+            },
           },
+          // Which axes moved + a human-readable reason for the Directory change
+          // (e.g. "readiness regressed ready -> likely_reject"). Degrade-open:
+          // directory_reason is null when only the security posture changed.
+          changed_axes: [
+            ...(securityChanged ? ["security"] : []),
+            ...(directoryChanged ? ["directory"] : []),
+          ],
+          directory_reason: dirDrift && directoryChanged ? dirDrift.reason : null,
+          directory_worsened: dirDrift ? dirDrift.worsened : null,
           scan_target: target,
         });
       }
@@ -12207,15 +12329,49 @@ export function renderPostureTimeline(opts: {
       if (added.length === 0 && removed.length === 0) return null;
       return { added, removed };
     };
+    // Claude Directory-readiness diff for a transition: compare this entry's
+    // directory snapshot against the nearest prior entry that carried one, and
+    // describe a readiness regression/improvement (status move + any structural
+    // blocker that appeared/resolved). This is the per-release Directory signal
+    // the subscription sells — a readiness change often has NO security-finding
+    // delta, so without this row it would be invisible in the timeline.
+    const dirLabel = (cx: string) => {
+      const [tool, rule] = String(cx).split("|");
+      if (!rule) return esc(String(cx));
+      return `${esc(rule.replace(/^directory:/, ""))}${tool ? ` <span class=muted>(${esc(tool)})</span>` : ""}`;
+    };
+    const dirDetailFor = (idx: number): string => {
+      const e = hist[idx];
+      if (!e || e.kind !== "changed" || !e.directory || typeof e.directory !== "object") return "";
+      let prev: any = null;
+      for (let j = idx - 1; j >= 0; j--) {
+        if (hist[j]?.directory && typeof hist[j].directory === "object") { prev = hist[j].directory; break; }
+      }
+      if (!prev) return "";
+      const rank: Record<string, number> = { ready: 0, needs_polish: 1, likely_reject: 2 };
+      const pr = rank[String(prev.status)] ?? 0;
+      const cr = rank[String(e.directory.status)] ?? 0;
+      const prevSet = new Set<string>(Array.isArray(prev.classes) ? prev.classes : []);
+      const curSet = new Set<string>(Array.isArray(e.directory.classes) ? e.directory.classes : []);
+      const appeared = (Array.isArray(e.directory.classes) ? e.directory.classes : []).filter((x: string) => !prevSet.has(x));
+      const resolved = (Array.isArray(prev.classes) ? prev.classes : []).filter((x: string) => !curSet.has(x));
+      if (cr === pr && appeared.length === 0 && resolved.length === 0) return "";
+      const statusColor = cr > pr ? "#b91c1c" : cr < pr ? "#15803d" : "#a16207";
+      const arrow = cr !== pr ? ` <strong style="color:${statusColor}">Directory readiness ${esc(String(prev.status))} → ${esc(String(e.directory.status))}</strong>` : "";
+      const added = appeared.length ? `<div style="margin:.15rem 0"><strong style="color:#b91c1c">+ ${appeared.length} new reject(s)</strong>: ${appeared.slice(0, 6).map(dirLabel).join(", ")}</div>` : "";
+      const gone = resolved.length ? `<div style="margin:.15rem 0"><strong style="color:#15803d">− ${resolved.length} fixed</strong>: ${resolved.slice(0, 6).map(dirLabel).join(", ")}</div>` : "";
+      const head = arrow ? `<div style="margin:.15rem 0">${arrow}</div>` : "";
+      return `<tr><td></td><td colspan=4 style="padding-top:0;border-bottom:1px solid var(--line)"><span class=muted style="font-size:.72rem">Claude Directory</span>${head}${added}${gone}</td></tr>`;
+    };
     const diffDetail = (idx: number): string => {
       const d = diffFor(idx);
-      if (!d) return "";
       const line = (items: string[], verb: string, color: string, sign: string) =>
         items.length
           ? `<div style="margin:.15rem 0"><strong style="color:${color}">${sign} ${items.length} ${verb}</strong>: ${items.slice(0, 8).map(clsLabel).join(", ")}${items.length > 8 ? ` <span class=muted>+${items.length - 8} more</span>` : ""}</div>`
           : "";
-      const body = line(d.added, "new finding(s)", "#b91c1c", "+") + line(d.removed, "resolved", "#15803d", "−");
-      return `<tr><td></td><td colspan=4 style="padding-top:0;border-bottom:1px solid var(--line)">${body}</td></tr>`;
+      const secBody = d ? line(d.added, "new finding(s)", "#b91c1c", "+") + line(d.removed, "resolved", "#15803d", "−") : "";
+      const secRow = secBody ? `<tr><td></td><td colspan=4 style="padding-top:0;border-bottom:1px solid var(--line)">${secBody}</td></tr>` : "";
+      return secRow + dirDetailFor(idx);
     };
     const rows = hist
       .map((e, i) => ({ e, i }))

@@ -635,10 +635,21 @@ const POISONED_TOOLS = [
   const calls = installPostureStub(HOST, token, { dns: true, tools: POISONED_TOOLS });
   const j = await (await app.request("/scan/verify/sweep", {}, { API_KEYS: kv })).json();
   ok(j.posture_changed === 1, "posture change detected on drift");
-  const drift = calls.filter((c) => JSON.parse(c.body).event === "scan_verdict_changed");
-  ok(drift.length === 1, "exactly one scan_verdict_changed alert fired");
+  // A poisoned tool both injects (security verdict clear->block) AND is a
+  // documented Claude Directory reject, so the alert carries BOTH axes — the
+  // combined event, not the security-only "scan_verdict_changed". This is
+  // strictly more informative: the subscriber learns the same release also
+  // fails Directory review. Exactly one drift alert still fires.
+  const drift = calls.filter((c) => {
+    const e = JSON.parse(c.body).event;
+    return e === "scan_verdict_changed" || e === "scan_posture_and_directory_changed" || e === "directory_readiness_changed";
+  });
+  ok(drift.length === 1, "exactly one drift alert fired on a real change");
   const ev = JSON.parse(drift[0].body);
+  ok(ev.event === "scan_posture_and_directory_changed", "both axes moved -> combined event type");
+  ok(Array.isArray(ev.changed_axes) && ev.changed_axes.includes("security") && ev.changed_axes.includes("directory"), "changed_axes names both security and directory");
   ok(ev.previous.verdict === "clear" && ev.current.verdict !== "clear", "alert carries previous->current verdict transition");
+  ok(ev.current.directory && ev.current.directory.status === "likely_reject", "alert carries current Directory readiness status");
   ok(ev.host === HOST && ev.scan_target === MCP_URL, "alert identifies host + scan target");
   ok(typeof drift[0].headers["x-grsg-signature"] === "string", "drift alert is HMAC-signed");
   const after = JSON.parse(kv.store.get("verify:" + HOST));
