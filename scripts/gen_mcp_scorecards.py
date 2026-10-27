@@ -77,8 +77,12 @@ def _display_name(title, host):
 
 
 def _fetch_registry(pages, per_page=100):
-    """Yield (title, description, url) for active, latest registry entries that
-    advertise a remote HTTP endpoint. The registry is the ground-truth roster."""
+    """Yield (title, description, url, repo_url, packages) for active, latest registry
+    entries that advertise a remote HTTP endpoint. The registry is the ground-truth
+    roster. repo_url is the server's declared source repository (repository.url) and
+    packages is its declared publish artifacts (packages[] with registryType +
+    identifier) — both feed the maintenance + supply-chain drift grade. Either may be
+    None/[] (the grade degrades open to UNKNOWN, never a false F)."""
     cursor = None
     for _ in range(pages):
         q = f"{REGISTRY}?limit={per_page}" + (f"&cursor={urllib.parse.quote(cursor)}" if cursor else "")
@@ -94,10 +98,19 @@ def _fetch_registry(pages, per_page=100):
             meta = (entry.get("_meta") or {}).get("io.modelcontextprotocol.registry/official", {})
             if meta.get("status") != "active" or not meta.get("isLatest", True):
                 continue
+            repo_url = ((srv.get("repository") or {}).get("url") or "").strip() or None
+            packages = []
+            for pkg in (srv.get("packages") or []):
+                if not isinstance(pkg, dict):
+                    continue
+                ident = (pkg.get("identifier") or pkg.get("name") or "").strip()
+                if ident:
+                    packages.append({"registryType": pkg.get("registryType") or pkg.get("registry_type"),
+                                     "identifier": ident})
             for rem in (srv.get("remotes") or []):
                 url = rem.get("url", "")
                 if rem.get("type") in ("streamable-http", "http", "sse") and url.startswith("http"):
-                    yield srv.get("title"), srv.get("description"), url
+                    yield srv.get("title"), srv.get("description"), url, repo_url, packages
                     break
         cursor = (d.get("metadata") or {}).get("nextCursor")
         if not cursor:
@@ -126,6 +139,251 @@ def _has_substance(tool_list):
     return len(set(n.lower() for n in named)) >= 2
 
 
+# --- Maintenance + supply-chain drift grade --------------------------------
+# The recurring-value dimension no one-shot competitor (Glama has no maintenance
+# grade; Snyk/mcp-scan is one-shot) covers: an MCP server's STATIC tool metadata can
+# be clean today while its source repo goes abandoned or its upstream package ships a
+# CVE next week. We grade two live, keyless signals — repo maintenance (GitHub unauth
+# /repos) and declared-package advisories (OSV + npm deprecated) — and persist them so
+# a re-scan that finds a NEW advisory or a worsened maintenance bucket is a DRIFT event
+# feeding the subscription-gated monitored badge. Everything here degrades OPEN: any API
+# miss or absent repo/packages yields UNKNOWN (neutral), never a fabricated F.
+
+def _parse_iso(s):
+    """Parse an ISO-8601 timestamp (GitHub's pushed_at, Z or offset) to an aware UTC
+    datetime, or None. Degrade-open: never raises."""
+    if not s or not isinstance(s, str):
+        return None
+    t = s.strip().replace("Z", "+00:00")
+    try:
+        dt = datetime.datetime.fromisoformat(t)
+    except Exception:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+    return dt.astimezone(datetime.timezone.utc)
+
+
+def parse_github_repo_url(url):
+    """(owner, repo) from a GitHub repository.url, or None for non-GitHub / unparseable.
+    Tolerates .git suffix, trailing slash, and extra path segments."""
+    if not url or not isinstance(url, str):
+        return None
+    try:
+        p = urllib.parse.urlparse(url.strip())
+    except Exception:
+        return None
+    if p.netloc.lower() not in ("github.com", "www.github.com"):
+        return None
+    parts = [x for x in p.path.split("/") if x]
+    if len(parts) < 2:
+        return None
+    owner, repo = parts[0], parts[1]
+    if repo.endswith(".git"):
+        repo = repo[:-4]
+    if not owner or not repo:
+        return None
+    return owner, repo
+
+
+def maintenance_bucket(repo_meta, now=None):
+    """Grade repository maintenance from a GitHub /repos payload (or None). Buckets:
+    archived|disabled -> ABANDONED (F); last push <30d -> fresh (A); 30-180d -> active
+    (B); 180-365d -> slowing (C); >365d -> stale (D); no repo / no push date -> UNKNOWN
+    (grade None, neutral). Pure + degrade-open."""
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    if not isinstance(repo_meta, dict):
+        return {"bucket": "UNKNOWN", "grade": None,
+                "reason": "no public source repository to measure maintenance from"}
+    if repo_meta.get("archived") or repo_meta.get("disabled"):
+        return {"bucket": "ABANDONED", "grade": "F",
+                "reason": "the source repository is archived or disabled"}
+    dt = _parse_iso(repo_meta.get("pushed_at"))
+    if not dt:
+        return {"bucket": "UNKNOWN", "grade": None,
+                "reason": "the source repository reports no last-push date"}
+    days = max(0, (now - dt).days)
+    oi = repo_meta.get("open_issues_count")
+    if days < 30:
+        bucket, grade = "fresh", "A"
+    elif days < 180:
+        bucket, grade = "active", "B"
+    elif days < 365:
+        bucket, grade = "slowing", "C"
+    else:
+        bucket, grade = "stale", "D"
+    reason = f"last commit pushed {days} day(s) ago"
+    if isinstance(oi, int):
+        reason += f", {oi} open issue(s)"
+    return {"bucket": bucket, "grade": grade, "reason": reason,
+            "days_since_push": days, "open_issues": oi if isinstance(oi, int) else None}
+
+
+def supplychain_grade(vuln_ids, deprecated_pkgs, had_packages=True):
+    """Grade declared-package supply-chain risk. OSV querybatch returns advisory IDs
+    only (no severity), so we grade on COUNT: 0 advisories + not deprecated = clean (A);
+    1-2 = CAUTION (C); 3+ = HIGH (D). A deprecated latest version alone = CAUTION. No
+    declared packages = UNKNOWN (grade None). Pure + degrade-open."""
+    ids = sorted({v for v in (vuln_ids or []) if v})
+    dep = sorted({d for d in (deprecated_pkgs or []) if d})
+    if not had_packages:
+        return {"level": "UNKNOWN", "grade": None, "vuln_ids": ids,
+                "deprecated": dep, "advisory_count": 0}
+    n = len(ids)
+    if n >= 3:
+        level, grade = "HIGH", "D"
+    elif n >= 1:
+        level, grade = "CAUTION", "C"
+    elif dep:
+        level, grade = "CAUTION", "C"
+    else:
+        level, grade = "clean", "A"
+    return {"level": level, "grade": grade, "vuln_ids": ids,
+            "deprecated": dep, "advisory_count": n}
+
+
+def _osv_ecosystem(registry_type):
+    """Map an MCP-registry packages[].registryType to an OSV ecosystem, or None if OSV
+    does not index it (we skip those packages rather than guess)."""
+    return {
+        "npm": "npm", "pypi": "PyPI", "nuget": "NuGet", "gem": "RubyGems",
+        "rubygems": "RubyGems", "golang": "Go", "go": "Go", "cargo": "crates.io",
+        "crates": "crates.io", "maven": "Maven", "composer": "Packagist",
+    }.get((registry_type or "").lower())
+
+
+def osv_querybatch(packages):
+    """ONE keyless POST to OSV querybatch for every OSV-indexable declared package;
+    return the flat list of advisory IDs (GHSA/PYSEC/...). Degrade-open: [] on any miss."""
+    queries, labels = [], []
+    for p in (packages or []):
+        eco = _osv_ecosystem(p.get("registryType"))
+        name = (p.get("identifier") or "").strip()
+        if eco and name:
+            queries.append({"package": {"name": name, "ecosystem": eco}})
+            labels.append(name)
+    if not queries:
+        return []
+    body = json.dumps({"queries": queries}).encode()
+    req = urllib.request.Request("https://api.osv.dev/v1/querybatch", data=body,
+                                 headers={**UA, "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=25) as r:
+            d = json.load(r)
+    except Exception as e:
+        print(f"  osv miss ({len(queries)} pkg): {e}", file=sys.stderr)
+        return []
+    ids = []
+    for res in d.get("results", []):
+        for v in (res.get("vulns") or []):
+            if v.get("id"):
+                ids.append(v["id"])
+    return ids
+
+
+def npm_deprecated(packages):
+    """Return npm package names whose dist-tags.latest version is deprecated (a real
+    'do not use' maintenance signal). Keyless GET per npm package; degrade-open."""
+    dep = []
+    for p in (packages or []):
+        if (p.get("registryType") or "").lower() != "npm":
+            continue
+        name = (p.get("identifier") or "").strip()
+        if not name:
+            continue
+        try:
+            q = f"https://registry.npmjs.org/{urllib.parse.quote(name, safe='@/')}"
+            with urllib.request.urlopen(urllib.request.Request(q, headers=UA), timeout=20) as r:
+                d = json.load(r)
+            latest = (d.get("dist-tags") or {}).get("latest") or ""
+            ver = (d.get("versions") or {}).get(latest, {})
+            if isinstance(ver, dict) and ver.get("deprecated"):
+                dep.append(name)
+        except Exception as e:
+            print(f"  npm-deprecated miss {name}: {e}", file=sys.stderr)
+            continue
+    return dep
+
+
+def fetch_repo_meta(owner, repo):
+    """GitHub unauth GET /repos/{owner}/{repo} (60/hr, >= our scan-cap). Degrade-open: None."""
+    q = f"https://api.github.com/repos/{owner}/{repo}"
+    req = urllib.request.Request(q, headers={**UA, "Accept": "application/vnd.github+json"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return json.load(r)
+    except Exception as e:
+        print(f"  repo-meta miss {owner}/{repo}: {e}", file=sys.stderr)
+        return None
+
+
+def assess_maintenance(repo_url):
+    """Resolve + grade repo maintenance from a declared repository.url. Degrade-open."""
+    gh = parse_github_repo_url(repo_url)
+    if not gh:
+        return maintenance_bucket(None)
+    return maintenance_bucket(fetch_repo_meta(*gh))
+
+
+def assess_supplychain(packages):
+    """Grade declared-package supply-chain risk live (OSV + npm deprecated). Degrade-open."""
+    had = bool(packages)
+    ids = osv_querybatch(packages) if had else []
+    dep = npm_deprecated(packages) if had else []
+    return supplychain_grade(ids, dep, had_packages=had)
+
+
+def maintenance_section(name, host, maint, supply):
+    """Render the maintenance + supply-chain block for a scorecard page. This is the
+    continuous-risk dimension a one-shot scan (Glama, Snyk mcp-scan) cannot see, and the
+    drift alert on it is the subscription-gated recurring value. Claims Law: every line
+    is a measured, dated read; UNKNOWN is stated plainly, never dressed as a pass."""
+    maint = maint or {"bucket": "UNKNOWN", "grade": None,
+                      "reason": "no public source repository to measure maintenance from"}
+    supply = supply or {"level": "UNKNOWN", "grade": None, "vuln_ids": [],
+                        "deprecated": [], "advisory_count": 0}
+    lines = []
+    mg = maint.get("grade")
+    if mg:
+        lines.append(f"- **Maintenance grade `{mg}`** — {maint['reason']}.")
+    else:
+        lines.append(f"- **Maintenance: not measurable** — {maint['reason']} "
+                     "(no grade asserted either way).")
+    sg = supply.get("grade")
+    ids = supply.get("vuln_ids") or []
+    dep = supply.get("deprecated") or []
+    if supply.get("level") == "UNKNOWN":
+        lines.append("- **Supply chain: not measurable** — this server declares no "
+                     "published package to trace upstream advisories against.")
+    elif supply.get("level") == "clean":
+        lines.append("- **Supply chain grade `A`** — no known advisory (OSV) and no "
+                     "deprecated release across the package(s) this server publishes.")
+    else:
+        bits = []
+        if ids:
+            shown = ", ".join(ids[:4]) + ("…" if len(ids) > 4 else "")
+            bits.append(f"{len(ids)} known upstream advisory/advisories ({shown})")
+        if dep:
+            bits.append(f"a deprecated latest release on {', '.join(dep[:3])}")
+        detail = "; ".join(bits) if bits else "a flagged upstream condition"
+        lines.append(f"- **Supply chain grade `{sg}` ({supply.get('level')})** — {detail}.")
+    body = (
+        f"## Maintenance & supply-chain — the risk {name}'s static scan can't see\n\n"
+        f"A prompt-injection scan reads {name}'s advertised tool metadata at one moment. "
+        "It cannot tell you the project behind `" + host + "` went quiet, or that a package it "
+        "ships picked up a CVE last week — the two ways a server that scanned clean becomes a "
+        "liability without its tool definitions changing at all. These are measured, dated reads:\n\n"
+        + "\n".join(lines) + "\n\n"
+        "A one-shot scan (and the free one-shot competitors) can only ever show the snapshot above. "
+        f"The value in watching `{host}` is the **change**: the alert the week its upstream ships an "
+        "advisory, or the month its repo crosses from active into stale. That continuous drift watch — "
+        "six-hourly re-checks of all three signals with an alert on any worsening — is the "
+        f"[`$9.99/mo` monitoring subscription]({BASE}/pricing). A grade here is a point-in-time "
+        "measurement, not a warranty.\n"
+    )
+    return body
+
+
 def discover_servers(scan_cap, pages, seen_urls, seen_slugs):
     """Discover live public MCP servers from the registry and keep only those that
     answer an unauthenticated tools/list with describable surface (see _has_substance).
@@ -133,7 +391,7 @@ def discover_servers(scan_cap, pages, seen_urls, seen_slugs):
     pre-fetched _tools/_instructions so render() does not re-fetch. Bounded by scan_cap."""
     out = []
     checked = 0
-    for title, desc, url in _fetch_registry(pages):
+    for title, desc, url, repo_url, packages in _fetch_registry(pages):
         parsed = urllib.parse.urlparse(url)
         key = (parsed.netloc + parsed.path.rstrip("/")).lower()
         if key in seen_urls:
@@ -173,9 +431,18 @@ def discover_servers(scan_cap, pages, seen_urls, seen_slugs):
             print(f"  discover THIN-SKIP {name} ({host}): "
                   f"{len(tool_list)} tool(s), no describable surface", file=sys.stderr)
             continue
+        # Maintenance + supply-chain drift grade (keyless, degrade-open): resolve the
+        # declared source repo + published packages into measured maintenance and
+        # upstream-advisory reads. Attached to d so render() and future drift re-scans
+        # consume them without re-fetching. Any miss -> UNKNOWN, never a false F.
+        d["_repo_url"] = repo_url
+        d["_packages"] = packages
+        d["_maintenance"] = assess_maintenance(repo_url)
+        d["_supplychain"] = assess_supplychain(packages)
         seen_slugs.add(slug)
         out.append((name, slug, url, vendor, d))
         print(f"  discover OK {name} ({host}): tools={d.get('tools_scanned')} "
+              f"maint={d['_maintenance'].get('bucket')} supply={d['_supplychain'].get('level')} "
               f"verdict={d.get('verdict')} blockers={(d.get('directory_readiness') or {}).get('blocker_count')}")
         if len(out) >= scan_cap:
             break
@@ -391,6 +658,10 @@ def render(name, slug, url, vendor, d, today):
         except Exception:
             tool_list, instr = [], ""
     tools_block = tools_section(name, tool_list, instr)
+    # Maintenance + supply-chain drift grade (the continuous-risk dimension no one-shot
+    # competitor covers). Discovery attaches these to d; curated anchors have no declared
+    # repo/packages so they degrade open to UNKNOWN (stated plainly, never a false F).
+    maint_block = maintenance_section(name, host, d.get("_maintenance"), d.get("_supplychain"))
     surf = surface_line(tool_list)
     surf_bullet = f"- {surf}\n" if surf else ""
     rsum = _clean(d.get("risk_summary"), 240)
@@ -462,6 +733,7 @@ on {today}; an MCP server's tool definitions can change at any time (the "drift"
 makes visible), so a clean result today is not a guarantee for tomorrow.
 
 {tools_block}
+{maint_block}
 ## Scan {name} yourself, or claim its badge {{#claim}}
 
 Re-run this exact {name} check yourself, keyless — the free response carries the verdict and the
