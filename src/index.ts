@@ -11149,6 +11149,7 @@ if(chk)chk.onclick=async function(){
         "<pre>"+j.owner_badge_markdown+"</pre>"+
         (j.scan_badge_markdown?"<div class=row style=\\"margin-top:.6rem\\"><strong style=font-size:.85rem>Scan verdict badge</strong></div><pre>"+j.scan_badge_markdown+"</pre>":"")+
         (j.monitored_badge_markdown?"<div class=row style=\\"margin-top:.9rem\\"><strong style=font-size:.85rem>Monitored badge</strong> <span class=muted style=font-size:.8rem>(grey until you start monitoring)</span></div><pre>"+j.monitored_badge_markdown+"</pre>":"")+
+        (j.directory_badge_markdown?"<div class=row style=\\"margin-top:.9rem\\"><strong style=font-size:.85rem>Claude Directory readiness badge</strong> <span class=muted style=font-size:.8rem>(grey until your first monitored sweep)</span></div><pre>"+j.directory_badge_markdown+"</pre>":"")+
         "<p class=muted style=\\"margin:.7rem 0 .4rem\\">"+j.monitor+"</p>"+
         (j.alerts_webhook_setup?"<div class=row style=\\"margin-top:.6rem\\"><strong style=font-size:.85rem>Drift-alert webhook</strong> <span class=muted style=font-size:.8rem>(Slack/Discord/PagerDuty or your own; HMAC-signed)</span></div><pre>"+j.alerts_webhook_setup.replace(/</g,"&lt;")+"</pre>":"")+
         (j.subscribe_url?"<button id=sub style=\\"margin-top:.2rem\\">Start monitoring — $9.99/mo</button>":"");
@@ -12584,8 +12585,8 @@ ${ctaBlock}${scriptBlock}`);
     // Monitored (paid) vs verified-only (free). A monitored server shows the
     // green continuous-watch badge; a verified-only one shows an upsell to it.
     const monitorRow = ownerMonitored
-      ? `<div class=badge-row style="margin-top:.5rem"><img alt="mcp security monitored" src="https://img.shields.io/endpoint?url=${encodeURIComponent(ORIGIN + "/scan/verify/badge?kind=monitored&domain=" + ownerHost)}&style=flat-square"></div>
-  <p class=summary style="margin:.5rem 0 0"><span class="pill clear">monitored</span> &nbsp;This server is under continuous monitoring — re-verified and re-scanned on a schedule with drift alerts.</p>`
+      ? `<div class=badge-row style="margin-top:.5rem"><img alt="mcp security monitored" src="https://img.shields.io/endpoint?url=${encodeURIComponent(ORIGIN + "/scan/verify/badge?kind=monitored&domain=" + ownerHost)}&style=flat-square"> <img alt="claude directory readiness" src="https://img.shields.io/endpoint?url=${encodeURIComponent(ORIGIN + "/scan/verify/badge?kind=directory&domain=" + ownerHost)}&style=flat-square"></div>
+  <p class=summary style="margin:.5rem 0 0"><span class="pill clear">monitored</span> &nbsp;This server is under continuous monitoring — re-verified and re-scanned on a schedule with drift alerts, and its Claude Directory readiness is tracked every sweep.</p>`
       : `<p class=summary style="margin:.5rem 0 0"><span class="pill unknown">monitoring off</span> &nbsp;Ownership is verified, but continuous monitoring is not active. <a href="/scan/verify?domain=${encodeURIComponent(ownerHost)}">Turn on monitoring</a> to keep a green badge with drift alerts.</p>`;
     ownerBlock = `<h2>Ownership</h2>
 <div class=card>
