@@ -462,7 +462,7 @@ on {today}; an MCP server's tool definitions can change at any time (the "drift"
 makes visible), so a clean result today is not a guarantee for tomorrow.
 
 {tools_block}
-## Scan {name} yourself, or claim its badge
+## Scan {name} yourself, or claim its badge {{#claim}}
 
 Re-run this exact {name} check yourself, keyless — the free response carries the verdict and the
 directory-blocker count for `{host}`:
@@ -595,6 +595,19 @@ def parse_published_card(slug, text):
         "tools": tools, "ready": ready, "blocker_count": bc,
         "risk_score": None, "grade_scale": "", "scanned": scanned,
     }
+
+
+def grade_cell_link(grade, page):
+    """Leaderboard Grade cell: deep-link the grade to that server's claim/fix CTA
+    (the #claim anchor on its per-server page), not just the row name to the page top.
+    The grade is the cell a server owner reacts to ("why am I a C?"), so it is the
+    highest-intent entry into the free-badge claim + $9.99/mo fix path. A missing grade
+    ("—" or empty) stays plain text so a carried-forward row with no grade is never a
+    dead link. Degrade-open: anything falsy or the em-dash placeholder passes through."""
+    g = (grade or "").strip()
+    if not g or g == "—":
+        return grade
+    return f"[{g}]({page}#claim)"
 
 
 def rank_key_card(c):
@@ -767,8 +780,9 @@ def main():
             directory = f"{bc} blocker{'s' if bc != 1 else ''}"
         scanned = (c.get("scanned") or today)[:10]
         grade_scale = grade_scale or (c.get("grade_scale") or "")
+        page = f"mcp-{c['slug']}-mcp-security.html"
         table_rows.append(
-            f"| [{c.get('name') or c['slug']}](mcp-{c['slug']}-mcp-security.html) | {grade} | "
+            f"| [{c.get('name') or c['slug']}]({page}) | {grade_cell_link(grade, page)} | "
             f"`{verdict}` | {tools} | {directory} | {scanned} |")
     table = ("| Server | Grade | Injection | Tools | Claude Directory | Scanned |\n"
              "|---|:--:|---|:--:|---|---|\n" + "\n".join(table_rows))
