@@ -795,11 +795,21 @@ Last generated {today}.
 *{grade_scale}* A `clear` injection verdict means no static tool-poisoning pattern was found — it is
 not a guarantee of safety.
 
-Scan a server not listed here:
+## Is your MCP server on this list?
+
+Scan it free and see where it ranks — paste your `tools/list` into the
+[browser scanner]({BASE}/scan/mcp-scanner) (it runs against a zero-egress endpoint, so your server
+stays private), or re-run any row from the terminal, keyless:
 
 ```bash
 curl "{BASE}/scan/mcp/preview?url=https://your-mcp-host/mcp&directory=true"
 ```
+
+If you run the server, [claim a measured verified-owner badge]({BASE}/scan/verify) free — one automated
+DNS-TXT check, no human review — and embed it in your README so your users can see the grade for
+themselves. Keeping that badge green as your tools change — six-hourly re-scans, drift alerts and the
+full OWASP LLM01/LLM08 report — is the [`$9.99/mo` monitoring subscription]({BASE}/pricing). A green
+badge means no injection patterns were found on the dates shown: a measured signal, not a warranty.
 
 Method and the rest of the catalogue: [vet an MCP server before your agent trusts it](index.html).
 Independent scans by [Grey Ridge Signals](https://github.com/rezearcher/greyridge-x402-tools).
