@@ -9875,9 +9875,10 @@ function computeDirectoryReadiness(
   return { ready: blockers.length === 0, status, blocker_count: blockers.length, hard_blockers, soft_blockers, blockers };
 }
 
-function previewOf(
+export function previewOf(
   r: McpScanResult,
   dir?: { ready: boolean; status?: "ready" | "needs_polish" | "likely_reject"; blocker_count: number; hard_blockers?: number; soft_blockers?: number },
+  badgeTarget?: string,
 ) {
   const by = { critical: 0, high: 0, medium: 0, low: 0 } as Record<string, number>;
   for (const f of r.findings) by[f.severity]++;
@@ -9923,6 +9924,20 @@ function previewOf(
       checked_against: "Anthropic Claude Connector Directory published review criteria",
       upsell,
     };
+    // Embeddable LIVE badge the connector author can drop in their README NOW,
+    // from this free scan — not grey-until-claimed. `kind=directory&url=` makes
+    // the badge endpoint do a fresh one-shot readiness scan of the public URL,
+    // so it shows the real ready / needs-polish / likely-reject colour and links
+    // back to the full report. This is the distribution surface: every embed is
+    // a backlink to Grey Ridge, and the CTA to keep it live across releases
+    // (monitored, so one broken release flips it red) is the subscription hook.
+    if (badgeTarget && /^https?:\/\//i.test(badgeTarget)) {
+      const bt = encodeURIComponent(badgeTarget);
+      (out.directory_readiness as Record<string, unknown>).badge_markdown =
+        `[![Claude Directory readiness](https://img.shields.io/endpoint?url=${encodeURIComponent(GRSG_PUBLIC_BASE + "/scan/verify/badge?kind=directory&url=" + bt)}&style=flat-square)](${GRSG_PUBLIC_BASE}/scan/report?url=${bt})`;
+      (out.directory_readiness as Record<string, unknown>).badge_note =
+        "Embed this live badge in your README — it re-checks your public server on each render and links to the full report. Claim + subscribe at /pricing to pin it to monitored (it flips red the release a new tool breaks readiness, before the Directory reviewer sees it).";
+    }
   }
   return out;
 }
@@ -9941,7 +9956,7 @@ app.get("/scan/mcp/preview", async (c) => {
     // in EVERY free scan now (count + ready only; itemized blockers stay paid).
     // The ?directory=true / mode=directory params are kept as back-compat no-ops.
     const dir = computeDirectoryReadiness(result.tools ?? [], result.findings);
-    return c.json(previewOf(result, dir));
+    return c.json(previewOf(result, dir, target));
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
@@ -10792,14 +10807,36 @@ app.get("/scan/verify/badge", async (c) => {
     if (!host) return c.json({ ...dbase, message: "unknown", color: "lightgrey" });
     const vrec = await grsgVerifyRecord(c, host);
     grsgScheduleRevalidate(c, host, vrec);
-    if (!vrec) return c.json({ ...dbase, message: "unclaimed", color: "lightgrey" });
     const dir = vrec?.posture?.directory;
-    const status = typeof dir?.status === "string" ? dir.status : null;
-    if (!status) return c.json({ ...dbase, message: "not scanned", color: "lightgrey", cacheSeconds: 600 });
-    if (status === "ready") return c.json({ ...dbase, message: "ready", color: "brightgreen" });
-    if (status === "needs_polish") return c.json({ ...dbase, message: "needs polish", color: "yellow", cacheSeconds: 600 });
-    if (status === "likely_reject") return c.json({ ...dbase, message: "likely reject", color: "red", cacheSeconds: 600 });
-    return c.json({ ...dbase, message: String(status), color: "lightgrey", cacheSeconds: 600 });
+    const persisted = typeof dir?.status === "string" ? dir.status : null;
+    // Claimed + monitored host → serve the persisted sweep status (no re-scan).
+    if (persisted) {
+      if (persisted === "ready") return c.json({ ...dbase, message: "ready", color: "brightgreen" });
+      if (persisted === "needs_polish") return c.json({ ...dbase, message: "needs polish", color: "yellow", cacheSeconds: 600 });
+      if (persisted === "likely_reject") return c.json({ ...dbase, message: "likely reject", color: "red", cacheSeconds: 600 });
+      return c.json({ ...dbase, message: String(persisted), color: "lightgrey", cacheSeconds: 600 });
+    }
+    // Unclaimed / not-yet-swept, but a full MCP URL was supplied → do a LIVE
+    // one-shot readiness scan so an author can embed a REAL coloured badge from
+    // the free scan (billboard + backlink), not a grey placeholder. Shields
+    // caches this (shorter window since it is a live read); claim + subscribe
+    // pins it to the monitored per-release status. Degrades open to grey.
+    const liveUrl = c.req.query("url");
+    if (liveUrl && /^https?:\/\//i.test(liveUrl)) {
+      try {
+        const r = await scanMcpServer(liveUrl);
+        const s = computeDirectoryReadiness(r.tools ?? [], r.findings).status;
+        const lbase = { ...dbase, cacheSeconds: 1800 };
+        if (s === "ready") return c.json({ ...lbase, message: "ready", color: "brightgreen" });
+        if (s === "needs_polish") return c.json({ ...lbase, message: "needs polish", color: "yellow" });
+        if (s === "likely_reject") return c.json({ ...lbase, message: "likely reject", color: "red" });
+        return c.json({ ...lbase, message: String(s), color: "lightgrey" });
+      } catch {
+        return c.json({ ...dbase, message: "unreachable", color: "lightgrey", cacheSeconds: 600 });
+      }
+    }
+    if (!vrec) return c.json({ ...dbase, message: "unclaimed", color: "lightgrey" });
+    return c.json({ ...dbase, message: "not scanned", color: "lightgrey", cacheSeconds: 600 });
   }
 
   const base = { schemaVersion: 1, label: "ownership", cacheSeconds: 3600 };
@@ -12787,7 +12824,7 @@ const mcpHandler = createMcpHandler(() => {
         content: [
           {
             type: "text" as const,
-            text: JSON.stringify(previewOf(result, dir), null, 2),
+            text: JSON.stringify(previewOf(result, dir, url), null, 2),
           },
         ],
       };
