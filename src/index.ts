@@ -10725,6 +10725,18 @@ app.get("/scan/verify/status", async (c) => {
           tools_scanned: rec.posture.tools_scanned ?? null,
           by_severity: rec.posture.by_severity ?? null,
           checked_at: rec.posture.checked_at ?? null,
+          // Claude Connector Directory readiness from the last sweep — queryable
+          // without a re-scan so an author's release pipeline can gate on it (fail
+          // CI when a new tool silently regresses Directory readiness). The paid
+          // continuous layer no competing MCP scanner surfaces.
+          directory: rec.posture.directory
+            ? {
+                status: rec.posture.directory.status ?? null,
+                blocker_count: rec.posture.directory.blocker_count ?? null,
+                hard_blockers: rec.posture.directory.hard_blockers ?? null,
+                soft_blockers: rec.posture.directory.soft_blockers ?? null,
+              }
+            : null,
         }
       : null,
     // Posture TIMELINE — the continuous-monitoring layer (Detectify/Probely
@@ -10766,6 +10778,28 @@ app.get("/scan/verify/badge", async (c) => {
     if (!grsgSubActive(srec))
       return c.json({ ...mbase, message: "monitoring off", color: "lightgrey", cacheSeconds: 600 });
     return c.json({ ...mbase, message: "monitored · verified", color: "brightgreen" });
+  }
+
+  // kind=directory → a live "Claude Directory readiness" billboard for a
+  // subscriber's README, reflecting the status from the last monitored sweep
+  // (grsgPostureDriftCheck persists posture.directory). This turns per-release
+  // Directory-readiness monitoring from a private webhook into a public badge —
+  // the distribution surface no one-shot scan and no competing scanner offers.
+  // Grey until a monitored host has a sweep; flips red the release a new tool
+  // silently breaks readiness, which is the renewal hook.
+  if (kind === "directory") {
+    const dbase = { schemaVersion: 1, label: "claude directory", cacheSeconds: 1800 };
+    if (!host) return c.json({ ...dbase, message: "unknown", color: "lightgrey" });
+    const vrec = await grsgVerifyRecord(c, host);
+    grsgScheduleRevalidate(c, host, vrec);
+    if (!vrec) return c.json({ ...dbase, message: "unclaimed", color: "lightgrey" });
+    const dir = vrec?.posture?.directory;
+    const status = typeof dir?.status === "string" ? dir.status : null;
+    if (!status) return c.json({ ...dbase, message: "not scanned", color: "lightgrey", cacheSeconds: 600 });
+    if (status === "ready") return c.json({ ...dbase, message: "ready", color: "brightgreen" });
+    if (status === "needs_polish") return c.json({ ...dbase, message: "needs polish", color: "yellow", cacheSeconds: 600 });
+    if (status === "likely_reject") return c.json({ ...dbase, message: "likely reject", color: "red", cacheSeconds: 600 });
+    return c.json({ ...dbase, message: String(status), color: "lightgrey", cacheSeconds: 600 });
   }
 
   const base = { schemaVersion: 1, label: "ownership", cacheSeconds: 3600 };
@@ -11008,6 +11042,11 @@ app.get("/scan/verify/check", async (c) => {
     // until the subscription is active, then flips green on the first paid
     // invoice. Subscribe binds the sub to THIS host.
     monitored_badge_markdown: `[![MCP security: monitored](https://img.shields.io/endpoint?url=${encodeURIComponent(ORIGIN + "/scan/verify/badge?kind=monitored&domain=" + host)}&style=flat-square)](${ORIGIN}/scan/report?url=${encodeURIComponent(url || "https://" + host)})`,
+    // Live Claude Connector Directory-readiness badge — reflects the last
+    // monitored sweep (grey until the first sweep, red the release a new tool
+    // breaks readiness). A public billboard of per-release Directory readiness
+    // no one-shot scan or competing scanner offers.
+    directory_badge_markdown: `[![Claude Directory readiness](https://img.shields.io/endpoint?url=${encodeURIComponent(ORIGIN + "/scan/verify/badge?kind=directory&domain=" + host)}&style=flat-square)](${ORIGIN}/scan/report?url=${encodeURIComponent(url || "https://" + host)})`,
     subscribe_url: `${ORIGIN}/stripe/create-checkout-session?host=${encodeURIComponent(host)}`,
     monitor: `To turn the badge green and keep it live with drift alerts + the full auditor-grade report, start monitoring for this host: POST ${ORIGIN}/stripe/create-checkout-session?host=${host} ($9.99/mo). The badge goes grey if the subscription lapses.`,
     // Drift-alert delivery: register an https webhook (Slack/Discord/PagerDuty or

@@ -742,4 +742,54 @@ const POISONED_TOOLS = [
   ok(st.posture_history_locked === true, "status: timeline is flagged locked (the upgrade hook)");
 }
 
+// ---- kind=directory badge: live Claude Directory readiness billboard ----
+
+// 38. directory badge: unclaimed host => grey "unclaimed".
+{
+  const kv = makeFakeKV();
+  const j = await (await app.request("/scan/verify/badge?kind=directory&domain=unclaimed.example", {}, { API_KEYS: kv })).json();
+  ok(j.label === "claude directory" && j.message === "unclaimed" && j.color === "lightgrey", "directory badge: unclaimed => grey");
+}
+
+// 39. directory badge: claimed but NO sweep yet (no posture.directory) => grey "not scanned".
+{
+  const kv = makeFakeKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, last_ok: true, verify_method: "dns-txt" }));
+  const j = await (await app.request("/scan/verify/badge?kind=directory&domain=" + HOST, {}, { API_KEYS: kv })).json();
+  ok(j.message === "not scanned" && j.color === "lightgrey", "directory badge: claimed/no-sweep => not scanned");
+}
+
+// 40. directory badge: ready => brightgreen.
+{
+  const kv = makeFakeKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, last_ok: true, posture: { directory: { status: "ready", hard_blockers: 0, soft_blockers: 0 } } }));
+  const j = await (await app.request("/scan/verify/badge?kind=directory&domain=" + HOST, {}, { API_KEYS: kv })).json();
+  ok(j.message === "ready" && j.color === "brightgreen", "directory badge: ready => green");
+}
+
+// 41. directory badge: needs_polish => yellow.
+{
+  const kv = makeFakeKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, last_ok: true, posture: { directory: { status: "needs_polish", hard_blockers: 0, soft_blockers: 2 } } }));
+  const j = await (await app.request("/scan/verify/badge?kind=directory&domain=" + HOST, {}, { API_KEYS: kv })).json();
+  ok(j.message === "needs polish" && j.color === "yellow", "directory badge: needs_polish => yellow");
+}
+
+// 42. directory badge: likely_reject => red (the renewal hook — a release broke readiness).
+{
+  const kv = makeFakeKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, last_ok: true, posture: { directory: { status: "likely_reject", hard_blockers: 1, soft_blockers: 0 } } }));
+  const j = await (await app.request("/scan/verify/badge?kind=directory&domain=" + HOST, {}, { API_KEYS: kv })).json();
+  ok(j.message === "likely reject" && j.color === "red", "directory badge: likely_reject => red");
+}
+
+// 43. status endpoint surfaces posture.directory (queryable without a re-scan — CI can gate on it).
+{
+  const kv = makeFakeKV();
+  kv.store.set("verify:" + HOST, JSON.stringify({ host: HOST, last_ok: true, verified_at: "2026-10-01T00:00:00Z", posture: { verdict: "review", risk_score: 10, directory: { status: "ready", blocker_count: 0, hard_blockers: 0, soft_blockers: 0 }, checked_at: "2026-10-27T00:00:00Z" } }));
+  const st = await (await app.request("/scan/verify/status?domain=" + HOST, {}, { API_KEYS: kv })).json();
+  ok(st.posture && st.posture.directory && st.posture.directory.status === "ready", "status: posture.directory surfaced");
+  ok(st.posture.directory.hard_blockers === 0, "status: posture.directory carries blocker counts");
+}
+
 console.log(`verify tests: ${passed}/${passed} passed`);
