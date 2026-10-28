@@ -122,11 +122,11 @@ export function createCryptoPrices(opts: DataToolOptions = {}) {
     {
       name: "crypto_prices",
       description:
-        "Spot token prices (DefiLlama) via Grey Ridge /crypto/prices ($0.001 USDC/call, paid inline with x402 — no API key). Pass comma-separated CoinGecko ids (up to 25); returns price, change_24h, symbol, confidence and timestamp per token.",
+        "Spot token prices (DefiLlama) via Grey Ridge /crypto/prices ($0.001 USDC/call, paid inline with x402 — no API key). Pass comma-separated ticker symbols or CoinGecko ids (up to 25); returns price, change_24h, symbol, confidence and timestamp per token.",
       schema: z.object({
         coins: z
           .string()
-          .describe("Comma-separated CoinGecko ids (max 25), e.g. 'bitcoin,ethereum,solana'."),
+          .describe("Comma-separated ticker symbols or CoinGecko ids (max 25), e.g. 'ETH,BTC' or 'bitcoin,ethereum,solana'."),
       }),
       responseFormat: "content_and_artifact",
     }

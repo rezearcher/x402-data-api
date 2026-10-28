@@ -8,7 +8,7 @@ sign-up. Your agent's own wallet signs a sub-cent micropayment per call.
 | Tool | Route | Price | Returns |
 |------|-------|-------|---------|
 | `defiYields` | `/defi/yields` | **$0.001** | Ranked lending/LP pools — project, chain, symbol, APY + 1d/7d/30d trend, IL risk, TVL, risk-adjusted score |
-| `cryptoPrices` | `/crypto/prices` | **$0.001** | Spot price, 24h change, symbol, confidence, timestamp (up to 25 tokens) |
+| `cryptoPrices` | `/crypto/prices` | **$0.001** | Spot price, 24h change, symbol, confidence, timestamp — pass ticker symbols (`ETH,BTC`) or CoinGecko ids, up to 25 |
 | `baseBalance` | `/chain/balance` | **$0.002** | ETH balance of a Base address incl. `balance_usd` |
 | `baseGasPrice` | `/chain/gas-price` | **$0.002** | Base EIP-1559 gas — `base_fee_gwei`, `priority_fee_gwei`, `gas_price_gwei/_wei`, `gas_price_usd` |
 | `baseBlockNumber` | `/chain/block-number` | **$0.002** | Current Base mainnet block height |

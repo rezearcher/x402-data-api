@@ -10,7 +10,7 @@ Drop-in tools wrapping Grey Ridge's live x402 data routes:
 | Function / tool | Route | Price | Returns |
 |------|-------|-------|---------|
 | `defi_yields` | `/defi/yields` | $0.001 | Top lending/LP pools: project, chain, symbol, APY + trend, IL risk, TVL, risk-adjusted score |
-| `crypto_prices` | `/crypto/prices` | $0.001 | Spot price, 24h change, symbol (≤25 CoinGecko ids) |
+| `crypto_prices` | `/crypto/prices` | $0.001 | Spot price, 24h change, symbol — ticker symbols (`ETH,BTC`) or CoinGecko ids, ≤25 |
 | `crypto_funding` | `/crypto/funding` | $0.004 | Cross-venue perp funding + arb spread (Hyperliquid+OKX+dYdX), best long/short venue, signal |
 | `market_brief` | `/brief/market` | $0.01 | One-call snapshot: fear/greed, global market cap, BTC dominance, trending coins |
 | `base_balance` | `/chain/balance` | $0.002 | Native ETH balance + `balance_usd` for a Base address |

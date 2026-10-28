@@ -41,7 +41,7 @@ def defi_yields(limit: int = 20, project: Optional[str] = None,
 
 def crypto_prices(coins: Any, *, private_key: Optional[str] = None,
                   base: str = _d.DATA_BASE) -> Dict[str, Any]:
-    """Spot price + 24h change for up to 25 CoinGecko ids. $0.001."""
+    """Spot price + 24h change for up to 25 ticker symbols or CoinGecko ids. $0.001."""
     c = _ctx(private_key)
     return _d.run_prices(c["pay_get"], coins=coins, has_key=c["has_key"], base=base)
 
@@ -120,7 +120,7 @@ def crewai_tools(private_key: Optional[str] = None) -> List[Any]:
         sort: str = Field("tvl", description="'tvl' or 'risk_adjusted'.")
 
     class _PricesArgs(BaseModel):
-        coins: str = Field(..., description="Comma-separated CoinGecko ids, e.g. 'bitcoin,ethereum'.")
+        coins: str = Field(..., description="Comma-separated ticker symbols or CoinGecko ids, e.g. 'ETH,BTC' or 'bitcoin,ethereum'.")
 
     class _AddrArgs(BaseModel):
         address: str = Field(..., description="A 0x… Base address.")
@@ -153,7 +153,7 @@ def crewai_tools(private_key: Optional[str] = None) -> List[Any]:
 
     class CryptoPricesTool(BaseTool):
         name: str = "crypto_prices"
-        description: str = ("Spot price + 24h change for up to 25 CoinGecko ids. Paid $0.001/call "
+        description: str = ("Spot price + 24h change for up to 25 ticker symbols or CoinGecko ids. Paid $0.001/call "
                             "via x402 USDC on Base; degrades open to a free 1-coin preview.")
         args_schema: type = _PricesArgs
 

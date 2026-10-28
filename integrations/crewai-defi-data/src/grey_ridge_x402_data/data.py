@@ -32,6 +32,25 @@ BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 _ADDR_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
 _COINGECKO_ID_RE = re.compile(r"^[a-z0-9-]{1,40}$")
 
+# Common ticker-symbol -> CoinGecko id aliases, mirrored from the server so the
+# client accepts the same input the API does. An LLM asked "price of ETH" calls
+# with "ETH", not the slug "ethereum"; without this the most natural query threw
+# before any request. Unknown symbols pass through lowercased so a real id still
+# resolves (degrade-open), never a silent gate.
+_COIN_ALIASES: Dict[str, str] = {
+    "btc": "bitcoin", "eth": "ethereum", "weth": "weth", "sol": "solana",
+    "bnb": "binancecoin", "xrp": "ripple", "ada": "cardano", "doge": "dogecoin",
+    "avax": "avalanche-2", "dot": "polkadot", "matic": "matic-network",
+    "pol": "matic-network", "link": "chainlink", "uni": "uniswap", "ltc": "litecoin",
+    "trx": "tron", "atom": "cosmos", "near": "near", "apt": "aptos", "arb": "arbitrum",
+    "op": "optimism", "usdc": "usd-coin", "usdt": "tether", "dai": "dai",
+    "wbtc": "wrapped-bitcoin", "cbbtc": "coinbase-wrapped-btc", "steth": "staked-ether",
+    "aave": "aave", "mkr": "maker", "ldo": "lido-dao", "crv": "curve-dao-token",
+    "snx": "havven", "comp": "compound-governance-token", "aero": "aerodrome-finance",
+    "degen": "degen-base", "pepe": "pepe", "shib": "shiba-inu", "ena": "ethena",
+    "sui": "sui", "ton": "the-open-network", "hype": "hyperliquid",
+}
+
 # A pay-getter returns ``(status_code, parsed_json_or_None)``. The keyless
 # default (``plain_get``) only ever hits the free /preview routes.
 PayGet = Callable[[str], Tuple[int, Optional[Any]]]
@@ -49,9 +68,9 @@ def normalize_coins(coins: Any) -> List[str]:
         raw = [str(c).strip() for c in coins]
     else:
         raw = [s.strip() for s in str(coins or "").split(",")]
-    ids = [c for c in raw if c]
+    ids = [_COIN_ALIASES.get(c.lower(), c.lower()) for c in raw if c]
     if not ids:
-        raise ValueError("coins must contain at least one CoinGecko id")
+        raise ValueError("coins must contain at least one CoinGecko id or ticker symbol")
     if len(ids) > 25:
         raise ValueError("coins accepts at most 25 ids")
     bad = [c for c in ids if not _COINGECKO_ID_RE.match(c)]

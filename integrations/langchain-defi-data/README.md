@@ -7,7 +7,7 @@ Drop-in LangChain tools wrapping Grey Ridge's live x402 data routes:
 | Tool | Route | Price | Returns |
 |------|-------|-------|---------|
 | `defiYields` | `/defi/yields` | $0.001 | Top lending/LP pools: project, chain, symbol, APY + 1d/7d/30d trend, IL risk, TVL, risk-adjusted score |
-| `cryptoPrices` | `/crypto/prices` | $0.001 | Spot price, 24h change, symbol, confidence (≤25 CoinGecko ids) |
+| `cryptoPrices` | `/crypto/prices` | $0.001 | Spot price, 24h change, symbol, confidence — ticker symbols (`ETH,BTC`) or CoinGecko ids, ≤25 |
 | `baseBalance` | `/chain/balance` | $0.002 | Native ETH balance + `balance_usd` for a Base address |
 | `baseGasPrice` | `/chain/gas-price` | $0.002 | Base EIP-1559 gas: `base_fee_gwei`, `priority_fee_gwei`, `gas_price_gwei/_wei`, `gas_price_usd` |
 | `baseBlockNumber` | `/chain/block-number` | $0.002 | Current Base mainnet block height |

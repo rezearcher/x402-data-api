@@ -2137,7 +2137,7 @@ app.get("/openapi.json", (c) => {
           responses: { "200": { description: "JSON — overall_success_pct, window, and per-endpoint samples/success_pct/p50_ms/p95_ms" } },
         },
       },
-      "/crypto/prices": paid("Spot token prices + change_24h (DefiLlama).", "0.001", [{ name: "coins", desc: "comma-separated coingecko ids (max 25)", example: "bitcoin,ethereum" }]),
+      "/crypto/prices": paid("Spot token prices + change_24h (DefiLlama).", "0.001", [{ name: "coins", desc: "comma-separated ticker symbols or coingecko ids (max 25)", example: "ETH,BTC" }]),
       "/crypto/funding": paid("Cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread + premium/annualized/signal/next_funding_ts.", "0.004", [{ name: "limit", desc: "max coins (default 20, max 100)", example: "10" }]),
       "/defi/yields": paid("Top DeFi lending/LP yields — APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast (DefiLlama).", "0.001", [{ name: "limit", desc: "max pools", example: "10" }, { name: "project", desc: "protocol filter", example: "aave-v3" }, { name: "chain", desc: "chain filter", example: "Base" }, { name: "stable", desc: "'true' = stablecoin only", example: "true" }, { name: "sort", desc: "'tvl' (default) or 'risk_adjusted' (apy/sigma)", example: "tvl" }]),
       "/pm/markets": paid("Live Polymarket prediction markets, ranked by volume24hr, with bestBid/bestAsk/spread and category tags.", "0.005", [{ name: "query", desc: "keyword filter", example: "election" }, { name: "limit", desc: "max markets", example: "10" }]),
@@ -5901,6 +5901,68 @@ interface TokenPrice {
 
 const COINGECKO_ID_RE = /^[a-z0-9-]{1,40}$/;
 
+// Common ticker-symbol → CoinGecko id aliases. An LLM asked "what's ETH trading
+// at" calls with "ETH", not the CoinGecko slug "ethereum", so without this the
+// most natural query 400s on a paid route. This is a convenience alias table,
+// not a gate: an unknown symbol passes through unchanged and is validated as an
+// id (degrade-open), so real CoinGecko ids keep working exactly as before.
+const COIN_ALIASES: Record<string, string> = {
+  btc: "bitcoin",
+  eth: "ethereum",
+  weth: "weth",
+  sol: "solana",
+  bnb: "binancecoin",
+  xrp: "ripple",
+  ada: "cardano",
+  doge: "dogecoin",
+  avax: "avalanche-2",
+  dot: "polkadot",
+  matic: "matic-network",
+  pol: "matic-network",
+  link: "chainlink",
+  uni: "uniswap",
+  ltc: "litecoin",
+  trx: "tron",
+  atom: "cosmos",
+  near: "near",
+  apt: "aptos",
+  arb: "arbitrum",
+  op: "optimism",
+  usdc: "usd-coin",
+  usdt: "tether",
+  dai: "dai",
+  wbtc: "wrapped-bitcoin",
+  cbbtc: "coinbase-wrapped-btc",
+  steth: "staked-ether",
+  aave: "aave",
+  mkr: "maker",
+  ldo: "lido-dao",
+  crv: "curve-dao-token",
+  snx: "havven",
+  comp: "compound-governance-token",
+  aero: "aerodrome-finance",
+  degen: "degen-base",
+  pepe: "pepe",
+  shib: "shiba-inu",
+  ena: "ethena",
+  sui: "sui",
+  ton: "the-open-network",
+  hype: "hyperliquid",
+};
+
+/**
+ * Normalize a caller's coin list to CoinGecko ids: trim, lowercase, and map a
+ * known ticker symbol to its slug. Unknown tokens pass through lowercased so a
+ * genuine CoinGecko id still resolves (and a truly invalid one still 400s at
+ * the validation step, with the same clear error).
+ */
+function resolveCoinIds(ids: string[]): string[] {
+  return ids.map((raw) => {
+    const k = raw.trim().toLowerCase();
+    return COIN_ALIASES[k] ?? k;
+  });
+}
+
 // Best-effort 24h % change — same host as the price call (coins.llama.fi), a
 // separate endpoint, so an upstream failure here never fails the price fetch.
 async function fetchTokenPriceChanges(ids: string[]): Promise<Record<string, number | null>> {
@@ -5951,10 +6013,10 @@ async function fetchTokenPrices(ids: string[]): Promise<TokenPrice[]> {
 
 app.get("/crypto/prices", async (c) => {
   const coinsParam = c.req.query("coins") || "bitcoin,ethereum,solana";
-  const ids = coinsParam.split(",").map((s) => s.trim()).filter(Boolean);
+  const ids = resolveCoinIds(coinsParam.split(",").map((s) => s.trim()).filter(Boolean));
 
   if (ids.length === 0) {
-    return c.json({ error: "coins query param must contain at least one CoinGecko id" }, { status: 400 });
+    return c.json({ error: "coins query param must contain at least one CoinGecko id or ticker symbol" }, { status: 400 });
   }
   if (ids.length > 25) {
     return c.json({ error: "coins query param accepts at most 25 ids" }, { status: 400 });
@@ -13930,13 +13992,13 @@ const mcpHandler = createMcpHandler(() => {
       description:
         "Live spot token prices (price, change_24h, symbol, confidence, timestamp) for CoinGecko ids, sourced from DefiLlama. Cost: $0.005 USDC per call via x402.",
       inputSchema: {
-        coins: z.string().optional().describe('Comma-separated CoinGecko ids, e.g. "bitcoin,ethereum,solana" (default; max 25)'),
+        coins: z.string().optional().describe('Comma-separated ticker symbols or CoinGecko ids, e.g. "ETH,BTC" or "bitcoin,ethereum,solana" (default; max 25)'),
       },
     },
     async ({ coins }) => {
       try {
         const coinsParam = coins || "bitcoin,ethereum,solana";
-        const ids = coinsParam.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 25);
+        const ids = resolveCoinIds(coinsParam.split(",").map((s) => s.trim()).filter(Boolean)).slice(0, 25);
         const invalid = ids.filter((id) => !COINGECKO_ID_RE.test(id));
         if (invalid.length > 0) {
           return { content: [{ type: "text" as const, text: `Error: invalid coingecko id(s): ${invalid.join(", ")}` }] };

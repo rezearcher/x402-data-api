@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grey-ridge-x402-data"
-version = "0.3.0"
+version = "0.3.1"
 description = "DeFi yields, token prices, perp funding, a one-call market brief and Base-chain reads for CrewAI and Python agents — paid inline per call with x402 USDC on Base, no API key."
 readme = "README.md"
 requires-python = ">=3.9"

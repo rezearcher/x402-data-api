@@ -84,11 +84,11 @@ export function createCryptoPrices(opts: DataToolOptions = {}) {
   const { base, payFetch, hasKey } = resolve(opts);
   return tool({
     description:
-      "Spot token prices (DefiLlama) via Grey Ridge /crypto/prices ($0.001 USDC/call, paid inline with x402 — no API key). Pass comma-separated CoinGecko ids (up to 25); returns price, change_24h, symbol, confidence and timestamp per token.",
+      "Spot token prices (DefiLlama) via Grey Ridge /crypto/prices ($0.001 USDC/call, paid inline with x402 — no API key). Pass comma-separated ticker symbols or CoinGecko ids (up to 25); returns price, change_24h, symbol, confidence and timestamp per token.",
     inputSchema: z.object({
       coins: z
         .string()
-        .describe("Comma-separated CoinGecko ids (max 25), e.g. 'bitcoin,ethereum,solana'."),
+        .describe("Comma-separated ticker symbols or CoinGecko ids (max 25), e.g. 'ETH,BTC' or 'bitcoin,ethereum,solana'."),
     }),
     execute: async ({ coins }: { coins: string }) => runPrices(payFetch, { coins, base }, { hasKey }),
   });

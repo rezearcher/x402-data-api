@@ -12,19 +12,42 @@ export const DATA_BASE = "https://x402-data-api.sigrunner.workers.dev";
 const ADDR_RE = /0x[a-fA-F0-9]{40}/;
 const COINGECKO_ID_RE = /^[a-z0-9-]{1,40}$/;
 
+// Common ticker-symbol → CoinGecko id aliases, mirrored from the server so the
+// client accepts the same input the API does. An LLM asked "what's ETH trading
+// at" calls with "ETH", not the slug "ethereum" — without this the most natural
+// query threw before any request. Unknown symbols pass through lowercased so a
+// real CoinGecko id still resolves (degrade-open), never a silent gate.
+const COIN_ALIASES = {
+  btc: "bitcoin", eth: "ethereum", weth: "weth", sol: "solana", bnb: "binancecoin",
+  xrp: "ripple", ada: "cardano", doge: "dogecoin", avax: "avalanche-2", dot: "polkadot",
+  matic: "matic-network", pol: "matic-network", link: "chainlink", uni: "uniswap",
+  ltc: "litecoin", trx: "tron", atom: "cosmos", near: "near", apt: "aptos",
+  arb: "arbitrum", op: "optimism", usdc: "usd-coin", usdt: "tether", dai: "dai",
+  wbtc: "wrapped-bitcoin", cbbtc: "coinbase-wrapped-btc", steth: "staked-ether",
+  aave: "aave", mkr: "maker", ldo: "lido-dao", crv: "curve-dao-token", snx: "havven",
+  comp: "compound-governance-token", aero: "aerodrome-finance", degen: "degen-base",
+  pepe: "pepe", shib: "shiba-inu", ena: "ethena", sui: "sui", ton: "the-open-network",
+  hype: "hyperliquid",
+};
+
 // --------------------------------------------------------------------------
 // Input normalisers
 // --------------------------------------------------------------------------
 
-/** Normalise `coins` (string "a,b" or string[]) to a validated, de-duped id list. Throws on a bad id so a bad call never silently costs a payment. */
+/** Normalise `coins` (string "a,b" or string[]) to a validated, de-duped id list, mapping ticker symbols (ETH, BTC) to CoinGecko ids. Throws on a bad id so a bad call never silently costs a payment. */
 export function normalizeCoins(coins) {
   const raw = Array.isArray(coins)
     ? coins
     : String(coins || "")
         .split(",")
         .map((s) => s.trim());
-  const ids = raw.filter(Boolean);
-  if (ids.length === 0) throw new Error("coins must contain at least one CoinGecko id");
+  const ids = raw
+    .filter(Boolean)
+    .map((s) => {
+      const k = s.toLowerCase();
+      return COIN_ALIASES[k] ?? k;
+    });
+  if (ids.length === 0) throw new Error("coins must contain at least one CoinGecko id or ticker symbol");
   if (ids.length > 25) throw new Error("coins accepts at most 25 ids");
   const bad = ids.filter((id) => !COINGECKO_ID_RE.test(id));
   if (bad.length) throw new Error(`invalid coingecko id(s): ${bad.join(", ")}`);

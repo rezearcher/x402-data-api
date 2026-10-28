@@ -59,8 +59,17 @@ test("normalizeCoins accepts string + array, dedupes, validates", () => {
   assert.deepEqual(normalizeCoins("bitcoin,ethereum"), ["bitcoin", "ethereum"]);
   assert.deepEqual(normalizeCoins(["bitcoin", "bitcoin", "solana"]), ["bitcoin", "solana"]);
   assert.throws(() => normalizeCoins(""), /at least one/);
-  assert.throws(() => normalizeCoins("BITCOIN"), /invalid coingecko/); // uppercase rejected
+  assert.throws(() => normalizeCoins("BAD ID!"), /invalid coingecko/); // spaces/punct rejected
   assert.throws(() => normalizeCoins(Array(26).fill("x")), /at most 25/);
+});
+
+test("normalizeCoins maps ticker symbols + uppercase to CoinGecko ids", () => {
+  assert.deepEqual(normalizeCoins("ETH,BTC"), ["ethereum", "bitcoin"]);
+  assert.deepEqual(normalizeCoins("eth, btc, sol"), ["ethereum", "bitcoin", "solana"]);
+  assert.deepEqual(normalizeCoins("BITCOIN"), ["bitcoin"]); // uppercase id now lowercased, not rejected
+  assert.deepEqual(normalizeCoins(["WETH", "aero"]), ["weth", "aerodrome-finance"]);
+  // unknown token passes through lowercased (degrade-open) so a real id still works
+  assert.deepEqual(normalizeCoins("some-new-token"), ["some-new-token"]);
 });
 
 // ---- URL builders ----

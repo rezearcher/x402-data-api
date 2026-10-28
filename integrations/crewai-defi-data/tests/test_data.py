@@ -18,6 +18,13 @@ class TestNormalizers(unittest.TestCase):
         self.assertEqual(d.normalize_coins("bitcoin, ethereum"), ["bitcoin", "ethereum"])
         self.assertEqual(d.normalize_coins(["usd-coin"]), ["usd-coin"])
 
+    def test_coins_ticker_symbol_aliases(self):
+        self.assertEqual(d.normalize_coins("ETH,BTC"), ["ethereum", "bitcoin"])
+        self.assertEqual(d.normalize_coins("eth, btc, sol"), ["ethereum", "bitcoin", "solana"])
+        self.assertEqual(d.normalize_coins("BITCOIN"), ["bitcoin"])  # uppercase id lowercased
+        self.assertEqual(d.normalize_coins(["WETH", "aero"]), ["weth", "aerodrome-finance"])
+        self.assertEqual(d.normalize_coins("some-new-token"), ["some-new-token"])  # degrade-open
+
     def test_coins_dedupe_order(self):
         self.assertEqual(d.normalize_coins("a,b,a"), ["a", "b"])
 

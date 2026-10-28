@@ -1,6 +1,6 @@
 {
   "name": "@grey-ridge/langchain-defi-data",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "DeFi yields, token prices and Base balances for LangChain.js trading agents \u2014 paid inline per call with x402 USDC on Base ($0.001/call), no API key. Drop-in tools wrapping Grey Ridge /defi/yields, /crypto/prices and /chain/balance; degrade open to a free preview.",
   "type": "module",
   "main": "dist/index.js",
