@@ -9523,15 +9523,40 @@ function tokenQ(c: any): string | undefined {
 // price-impact decision, so silently defaulting a mis-cased param to $100 would
 // return a dangerously-wrong GO for a large trade; accept the camelCase alias
 // too. Returns null for a present-but-invalid value so the handler can 400.
-export function notionalQ(c: any): number | null {
+// `present` exists so a caller can tell "absent -> documented default" apart from
+// "present but unparseable -> 400"; collapsing both into the default is exactly
+// the fail-open this helper is supposed to prevent.
+export function notionalParam(c: any): { present: boolean; value: number | null } {
   for (const k of ["notional_usd", "notional", "notionalUsd"]) {
     const v = c.req.query(k);
     if (v !== undefined && v !== "") {
       const n = Number(v);
-      return Number.isFinite(n) && n > 0 ? n : null;
+      return { present: true, value: Number.isFinite(n) && n > 0 ? n : null };
     }
   }
-  return 100;
+  return { present: false, value: null };
+}
+export function notionalQ(c: any): number | null {
+  const p = notionalParam(c);
+  return p.present ? p.value : 100;
+}
+// Query validation for the FREE gate paths — /gate/swap/preview and, via the
+// ?preview=true redirect in the middleware, the paid /gate/swap route itself.
+// Absent params keep the documented preview defaults (buy, $100); PRESENT-but-
+// invalid params are an error the handler 400s. Coercing side=hodl to `buy`, or
+// reading notional=abc / notional=-5 as $100, answers a different question than
+// the caller asked and returns a GO sized to the wrong trade — this is the path
+// probes and agents hit to "check before paying", so a silent default here is
+// worse than on the paid route, not more forgiving. Exported for the contract test.
+export function previewGateArgs(c: any): { error: string } | { side: "buy" | "sell"; notional: number } {
+  const sideRaw = c.req.query("side");
+  const sideLc = (sideRaw ?? "").toLowerCase();
+  if (sideRaw !== undefined && sideRaw !== "" && sideLc !== "buy" && sideLc !== "sell") {
+    return { error: "side must be buy or sell" };
+  }
+  const np = notionalParam(c);
+  if (np.present && np.value === null) return { error: "notional_usd must be a positive number" };
+  return { side: sideLc === "sell" ? "sell" : "buy", notional: np.present ? (np.value as number) : 100 };
 }
 app.get("/chain/token-report/preview", async (c) => {
   const tq = tokenQ(c);
@@ -9571,17 +9596,20 @@ async function trialToken(c: any, q: string | undefined): Promise<{ token: strin
 app.get("/gate/swap/preview", async (c) => {
   const tq = tokenQ(c);
   if (tq !== undefined && !ADDR_RE.test(tq) && !PREVIEW_DEMO_TOKENS[tq.toLowerCase()]) return c.json({ error: "token must be a 0x-prefixed 20-byte Base address (or demo: usdc|weth|cbbtc|aero|degen)" }, { status: 400 });
+  // Validate BEFORE trialToken: a malformed request must not burn one of the 3
+  // free real-token checks per IP per day, and must not fall through to a default
+  // that answers a different question than the caller asked.
+  const args = previewGateArgs(c);
+  if ("error" in args) return c.json({ error: args.error }, { status: 400 });
   try {
     const t = await trialToken(c, tq);
     if (t.exhausted) { const pu = paidUrlFrom(c); return c.json({ error: "free real-token trial exhausted (3/day/IP) - this is NOT a result for the token you asked about", trial: { real_token_checks_left_today: 0 }, paid: pu, paid_url: pu, price_usdc: "0.008", pay_with: `x402: npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f("${pu}") - pays USDC on Base automatically. Docs: https://api.greyridgesignals.ai/llms.txt` }, { status: 429 }); }
-    const pSide = c.req.query("side") === "sell" ? "sell" : "buy";
-    const effNotional = notionalQ(c) ?? 100;
-    const out = await buildSwapGate(t.token, pSide, effNotional);
+    const out = await buildSwapGate(t.token, args.side, args.notional);
     const swapUpgrade = upgradeCTA(
       paidUrlFrom(c),
       "0.008",
       "Adds the EXIT SIMULATION (USD recoverable vs lost to slippage at $100/$1k/$10k/$50k and for your own notional) + trade sizing — the bounded-downside number this free verdict does not include. Unmetered, any Base ERC-20 (free preview is capped at 3 real tokens/IP/day).",
-      { paid_adds: paidSwapAdds(effNotional) },
+      { paid_adds: paidSwapAdds(args.notional) },
     );
     if (t.left !== null) return c.json({ ...out, trial: { real_token_checks_left_today: t.left }, paid_gate: { url: paidUrlFrom(c), price_usdc: "0.008" }, upgrade: swapUpgrade, note: t.left === 0 && t.token === previewToken(c.req.query("token")) ? "Free real-token trial exhausted for today (3/day/IP); showing demo token. Paid: GET /gate/swap?token=<0x…> ($0.008)." : `Free real-token trial (${t.left} left today). Paid: GET /gate/swap?token=<0x…>&side=buy|sell&notional_usd=<n> ($0.008).` });
     return c.json({ ...out, upgrade: swapUpgrade, note: "Free live sample (demo tokens via ?token=usdc|weth|cbbtc|aero|degen; default Base USDC, buy, $100) — full: GET /gate/swap?token=<0x…>&side=buy|sell&notional_usd=<n> ($0.008) for ANY Base ERC-20." });
