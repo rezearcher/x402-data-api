@@ -181,7 +181,7 @@ const ROUTE_CATALOG: Array<[string, string, string, string, string, string[]]> =
   ["/chain/token-security", "GET", "0.009", "9000", "Is this Base token a scam or rug pull? Honeypot detector for a Base ERC-20: EIP-1967 proxy + upgradeability check, bytecode scan for mint/pause/blacklist/fee-setter/ownership, owner() renouncement, and a live eth_call state-override sim proving a real wallet can transfer() it. Returns risk_score (0-100) + verdict (clear/review/block) + honeypot/scam/rug flags. Use before an agent buys, holds or approves a token.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "token-security", "data", "scam", "rug", "rug-detection", "scam-detection"]],
   ["/pm/markets", "GET", "0.005", "5000", "Live Polymarket prediction markets — question, outcomes, bestBid/bestAsk/spread, volume24hr/volume1wk, oneDayPriceChange, clobTokenIds, conditionId, category tags, liquidity, end date. Ranked by volume24hr; filter by keyword.", ["prediction-markets", "polymarket", "markets", "crypto", "data"]],
   ["/crypto/funding", "GET", "0.004", "4000", "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, premium/basis, annualized_hl/annualized_okx, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices, open interest.", ["crypto", "funding", "perps", "hyperliquid", "okx", "dydx", "arbitrage", "defi", "market-data", "data"]],
-  ["/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, pool id, APY breakdown + 1d/7d/30d APY trend, IL risk (incl. il7d), exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL. Filter by project, chain, or stablecoin-only; sort by TVL or risk-adjusted APY.", ["defi", "yield", "lending", "apy", "tvl", "defi-yields", "data"]],
+  ["/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, pool id, APY breakdown + 1d/7d/30d APY trend, IL risk (incl. il7d), exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL. Filter by project (family name like aave/uniswap/curve resolves all versions, or an exact slug like aave-v3), chain, or stablecoin-only; sort by TVL or risk-adjusted APY.", ["defi", "yield", "lending", "apy", "tvl", "defi-yields", "data"]],
   ["/crypto/prices", "GET", "0.001", "1000", "Spot token prices from DefiLlama — pass comma-separated ticker symbols or CoinGecko ids, get price/change_24h/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "market-data", "defi", "data"]],
   ["/scan/mcp", "GET", "0.05", "50000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score + verdict (clear/review/block).", ["security", "mcp", "audit", "prompt-injection"]],
   ["/enrich/tech-risk", "GET", "0.01", "10000", "Tech-stack fingerprint -> CVE (NVD) + EPSS + CISA-KEV attack-surface risk + verdict (clear/review/block) for a domain.", ["security", "cve", "risk"]],
@@ -2139,7 +2139,7 @@ app.get("/openapi.json", (c) => {
       },
       "/crypto/prices": paid("Spot token prices + change_24h (DefiLlama).", "0.001", [{ name: "coins", desc: "comma-separated ticker symbols or coingecko ids (max 25)", example: "ETH,BTC" }]),
       "/crypto/funding": paid("Cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread + premium/annualized/signal/next_funding_ts.", "0.004", [{ name: "limit", desc: "max coins (default 20, max 100)", example: "10" }]),
-      "/defi/yields": paid("Top DeFi lending/LP yields — APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast (DefiLlama).", "0.001", [{ name: "limit", desc: "max pools", example: "10" }, { name: "project", desc: "protocol filter", example: "aave-v3" }, { name: "chain", desc: "chain filter", example: "Base" }, { name: "stable", desc: "'true' = stablecoin only", example: "true" }, { name: "sort", desc: "'tvl' (default) or 'risk_adjusted' (apy/sigma)", example: "tvl" }]),
+      "/defi/yields": paid("Top DeFi lending/LP yields — APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast (DefiLlama).", "0.001", [{ name: "limit", desc: "max pools", example: "10" }, { name: "project", desc: "protocol filter — family name (aave, uniswap, curve) resolves all versions, or exact slug", example: "aave" }, { name: "chain", desc: "chain filter", example: "Base" }, { name: "stable", desc: "'true' = stablecoin only", example: "true" }, { name: "sort", desc: "'tvl' (default) or 'risk_adjusted' (apy/sigma)", example: "tvl" }]),
       "/pm/markets": paid("Live Polymarket prediction markets, ranked by volume24hr, with bestBid/bestAsk/spread and category tags.", "0.005", [{ name: "query", desc: "keyword filter", example: "election" }, { name: "limit", desc: "max markets", example: "10" }]),
       "/scan/mcp": paid("Security audit of an MCP server (tool-poisoning / prompt-injection). Findings + risk score + verdict (clear/review/block).", "0.05", [{ name: "url", desc: "target MCP server URL", required: true, example: "https://x402-data-api.sigrunner.workers.dev/mcp" }]),
       "/enrich/tech-risk": paid("Tech-stack -> CVE + EPSS + CISA-KEV risk + verdict (clear/review/block).", "0.01", [{ name: "domain", desc: "target domain", required: true, example: "stripe.com" }]),
@@ -5791,6 +5791,22 @@ interface YieldPool {
   volumeUsd1d: number | null;
 }
 
+// Match a DefiLlama pool's project slug against a caller-supplied filter by
+// exact slug OR by protocol family name. DefiLlama namespaces protocols as
+// "<family>-<version>" (aave-v3, uniswap-v2, curve-dex), so an agent asking
+// for the human name (project=aave) must still resolve the versioned pools
+// instead of silently getting [] on a paid route. The trailing dash keeps the
+// family match precise: "aave" -> {aave-v3, aave-v4} and "curve" -> {curve-dex,
+// curve-llamalend}, but "uni" does NOT match "uniswap" and a bogus name still
+// returns [] (degrade-open, no hardcoded protocol list — derived from the
+// upstream naming convention).
+export function matchesProjectFamily(slug: string, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const s = slug.toLowerCase();
+  return s === q || s.startsWith(`${q}-`);
+}
+
 async function fetchDefiYields(
   limit: number,
   project: string | undefined,
@@ -5833,7 +5849,7 @@ async function fetchDefiYields(
   }));
 
   const filtered = normalized.filter((p) => {
-    if (project && p.project.toLowerCase() !== project.toLowerCase()) return false;
+    if (project && !matchesProjectFamily(p.project, project)) return false;
     if (chain && p.chain.toLowerCase() !== chain.toLowerCase()) return false;
     if (stableOnly && !p.stablecoin) return false;
     return true;
@@ -14040,7 +14056,7 @@ const mcpHandler = createMcpHandler(() => {
         "Live DeFi lending/LP yield pools (project, chain, symbol, pool id, APY breakdown incl. 1d/7d/30d trend + apyBase7d/apyMean30d, IL risk incl. il7d, exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL, stablecoin flag) from DefiLlama, ranked by TVL (or risk-adjusted APY = apy/sigma). Cost: $0.005 USDC per call via x402.",
       inputSchema: {
         limit: z.number().optional().describe("Number of results, default 20, max 100"),
-        project: z.string().optional().describe("Filter by DefiLlama project slug"),
+        project: z.string().optional().describe("Filter by protocol — the family name (aave, uniswap, curve) resolves all versions, or an exact DefiLlama slug (aave-v3)"),
         chain: z.string().optional().describe("Filter by chain name"),
         stable: z.boolean().optional().describe("Only stablecoin pools"),
         sort: z.enum(["tvl", "risk_adjusted"]).optional().describe("Sort order: 'tvl' (default) or 'risk_adjusted' (apy/sigma)"),
