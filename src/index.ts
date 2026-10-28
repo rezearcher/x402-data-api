@@ -14131,7 +14131,7 @@ const mcpHandler = createMcpHandler(() => {
       inputSchema: {
         limit: z.number().optional().describe("Number of results, default 20, max 100"),
         project: z.string().optional().describe("Filter by protocol — the family name (aave, uniswap, curve) resolves all versions, or an exact DefiLlama slug (aave-v3)"),
-        chain: z.string().optional().describe("Filter by chain name"),
+        chain: z.string().optional().describe("Filter by chain. Short names like eth, arb, op, avax, matic, sol, bnb resolve to the DefiLlama canonical chain name."),
         stable: z.boolean().optional().describe("Only stablecoin pools"),
         sort: z.enum(["tvl", "risk_adjusted"]).optional().describe("Sort order: 'tvl' (default) or 'risk_adjusted' (apy/sigma)"),
       },
