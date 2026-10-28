@@ -8455,42 +8455,155 @@ app.get("/chain/token-report", async (c) => {
   }
 });
 
-async function buildSwapGate(token: string, side: "buy" | "sell", notional: number) {
-  const r = await buildTokenReport(token);
-  const liq = r.liquidity.wethPoolUsd;
-  const impact = liq && liq > 0 ? (notional / liq) * 100 : null;
+// ---------------------------------------------------------------------------
+// Pre-trade decision composition (the gate contract)
+//
+// Three independent signals must collapse into ONE answer, not a flag report:
+//   1. token-security simulation  → verdict / risk_score / isHoneypot
+//      (wallet-to-wallet honeypot probe, admin capabilities, owner concentration)
+//   2. measured DEX tax           → folded into verdict / risk_score / reasons by
+//      dexTaxRisk() inside buildTokenReport (pair-targeted buy/sell fee-on-transfer)
+//   3. pool liquidity             → weth_pool_usd, turned into price impact for the
+//      caller's actual notional_usd
+//
+// The composition is a PURE function on purpose: the precedence between those
+// signals (AVOID beats size, no-liquidity-evidence beats size, size beats CAUTION)
+// is the product decision, so it belongs somewhere it can be unit-tested without
+// RPC and read in one screen — not inside the if-branches of a network-bound
+// handler. `reason` is derived only from its inputs, so the same signals always
+// produce the same audit string.
+export type SwapDecision = { decision: "go" | "hold" | "block"; reason: string };
+
+export interface SwapGateSignals {
+  side: "buy" | "sell";
+  verdict: "SAFE" | "CAUTION" | "AVOID";
+  risk_score: number;
+  /** true = simulation proved the token cannot be transferred; null = unverified */
+  isHoneypot: boolean | null;
+  /** fused reasons from the token report (honeypot + tax + admin caps + liquidity) */
+  reasons: string[];
+  /** approx USD in the deepest Uniswap v3 WETH pool; null = no verifiable pool */
+  liquidity_usd: number | null;
+  notional_usd: number;
+}
+
+// Price impact of the caller's notional against the measured pool, as a % of pool.
+// null when there is no verifiable pool (the caller must not read that as 0%).
+export function swapImpactPct(liquidityUsd: number | null, notionalUsd: number): number | null {
+  return liquidityUsd !== null && liquidityUsd > 0 ? (notionalUsd / liquidityUsd) * 100 : null;
+}
+
+export function decideSwapGate(s: SwapGateSignals): SwapDecision {
+  const impact = swapImpactPct(s.liquidity_usd, s.notional_usd);
   // No verifiable WETH-pool liquidity (no pool found, or the check could not run).
   // We cannot confirm the position is exitable or size the trade — and thin/absent
   // markets are exactly where honeypot simulations are least reliable — so this must
   // never produce a GO. Fail closed to HOLD (below AVOID/BLOCK, above GO).
-  const noLiquidityEvidence = liq === null;
-  let decision: "go" | "hold" | "block" = "go";
-  let reason = "token passes safety checks";
-  if (r.verdict === "AVOID") {
-    decision = side === "sell" && r.security.isHoneypot !== true ? "hold" : "block";
-    reason = r.reasons[0] ?? "token flagged AVOID";
-  } else if (impact !== null && impact > 10) {
-    decision = "block";
-    reason = `trade is ${impact.toFixed(1)}% of pool liquidity; severe price impact`;
-  } else if (noLiquidityEvidence) {
-    decision = "hold";
-    reason = side === "sell"
-      ? "no verifiable Uniswap v3 WETH-pool liquidity — cannot confirm an on-chain exit venue; verify another DEX/pair before trading"
-      : "no verifiable Uniswap v3 WETH-pool liquidity — cannot confirm the position is exitable or size the trade; not safe to auto-buy";
-  } else if (impact !== null && impact > 2) {
-    decision = "hold";
-    reason = `trade is ${impact.toFixed(1)}% of pool liquidity; split the order`;
-  } else if (r.verdict === "CAUTION") {
-    decision = side === "buy" && r.risk_score >= 50 ? "hold" : "go";
-    reason = r.reasons[0] ?? "caution flags present";
-  } else if (impact !== null) {
-    reason = `token passes safety checks; trade is ${impact.toFixed(2)}% of pool liquidity`;
+  // <=0 counts as "no evidence" too: a zero-dollar pool is degenerate, and treating
+  // it as a usable depth would let `impact === null` fall through to the GO branch.
+  const noLiquidityEvidence = s.liquidity_usd === null || !(s.liquidity_usd > 0);
+
+  // 1. AVOID outranks size: a token the security+tax fusion already condemned is
+  //    BLOCK on a buy. On a SELL we only BLOCK when the honeypot sim actually
+  //    proved transfers are blocked; an unproven sell-block is HOLD, never a
+  //    fabricated certainty (a seller who already holds needs the venue question
+  //    answered, not a guess).
+  if (s.verdict === "AVOID") {
+    return {
+      decision: s.side === "sell" && s.isHoneypot !== true ? "hold" : "block",
+      reason: s.reasons[0] ?? "token flagged AVOID",
+    };
   }
+  // 2. Size beats everything below AVOID: >10% of pool is not a trade, it is the
+  //    trade — the price impact alone eats the edge regardless of how clean the token is.
+  if (impact !== null && impact > 10) {
+    return { decision: "block", reason: `trade is ${impact.toFixed(1)}% of pool liquidity; severe price impact` };
+  }
+  // 3. Unknown liquidity fails closed to HOLD, never GO.
+  if (noLiquidityEvidence) {
+    return {
+      decision: "hold",
+      reason:
+        s.side === "sell"
+          ? "no verifiable Uniswap v3 WETH-pool liquidity — cannot confirm an on-chain exit venue; verify another DEX/pair before trading"
+          : "no verifiable Uniswap v3 WETH-pool liquidity — cannot confirm the position is exitable or size the trade; not safe to auto-buy",
+    };
+  }
+  // 4. 2-10% of pool is executable but must be split.
+  if (impact !== null && impact > 2) {
+    return { decision: "hold", reason: `trade is ${impact.toFixed(1)}% of pool liquidity; split the order` };
+  }
+  // 5. CAUTION is advisory unless the fused risk score is high on a buy.
+  if (s.verdict === "CAUTION") {
+    return {
+      decision: s.side === "buy" && s.risk_score >= 50 ? "hold" : "go",
+      reason: s.reasons[0] ?? "caution flags present",
+    };
+  }
+  // 6. Clean token, sizeable trade.
+  return {
+    decision: "go",
+    reason: impact !== null ? `token passes safety checks; trade is ${impact.toFixed(2)}% of pool liquidity` : "token passes safety checks",
+  };
+}
+
+// Decision-path cache. buildTokenReport is ~5 sequential Base RPC round-trips
+// (pool discovery → pool balances → security fan-out → pair-tax sims), which is
+// ~1.1s cold and blows the gate's sub-second budget. A gate is a hot-path call —
+// an agent asks, then trades — so repeat questions about the same token must not
+// re-run the whole RPC fan-out.
+//
+// TTL is deliberately SHORT (60s): this is a safety gate, so serving a stale
+// "go" for minutes would be the wrong trade of freshness for latency. Within the
+// window, the decision path makes zero external calls and returns byte-identical
+// signals. Errors are never cached (a degraded snapshot must not pin for 60s).
+// Per-colo (Cloudflare Cache API), so a cold colo still pays one full build.
+const GATE_CACHE_TTL_S = 60;
+const GATE_CACHE_ORIGIN = "https://gate-cache.internal";
+
+async function buildTokenReportCached(token: string): Promise<{ report: Awaited<ReturnType<typeof buildTokenReport>>; cache_state: "hit" | "miss" | "bypass" }> {
+  const cache = (globalThis as { caches?: { default?: Cache } }).caches?.default;
+  if (!cache) return { report: await buildTokenReport(token), cache_state: "bypass" };
+  const key = new Request(`${GATE_CACHE_ORIGIN}/v1/token-report/${token.toLowerCase()}`);
+  try {
+    const hit = await cache.match(key);
+    if (hit) return { report: (await hit.json()) as Awaited<ReturnType<typeof buildTokenReport>>, cache_state: "hit" };
+  } catch {
+    // A cache read must never fail the gate — fall through and build.
+  }
+  const fresh = await buildTokenReport(token);
+  try {
+    await cache.put(
+      key,
+      new Response(JSON.stringify(fresh), {
+        headers: { "content-type": "application/json", "cache-control": `max-age=${GATE_CACHE_TTL_S}` },
+      }),
+    );
+  } catch {
+    // Cache write is best-effort; the decision is already computed.
+  }
+  return { report: fresh, cache_state: "miss" };
+}
+
+async function buildSwapGate(token: string, side: "buy" | "sell", notional: number) {
+  const { report: r, cache_state } = await buildTokenReportCached(token);
+  const liq = r.liquidity.wethPoolUsd;
+  const impact = swapImpactPct(liq, notional);
+  const { decision, reason } = decideSwapGate({
+    side,
+    verdict: r.verdict,
+    risk_score: r.risk_score,
+    isHoneypot: r.security.isHoneypot,
+    reasons: r.reasons,
+    liquidity_usd: liq,
+    notional_usd: notional,
+  });
   return {
     token, side, notional_usd: notional, decision, reason,
     verdict: r.verdict, risk_score: r.risk_score, liquidity_usd: liq,
     impact_pct_of_pool: impact === null ? null : Math.round(impact * 100) / 100,
     flags: r.reasons, token_meta: r.token_meta, analyzed_at: r.analyzed_at,
+    cache_state,
     disclaimer: r.disclaimer,
   };
 }
@@ -12065,6 +12178,18 @@ const fetchPaid = wrapFetch(fetch, { account }); // your agent's Base wallet
 const r = await fetchPaid("${CANONICAL_ORIGIN}/defi/yields?limit=20&stable=true");
 const yields = await r.json(); // risk-adjusted stablecoin yields, paid inline</pre>
 <p class=muted style="margin:.7rem 0 0">No API key is sent or stored. Settlement is a standard USDC transfer on Base the route verifies on-chain before returning data.</p>
+</div>
+
+<h2>Building on the Vercel AI SDK?</h2>
+<div class=card>
+<p style="margin:.2rem 0 .7rem">Skip the hand-wiring. Drop-in AI SDK tools wrap the yields, prices and balance routes with the x402 payment rail built in &mdash; your agent's wallet pays per call, and a keyless install still returns a free preview so you can try before you fund it:</p>
+<pre>npm i github:rezearcher/vercel-ai-defi-data ai zod
+
+import { generateText } from "ai";
+import { defiDataTools } from "@grey-ridge/vercel-ai-defi-data";
+// reads PRIVATE_KEY (your agent's Base wallet) from the env
+await generateText({ model, tools: { ...defiDataTools }, prompt: "Best stablecoin yield on Base right now?" });</pre>
+<p class=muted style="margin:.7rem 0 0">Three tools &mdash; <code>defiYields</code>, <code>cryptoPrices</code>, <code>baseBalance</code> &mdash; each returns a model-ready one-line summary and never throws into your agent loop. Source: <a href="https://github.com/rezearcher/vercel-ai-defi-data">github.com/rezearcher/vercel-ai-defi-data</a>.</p>
 </div>
 
 <h2>Where the data comes from</h2>
