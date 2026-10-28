@@ -2784,7 +2784,7 @@ export function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "MCP tools/call over x402 for Base/crypto data + token safety: crypto_prices, crypto_funding, defi_yields, yield_entry_verdict (per-pool SUSTAINABLE/DECAYING/OUTLIER/AVOID go/no-go), pm_markets, chain_block_number, chain_gas_price, chain_balance, chain_token_balance, chain_tx, chain_wallet, simulate (prospective-tx dry-run: will_revert + gas + asset changes), gate_swap (go/hold/block pre-trade gate), chain_token_report (SAFE/CAUTION/AVOID verdict), chain_token_security (honeypot detector), enrich_tech_risk (CVE/EPSS/KEV), enrich_domain, scan_mcp_server (MCP tool-poisoning audit). Use when an agent needs Base data or token-safety over MCP.",
+        "MCP tools/call over x402 for Base/crypto data + token safety: crypto_prices, crypto_funding, defi_yields, yield_entry_verdict (pool go/no-go), pm_markets, chain_block_number, chain_gas_price, chain_balance, chain_token_balance, chain_tx, chain_wallet, simulate (prospective-tx dry-run), gate_swap (pre-trade gate), chain_token_report (SAFE/CAUTION/AVOID), chain_token_security (honeypot), enrich_tech_risk, enrich_domain, scan_mcp_server. Use when an agent needs Base data or token-safety over MCP.",
       mimeType: "application/json",
     },
     "GET /scan/mcp": {
