@@ -173,10 +173,47 @@ const PREVIEW_ROUTES = new Set<string>([
   "/v1/chat/completions", "/chain/simulate",
 ]);
 
+// --- Willingness-to-pay price floor (evidence-based, sensor-gated) ----------
+// Hard WTP evidence (revenue sensor, 30d): an external wallet autopaid $0.005
+// (5000 micros) on multiple DATA routes with ZERO churn -> the paying cohort is
+// price-INELASTIC up to >=5000 micros, so a 4000-micro floor sits BELOW observed
+// tolerance. We lift the cold long-tail to that floor so $/payer rises when a NEW
+// buyer arrives, WITHOUT ever touching a route a real buyer already pays.
+//
+// No-hardcoded-list law (CLAUDE.md): which rows are protected is DERIVED from the
+// live DEMAND_SNAPSHOT (distinct external payers per route), never a hand-written
+// route list that goes stale as demand shifts. Convex barbell / bounded-downside
+// ("lose a dime and we might as well die"): a row is PROTECTED (never raised) if
+// it has ANY proven external payer in the window, OR is a magnet price (<=1000,
+// intentionally cheap), OR is already at/above the floor. Only the zero-demand
+// long-tail priced strictly between the magnet ceiling and the floor is raised.
+// Degrade-OPEN: with no usable snapshot we cannot tell a paid route from a cold
+// one, so we raise NOTHING (the safe direction — never risk churning unseen
+// demand). usd and micros columns are set together so advertised == charged.
+const WTP_PRICE_FLOOR_MICROS = 4000;
+const WTP_MAGNET_CEILING_MICROS = 1000;
+type RouteCatalogRow = [string, string, string, string, string, string[]];
+export function applyWtpPriceFloor(
+  catalog: readonly RouteCatalogRow[],
+  byRoute: Record<string, number> = (DEMAND_SNAPSHOT && DEMAND_SNAPSHOT.external_by_route) || {},
+  floor: number = WTP_PRICE_FLOOR_MICROS,
+): RouteCatalogRow[] {
+  const hasSnapshot = byRoute && typeof byRoute === "object" && Object.keys(byRoute).length > 0;
+  if (!hasSnapshot) return catalog.map((r) => r.slice() as RouteCatalogRow); // degrade-open: raise nothing
+  const flooredUsd = (floor / 1_000_000).toFixed(3);
+  return catalog.map((row) => {
+    const micros = Number(row[3]);
+    if (!Number.isFinite(micros) || micros >= floor) return row.slice() as RouteCatalogRow; // already >= floor
+    if (micros <= WTP_MAGNET_CEILING_MICROS) return row.slice() as RouteCatalogRow;          // magnet — never raised
+    if ((Number(byRoute[row[0]]) || 0) >= 1) return row.slice() as RouteCatalogRow;           // proven payer — never churn
+    return [row[0], row[1], flooredUsd, String(floor), row[4], row[5]];                        // cold long-tail -> floor
+  });
+}
+
 // Single source of truth for paid routes: [path, method, price_usdc, atomic_units, description, tags].
     // Lane order derived from measured on-chain demand (onchain_demand_by_lane.json):
     // token-safety is the #1 live-demand lane — lead the machine-import surface with it.
-export const ROUTE_CATALOG: Array<[string, string, string, string, string, string[]]> = [
+export const ROUTE_CATALOG_BASE: Array<[string, string, string, string, string, string[]]> = [
   ["/gate/swap", "GET", "0.008", "8000", "Is this Base token safe to swap right now? GO / HOLD / BLOCK pre-trade safety gate for autonomous trading agents: is it a honeypot, can you sell it, and is your trade too big for the pool? Honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your notional — one decision + reason in one fast call.", ["security", "base", "onchain", "trading", "gate", "agents", "token", "honeypot", "token-security", "data", "sell simulation before swap Base", "pre-swap safety gate"]],
   ["/chain/token-report", "GET", "0.01", "10000", "Is this Base token safe to buy? One call returns a trade-safety verdict — SAFE | CAUTION | AVOID — with risk_score (0-100) and reasons: honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, measured transfer tax, symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade before an agent buys a Base ERC-20.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "verdict", "trading", "token-security", "data"]],
   ["/chain/token-security", "GET", "0.009", "9000", "Is this Base token a scam or rug pull? Honeypot detector for a Base ERC-20: EIP-1967 proxy + upgradeability check, bytecode scan for mint/pause/blacklist/fee-setter/ownership, owner() renouncement, contract source-verification (Sourcify), and a live eth_call state-override sim proving a real wallet can transfer() it. Returns risk_score (0-100) + verdict (clear/review/block) + honeypot/scam/rug flags. Use before an agent buys, holds or approves a token.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "token-security", "data", "scam", "rug", "rug-detection", "scam-detection"]],
@@ -242,6 +279,13 @@ export const ROUTE_CATALOG: Array<[string, string, string, string, string, strin
   ["/dns", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH. Pass ?domain=stripe.com.", ["dns", "domain", "data", "recon"]],
   ["/whois", "GET", "0.01", "10000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain. Pass ?domain=cloudflare.com.", ["whois", "rdap", "domain", "data", "recon"]],
 ];
+
+// The live catalog EVERY surface reads (the 402 gate, the x402 manifest, the
+// /for-agents pages, demandOrderedCatalog) is the base rows with the WTP price
+// floor applied from the live demand snapshot — so advertised price == charged
+// price everywhere, with zero per-surface divergence. Base is kept for tests.
+export const ROUTE_CATALOG: Array<[string, string, string, string, string, string[]]> =
+  applyWtpPriceFloor(ROUTE_CATALOG_BASE);
 
 // Order a copy of ROUTE_CATALOG by observed EXTERNAL per-route demand (descending),
 // read from the sensor-regenerated DEMAND_SNAPSHOT (external payers only, self
