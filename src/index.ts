@@ -12387,8 +12387,8 @@ const yields = await r.json(); // risk-adjusted stablecoin yields, paid inline</
 import { generateText } from "ai";
 import { defiDataTools } from "@grey-ridge/vercel-ai-defi-data";
 // reads PRIVATE_KEY (your agent's Base wallet) from the env
-await generateText({ model, tools: { ...defiDataTools }, prompt: "Best stablecoin yield on Base, and what's gas right now?" });</pre>
-<p class=muted style="margin:.7rem 0 0">Six tools &mdash; <code>defiYields</code>, <code>cryptoPrices</code>, <code>baseBalance</code>, <code>baseGasPrice</code>, <code>baseBlockNumber</code>, <code>baseTokenBalance</code> &mdash; each returns a model-ready one-line summary and never throws into your agent loop. The three Base-RPC reads return the real live value even with no wallet. Source: <a href="https://github.com/rezearcher/vercel-ai-defi-data">github.com/rezearcher/vercel-ai-defi-data</a>.</p>
+await generateText({ model, tools: { ...defiDataTools }, prompt: "Best stablecoin yield on Base, what's gas, and where's funding paying?" });</pre>
+<p class=muted style="margin:.7rem 0 0">Eight tools &mdash; <code>defiYields</code>, <code>cryptoPrices</code>, <code>baseBalance</code>, <code>baseGasPrice</code>, <code>baseBlockNumber</code>, <code>baseTokenBalance</code>, <code>cryptoFunding</code> (cross-venue perp funding + arb spread), <code>marketBrief</code> (one-call market snapshot) &mdash; each returns a model-ready one-line summary and never throws into your agent loop. The Base-RPC reads and perp-funding sample return real live values even with no wallet. Source: <a href="https://github.com/rezearcher/vercel-ai-defi-data">github.com/rezearcher/vercel-ai-defi-data</a>.</p>
 </div>
 
 <h2>Building on LangChain.js?</h2>
@@ -12400,7 +12400,7 @@ import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { defiDataTools } from "@grey-ridge/langchain-defi-data";
 // reads PRIVATE_KEY (your agent's Base wallet) from the env
 const agent = createReactAgent({ llm, tools: defiDataTools });</pre>
-<p class=muted style="margin:.7rem 0 0">Six tools &mdash; <code>defi_yields</code>, <code>crypto_prices</code>, <code>base_balance</code>, <code>base_gas_price</code>, <code>base_block_number</code>, <code>base_token_balance</code> &mdash; degrade open with no key. The three Base-RPC reads return the real live value (gas, block height, token balance), and the native-balance read returns an honest activation hint rather than a fabricated number. Source: <a href="https://github.com/rezearcher/langchain-defi-data">github.com/rezearcher/langchain-defi-data</a>.</p>
+<p class=muted style="margin:.7rem 0 0">Eight tools &mdash; <code>defi_yields</code>, <code>crypto_prices</code>, <code>base_balance</code>, <code>base_gas_price</code>, <code>base_block_number</code>, <code>base_token_balance</code>, <code>crypto_funding</code> (cross-venue perp funding + arb spread), <code>market_brief</code> (one-call market snapshot) &mdash; degrade open with no key. The Base-RPC reads and perp-funding sample return the real live value, and the market-brief and native-balance reads return an honest activation hint rather than a fabricated number. Source: <a href="https://github.com/rezearcher/langchain-defi-data">github.com/rezearcher/langchain-defi-data</a>.</p>
 </div>
 
 <h2>Where the data comes from</h2>

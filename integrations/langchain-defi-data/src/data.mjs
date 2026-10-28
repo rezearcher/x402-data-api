@@ -84,6 +84,7 @@ export function buildBalanceUrl({ address, base = DATA_BASE } = {}) {
 function usd(n) {
   if (typeof n !== "number" || !Number.isFinite(n)) return null;
   const abs = Math.abs(n);
+  if (abs >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
   if (abs >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
   if (abs >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
   if (abs >= 1e3) return `$${Math.round(n).toLocaleString("en-US")}`;
@@ -457,5 +458,136 @@ export async function runTokenBalance(payFetch, args = {}, { hasKey = true, prev
   } catch (err) {
     const msg = `chain/token-balance unavailable: ${err?.message || err}`;
     return { error: msg, address: args.address, token: resolved.token, paid: false, summary: `ERROR: ${msg}` };
+  }
+}
+
+// --------------------------------------------------------------------------
+// Market-intelligence routes — perp funding, one-call market brief
+// --------------------------------------------------------------------------
+// Higher-value routes that lift $/payer above the $0.001 base tier and that
+// external agents demonstrably bundle (the top repeat buyer pays several market
+// routes per session). /crypto/funding ($0.004) exposes a free 1-row preview
+// (a REAL top-coin sample) so a keyless install still returns live data;
+// /brief/market ($0.01) has no preview, so keyless returns an activation stub
+// — never a fabricated brief.
+
+/** Build the paid /crypto/funding URL (top N coins by 24h notional volume). */
+export function buildFundingUrl({ limit = 20, base = DATA_BASE } = {}) {
+  const qs = new URLSearchParams({ limit: String(clampLimit(limit)) });
+  return `${base}/crypto/funding?${qs.toString()}`;
+}
+/** Build the FREE /crypto/funding/preview URL (real top-1 sample). */
+export function buildFundingPreviewUrl({ base = DATA_BASE } = {}) {
+  return `${base}/crypto/funding/preview`;
+}
+
+/** Build the paid /brief/market URL (no params). */
+export function buildMarketBriefUrl({ base = DATA_BASE } = {}) {
+  return `${base}/brief/market`;
+}
+
+/** One-line summary of a /crypto/funding array (top coin + arb spread + signal + venues). */
+export function summarizeFunding(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return "no funding data";
+  const t = rows[0];
+  const bits = [t.coin || "coin"];
+  if (typeof t.funding_spread_bps === "number") bits.push(`arb spread ${t.funding_spread_bps.toFixed(2)}bps`);
+  if (t.signal) bits.push(String(t.signal));
+  if (t.best_long_venue && t.best_short_venue) bits.push(`long@${t.best_long_venue}/short@${t.best_short_venue}`);
+  return `Top of ${rows.length}: ${bits.join(" · ")}`;
+}
+
+/** One-line summary of a /brief/market object (sentiment + market cap + dominance + trending). */
+export function summarizeMarketBrief(out) {
+  if (!out || typeof out !== "object" || out.fear_greed == null) return "no market brief";
+  const bits = [];
+  if (out.fear_greed && out.fear_greed.value != null) {
+    bits.push(`F&G ${out.fear_greed.value}${out.fear_greed.classification ? ` (${out.fear_greed.classification})` : ""}`);
+  }
+  const cap = out.global && usd(out.global.total_market_cap_usd);
+  if (cap) bits.push(`mcap ${cap}`);
+  if (out.global && typeof out.global.btc_dominance_pct === "number") bits.push(`BTC dom ${out.global.btc_dominance_pct.toFixed(1)}%`);
+  const trend = Array.isArray(out.trending) && out.trending[0] ? (out.trending[0].symbol || out.trending[0].name) : null;
+  if (trend) bits.push(`trending ${trend}`);
+  return bits.join(" · ") || "market brief";
+}
+
+/**
+ * Fetch /crypto/funding, DEGRADING OPEN to the free top-1 preview when the paid
+ * call cannot be paid (no PRIVATE_KEY, or an unfunded wallet → 402). The sample
+ * is a real top coin; only the depth (up to 100 ranked coins) is withheld.
+ * Returns `{ funding, paid, total_available?, activation? }`.
+ */
+export async function fetchFundingOrPreview(payFetch, args = {}, { hasKey = true, previewFetch } = {}) {
+  const paidUrl = buildFundingUrl(args);
+  const takePreview = async (reason) => {
+    const out = await plainGet(previewFetch, buildFundingPreviewUrl(args));
+    const funding = Array.isArray(out?.preview) ? out.preview : [];
+    return { funding, paid: false, total_available: out?.total_available, activation: activationBlock(reason, { paidUrl, priceUsdc: "0.004" }) };
+  };
+  if (!hasKey) return takePreview("no PRIVATE_KEY configured");
+  const res = await payFetch(paidUrl);
+  if (res.ok || res.status === 200) {
+    const out = await res.json();
+    return { funding: Array.isArray(out) ? out : [], paid: true };
+  }
+  const reason = res.status === 402 ? "wallet not funded (paid /crypto/funding returned 402)" : `paid /crypto/funding returned HTTP ${res.status}`;
+  return takePreview(reason);
+}
+
+/** Run /crypto/funding. Returns `{ funding, count, summary, paid, total_available?, activation? }`. Never throws into the agent runtime. */
+export async function runFunding(payFetch, args = {}, { hasKey = true, previewFetch } = {}) {
+  try {
+    const out = await fetchFundingOrPreview(payFetch, args, { hasKey, previewFetch });
+    const result = {
+      funding: out.funding,
+      count: out.funding.length,
+      summary: summarizeFunding(out.funding),
+      paid: out.paid,
+    };
+    if (out.total_available != null) result.total_available = out.total_available;
+    if (out.activation) {
+      result.activation = out.activation;
+      result.guard_reasons = [out.activation.hint];
+    }
+    return result;
+  } catch (err) {
+    const msg = `crypto/funding unavailable: ${err?.message || err}`;
+    return { error: msg, funding: [], count: 0, summary: `ERROR: ${msg}`, paid: false };
+  }
+}
+
+/**
+ * Run /brief/market. There is NO free preview for this composite route, so a
+ * keyless / unfunded install gets an activation stub (no data) rather than a
+ * fabricated brief — honest degrade. Returns the brief object + `summary` on
+ * the paid path; `{ activation, paid:false }` when no funded wallet.
+ */
+export async function runMarketBrief(payFetch, args = {}, { hasKey = true } = {}) {
+  const paidUrl = buildMarketBriefUrl(args);
+  try {
+    if (!hasKey) {
+      return {
+        paid: false,
+        summary: "market brief requires a funded wallet — running keyless",
+        activation: activationBlock("no PRIVATE_KEY configured", { paidUrl, priceUsdc: "0.01" }),
+        guard_reasons: [fundOnrampHint()],
+      };
+    }
+    const res = await payFetch(paidUrl);
+    if (res.ok || res.status === 200) {
+      const out = await res.json();
+      return { ...out, paid: true, summary: summarizeMarketBrief(out) };
+    }
+    const reason = res.status === 402 ? "wallet not funded (paid /brief/market returned 402)" : `paid /brief/market returned HTTP ${res.status}`;
+    return {
+      paid: false,
+      summary: `market brief unavailable — ${reason}`,
+      activation: activationBlock(reason, { paidUrl, priceUsdc: "0.01" }),
+      guard_reasons: [fundOnrampHint()],
+    };
+  } catch (err) {
+    const msg = `brief/market unavailable: ${err?.message || err}`;
+    return { error: msg, paid: false, summary: `ERROR: ${msg}` };
   }
 }

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { makePayFetch, type PayFetch } from "./client.js";
 // Core fetch/shaping logic lives in a dependency-free module so it is unit-
 // tested without the AI SDK runtime. Imported with the .mjs extension on purpose.
-import { runYields, runPrices, runBalance, runGasPrice, runBlockNumber, runTokenBalance, BASE_USDC, DATA_BASE } from "./data.mjs";
+import { runYields, runPrices, runBalance, runGasPrice, runBlockNumber, runTokenBalance, runFunding, runMarketBrief, BASE_USDC, DATA_BASE } from "./data.mjs";
 
 function envKey(): string | undefined {
   return typeof process !== "undefined" ? process.env?.PRIVATE_KEY : undefined;
@@ -170,6 +170,47 @@ export function createBaseTokenBalance(opts: DataToolOptions = {}) {
   });
 }
 
+/**
+ * Vercel AI SDK tool: cross-venue perp funding rates via Grey Ridge
+ * `/crypto/funding` ($0.004 USDC/call, paid inline with x402 — no API key).
+ * Returns top coins by 24h notional volume with per-venue (Hyperliquid/OKX/dYdX)
+ * funding, the arb spread (bps), cheapest-long/richest-short venue, premium/basis,
+ * annualized rates, a LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next funding time,
+ * mark/oracle prices and open interest. Degrades OPEN to a free real top-1 sample
+ * when no funded wallet is configured. Use to find a funding-rate arbitrage or
+ * to read market positioning before a perp trade.
+ */
+export function createCryptoFunding(opts: DataToolOptions = {}) {
+  const { base, payFetch, hasKey } = resolve(opts);
+  return tool({
+    description:
+      "Cross-venue perp funding rates (Hyperliquid + OKX + dYdX) via Grey Ridge /crypto/funding ($0.004 USDC/call, paid inline with x402 — no API key). Top coins by 24h volume with per-venue funding, arb spread (bps), cheapest-long/richest-short venue, premium, annualized rates, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices and open interest. Use for funding-rate arbitrage or perp positioning.",
+    inputSchema: z.object({
+      limit: z.number().positive().default(20).describe("Max coins to return (1-100), ranked by 24h notional volume."),
+    }),
+    execute: async ({ limit }: { limit?: number }) => runFunding(payFetch, { limit, base }, { hasKey }),
+  });
+}
+
+/**
+ * Vercel AI SDK tool: one-call crypto market brief via Grey Ridge
+ * `/brief/market` ($0.01 USDC/call, paid inline with x402 — no API key). Returns
+ * the Fear & Greed index, global market cap / 24h volume / BTC+ETH dominance, the
+ * top 5 gainers and losers, trending coins and the top DeFi fee earners — a full
+ * market snapshot in a single payment. There is no free preview for this
+ * composite route, so a keyless install returns an activation hint (never a
+ * fabricated brief) rather than silently failing.
+ */
+export function createMarketBrief(opts: DataToolOptions = {}) {
+  const { base, payFetch, hasKey } = resolve(opts);
+  return tool({
+    description:
+      "One-call crypto market brief via Grey Ridge /brief/market ($0.01 USDC/call, paid inline with x402 — no API key). Returns Fear & Greed, global market cap + 24h volume + BTC/ETH dominance, top 5 gainers/losers, trending coins and top DeFi fee earners — a full market snapshot in one payment. Use when an agent needs the whole market picture at once.",
+    inputSchema: z.object({}),
+    execute: async () => runMarketBrief(payFetch, { base }, { hasKey }),
+  });
+}
+
 /** Zero-config tool instances: read `PRIVATE_KEY` (agent wallet) + optional `X402_DATA_BASE_URL` from env. */
 export const defiYields = createDefiYields({ privateKey: envKey(), base: envBase() });
 export const cryptoPrices = createCryptoPrices({ privateKey: envKey(), base: envBase() });
@@ -177,8 +218,10 @@ export const baseBalance = createBaseBalance({ privateKey: envKey(), base: envBa
 export const baseGasPrice = createBaseGasPrice({ privateKey: envKey(), base: envBase() });
 export const baseBlockNumber = createBaseBlockNumber({ privateKey: envKey(), base: envBase() });
 export const baseTokenBalance = createBaseTokenBalance({ privateKey: envKey(), base: envBase() });
+export const cryptoFunding = createCryptoFunding({ privateKey: envKey(), base: envBase() });
+export const marketBrief = createMarketBrief({ privateKey: envKey(), base: envBase() });
 
-/** All six data tools as a ready-to-spread toolset: `tools: { ...defiDataTools }`. */
+/** All eight data tools as a ready-to-spread toolset: `tools: { ...defiDataTools }`. */
 export const defiDataTools = {
   defiYields,
   cryptoPrices,
@@ -186,4 +229,6 @@ export const defiDataTools = {
   baseGasPrice,
   baseBlockNumber,
   baseTokenBalance,
+  cryptoFunding,
+  marketBrief,
 };

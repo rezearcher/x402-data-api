@@ -28,6 +28,13 @@ import {
   runGasPrice,
   runBlockNumber,
   runTokenBalance,
+  buildFundingUrl,
+  buildFundingPreviewUrl,
+  buildMarketBriefUrl,
+  summarizeFunding,
+  summarizeMarketBrief,
+  runFunding,
+  runMarketBrief,
 } from "../src/data.mjs";
 
 const ADDR = "0x4200000000000000000000000000000000000006";
@@ -314,4 +321,91 @@ test("runTokenBalance bad address surfaces as {error}, never throws", async () =
   const out = await runTokenBalance(payStub(jsonResponse({})), { address: "0xdead" }, { hasKey: true });
   assert.match(out.error, /invalid Base address/);
   assert.equal(out.paid, false);
+});
+
+// ---- market-intelligence routes: perp funding + market brief ----
+
+test("buildFundingUrl clamps limit; preview + brief URLs are param-free", () => {
+  const u = buildFundingUrl({ limit: 999 });
+  assert.ok(u.startsWith(`${DATA_BASE}/crypto/funding?`));
+  assert.ok(u.includes("limit=100")); // clamped
+  assert.equal(buildFundingPreviewUrl(), `${DATA_BASE}/crypto/funding/preview`);
+  assert.equal(buildMarketBriefUrl(), `${DATA_BASE}/brief/market`);
+});
+
+test("summarizeFunding renders top coin, arb spread, signal + venues", () => {
+  const rows = [{ coin: "BTC", funding_spread_bps: 1.03, signal: "LONGS_PAY", best_long_venue: "dydx", best_short_venue: "okx" }];
+  const s = summarizeFunding(rows);
+  assert.match(s, /BTC/);
+  assert.match(s, /1\.03bps/);
+  assert.match(s, /LONGS_PAY/);
+  assert.match(s, /long@dydx\/short@okx/);
+  assert.equal(summarizeFunding([]), "no funding data");
+});
+
+test("summarizeMarketBrief renders sentiment, mcap, dominance, trending", () => {
+  const out = { fear_greed: { value: 55, classification: "Greed" }, global: { total_market_cap_usd: 2.5e12, btc_dominance_pct: 58.3 }, trending: [{ symbol: "AERO" }] };
+  const s = summarizeMarketBrief(out);
+  assert.match(s, /F&G 55 \(Greed\)/);
+  assert.match(s, /mcap \$2\.50T/);
+  assert.match(s, /BTC dom 58\.3%/);
+  assert.match(s, /trending AERO/);
+  assert.equal(summarizeMarketBrief({}), "no market brief");
+});
+
+test("runFunding keyless degrades OPEN to the real top-1 preview sample", async () => {
+  const previewFetch = async () => jsonResponse({ preview: [{ coin: "BTC", funding_spread_bps: 1.03, signal: "LONGS_PAY" }], total_available: 20 });
+  const out = await runFunding(payStub(jsonResponse([])), {}, { hasKey: false, previewFetch });
+  assert.equal(out.paid, false);
+  assert.equal(out.count, 1);
+  assert.equal(out.funding[0].coin, "BTC");
+  assert.equal(out.total_available, 20);
+  assert.ok(out.activation.needed);
+  assert.equal(out.activation.price_usdc, "0.004");
+});
+
+test("runFunding paid path returns the full array with paid:true", async () => {
+  const rows = [{ coin: "BTC" }, { coin: "ETH" }, { coin: "SOL" }];
+  const out = await runFunding(payStub(jsonResponse(rows)), { limit: 3 }, { hasKey: true });
+  assert.equal(out.paid, true);
+  assert.equal(out.count, 3);
+  assert.equal(out.activation, undefined);
+});
+
+test("runFunding degrades open on a 402 to the preview", async () => {
+  const previewFetch = async () => jsonResponse({ preview: [{ coin: "BTC" }], total_available: 20 });
+  const out = await runFunding(payStub(jsonResponse(null, 402)), {}, { hasKey: true, previewFetch });
+  assert.equal(out.paid, false);
+  assert.match(out.activation.reason, /402/);
+});
+
+test("runFunding true outage returns {error}, never throws", async () => {
+  const boom = async () => { throw new Error("hl down"); };
+  const out = await runFunding(boom, {}, { hasKey: false, previewFetch: boom });
+  assert.match(out.error, /hl down/);
+  assert.deepEqual(out.funding, []);
+  assert.match(out.summary, /^ERROR:/);
+});
+
+test("runMarketBrief keyless returns an activation stub (no fabricated brief)", async () => {
+  const out = await runMarketBrief(payStub(jsonResponse({})), {}, { hasKey: false });
+  assert.equal(out.paid, false);
+  assert.equal(out.fear_greed, undefined); // no fabricated data
+  assert.ok(out.activation.needed);
+  assert.equal(out.activation.price_usdc, "0.01");
+  assert.ok(Array.isArray(out.guard_reasons));
+});
+
+test("runMarketBrief paid path returns the brief with a summary", async () => {
+  const brief = { fear_greed: { value: 55, classification: "Greed" }, global: { total_market_cap_usd: 2.5e12, btc_dominance_pct: 58.3 }, trending: [{ symbol: "AERO" }] };
+  const out = await runMarketBrief(payStub(jsonResponse(brief)), {}, { hasKey: true });
+  assert.equal(out.paid, true);
+  assert.equal(out.fear_greed.value, 55);
+  assert.match(out.summary, /F&G 55/);
+});
+
+test("runMarketBrief 402 returns activation (no data), never throws", async () => {
+  const out = await runMarketBrief(payStub(jsonResponse(null, 402)), {}, { hasKey: true });
+  assert.equal(out.paid, false);
+  assert.match(out.activation.reason, /402/);
 });

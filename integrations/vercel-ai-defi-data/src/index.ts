@@ -9,6 +9,8 @@
  *   - `baseGasPrice`     → /chain/gas-price   ($0.002) EIP-1559 gas, gas_price_usd
  *   - `baseBlockNumber`  → /chain/block-number($0.002) current Base block height
  *   - `baseTokenBalance` → /chain/token-balance($0.002) ERC-20 balance (symbol/decimals)
+ *   - `cryptoFunding`    → /crypto/funding    ($0.004) cross-venue perp funding + arb spread
+ *   - `marketBrief`      → /brief/market      ($0.01)  one-call market snapshot
  *
  * Each tool degrades OPEN to the free preview when no funded wallet is set, so
  * a keyless install still returns real data plus an activation hint. The three
@@ -22,12 +24,16 @@ export {
   createBaseGasPrice,
   createBaseBlockNumber,
   createBaseTokenBalance,
+  createCryptoFunding,
+  createMarketBrief,
   defiYields,
   cryptoPrices,
   baseBalance,
   baseGasPrice,
   baseBlockNumber,
   baseTokenBalance,
+  cryptoFunding,
+  marketBrief,
   defiDataTools,
 } from "./tool.js";
 export type { DataToolOptions } from "./tool.js";
@@ -48,21 +54,29 @@ export {
   buildBlockNumberPreviewUrl,
   buildTokenBalanceUrl,
   buildTokenBalancePreviewUrl,
+  buildFundingUrl,
+  buildFundingPreviewUrl,
+  buildMarketBriefUrl,
   summarizeYields,
   summarizePrices,
   summarizeBalance,
   summarizeGasPrice,
   summarizeBlockNumber,
   summarizeTokenBalance,
+  summarizeFunding,
+  summarizeMarketBrief,
   fundOnrampHint,
   fetchYieldsOrPreview,
   fetchPricesOrPreview,
+  fetchFundingOrPreview,
   runYields,
   runPrices,
   runBalance,
   runGasPrice,
   runBlockNumber,
   runTokenBalance,
+  runFunding,
+  runMarketBrief,
 } from "./data.mjs";
 export type {
   YieldArgs,
@@ -82,6 +96,12 @@ export type {
   GasPriceResult,
   BlockNumberResult,
   TokenBalanceResult,
+  FundingArgs,
+  BriefArgs,
+  FundingRow,
+  MarketBriefResponse,
+  FundingResult,
+  MarketBriefResult,
   Activation,
 } from "./data.mjs";
 

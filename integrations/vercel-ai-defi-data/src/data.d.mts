@@ -206,3 +206,86 @@ export declare function summarizeTokenBalance(out: TokenBalanceResponse): string
 export declare function runGasPrice(payFetch: PayFetch, args?: ReadArgs, opts?: RunOpts): Promise<GasPriceResult>;
 export declare function runBlockNumber(payFetch: PayFetch, args?: ReadArgs, opts?: RunOpts): Promise<BlockNumberResult>;
 export declare function runTokenBalance(payFetch: PayFetch, args?: TokenBalanceArgs, opts?: RunOpts): Promise<TokenBalanceResult>;
+
+// --- Market-intelligence routes: perp funding, market brief ---
+
+export interface FundingArgs {
+  limit?: number;
+  base?: string;
+}
+export interface BriefArgs {
+  base?: string;
+}
+
+export interface FundingRow {
+  coin?: string;
+  funding?: Record<string, number>;
+  funding_spread_bps?: number;
+  best_long_venue?: string;
+  best_short_venue?: string;
+  premium?: number;
+  annualized_hl?: number;
+  annualized_okx?: number;
+  signal?: "LONGS_PAY" | "SHORTS_PAY" | "NEUTRAL" | string;
+  next_funding_ts?: number;
+  markPx?: number;
+  oraclePx?: number;
+  openInterest?: number;
+  dayNtlVlm?: number;
+  [k: string]: unknown;
+}
+
+export interface MarketBriefResponse {
+  fear_greed?: { value: number; classification: string };
+  global?: {
+    total_market_cap_usd?: number;
+    total_volume_24h_usd?: number;
+    market_cap_change_24h_pct?: number;
+    btc_dominance_pct?: number;
+    eth_dominance_pct?: number;
+  };
+  movers?: { gainers: unknown[]; losers: unknown[] };
+  trending?: Array<{ name?: string; symbol?: string }>;
+  defi_fees_top?: { total24h_usd?: number; protocols?: Array<{ name: string; fees24h_usd: number }> };
+  source?: string;
+  ts?: string;
+  [k: string]: unknown;
+}
+
+export interface FundingResult {
+  funding: FundingRow[];
+  count: number;
+  summary: string;
+  paid: boolean;
+  total_available?: number;
+  activation?: Activation;
+  guard_reasons?: string[];
+  error?: string;
+}
+export interface MarketBriefResult extends MarketBriefResponse {
+  summary: string;
+  paid: boolean;
+  activation?: Activation;
+  guard_reasons?: string[];
+  error?: string;
+}
+
+export declare function buildFundingUrl(args?: FundingArgs): string;
+export declare function buildFundingPreviewUrl(args?: { base?: string }): string;
+export declare function buildMarketBriefUrl(args?: BriefArgs): string;
+
+export declare function summarizeFunding(rows: FundingRow[]): string;
+export declare function summarizeMarketBrief(out: MarketBriefResponse): string;
+
+export declare function fetchFundingOrPreview(
+  payFetch: PayFetch,
+  args?: FundingArgs,
+  opts?: RunOpts
+): Promise<{ funding: FundingRow[]; paid: boolean; total_available?: number; activation?: Activation }>;
+
+export declare function runFunding(payFetch: PayFetch, args?: FundingArgs, opts?: RunOpts): Promise<FundingResult>;
+export declare function runMarketBrief(
+  payFetch: PayFetch,
+  args?: BriefArgs,
+  opts?: { hasKey?: boolean }
+): Promise<MarketBriefResult>;
