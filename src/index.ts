@@ -731,6 +731,15 @@ app.get("/api-key", async (c) => {
   });
 });
 
+// Canonical SEO origin. The Worker answers on BOTH the workers.dev host and the
+// promoted brand host (api.greyridgesignals.ai). Every self-referential SEO signal
+// — <link rel=canonical>, og:url, robots Sitemap:, sitemap <loc> — must point at the
+// ONE preferred host regardless of which host served the request, so Google
+// consolidates link equity onto the promoted domain instead of discarding it as a
+// cross-host canonical. Functional/host-bound URLs (miniapp signed manifest, Telegram
+// webhook, scanner probe UA, x402 facilitator) deliberately stay on their own hosts.
+const CANONICAL_ORIGIN = "https://api.greyridgesignals.ai";
+
 app.get("/", async (c) => {
   const BASE = "https://x402-data-api.sigrunner.workers.dev";
   const mcpConfig = JSON.stringify(
@@ -792,13 +801,13 @@ app.get("/", async (c) => {
 <meta name="description" content="Pay-per-call market & on-chain data for Base trading agents over x402: live DeFi yields, cross-venue funding rates, token prices, Polymarket and RPC data — plus a pre-trade token-safety gate (GO/HOLD/BLOCK). No account, no API key; agents pay inline in USDC from $0.001/call.">
 <meta property="og:title" content="Grey Ridge Signals — pay-per-call market & on-chain data for Base agents (x402)">
 <meta property="og:description" content="Pay-per-call market & on-chain data for Base trading agents over x402: live DeFi yields, cross-venue funding rates, token prices, Polymarket and RPC data — plus a pre-trade token-safety gate (GO/HOLD/BLOCK). No account, no API key; agents pay inline in USDC from $0.001/call.">
-<meta property="og:url" content="https://x402-data-api.sigrunner.workers.dev/">
+<meta property="og:url" content="${CANONICAL_ORIGIN}/">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Grey Ridge Signals — pay-per-call market & on-chain data for Base agents (x402)">
 <meta name="twitter:description" content="Pay-per-call market & on-chain data for Base trading agents over x402: live DeFi yields, cross-venue funding rates, token prices, Polymarket and RPC data — plus a pre-trade token-safety gate (GO/HOLD/BLOCK). No account, no API key; agents pay inline in USDC from $0.001/call.">
 <meta name="robots" content="index, follow">
-<link rel="canonical" href="https://x402-data-api.sigrunner.workers.dev/">
+<link rel="canonical" href="${CANONICAL_ORIGIN}/">
 <title>Grey Ridge Signals — pay-per-call market & on-chain data for Base agents (x402)</title>
 ${provisionMeta}
 <style>
@@ -1694,18 +1703,16 @@ These third-party x402 buyer tools let agents discover and purchase pay-per-call
 // robots.txt — Instruct crawlers how to index the site. Allow everything; sitemap
 // tells them where the canonical discovery/documentation routes are.
 app.get("/robots.txt", (c) => {
-  const BASE = "https://x402-data-api.sigrunner.workers.dev";
   return c.text(`User-agent: *
 Allow: /
 
-Sitemap: ${BASE}/sitemap.xml
+Sitemap: ${CANONICAL_ORIGIN}/sitemap.xml
 `);
 });
 
 // sitemap.xml — XML sitemap for SEO crawlers. Links canonical pages + key discovery
 // routes so crawlers prioritize indexing the public API docs over transient queries.
 app.get("/sitemap.xml", (c) => {
-  const BASE = "https://x402-data-api.sigrunner.workers.dev";
   const lastmod = new Date().toISOString().split("T")[0];
   const pages = [
     { path: "/", priority: "1.0", changefreq: "daily" },
@@ -1736,7 +1743,7 @@ app.get("/sitemap.xml", (c) => {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${[...pages, ...reportPages].map((p) => `  <url>
-    <loc>${BASE}${p.path.replace(/&/g, "&amp;")}</loc>
+    <loc>${CANONICAL_ORIGIN}${p.path.replace(/&/g, "&amp;")}</loc>
     <lastmod>${lastmod}</lastmod>
     <changefreq>${p.changefreq}</changefreq>
     <priority>${p.priority}</priority>
@@ -3819,13 +3826,13 @@ app.get("/token-safety", (c) => {
 <meta name="description" content="Real-time honeypot detection for Base chain tokens. Analyze any ERC-20 for proxy risks, mint/pause/blacklist functions, and simulate transfers before you buy.">
 <meta property="og:title" content="Token Safety Scanner — Base Chain Honeypot Detector">
 <meta property="og:description" content="Real-time honeypot detection for Base chain tokens. Analyze proxy risks, mint/pause/blacklist functions, and simulate transfers.">
-<meta property="og:url" content="https://x402-data-api.sigrunner.workers.dev/token-safety">
+<meta property="og:url" content="${CANONICAL_ORIGIN}/token-safety">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Token Safety Scanner — Base Chain Honeypot Detector">
 <meta name="twitter:description" content="Real-time honeypot detection for Base chain tokens. Analyze before you swap.">
 <meta name="robots" content="index, follow">
-<link rel="canonical" href="https://x402-data-api.sigrunner.workers.dev/token-safety">
+<link rel="canonical" href="${CANONICAL_ORIGIN}/token-safety">
 <title>Token Safety Scanner — Base Chain Honeypot Detector | Grey Ridge Signals</title>
 <style>
   :root { color-scheme: dark; }
@@ -8915,7 +8922,7 @@ app.get("/check", (c) => {
   return c.html(
     CHECK_HTML.replace(
       /<meta property="og:title"[^>]*>/,
-      `<meta property="og:title" content="Is ${short} a honeypot? Base Token Check"><meta property="og:url" content="https://x402-data-api.sigrunner.workers.dev/check?token=${t}"><meta property="og:image" content="https://x402-data-api.sigrunner.workers.dev/check/card.svg?token=${t}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:image" content="https://x402-data-api.sigrunner.workers.dev/check/card.svg?token=${t}">`,
+      `<meta property="og:title" content="Is ${short} a honeypot? Base Token Check"><meta property="og:url" content="${CANONICAL_ORIGIN}/check?token=${t}"><meta property="og:image" content="${CANONICAL_ORIGIN}/check/card.svg?token=${t}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:image" content="${CANONICAL_ORIGIN}/check/card.svg?token=${t}">`,
     ),
   );
 });
