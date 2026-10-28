@@ -9079,6 +9079,123 @@ async function checkSourceVerified(address: string): Promise<boolean | null> {
   }
 }
 
+// Additive token-risk scoring, extracted as a pure, unit-testable function so
+// the single scorer behind all five token-safety surfaces (paid token-security,
+// its preview, /gate/swap, token-report, MCP tools/call) is calibrated in one
+// place. Thresholds live in a named data object (editable without touching the
+// logic, and NO token-address allowlist anywhere — the benign path is derived
+// entirely from runtime signals).
+export const TOKEN_RISK_THRESHOLDS = {
+  HONEYPOT_REVERT: 75, // sim transfer reverted — real exploit evidence, never dampened
+  FEE_ON_TRANSFER: 25, // measured ≥5% transfer tax — never dampened
+  FEE_ON_TRANSFER_BPS_MIN: 500, // tax ≥ this (bps) scores fee-on-transfer
+  PROXY_UPGRADEABLE: 15,
+  CAN_MINT: 15,
+  HAS_BLACKLIST: 15,
+  CAN_PAUSE: 10,
+  HAS_FEE_SETTER: 10,
+  OWNER_NOT_RENOUNCED: 10,
+  // Benign-centralized dampening. A contract that (a) has publicly-verified
+  // source, (b) a live sell simulation actually succeeded on, and (c) whose
+  // privileged owner holds ≤1% of supply still carries admin capabilities, but
+  // shows NONE of the exploit patterns that make those capabilities dangerous
+  // in practice (blue-chips like USDC/cbBTC sit exactly here). When all three
+  // independent positive proofs hold, dampen ONLY the static capability-existence
+  // penalties — never the honeypot-sim, fee-on-transfer, or owner-concentration
+  // penalties, so a real honeypot / high-tax / insider-heavy token keeps its full
+  // score. Every capability flag stays visible (more transparent than an opaque
+  // 0/1 field). This is a calibration, not a false-SAFE downgrade: a scammer
+  // cannot cheaply fake verified byte-matching source AND a genuinely sellable
+  // token AND a near-zero owner balance at once.
+  BENIGN_CAPABILITY_DAMPEN: 0.4,
+  BENIGN_OWNER_BPS_MAX: 100, // owner must hold ≤1% of supply (100 bps) to qualify
+  BENIGN_TAX_BPS_MAX: 500, // measured transfer tax must be under this to qualify
+} as const;
+
+export interface TokenRiskInputs {
+  is_contract: boolean;
+  sim: { sim_status: "tested" | "unavailable"; transferable: boolean | null; transfer_tax_bps?: number | null };
+  proxy: { is_proxy: boolean; proxy_standard: string | null };
+  categories: { can_mint: boolean; has_blacklist: boolean; can_pause: boolean; has_fee_setter: boolean; has_ownership: boolean };
+  owner: { ownership_renounced: boolean; owner_type: "none" | "renounced" | "eoa" | "contract" };
+  owner_percent_bps: number | null;
+  source_verified: boolean;
+}
+
+export function computeTokenRiskScore(inp: TokenRiskInputs): { score: number; flags: string[]; dampened: boolean } {
+  const T = TOKEN_RISK_THRESHOLDS;
+  const flags: string[] = [];
+
+  if (!inp.is_contract) {
+    return { score: 100, flags: ["target address is not a contract — not a valid ERC-20 token"], dampened: false };
+  }
+
+  // Non-dampenable danger signals: direct evidence of an exploit pattern.
+  let danger = 0;
+  if (inp.sim.sim_status === "tested" && inp.sim.transferable === false) {
+    danger += T.HONEYPOT_REVERT;
+    flags.push("simulated transfer reverted — token appears non-transferable / possible honeypot");
+  }
+  if (inp.sim.sim_status === "tested" && typeof inp.sim.transfer_tax_bps === "number" && inp.sim.transfer_tax_bps >= T.FEE_ON_TRANSFER_BPS_MIN) {
+    danger += T.FEE_ON_TRANSFER;
+    flags.push(`measured ${(inp.sim.transfer_tax_bps / 100).toFixed(1)}% fee on a plain transfer() (fee-on-transfer token)`);
+  }
+
+  // Static capability-existence penalties: the admin powers a privileged account
+  // COULD use. Dampenable when the benign-centralized context holds.
+  let caps = 0;
+  if (inp.proxy.is_proxy) {
+    caps += T.PROXY_UPGRADEABLE;
+    flags.push(`upgradeable proxy (${inp.proxy.proxy_standard}) — contract logic can be changed by the admin after you hold this token`);
+  }
+  if (inp.categories.can_mint) {
+    caps += T.CAN_MINT;
+    flags.push("owner/admin can mint unlimited new supply");
+  }
+  if (inp.categories.has_blacklist) {
+    caps += T.HAS_BLACKLIST;
+    flags.push("has a blacklist function — holders can be blocked from transferring");
+  }
+  if (inp.categories.can_pause) {
+    caps += T.CAN_PAUSE;
+    flags.push("contract can be paused — the owner can freeze all transfers");
+  }
+  if (inp.categories.has_fee_setter) {
+    caps += T.HAS_FEE_SETTER;
+    flags.push("owner can set or change a transfer tax/fee");
+  }
+  if (inp.categories.has_ownership && !inp.owner.ownership_renounced) {
+    caps += T.OWNER_NOT_RENOUNCED;
+    flags.push("ownership not renounced — a privileged admin account still controls this contract");
+  }
+
+  // Owner supply concentration: single-owner dump risk. Non-dampenable.
+  const conc = ownerConcentrationRisk(inp.owner_percent_bps, inp.owner.owner_type);
+  danger += conc.scoreAdd;
+  flags.push(...conc.reasons);
+
+  // Benign-centralized context — ALL THREE independent positive proofs required.
+  const benign =
+    inp.source_verified === true &&
+    inp.sim.sim_status === "tested" &&
+    inp.sim.transferable === true &&
+    (inp.sim.transfer_tax_bps == null || inp.sim.transfer_tax_bps < T.BENIGN_TAX_BPS_MAX) &&
+    inp.owner_percent_bps !== null &&
+    inp.owner_percent_bps <= T.BENIGN_OWNER_BPS_MAX;
+
+  let dampened = false;
+  if (benign && caps > 0) {
+    caps = Math.round(caps * T.BENIGN_CAPABILITY_DAMPEN);
+    dampened = true;
+    flags.push(
+      "admin capabilities dampened: contract source is publicly verified, a live sell simulation succeeded, and the owner holds ≤1% of supply — the capabilities above exist but the token shows no exploit pattern",
+    );
+  }
+
+  const score = Math.min(100, danger + caps);
+  return { score, flags, dampened };
+}
+
 async function analyzeTokenSecurity(token: string): Promise<TokenSecurityResult> {
   const analyzed_at = new Date().toISOString();
 
@@ -9139,52 +9256,21 @@ async function analyzeTokenSecurity(token: string): Promise<TokenSecurityResult>
     }
   }
 
-  const flags: string[] = [];
-  let score = 0;
-
-  if (!codeClass.is_contract) {
-    score = 100;
-    flags.push("target address is not a contract — not a valid ERC-20 token");
-  } else {
-    if (sim.sim_status === "tested" && sim.transferable === false) {
-      score += 75;
-      flags.push("simulated transfer reverted — token appears non-transferable / possible honeypot");
-    }
-    if (sim.sim_status === "tested" && typeof sim.transfer_tax_bps === "number" && sim.transfer_tax_bps >= 500) {
-      score += 25;
-      flags.push(`measured ${(sim.transfer_tax_bps / 100).toFixed(1)}% fee on a plain transfer() (fee-on-transfer token)`);
-    }
-    if (proxy.is_proxy) {
-      score += 15;
-      flags.push(`upgradeable proxy (${proxy.proxy_standard}) — contract logic can be changed by the admin after you hold this token`);
-    }
-    if (categories.can_mint) {
-      score += 15;
-      flags.push("owner/admin can mint unlimited new supply");
-    }
-    if (categories.has_blacklist) {
-      score += 15;
-      flags.push("has a blacklist function — holders can be blocked from transferring");
-    }
-    if (categories.can_pause) {
-      score += 10;
-      flags.push("contract can be paused — the owner can freeze all transfers");
-    }
-    if (categories.has_fee_setter) {
-      score += 10;
-      flags.push("owner can set or change a transfer tax/fee");
-    }
-    if (categories.has_ownership && !owner.ownership_renounced) {
-      score += 10;
-      flags.push("ownership not renounced — a privileged admin account still controls this contract");
-    }
-    const conc = ownerConcentrationRisk(owner_percent_bps, owner.owner_type);
-    if (conc.scoreAdd > 0) {
-      score += conc.scoreAdd;
-      flags.push(...conc.reasons);
-    }
-  }
-  score = Math.min(100, score);
+  const { score, flags } = computeTokenRiskScore({
+    is_contract: codeClass.is_contract,
+    sim: { sim_status: sim.sim_status, transferable: sim.transferable, transfer_tax_bps: sim.transfer_tax_bps },
+    proxy: { is_proxy: proxy.is_proxy, proxy_standard: proxy.proxy_standard },
+    categories: {
+      can_mint: categories.can_mint,
+      has_blacklist: categories.has_blacklist,
+      can_pause: categories.can_pause,
+      has_fee_setter: categories.has_fee_setter,
+      has_ownership: categories.has_ownership,
+    },
+    owner: { ownership_renounced: owner.ownership_renounced, owner_type: owner.owner_type },
+    owner_percent_bps,
+    source_verified: source_verified === true,
+  });
   const verdict = verdictFromScore(score);
 
   const srcNote = source_verified ? " Contract source is publicly verified (Sourcify)." : "";
