@@ -346,6 +346,40 @@ export function buildSeeAlso(
   return out;
 }
 
+// Inject the demand-ordered see_also cross-sell into a 200 SUCCESS JSON body.
+//
+// An x402 buyer client auto-pays the 402 INSIDE its payment middleware; the
+// agent's own reasoning loop only ever parses the 200 JSON it requested — never
+// the 402 body where the zzzdn see_also upsell also lives (reach ~0% of the
+// paying cohort, which is 100% scripted DATA-route sweepers/repeat-buyers per
+// external_payer_routes.py). This mirrors the SAME buildSeeAlso output onto the
+// one surface 100% of payers parse, under an additive namespaced key so no
+// field the buyer asked for ever moves.
+//
+// Pure + degrade-open: returns the body UNCHANGED on anything that is not a
+// plain JSON object, when the route yields no upsell (fail-closed on unknown
+// routes), when a `_greyridge` key already exists (idempotent), or on any
+// parse/stringify error. Never throws.
+export function injectSeeAlso(
+  body: string,
+  path: string,
+  origin: string = CANONICAL_ORIGIN,
+): string {
+  try {
+    const seeAlso = buildSeeAlso(path, origin);
+    if (seeAlso.length === 0) return body; // unknown/ineligible route — fail-closed
+    const parsed = JSON.parse(body);
+    // Only a plain object can carry an additive namespaced key without reshaping
+    // the payload the buyer requested. Arrays/primitives pass through untouched.
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return body;
+    if ("_greyridge" in parsed) return body; // never double-inject
+    (parsed as Record<string, unknown>)._greyridge = { see_also: seeAlso };
+    return JSON.stringify(parsed);
+  } catch {
+    return body; // degrade-open: original body, byte-for-byte
+  }
+}
+
 /** GET /chain/block-number 200: handler always returns numeric block_number and chain "base". Preview may add `note`. */
 const BLOCK_NUMBER_SUCCESS_SCHEMA = {
   type: "object",
@@ -623,6 +657,42 @@ app.use("*", async (c, next) => {
     const nh = new Headers(c.res.headers);
     for (const [k, v] of SEC) if (!nh.has(k)) nh.set(k, v);
     c.res = new Response(c.res.body, { status: c.res.status, statusText: c.res.statusText, headers: nh });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 200-envelope cross-sell. An x402 buyer client auto-pays the 402 inside its
+// payment middleware, so the paying agent's reasoning loop only ever parses the
+// 200 JSON it requested — NOT the 402 body where the demand-ordered see_also
+// upsell also lives (zzzdn, reach ~0% of the proven DATA-route payer cohort).
+// This mirrors that SAME cross-sell onto the 200 success body of catalog routes,
+// additively under `_greyridge.see_also`, so a data buyer sees the 10x flagship
+// safety verdict in the exact JSON it already parses.
+//
+// Registered here (early) so it is OUTER to the paid handlers — next() resolves
+// the final 200 — and INNER to the security-header mw above, which re-applies
+// its headers to this rebuilt response. Strictly bounded + degrade-open: only a
+// 200 JSON OBJECT body of a known catalog route is touched; 402 bodies, errors,
+// arrays, HTML/SVG pages and non-catalog routes pass through byte-for-byte.
+// injectSeeAlso is pure and never throws.
+// ---------------------------------------------------------------------------
+app.use("*", async (c, next) => {
+  await next();
+  try {
+    const res = c.res;
+    if (res.status !== 200) return; // success envelope only
+    const ct = res.headers.get("content-type") || "";
+    if (!ct.includes("application/json")) return; // JSON bodies only
+    // Cheap in-memory gate BEFORE touching the body: a non-catalog route yields
+    // no upsell, so skip the reparse entirely for health/pages/manifests/etc.
+    if (buildSeeAlso(c.req.path).length === 0) return;
+    const original = await res.text(); // consumes the stream; rebuilt below either way
+    const injected = injectSeeAlso(original, c.req.path);
+    const headers = new Headers(res.headers);
+    headers.delete("content-length"); // body length changed on inject (no-op if unchanged)
+    c.res = new Response(injected, { status: 200, statusText: res.statusText, headers });
+  } catch {
+    // Any failure leaves the already-emitted response in place.
   }
 });
 
