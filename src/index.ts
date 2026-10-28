@@ -12736,10 +12736,20 @@ app.post("/scan/mcp/preview", async (c) => {
 // ---------------------------------------------------------------------------
 
 const mcpHandler = createMcpHandler(() => {
-  const server = new McpServer({
-    name: "x402-data-api",
-    version: "0.1.0", // mirror root package.json (canonical)
-  });
+  const server = new McpServer(
+    {
+      name: "Grey Ridge MCP Security + Base Trade-Safety",
+      version: "0.1.4", // mirror root package.json (canonical) + registry isLatest
+    },
+    {
+      // Connect-time identity rendered by every MCP client (Claude/Cursor/Cline)
+      // and aggregator (official registry isLatest, Glama). Honest capability +
+      // pricing description — Claims Law: static detection + monitoring, never
+      // a guarantee of safety. No agent-steering directives.
+      instructions:
+        "Grey Ridge x402 — two capabilities. (1) FREE MCP security scanning: static tool-poisoning and prompt-injection audit (OWASP LLM01/LLM08) of any MCP server's advertised tools; no tool invocation. A 'clear' result means no static red flags were found — NOT a guarantee the server is safe. (2) Base-chain pre-trade safety for autonomous trading agents: a GO/HOLD/BLOCK swap gate with honeypot, rug, buy/sell-tax and position-sizing checks. Every route has a free preview; full verdicts are x402 pay-per-call (~$0.005-0.01 USDC). Keep a public 'verified · monitored' trust badge live with continuous re-scanning + drift alerts via subscription: https://api.greyridgesignals.ai/pricing",
+    },
+  );
 
   server.registerTool(
     "enrich_tech_risk",
