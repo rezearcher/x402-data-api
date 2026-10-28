@@ -176,9 +176,9 @@ const PREVIEW_ROUTES = new Set<string>([
     // Lane order derived from measured on-chain demand (onchain_demand_by_lane.json):
     // token-safety is the #1 live-demand lane — lead the machine-import surface with it.
 const ROUTE_CATALOG: Array<[string, string, string, string, string, string[]]> = [
-  ["/gate/swap", "GET", "0.008", "8000", "Is this Base token safe to swap right now? GO / HOLD / BLOCK pre-trade safety gate for autonomous trading agents: is it a honeypot, can you sell it, and is your trade too big for the pool? Honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your notional — one decision + reason in one fast call.", ["security", "base", "onchain", "trading", "gate", "agents", "token", "honeypot", "token-security", "data"]],
+  ["/gate/swap", "GET", "0.008", "8000", "Is this Base token safe to swap right now? GO / HOLD / BLOCK pre-trade safety gate for autonomous trading agents: is it a honeypot, can you sell it, and is your trade too big for the pool? Honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your notional — one decision + reason in one fast call.", ["security", "base", "onchain", "trading", "gate", "agents", "token", "honeypot", "token-security", "data", "sell simulation before swap Base", "pre-swap safety gate"]],
   ["/chain/token-report", "GET", "0.01", "10000", "Is this Base token safe to buy? One call returns a trade-safety verdict — SAFE | CAUTION | AVOID — with risk_score (0-100) and reasons: honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, measured transfer tax, symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade before an agent buys a Base ERC-20.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "verdict", "trading", "token-security", "data"]],
-  ["/chain/token-security", "GET", "0.009", "9000", "Is this Base token a honeypot — can a real wallet actually sell it? Token-security / honeypot detector for a Base ERC-20: EIP-1967 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement, and a live eth_call state-override sim testing whether a synthetic wallet can transfer() it. Real compute, not a thin data wrapper. Returns risk_score (0-100) + verdict (clear/review/block) + flags.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "token-security", "data"]],
+  ["/chain/token-security", "GET", "0.009", "9000", "Is this Base token a scam or rug pull? Honeypot detector for a Base ERC-20: EIP-1967 proxy + upgradeability check, bytecode scan for mint/pause/blacklist/fee-setter/ownership, owner() renouncement, and a live eth_call state-override sim proving a real wallet can transfer() it. Returns risk_score (0-100) + verdict (clear/review/block) + honeypot/scam/rug flags. Use before an agent buys, holds or approves a token.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "token-security", "data", "scam", "rug", "rug-detection", "scam-detection"]],
   ["/pm/markets", "GET", "0.005", "5000", "Live Polymarket prediction markets — question, outcomes, bestBid/bestAsk/spread, volume24hr/volume1wk, oneDayPriceChange, clobTokenIds, conditionId, category tags, liquidity, end date. Ranked by volume24hr; filter by keyword.", ["prediction-markets", "polymarket", "markets", "crypto", "data"]],
   ["/crypto/funding", "GET", "0.004", "4000", "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, premium/basis, annualized_hl/annualized_okx, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices, open interest.", ["crypto", "funding", "perps", "hyperliquid", "okx", "dydx", "arbitrage", "defi", "market-data", "data"]],
   ["/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, pool id, APY breakdown + 1d/7d/30d APY trend, IL risk (incl. il7d), exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL. Filter by project, chain, or stablecoin-only; sort by TVL or risk-adjusted APY.", ["defi", "yield", "lending", "apy", "tvl", "defi-yields", "data"]],
@@ -2133,7 +2133,7 @@ const facilitatorClient = new HTTPFacilitatorClient({ url: FACILITATOR_URL });
 const evmScheme = new ExactEvmScheme();
 const resourceServer = new x402ResourceServer(facilitatorClient).register(
   NETWORK,
-  evmScheme,
+  evmScheme as any,
 );
 
 // bazaarResourceServerExtension is intentionally NOT registered here: it uses
@@ -2156,7 +2156,7 @@ function selectResourceServer(env: Env): x402ResourceServer {
     const cdpFacilitator = createCdpFacilitator(env.CDP_API_KEY_ID, env.CDP_API_KEY_SECRET);
     activeResourceServer = new x402ResourceServer(cdpFacilitator).register(
       NETWORK,
-      new ExactEvmScheme(),
+      evmScheme as any,
     );
   } else {
     activeResourceServer = resourceServer; // xpay default (unchanged)
@@ -3498,7 +3498,7 @@ function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Is this Base token a honeypot — can a real wallet actually sell it? Token-security / honeypot detector for a Base ERC-20: EIP-1967 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement, and a live eth_call state-override sim testing whether a synthetic wallet can transfer() it. Returns risk_score (0-100) + verdict (clear/review/block) + flags. Use when an agent needs honeypot/mint/pause/proxy checks for a Base ERC-20.",
+        "Is this Base token a scam or rug pull? Honeypot detector for a Base ERC-20: EIP-1967 proxy + upgradeability check, bytecode scan for mint/pause/blacklist/fee-setter/ownership, owner() renouncement, and a live eth_call state-override sim proving a real wallet can transfer() it. Returns risk_score (0-100) + verdict (clear/review/block) + honeypot/scam/rug flags. Use before an agent buys, holds or approves a token.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -8499,6 +8499,11 @@ async function buildTokenReport(token: string) {
       canPause: caps ? caps.can_pause : null,
       hasBlacklist: caps ? caps.has_blacklist : null,
       simStatus: sim?.sim_status ?? null,
+      // Sellability is UNKNOWN, not "safe", whenever the transfer simulation could
+      // not run. Surfaced as its own field (not folded into `verdict`) because a
+      // consumer composing a go/no-go decision — /gate/swap — cannot recover it from
+      // `sellable: null` (which also covers "we never analyzed the contract at all").
+      sellabilityUnverified,
     },
     liquidity: liq
       ? { wethPoolUsd: liq.weth_pool_usd, basis: "approx: 2x WETH-side balance of the deepest Uniswap v3 WETH pool", pools: liq.pools, dex: "uniswap-v3", note: liq.note }
@@ -8554,6 +8559,14 @@ export interface SwapGateSignals {
   risk_score: number;
   /** true = simulation proved the token cannot be transferred; null = unverified */
   isHoneypot: boolean | null;
+  /**
+   * true = the transfer/sellability simulation could NOT run, so "can you sell
+   * it?" is unknown. Distinct from `isHoneypot` (proven bad) and from
+   * `liquidity_usd === null` (proven nothing about exit): an unproven exit must
+   * never authorize a trade. The fused risk score cannot carry this — it is
+   * capped at 25 while the sim is missing, so no CAUTION threshold can express it.
+   */
+  sellability_unverified: boolean;
   /** fused reasons from the token report (honeypot + tax + admin caps + liquidity) */
   reasons: string[];
   /** approx USD in the deepest Uniswap v3 WETH pool; null = no verifiable pool */
@@ -8593,7 +8606,24 @@ export function decideSwapGate(s: SwapGateSignals): SwapDecision {
   if (impact !== null && impact > 10) {
     return { decision: "block", reason: `trade is ${impact.toFixed(1)}% of pool liquidity; severe price impact` };
   }
-  // 3. Unknown liquidity fails closed to HOLD, never GO.
+  // 3. Unknown sellability fails closed to HOLD, never GO. This is the asymmetry
+  //    that was the P0 bug: the gate refused to authorize a trade it could not SIZE
+  //    (branch 4) but happily authorized a buy of a token whose EXIT was never
+  //    proven. "We could not check" is not "it checked out" — a honeypot that
+  //    exempts the probed path, or one whose storage layout defeats the transfer
+  //    sim, reports exactly this way. HOLD on both sides: on a sell we cannot
+  //    assert the exit is blocked (that is a BLOCK, and needs proof) and must not
+  //    assert it works either.
+  if (s.sellability_unverified) {
+    return {
+      decision: "hold",
+      reason:
+        s.side === "sell"
+          ? "sellability unverified — the transfer simulation could not run, so the exit is unproven; confirm you can actually sell this token before trading"
+          : "sellability unverified — the transfer simulation could not run, so the token's exit is unproven; not safe to auto-buy",
+    };
+  }
+  // 4. Unknown liquidity fails closed to HOLD, never GO.
   if (noLiquidityEvidence) {
     return {
       decision: "hold",
@@ -8603,18 +8633,18 @@ export function decideSwapGate(s: SwapGateSignals): SwapDecision {
           : "no verifiable Uniswap v3 WETH-pool liquidity — cannot confirm the position is exitable or size the trade; not safe to auto-buy",
     };
   }
-  // 4. 2-10% of pool is executable but must be split.
+  // 5. 2-10% of pool is executable but must be split.
   if (impact !== null && impact > 2) {
     return { decision: "hold", reason: `trade is ${impact.toFixed(1)}% of pool liquidity; split the order` };
   }
-  // 5. CAUTION is advisory unless the fused risk score is high on a buy.
+  // 6. CAUTION is advisory unless the fused risk score is high on a buy.
   if (s.verdict === "CAUTION") {
     return {
       decision: s.side === "buy" && s.risk_score >= 50 ? "hold" : "go",
       reason: s.reasons[0] ?? "caution flags present",
     };
   }
-  // 6. Clean token, sizeable trade.
+  // 7. Clean token, sizeable trade.
   return {
     decision: "go",
     reason: impact !== null ? `token passes safety checks; trade is ${impact.toFixed(2)}% of pool liquidity` : "token passes safety checks",
@@ -8663,11 +8693,17 @@ async function buildSwapGate(token: string, side: "buy" | "sell", notional: numb
   const { report: r, cache_state } = await buildTokenReportCached(token);
   const liq = r.liquidity.wethPoolUsd;
   const impact = swapImpactPct(liq, notional);
+  // The report field is newer than the payload it rides in: a decision cached by the
+  // PREVIOUS deploy stays warm for up to GATE_CACHE_TTL_S and will not carry it. A
+  // missing key must fail CLOSED (hold), never read as "verified", so fall back to
+  // the exact fact buildTokenReport derives it from — the transfer sim did not run.
+  const sellability_unverified = r.security.sellabilityUnverified ?? (r.security.simStatus !== "tested");
   const { decision, reason } = decideSwapGate({
     side,
     verdict: r.verdict,
     risk_score: r.risk_score,
     isHoneypot: r.security.isHoneypot,
+    sellability_unverified,
     reasons: r.reasons,
     liquidity_usd: liq,
     notional_usd: notional,
@@ -8675,6 +8711,10 @@ async function buildSwapGate(token: string, side: "buy" | "sell", notional: numb
   return {
     token, side, notional_usd: notional, decision, reason,
     verdict: r.verdict, risk_score: r.risk_score, liquidity_usd: liq,
+    // Signal, not a second decision: decision/reason above stay authoritative. This
+    // exposes WHY a hold happened (unknown exit vs unknown depth) so an agent can
+    // route a human to verify the token instead of silently retrying.
+    sellability_unverified,
     impact_pct_of_pool: impact === null ? null : Math.round(impact * 100) / 100,
     flags: r.reasons, token_meta: r.token_meta, analyzed_at: r.analyzed_at,
     cache_state,

@@ -109,3 +109,46 @@ trial (3 real tokens/IP/day) was already exhausted for this egress IP — produc
 HTTP 429 `real_token_checks_left_today: 0`. Local run exercises the **same src** against
 **real Base RPC**; only KV (trial counter) is local. Production USDC `go` and canary `block`
 were both reproduced against the deployed worker.
+
+## Fix applied (t_41513ed5, 2026-10-28)
+
+`sellability_unverified` is now a gate input, not a score contribution:
+
+- `buildTokenReport` surfaces the existing L8459 boolean as `security.sellabilityUnverified`
+  (additive field; nothing else in the report changes).
+- `SwapGateSignals.sellability_unverified` is **required**, so a future caller cannot silently
+  omit it and re-open the fail-open (a missing signal would otherwise read as "verified").
+- `decideSwapGate` gained branch **3**: `sellability_unverified -> hold` on BOTH sides, ordered
+  **below** `AVOID` (branch 1) and `>10% of pool` (branch 2) so a proven honeypot still BLOCKs,
+  and **above** the no-liquidity / split / CAUTION branches, because "we could not prove you can
+  sell" is a harder answer than "we cannot size it".
+- `buildSwapGate` fails CLOSED on a report cached by the previous deploy (which cannot carry the
+  new key): `sellabilityUnverified ?? (simStatus !== "tested")` — a missing key never reads as
+  verified. The gate body also exposes `sellability_unverified` as a *signal*; `decision`/`reason`
+  remain the single authoritative pair.
+- Free preview, paid `/gate/swap`, the Telegram bot and the MCP tool all share `buildSwapGate`,
+  so all four surfaces get the rule from one change.
+
+### Before / after, same `decideSwapGate` inputs
+
+| case | before | after |
+|---|---|---|
+| (a) buy, CAUTION, score 10, $24.9k pool, $100 (0.4%) | `go` | `hold` — "sellability unverified … not safe to auto-buy" |
+| (b) sell, same signals | `go` | `hold` — "… the exit is unproven; confirm you can actually sell" |
+| (c) buy, AVOID + proven honeypot | `block` | `block` (precedence unchanged) |
+| >10% of pool + unverified | `block` | `block` (precedence unchanged) |
+
+### Live assertions (`npx wrangler dev --local`, same src, real Base RPC, local KV)
+
+All four exit 0 on the acceptance URLs (`cf-connecting-ip` varied only to step around the local
+3/day trial counter, which is KV state, not logic):
+
+- **A** `0xb200…108c` buy $100 → `hold`, `sellability_unverified: true`, pool $24,892, impact 0.4%
+  (previously `go`)
+- **B** `0xb200…58b7` (second confirmed honeypot) buy $100 → `hold`
+- **C** USDC `0x8335…2913` buy $100 → `go`, `sellability_unverified: false` (no regression)
+- **D** `0xb200…108c` **sell** $100 → `hold` (previously `go`; the exit is no longer asserted)
+
+`node tests/test_gate_decision_contract.mjs` → 31 checks passed (25 before; +6 pinning this
+signal, including an invariant that `sellability_unverified` can never yield `go` across
+side × verdict × honeypot × liquidity × notional × score).

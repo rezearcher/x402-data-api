@@ -38,6 +38,7 @@ function signals(over = {}) {
     reasons: [],
     liquidity_usd: 10_000_000,
     notional_usd: 100,
+    sellability_unverified: false,
     ...over,
   };
 }
@@ -61,20 +62,22 @@ check("every branch returns a decision in the closed set (fuzz over signals)", (
   const honeypots = [true, false, null];
   const liqs = [null, 0, 1, 1_000, 250_000, 10_000_000];
   const notionals = [1, 100, 1_000, 50_000];
+  const unverified = [false, true];
   let n = 0;
   for (const side of sides)
     for (const verdict of verdicts)
       for (const isHoneypot of honeypots)
         for (const liquidity_usd of liqs)
           for (const notional_usd of notionals)
-            for (const risk_score of [0, 49, 50, 90]) {
-              const out = decideSwapGate(signals({ side, verdict, isHoneypot, liquidity_usd, notional_usd, risk_score }));
-              assert.ok(DECISIONS.has(out.decision), `bad decision for ${JSON.stringify({ side, verdict, isHoneypot, liquidity_usd, notional_usd, risk_score })}`);
-              assert.equal(typeof out.reason, "string");
-              assert.ok(out.reason.length > 0);
-              n++;
-            }
-  assert.equal(n, 2 * 3 * 3 * 6 * 4 * 4);
+            for (const risk_score of [0, 49, 50, 90])
+              for (const sellability_unverified of unverified) {
+                const out = decideSwapGate(signals({ side, verdict, isHoneypot, liquidity_usd, notional_usd, risk_score, sellability_unverified }));
+                assert.ok(DECISIONS.has(out.decision), `bad decision for ${JSON.stringify({ side, verdict, isHoneypot, liquidity_usd, notional_usd, risk_score, sellability_unverified })}`);
+                assert.equal(typeof out.reason, "string");
+                assert.ok(out.reason.length > 0);
+                n++;
+              }
+  assert.equal(n, 2 * 3 * 3 * 6 * 4 * 4 * 2);
 });
 
 // ---------------------------------------------------------------------------
@@ -108,6 +111,87 @@ check("AVOID reason falls back deterministically when reasons[] is empty", () =>
   const out = decideSwapGate(signals({ verdict: "AVOID", risk_score: 88, isHoneypot: true, reasons: [] }));
   assert.equal(out.decision, "block");
   assert.equal(out.reason, "token flagged AVOID");
+});
+
+// ---------------------------------------------------------------------------
+// Signal 1b: sellability UNVERIFIED — the transfer simulation never ran, so "can
+// you sell it?" is unknown. Unknown is not safe. This is the P0 that shipped: the
+// deployed gate printed "sellability unverified" in its own flags and still
+// answered `go`, because the fused score is capped at 25 when the sim is missing
+// and the only CAUTION rule needs risk_score >= 50 — a threshold the never-ran
+// path can never reach. The signal has to be a gate input, not a score.
+// ---------------------------------------------------------------------------
+const HONEYPOT_UNVERIFIED_REASONS = [
+  "modest WETH-pool liquidity (~$24,842); slippage risk on size",
+  "transfer simulation unavailable (non-standard storage layout); sellability unverified",
+];
+
+check("(a) sellability_unverified + deep-enough pool + small notional + BUY -> hold, never go", () => {
+  // The live shape of 0xb200…108c NVDAc: CAUTION, risk_score 10, $24,880 pool,
+  // $100 notional (0.4% of pool), sim never ran. Real impact is small and the
+  // token is liquid — every old branch said GO.
+  const out = decideSwapGate(
+    signals({
+      verdict: "CAUTION",
+      risk_score: 10,
+      liquidity_usd: 24_880,
+      notional_usd: 100,
+      sellability_unverified: true,
+      reasons: HONEYPOT_UNVERIFIED_REASONS,
+    }),
+  );
+  assert.equal(out.decision, "hold");
+  assert.notEqual(out.decision, "go");
+  assert.match(out.reason, /sellability unverified/);
+  assert.match(out.reason, /not safe to auto-buy$/);
+});
+
+check("(b) sellability_unverified HOLDs a SELL too — the exit is unproven either way", () => {
+  const out = decideSwapGate(
+    signals({ side: "sell", verdict: "CAUTION", risk_score: 10, notional_usd: 100, sellability_unverified: true, reasons: HONEYPOT_UNVERIFIED_REASONS }),
+  );
+  assert.equal(out.decision, "hold");
+  assert.match(out.reason, /exit is unproven/);
+  assert.match(out.reason, /confirm you can actually sell/);
+});
+
+check("(c) AVOID + sellability_unverified still BLOCKs a buy (proven outranks unproven)", () => {
+  const out = decideSwapGate(
+    signals({ verdict: "AVOID", risk_score: 90, isHoneypot: true, sellability_unverified: true, reasons: ["simulated transfer reverted"] }),
+  );
+  assert.equal(out.decision, "block");
+  assert.equal(out.reason, "simulated transfer reverted");
+});
+
+check("(c2) size >10% of pool still BLOCKs even with sellability unverified (block outranks hold)", () => {
+  const out = decideSwapGate(
+    signals({ verdict: "CAUTION", risk_score: 10, sellability_unverified: true, liquidity_usd: 5_000, notional_usd: 1_000 }),
+  );
+  assert.equal(out.decision, "block");
+  assert.match(out.reason, /severe price impact$/);
+});
+
+check("(d) sellability_unverified outranks the size/liquidity HOLDs (one reason, the decisive one)", () => {
+  // 5% of pool would say "split the order" and a null pool would say "cannot size";
+  // neither is the real answer while the exit itself is unproven.
+  const split = decideSwapGate(signals({ verdict: "CAUTION", risk_score: 10, sellability_unverified: true, liquidity_usd: 100_000, notional_usd: 5_000 }));
+  assert.equal(split.decision, "hold");
+  assert.match(split.reason, /sellability unverified/);
+  const noPool = decideSwapGate(signals({ verdict: "CAUTION", risk_score: 10, sellability_unverified: true, liquidity_usd: null }));
+  assert.equal(noPool.decision, "hold");
+  assert.match(noPool.reason, /sellability unverified/);
+});
+
+check("(e) invariant: sellability_unverified can never produce go for any side/size/verdict", () => {
+  for (const side of ["buy", "sell"])
+    for (const verdict of ["SAFE", "CAUTION", "AVOID"])
+      for (const isHoneypot of [true, false, null])
+        for (const liquidity_usd of [null, 0, 24_880, 10_000_000])
+          for (const notional_usd of [1, 100, 1_000, 50_000])
+            for (const risk_score of [0, 10, 49, 90]) {
+              const out = decideSwapGate(signals({ side, verdict, isHoneypot, liquidity_usd, notional_usd, risk_score, sellability_unverified: true }));
+              assert.notEqual(out.decision, "go", `go with unverified sellability: ${JSON.stringify({ side, verdict, isHoneypot, liquidity_usd, notional_usd, risk_score })}`);
+            }
 });
 
 // ---------------------------------------------------------------------------
