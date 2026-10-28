@@ -9043,6 +9043,7 @@ interface TokenSecurityResult {
     scanned_address: string;
   };
   ownership: OwnerInfo & { owner_percent_bps: number | null; owner_percent_note: string };
+  holders: { holder_count: number | null; top_holder_pct_bps: number | null; source: "goplus" | null; note: string };
   honeypot_sim: HoneypotSim;
   source_verified: boolean | null;
   source_verified_note: string;
@@ -9079,6 +9080,55 @@ async function checkSourceVerified(address: string): Promise<boolean | null> {
   }
 }
 
+export interface HolderConcentration {
+  holder_count: number | null;
+  top_holder_pct_bps: number | null;
+  source: "goplus" | null;
+}
+
+// Aggregate holder data — GoPlus top-holder parity, keyless. GoPlus exposes a
+// public token_security record per chain that carries holder_count plus the top
+// holders list (each with percent, is_contract, is_locked). We fold two signals
+// out of it: total holder_count (a distribution breadth datum, reported not scored)
+// and the largest NON-contract, NON-locked, NON-owner holder's share (scored as
+// single-whale dump risk by topHolderConcentrationRisk). Contracts/locked holders
+// are excluded so a legitimate staking/LP majority never cry-wolfs, and the owner()
+// address is excluded so we don't double-count the owner-concentration signal.
+// Degrades OPEN: any error/timeout/non-200/missing record -> all-null = no score
+// change, so if GoPlus is unreachable the verdict is identical to today.
+export function parseHolderConcentration(rec: unknown, ownerAddr: string | null): HolderConcentration {
+  const r = rec as { holder_count?: unknown; holders?: Array<{ address?: string; percent?: string; is_contract?: unknown; is_locked?: unknown }> } | null | undefined;
+  if (!r) return { holder_count: null, top_holder_pct_bps: null, source: null };
+  const hcNum = r.holder_count != null ? Number(r.holder_count) : NaN;
+  const holder_count = Number.isFinite(hcNum) ? hcNum : null;
+  const owner = (ownerAddr ?? "").toLowerCase();
+  let topBps: number | null = null;
+  for (const h of r.holders ?? []) {
+    if (String(h.is_contract) === "1" || String(h.is_locked) === "1") continue; // exclude contracts & locked
+    if (owner && String(h.address ?? "").toLowerCase() === owner) continue; // owner scored separately
+    const pct = parseFloat(String(h.percent)); // GoPlus percent is a fraction (0.594 = 59.4%)
+    if (!Number.isFinite(pct) || pct <= 0) continue;
+    const bps = Math.round(pct * 10000);
+    if (topBps === null || bps > topBps) topBps = bps;
+  }
+  return { holder_count, top_holder_pct_bps: topBps, source: "goplus" };
+}
+
+async function getHolderConcentration(token: string, ownerAddr: string | null): Promise<HolderConcentration> {
+  try {
+    const res = await fetch(`https://api.gopluslabs.io/api/v1/token_security/8453?contract_addresses=${token.toLowerCase()}`, {
+      headers: { "User-Agent": "greyridge-x402/1 (token-safety holder-concentration)", accept: "application/json" },
+      signal: AbortSignal.timeout(2500),
+    });
+    if (res.status !== 200) return { holder_count: null, top_holder_pct_bps: null, source: null };
+    const d = (await res.json()) as { result?: Record<string, unknown> };
+    const rec = d?.result?.[token.toLowerCase()] ?? Object.values(d?.result ?? {})[0] ?? null;
+    return parseHolderConcentration(rec, ownerAddr);
+  } catch {
+    return { holder_count: null, top_holder_pct_bps: null, source: null };
+  }
+}
+
 // Additive token-risk scoring, extracted as a pure, unit-testable function so
 // the single scorer behind all five token-safety surfaces (paid token-security,
 // its preview, /gate/swap, token-report, MCP tools/call) is calibrated in one
@@ -9110,6 +9160,19 @@ export const TOKEN_RISK_THRESHOLDS = {
   BENIGN_CAPABILITY_DAMPEN: 0.4,
   BENIGN_OWNER_BPS_MAX: 100, // owner must hold ≤1% of supply (100 bps) to qualify
   BENIGN_TAX_BPS_MAX: 500, // measured transfer tax must be under this to qualify
+  // Top non-owner holder concentration (GoPlus top-holder parity). A single
+  // human-controlled wallet — NOT a contract (DEX pool/bridge/veToken locker/
+  // treasury), NOT a locked position, and NOT the owner() address we already
+  // score separately — holding a large slice of supply is dump/rug risk. We
+  // exclude contracts and locked holders on purpose: a legitimate staking or LP
+  // majority (e.g. AERO's 59% veToken, WETH's DEX pools) is is_contract=1 and
+  // must never cry-wolf. Non-dampenable (a factual on-chain concentration datum).
+  TOP_HOLDER_BPS_HIGH: 5000, // ≥50% in one non-owner EOA
+  TOP_HOLDER_BPS_MED: 2000, // ≥20%
+  TOP_HOLDER_BPS_LOW: 1000, // ≥10%
+  TOP_HOLDER_SCORE_HIGH: 20,
+  TOP_HOLDER_SCORE_MED: 12,
+  TOP_HOLDER_SCORE_LOW: 5,
 } as const;
 
 export interface TokenRiskInputs {
@@ -9119,6 +9182,7 @@ export interface TokenRiskInputs {
   categories: { can_mint: boolean; has_blacklist: boolean; can_pause: boolean; has_fee_setter: boolean; has_ownership: boolean };
   owner: { ownership_renounced: boolean; owner_type: "none" | "renounced" | "eoa" | "contract" };
   owner_percent_bps: number | null;
+  top_holder_pct_bps: number | null;
   source_verified: boolean;
 }
 
@@ -9174,6 +9238,12 @@ export function computeTokenRiskScore(inp: TokenRiskInputs): { score: number; fl
   danger += conc.scoreAdd;
   flags.push(...conc.reasons);
 
+  // Top non-owner holder concentration: a whale EOA (not the owner, not a
+  // contract, not locked) that could dump the price. Non-dampenable.
+  const topConc = topHolderConcentrationRisk(inp.top_holder_pct_bps);
+  danger += topConc.scoreAdd;
+  flags.push(...topConc.reasons);
+
   // Benign-centralized context — ALL THREE independent positive proofs required.
   const benign =
     inp.source_verified === true &&
@@ -9222,11 +9292,12 @@ async function analyzeTokenSecurity(token: string): Promise<TokenSecurityResult>
   // code fetch and the Sourcify source check in parallel so the source signal adds no
   // serial latency to this paid route.
   const verifyTarget = proxy.is_proxy && proxy.implementation_address ? proxy.implementation_address : token;
-  const [implCode, source_verified] = await Promise.all([
+  const [implCode, source_verified, holders] = await Promise.all([
     proxy.is_proxy && proxy.implementation_address
       ? (baseRpc("eth_getCode", [proxy.implementation_address, "latest"]).catch(() => null) as Promise<string | null>)
       : Promise.resolve<string | null>(null),
     checkSourceVerified(verifyTarget),
+    getHolderConcentration(token, owner.owner),
   ]);
   if (implCode && implCode !== "0x") {
     scanAddress = proxy.implementation_address!;
@@ -9269,6 +9340,7 @@ async function analyzeTokenSecurity(token: string): Promise<TokenSecurityResult>
     },
     owner: { ownership_renounced: owner.ownership_renounced, owner_type: owner.owner_type },
     owner_percent_bps,
+    top_holder_pct_bps: holders.top_holder_pct_bps,
     source_verified: source_verified === true,
   });
   const verdict = verdictFromScore(score);
@@ -9299,7 +9371,14 @@ async function analyzeTokenSecurity(token: string): Promise<TokenSecurityResult>
       ...owner,
       owner_percent_bps,
       owner_percent_note:
-        "owner_percent_bps = balanceOf(owner())/totalSupply in basis points (10000 = 100%). This is single-owner supply concentration (GoPlus owner_percent) — the share held by the privileged owner() address. null = ownership renounced/none, non-standard balanceOf, or totalSupply unavailable (never 0 by default). An EOA owner holding a large slice is weighted as dump risk; a contract owner (possible treasury/timelock/locker) is reported but weighted lower. Aggregate top-holder concentration and total holder_count across many addresses require an off-chain indexer and are NOT included.",
+        "owner_percent_bps = balanceOf(owner())/totalSupply in basis points (10000 = 100%). This is single-owner supply concentration (GoPlus owner_percent) — the share held by the privileged owner() address. null = ownership renounced/none, non-standard balanceOf, or totalSupply unavailable (never 0 by default). An EOA owner holding a large slice is weighted as dump risk; a contract owner (possible treasury/timelock/locker) is reported but weighted lower. Aggregate top-holder concentration and total holder_count are reported separately in `holders`.",
+    },
+    holders: {
+      holder_count: holders.holder_count,
+      top_holder_pct_bps: holders.top_holder_pct_bps,
+      source: holders.source,
+      note:
+        "holder_count = total distinct holders (breadth signal, reported not scored). top_holder_pct_bps = the single largest holder that is NOT a contract, NOT a locked position, and NOT the owner() address — a human-controlled wallet that could dump — in basis points of supply (10000 = 100%). Contracts (DEX pools, bridges, veToken lockers, treasuries) and locked positions are excluded so a legitimate staking/LP majority never cry-wolfs; the owner() is excluded because it is scored under ownership.owner_percent_bps. null = GoPlus holder data unavailable (degrade-open: no score change) or no qualifying non-owner EOA whale. source = provider of the holder snapshot (GoPlus token_security, chainId 8453).",
     },
     honeypot_sim: sim,
     source_verified,
@@ -10078,6 +10157,28 @@ export function ownerConcentrationRisk(
   }
   if (ownerPercentBps >= 500) {
     return { reasons: [`owner address holds ~${pct}% of total supply${contractNote}`], scoreAdd: isEoa ? 5 : 2 };
+  }
+  return { reasons: [], scoreAdd: 0 };
+}
+
+// Top non-owner holder concentration risk (GoPlus top-holder parity). `topEoaPctBps`
+// is the largest holder that is NOT a contract, NOT a locked position, and NOT the
+// owner() address — i.e. a single human-controlled wallet that can dump at will.
+// Contracts and locked holders are excluded upstream so legitimate staking/LP
+// majorities (AERO veToken 59%, WETH DEX pools) never score. null/0 = no qualifying
+// whale, or holder data unavailable (degrade-open) — no score change.
+export function topHolderConcentrationRisk(topEoaPctBps: number | null): { reasons: string[]; scoreAdd: number } {
+  const T = TOKEN_RISK_THRESHOLDS;
+  if (topEoaPctBps === null || topEoaPctBps <= 0) return { reasons: [], scoreAdd: 0 };
+  const pct = (topEoaPctBps / 100).toFixed(1);
+  if (topEoaPctBps >= T.TOP_HOLDER_BPS_HIGH) {
+    return { reasons: [`largest non-owner wallet holds ~${pct}% of supply (an EOA, not a contract/locked position) — a single holder could crash the price`], scoreAdd: T.TOP_HOLDER_SCORE_HIGH };
+  }
+  if (topEoaPctBps >= T.TOP_HOLDER_BPS_MED) {
+    return { reasons: [`largest non-owner wallet holds ~${pct}% of supply (an EOA) — concentrated supply, elevated dump risk`], scoreAdd: T.TOP_HOLDER_SCORE_MED };
+  }
+  if (topEoaPctBps >= T.TOP_HOLDER_BPS_LOW) {
+    return { reasons: [`largest non-owner wallet holds ~${pct}% of supply (an EOA)`], scoreAdd: T.TOP_HOLDER_SCORE_LOW };
   }
   return { reasons: [], scoreAdd: 0 };
 }

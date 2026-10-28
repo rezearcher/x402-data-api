@@ -136,4 +136,73 @@ function bluechip(over = {}) {
   ok(TOKEN_RISK_THRESHOLDS.HONEYPOT_REVERT === 75, "thresholds: honeypot weight");
 }
 
+// === top-holder concentration signal (GoPlus top-holder parity) ===========
+const { topHolderConcentrationRisk, parseHolderConcentration } = await import("../src/index.ts");
+
+// --- (j) a single non-owner EOA whale ADDS non-dampenable dump-risk ---------
+{
+  // clean renounced token (no caps, no owner) but a 55% non-owner EOA whale.
+  const base = bluechip({
+    proxy: { is_proxy: false, proxy_standard: null },
+    categories: { can_mint: false, has_blacklist: false, can_pause: false, has_fee_setter: false, has_ownership: false },
+    owner: { ownership_renounced: true, owner_type: "renounced" },
+    owner_percent_bps: null,
+  });
+  const clean = computeTokenRiskScore({ ...base, top_holder_pct_bps: null });
+  eq(clean.score, 0, "j: no whale → 0");
+  const whale = computeTokenRiskScore({ ...base, top_holder_pct_bps: 5500 });
+  eq(whale.score, TOKEN_RISK_THRESHOLDS.TOP_HOLDER_SCORE_HIGH, "j: 55% non-owner EOA → HIGH score");
+  ok(whale.flags.some((f) => f.includes("largest non-owner wallet")), "j: whale flag visible");
+}
+
+// --- (k) whale risk is NON-dampenable even on an otherwise-benign token -----
+{
+  // blue-chip (verified+sellable+owner 0%) that ALSO has a 25% non-owner EOA whale.
+  const r = computeTokenRiskScore({ ...bluechip(), top_holder_pct_bps: 2500 });
+  // caps 65 dampened ×0.4 = 26; whale MED = 12 added on top, never dampened.
+  eq(r.score, 26 + TOKEN_RISK_THRESHOLDS.TOP_HOLDER_SCORE_MED, "k: whale added post-dampen");
+  ok(r.flags.some((f) => f.includes("elevated dump risk")), "k: whale dump flag present");
+}
+
+// --- (l) tiered thresholds (HIGH/MED/LOW) ----------------------------------
+{
+  eq(topHolderConcentrationRisk(6000).scoreAdd, TOKEN_RISK_THRESHOLDS.TOP_HOLDER_SCORE_HIGH, "l: ≥50% HIGH");
+  eq(topHolderConcentrationRisk(2500).scoreAdd, TOKEN_RISK_THRESHOLDS.TOP_HOLDER_SCORE_MED, "l: ≥20% MED");
+  eq(topHolderConcentrationRisk(1200).scoreAdd, TOKEN_RISK_THRESHOLDS.TOP_HOLDER_SCORE_LOW, "l: ≥10% LOW");
+  eq(topHolderConcentrationRisk(500).scoreAdd, 0, "l: <10% no score");
+  eq(topHolderConcentrationRisk(null).scoreAdd, 0, "l: null → degrade-open no score");
+  eq(topHolderConcentrationRisk(0).scoreAdd, 0, "l: 0 → no score");
+}
+
+// --- (m) parseHolderConcentration EXCLUDES contracts, locked, and owner -----
+{
+  // AERO-shaped: 59% top holder is is_contract=1 (veToken) → must NOT score.
+  const aero = parseHolderConcentration(
+    { holder_count: 740573, holders: [
+      { address: "0xebf4", percent: "0.594268", is_contract: 1, is_locked: 0 },
+      { address: "0x3304", percent: "0.019783", is_contract: 0, is_locked: 0 },
+    ] },
+    null,
+  );
+  eq(aero.holder_count, 740573, "m: holder_count parsed");
+  eq(aero.top_holder_pct_bps, Math.round(0.019783 * 10000), "m: contract veToken excluded; top EOA is 1.98%");
+  // a locked position is excluded
+  const locked = parseHolderConcentration(
+    { holder_count: 10, holders: [{ address: "0xaa", percent: "0.80", is_contract: 0, is_locked: 1 }] },
+    null,
+  );
+  eq(locked.top_holder_pct_bps, null, "m: locked holder excluded → null");
+  // the owner() address is excluded (scored separately)
+  const ownerDup = parseHolderConcentration(
+    { holder_count: 10, holders: [{ address: "0xOWNER", percent: "0.40", is_contract: 0, is_locked: 0 }] },
+    "0xowner",
+  );
+  eq(ownerDup.top_holder_pct_bps, null, "m: owner address excluded → no double-count");
+  // degrade-open: null record → all null
+  const dead = parseHolderConcentration(null, null);
+  eq(dead.holder_count, null, "m: null record → holder_count null");
+  eq(dead.top_holder_pct_bps, null, "m: null record → top_holder null");
+  eq(dead.source, null, "m: null record → source null");
+}
+
 console.log(`token-risk-score: ${pass} checks passed`);
