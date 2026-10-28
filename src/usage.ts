@@ -40,6 +40,7 @@ export type Route =
   | "GET /pm/markets"
   | "GET /crypto/funding"
   | "GET /defi/yields"
+  | "GET /defi/yield-entry-verdict"
   | "GET /crypto/prices"
   | "GET /chain/block-number"
   | "GET /chain/gas-price"

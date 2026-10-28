@@ -229,6 +229,7 @@ export const ROUTE_CATALOG: Array<[string, string, string, string, string, strin
   ["/defi/protocol-risk", "GET", "0.01", "10000", "Protocol risk score from DefiLlama: joins TVL, 1d/7d TVL change, age, audits, chain count and matching hack history into one 0-100 score with flags; ?protocol= accepts a family name (aave, uniswap) that resolves to the highest-TVL version, or an exact slug (default aave-v3). Use when an agent needs a due-diligence check before routing funds to a DeFi protocol.", ["defi", "risk", "security", "due-diligence", "data"]],
   ["/defi/safe-yields", "GET", "0.01", "10000", "Vetted stablecoin yields: top stablecoin pools (DefiLlama, TVL>$5M, APY 1-25%) joined with each protocol's age and hack history, safest-yield first; optional ?chain= (short names like eth/arb/op/avax/matic/sol resolve to the canonical chain) & ?limit=. No required params. Use when an agent needs where to park stablecoins with due-diligence already applied.", ["defi", "yield", "stablecoin", "risk", "data"]],
   ["/defi/yields-top", "GET", "0.003", "3000", "Top DeFi yield pools by TVL (DefiLlama): chain, project, symbol, APY, TVL USD; optional ?chain= (short names like eth/arb/op/avax/matic/sol resolve to the canonical chain) & ?stable=true. Use when an agent needs where to earn yield.", ["defi", "yield", "apy", "data"]],
+  ["/defi/yield-entry-verdict", "GET", "0.01", "10000", "Per-pool DeFi yield-entry verdict: pass ?pool=<DefiLlama poolId from /defi/yields> and get a packaged SUSTAINABLE|DECAYING|OUTLIER|AVOID go/no-go with a 0-100 risk score and field-cited reasons — built from the pool's APY trend (1d/7d/30d), DefiLlama stability forecast, impermanent loss (il7d), volatility (sigma), outlier flag and TVL/exit-liquidity. Optional ?token=<0x underlying, Base> adds a honeypot-check pointer. Use after /defi/yields surfaces a high-APY pool and an agent needs a go/no-go on THAT pool before committing funds.", ["defi", "yield", "apy", "risk", "due-diligence", "data"]],
   ["/ai/classify", "GET", "0.003", "3000", "Zero-shot text classification (Llama 3.2 3B): ?text=<up to 1000 chars>&labels=<comma-separated labels, 2-10> returns the single best label. Use when an agent needs to route or tag text (intent, sentiment, topic, spam) in one cheap call.", ["ai", "llm", "classification", "text", "data"]],
   ["/ai/summarize", "GET", "0.003", "3000", "Text summarization (Llama 3.2 3B): ?text=<up to 1500 chars> returns a 1-3 sentence summary. Use when an agent needs to compress a passage cheaply before reasoning over it.", ["ai", "llm", "summarization", "text", "data"]],
   ["/ai/translate", "GET", "0.003", "3000", "Text translation (Llama 3.2 3B): ?text=<up to 800 chars>&to=<target language, e.g. es, fr, de, ja> returns the translated text only. Use when an agent needs quick pay-per-call translation with no API key.", ["ai", "llm", "translation", "language", "data"]],
@@ -1497,6 +1498,10 @@ const MANIFEST_IO: Record<string, ManifestIO> = {
     { name: "chain", desc: "Short chain name (eth/arb/op/avax/matic/sol) or canonical." },
     { name: "stable", enum: ["true", "false"], desc: "Stablecoin pools only." },
   ] },
+  "/defi/yield-entry-verdict": { name: "Per-pool DeFi yield-entry go/no-go verdict (SUSTAINABLE/DECAYING/OUTLIER/AVOID + risk score)", category: "defi", params: [
+    { name: "pool", required: true, example: "747c1d2a-c668-4682-b9f9-296708a3dd90", desc: "DefiLlama poolId — the 'pool' field from GET /defi/yields." },
+    { name: "token", example: "0x4200000000000000000000000000000000000006", desc: "Optional underlying token (0x, Base) — adds a honeypot-check pointer." },
+  ] },
   "/defi/safe-yields": { name: "Vetted stablecoin yields with protocol age & hack-history due diligence", category: "defi", params: [
     { name: "chain", desc: "Short chain name or canonical (optional)." },
     { name: "limit", example: "10", desc: "Max rows (optional)." },
@@ -2152,6 +2157,7 @@ Proof pack for integrators (a real settled Base-mainnet x402 tx + decoded receip
 - GET ${BASE}/defi/protocol-risk?protocol=aave-v3 — $0.01 — Protocol risk score joining TVL, age, audits and hack history.
 - GET ${BASE}/defi/safe-yields — $0.01 — Vetted stablecoin yields joined with protocol age and hack history.
 - GET ${BASE}/defi/yields-top — $0.003 — Top DeFi yield pools by TVL with APY.
+- GET ${BASE}/defi/yield-entry-verdict?pool=<DefiLlama poolId>&token=<0x…> — $0.01 — per-pool go/no-go: SUSTAINABLE|DECAYING|OUTLIER|AVOID + risk score + field-cited reasons from APY trend, stability forecast, IL, volatility, outlier flag and TVL. The should-I-enter-THIS-pool call after /defi/yields.
 - GET ${BASE}/ai/classify?text=<…>&labels=a,b,c — $0.003 — Zero-shot classification into one of your labels.
 - GET ${BASE}/ai/summarize?text=<…> — $0.003 — 1-3 sentence summary of a passage.
 - GET ${BASE}/ai/translate?text=<…>&to=es — $0.003 — Translate text into a target language.
@@ -2176,6 +2182,7 @@ Proof pack for integrators (a real settled Base-mainnet x402 tx + decoded receip
 - GET ${BASE}/crypto/funding/preview — free top-1 sample of /crypto/funding.
 - GET ${BASE}/defi/yields/preview — free top-1 sample of /defi/yields.
 - GET ${BASE}/defi/safe-yields/preview — free top-3 sample of the paid /defi/safe-yields.
+- GET ${BASE}/defi/yield-entry-verdict/preview — free sample verdict (current top-TVL pool) of the paid /defi/yield-entry-verdict.
 - GET ${BASE}/defi/protocol-risk/preview — free sample (aave-v3) of the paid /defi/protocol-risk risk score.
 - GET ${BASE}/pm/markets/preview — free top-1 sample of /pm/markets.
 - GET ${BASE}/chain/block-number/preview — free, full live data (identical to the paid route).
@@ -2528,6 +2535,7 @@ app.get("/openapi.json", (c) => {
       "/defi/protocol-risk": paid("DeFi protocol risk score (TVL, age, audits, hacks).", "0.01", [{ name: "protocol", desc: "protocol family name (aave, uniswap) resolves highest-TVL version, or exact slug; default aave-v3", example: "aave" }]),
       "/defi/safe-yields": paid("Vetted stablecoin yields with protocol age and hack flags (DefiLlama).", "0.01", [{ name: "chain", desc: "optional chain filter; short names (eth, arb, op, avax, matic, sol, bnb) resolve to the DefiLlama canonical chain", example: "eth" }, { name: "limit", desc: "optional, max 30", example: "10" }]),
       "/defi/yields-top": paid("Top DeFi yield pools by TVL (DefiLlama).", "0.003", [{ name: "chain", desc: "optional chain filter; short names (eth, arb, op, avax, matic, sol, bnb) resolve to the DefiLlama canonical chain", example: "eth" }, { name: "stable", desc: "true = stablecoin pools only", example: "true" }, { name: "limit", desc: "optional", example: "20" }]),
+      "/defi/yield-entry-verdict": paid("Per-pool DeFi yield-entry go/no-go verdict: SUSTAINABLE/DECAYING/OUTLIER/AVOID + risk score + field-cited reasons from APY trend, stability forecast, IL, volatility, outlier flag and TVL.", "0.01", [{ name: "pool", desc: "DefiLlama poolId — the 'pool' field from /defi/yields (required)", example: "747c1d2a-c668-4682-b9f9-296708a3dd90" }, { name: "token", desc: "optional underlying token (0x, Base) — adds a honeypot-check pointer", example: "0x4200000000000000000000000000000000000006" }]),
       "/ai/classify": paid("Classify text into one of your labels.", "0.003", [{ name: "text", desc: "text, max 1000 chars", required: true, example: "My card was charged twice" }, { name: "labels", desc: "comma-separated labels, 2-10", required: true, example: "billing,bug,feature_request,other" }]),
       "/ai/summarize": paid("Summarize a passage into 1-3 sentences.", "0.003", [{ name: "text", desc: "passage, max 1500 chars", required: true, example: "x402 is an open HTTP 402 payment protocol letting clients pay per request in USDC on Base without accounts or API keys." }]),
       "/ai/translate": paid("Translate text into a target language.", "0.003", [{ name: "text", desc: "source text, max 800 chars", required: true, example: "Hello, how are you?" }, { name: "to", desc: "target language name or code", required: true, example: "es" }]),
@@ -3751,6 +3759,17 @@ export function makeRoutes(payTo: string) {
         input: { limit: "10" },
         inputSchema: { type: "object", properties: { chain: { type: "string", description: "optional; short names (eth, arb, op, avax, matic, sol, bnb) resolve to the DefiLlama canonical chain" }, limit: { type: "string", description: "optional, max 30" } } },
         output: { example: { pools: [{ project: "aave-v3", chain: "Ethereum", symbol: "USDC", apy: 4.2, tvl_usd: 900000000, protocol_age_days: 1662, hacked_before: true }] } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /defi/yield-entry-verdict": {
+      accepts: { scheme: "exact" as const, price: "$0.01", network: NETWORK, payTo },
+      description: "Per-pool DeFi yield-entry verdict: pass ?pool=<DefiLlama poolId from /defi/yields> and get a packaged SUSTAINABLE|DECAYING|OUTLIER|AVOID go/no-go with a 0-100 risk score and field-cited reasons, built from the pool's APY trend (1d/7d/30d), DefiLlama stability forecast, impermanent loss (il7d), volatility (sigma), outlier flag and TVL/exit-liquidity. Optional ?token=<0x underlying, Base> adds a honeypot-check pointer. Use after /defi/yields surfaces a high-APY pool and an agent needs a go/no-go on THAT pool before committing funds.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { pool: "747c1d2a-c668-4682-b9f9-296708a3dd90" },
+        inputSchema: { type: "object", properties: { pool: { type: "string", description: "DefiLlama poolId — the 'pool' field from GET /defi/yields" }, token: { type: "string", description: "optional underlying token (0x, Base) — adds a honeypot-check pointer" } }, required: ["pool"] },
+        output: { example: { pool: "747c1d2a-c668-4682-b9f9-296708a3dd90", project: "lido", chain: "Ethereum", symbol: "STETH", verdict: "SUSTAINABLE", risk_score: 0, reasons: [{ code: "stable_sustainable", detail: "Stable-or-up forecast, APY trend intact, adequate liquidity.", field: "predicted_class" }] } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /ai/classify": {
@@ -6116,7 +6135,7 @@ interface DefiLlamaPool {
   underlyingTokens: string[] | null;
   mu: number | null;
   sigma: number | null;
-  predictions?: { predictedProbability: number | null };
+  predictions?: { predictedProbability: number | null; predictedClass?: string | null };
 }
 
 interface YieldPool {
@@ -6144,6 +6163,7 @@ interface YieldPool {
   sigma: number | null;
   risk_adjusted_apy: number | null;
   predicted_probability: number | null;
+  predicted_class: string | null;
   volumeUsd1d: number | null;
 }
 
@@ -6214,20 +6234,12 @@ export function resolveChainAlias(query: string): string {
   return CHAIN_ALIASES[q] ?? q;
 }
 
-async function fetchDefiYields(
-  limit: number,
-  project: string | undefined,
-  chain: string | undefined,
-  stableOnly: boolean,
-  sort: "tvl" | "risk_adjusted" = "tvl",
-): Promise<YieldPool[]> {
-  const res = await fetch("https://yields.llama.fi/pools", { headers: { accept: "application/json" } });
-  if (!res.ok) {
-    throw new Error(`DefiLlama yields upstream error: ${res.status}`);
-  }
-  const raw = (await res.json()) as { status: string; data: DefiLlamaPool[] };
-
-  const normalized: YieldPool[] = raw.data.map((p) => ({
+// Normalize one raw DefiLlama pool into our YieldPool shape. Extracted so both
+// the ranked /defi/yields list and the single-pool /defi/yield-entry-verdict
+// lookup share ONE normalization (incl. the stability forecast class/probability
+// the verdict logic reads) — no drift between list rows and the verdict input.
+export function normalizeDefiLlamaPool(p: DefiLlamaPool): YieldPool {
+  return {
     project: p.project,
     chain: p.chain,
     symbol: p.symbol,
@@ -6252,8 +6264,25 @@ async function fetchDefiYields(
     sigma: p.sigma ?? null,
     risk_adjusted_apy: p.apy != null && p.sigma ? p.apy / p.sigma : null,
     predicted_probability: p.predictions?.predictedProbability ?? null,
+    predicted_class: p.predictions?.predictedClass ?? null,
     volumeUsd1d: p.volumeUsd1d ?? null,
-  }));
+  };
+}
+
+async function fetchDefiYields(
+  limit: number,
+  project: string | undefined,
+  chain: string | undefined,
+  stableOnly: boolean,
+  sort: "tvl" | "risk_adjusted" = "tvl",
+): Promise<YieldPool[]> {
+  const res = await fetch("https://yields.llama.fi/pools", { headers: { accept: "application/json" } });
+  if (!res.ok) {
+    throw new Error(`DefiLlama yields upstream error: ${res.status}`);
+  }
+  const raw = (await res.json()) as { status: string; data: DefiLlamaPool[] };
+
+  const normalized: YieldPool[] = raw.data.map(normalizeDefiLlamaPool);
 
   const wantChain = resolveChainAlias(chain ?? "");
   const filtered = normalized.filter((p) => {
@@ -6302,6 +6331,224 @@ app.get("/defi/yields", async (c) => {
     fireAndForget(c, trackPaidRequest("GET /defi/yields", rail, makeUsageCounter(c.env)));
 
     return c.json(pools);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+// Fetch a single DefiLlama pool by its poolId. DefiLlama's /pools has no id
+// filter, so we fetch-all (same upstream as fetchDefiYields) and find by id.
+// Returns null when the id isn't in DefiLlama's universe (degrade-open — the
+// caller turns that into verdict:null, never a throw).
+export async function fetchDefiPoolById(poolId: string): Promise<YieldPool | null> {
+  const res = await fetch("https://yields.llama.fi/pools", { headers: { accept: "application/json" } });
+  if (!res.ok) {
+    throw new Error(`DefiLlama yields upstream error: ${res.status}`);
+  }
+  const raw = (await res.json()) as { status: string; data: DefiLlamaPool[] };
+  const p = raw.data.find((x) => x.pool === poolId);
+  return p ? normalizeDefiLlamaPool(p) : null;
+}
+
+export type YieldEntryVerdict = "SUSTAINABLE" | "DECAYING" | "OUTLIER" | "AVOID";
+export interface YieldEntryReason { code: string; detail: string; field: string }
+export interface YieldEntryVerdictResult {
+  pool: string;
+  project: string;
+  chain: string;
+  symbol: string;
+  verdict: YieldEntryVerdict;
+  risk_score: number;
+  reasons: YieldEntryReason[];
+  apy: number | null;
+  apyPct7D: number | null;
+  apyPct30D: number | null;
+  il7d: number | null;
+  ilRisk: string;
+  sigma: number | null;
+  risk_adjusted_apy: number | null;
+  predicted: { class: string | null; probability: number | null };
+  tvlUsd: number;
+}
+
+// Per-pool entry verdict — the should-I-enter-THIS-pool call that neither
+// DefiLlama (raw fields only) nor GoPlus (token-safety only) nor any x402 seller
+// packages. Pure + deterministic over the pool's OWN DefiLlama fields (no network,
+// no hardcoded pool list): every threshold is a named constant and every reason
+// cites the field that drove it. Worst-verdict-wins precedence:
+//   OUTLIER (DefiLlama's own statistical-artifact flag — APY likely not real)
+//   > AVOID (collapsing/down forecast, or dangerously illiquid)
+//   > DECAYING (meaningful negative APY trend / volatile)
+//   > SUSTAINABLE (stable-or-up, liquid, trend intact).
+// risk_score (0-100, higher = worse) is the additive sum of the triggered
+// factors, capped — it quantifies the verdict for sizing.
+export const YIELD_ENTRY_THRESHOLDS = {
+  DOWN_PROB_AVOID: 60,       // predictedClass "Down" with ≥ this probability → AVOID
+  APY_30D_COLLAPSE: -50,     // apyPct30D ≤ this (%) → APY has collapsed → AVOID
+  TVL_ILLIQUID: 50_000,      // tvlUsd < this → exit-liquidity risk
+  APY_7D_DECAY: -40,         // apyPct7D ≤ this (%) → DECAYING
+  APY_30D_DECAY: -25,        // apyPct30D ≤ this (%) → DECAYING
+  SIGMA_VOLATILE: 0.5,       // sigma ≥ this → APY is volatile
+  IL7D_HIGH: 5,              // |il7d| ≥ this (%) → material impermanent-loss drag
+} as const;
+
+export function computeYieldEntryVerdict(pool: YieldPool): YieldEntryVerdictResult {
+  const T = YIELD_ENTRY_THRESHOLDS;
+  const reasons: YieldEntryReason[] = [];
+  let score = 0;
+  const num = (v: number | null | undefined): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
+
+  const apy = num(pool.apy);
+  const apy7 = num(pool.apyPct7D);
+  const apy30 = num(pool.apyPct30D);
+  const il7 = num(pool.il7d);
+  const sigma = num(pool.sigma);
+  const tvl = num(pool.tvlUsd) ?? 0;
+  const pClass = pool.predicted_class ?? null;
+  const pProb = num(pool.predicted_probability);
+
+  let verdict: YieldEntryVerdict = "SUSTAINABLE";
+  const worse = (v: YieldEntryVerdict) => {
+    const rank: Record<YieldEntryVerdict, number> = { SUSTAINABLE: 0, DECAYING: 1, AVOID: 2, OUTLIER: 3 };
+    if (rank[v] > rank[verdict]) verdict = v;
+  };
+
+  // OUTLIER — DefiLlama's own flag that the advertised APY is a statistical
+  // artifact (reward spike, thin pool), i.e. not a yield you can actually earn.
+  if (pool.outlier === true) {
+    worse("OUTLIER");
+    score += 45;
+    reasons.push({ code: "statistical_outlier", detail: "DefiLlama flags this pool's APY as a statistical outlier — the advertised rate is likely a data artifact, not a sustainable yield.", field: "outlier" });
+  }
+
+  // AVOID — forecast collapse / collapsed APY / illiquid exit.
+  if (pClass === "Down" && pProb != null && pProb >= T.DOWN_PROB_AVOID) {
+    worse("AVOID");
+    score += 35;
+    reasons.push({ code: "forecast_down_high_conf", detail: `DefiLlama's model forecasts the APY trending DOWN with ${pProb}% confidence (≥${T.DOWN_PROB_AVOID}%).`, field: "predicted_class" });
+  }
+  if (apy30 != null && apy30 <= T.APY_30D_COLLAPSE) {
+    worse("AVOID");
+    score += 30;
+    reasons.push({ code: "apy_collapsed_30d", detail: `APY has fallen ${apy30.toFixed(1)}% over 30d (≤${T.APY_30D_COLLAPSE}%) — the yield that made this pool attractive is largely gone.`, field: "apyPct30D" });
+  }
+  if (tvl < T.TVL_ILLIQUID) {
+    worse("AVOID");
+    score += 25;
+    reasons.push({ code: "illiquid_tvl", detail: `TVL is only $${Math.round(tvl).toLocaleString("en-US")} (<$${T.TVL_ILLIQUID.toLocaleString("en-US")}) — too thin to enter and exit a meaningful position safely.`, field: "tvlUsd" });
+  }
+
+  // DECAYING — meaningful negative trend or volatile APY.
+  if (apy7 != null && apy7 <= T.APY_7D_DECAY) {
+    worse("DECAYING");
+    score += 18;
+    reasons.push({ code: "apy_decaying_7d", detail: `APY is down ${apy7.toFixed(1)}% over 7d (≤${T.APY_7D_DECAY}%) — a near-term downtrend.`, field: "apyPct7D" });
+  } else if (apy30 != null && apy30 <= T.APY_30D_DECAY && apy30 > T.APY_30D_COLLAPSE) {
+    worse("DECAYING");
+    score += 12;
+    reasons.push({ code: "apy_decaying_30d", detail: `APY is down ${apy30.toFixed(1)}% over 30d (≤${T.APY_30D_DECAY}%) — a sustained downtrend.`, field: "apyPct30D" });
+  }
+  if (pClass === "Down" && (pProb == null || pProb < T.DOWN_PROB_AVOID)) {
+    worse("DECAYING");
+    score += 10;
+    reasons.push({ code: "forecast_down", detail: `DefiLlama's model forecasts the APY trending DOWN${pProb != null ? ` (${pProb}% confidence)` : ""}.`, field: "predicted_class" });
+  }
+  if (sigma != null && sigma >= T.SIGMA_VOLATILE) {
+    worse("DECAYING");
+    score += 8;
+    reasons.push({ code: "volatile_apy", detail: `APY volatility (sigma ${sigma.toFixed(2)}) is high (≥${T.SIGMA_VOLATILE}) — the return is unstable.`, field: "sigma" });
+  }
+
+  // Impermanent-loss drag — a modifier, flagged whenever material.
+  if (il7 != null && Math.abs(il7) >= T.IL7D_HIGH) {
+    score += 10;
+    reasons.push({ code: "impermanent_loss", detail: `7-day impermanent loss is ${il7.toFixed(1)}% — LP exposure is eroding principal; net return is below the headline APY.`, field: "il7d" });
+    if (verdict === "SUSTAINABLE") worse("DECAYING");
+  } else if (pool.ilRisk === "yes" && verdict === "SUSTAINABLE") {
+    reasons.push({ code: "il_risk_flag", detail: "Pool carries impermanent-loss risk (non-stable pair) — size accordingly.", field: "ilRisk" });
+  }
+
+  if (reasons.length === 0) {
+    reasons.push({ code: "stable_sustainable", detail: "Stable-or-up forecast, APY trend intact, adequate liquidity — no decay, outlier or liquidity flags triggered.", field: "predicted_class" });
+  }
+
+  return {
+    pool: pool.pool,
+    project: pool.project,
+    chain: pool.chain,
+    symbol: pool.symbol,
+    verdict,
+    risk_score: Math.max(0, Math.min(100, Math.round(score))),
+    reasons,
+    apy,
+    apyPct7D: apy7,
+    apyPct30D: apy30,
+    il7d: il7,
+    ilRisk: pool.ilRisk,
+    sigma,
+    risk_adjusted_apy: num(pool.risk_adjusted_apy),
+    predicted: { class: pClass, probability: pProb },
+    tvlUsd: tvl,
+  };
+}
+
+// GET /defi/yield-entry-verdict — paid ($0.01). The per-pool go/no-go on the
+// proven-demand /defi/yields lane: pass the pool id from a /defi/yields row and
+// get a packaged SUSTAINABLE | DECAYING | OUTLIER | AVOID verdict + risk score +
+// field-cited reasons. The 200-envelope middleware auto-injects _greyridge.see_also
+// pointing the same cohort at the token honeypot check + top data sibling.
+app.get("/defi/yield-entry-verdict", async (c) => {
+  const pool = (c.req.query("pool") || "").trim();
+  if (!pool) {
+    return c.json(
+      { error: "pool required — pass ?pool=<DefiLlama poolId> (the 'pool' field from GET /defi/yields)." },
+      { status: 400 },
+    );
+  }
+  const token = (c.req.query("token") || "").trim();
+  try {
+    const p = await fetchDefiPoolById(pool);
+    if (!p) {
+      return c.json({ pool, verdict: null, error: "pool not found — the poolId is not in DefiLlama's current universe. Use the 'pool' field from GET /defi/yields." });
+    }
+    const result = computeYieldEntryVerdict(p);
+    const body: Record<string, unknown> = { ...result };
+    // Optional underlying-token hook: we don't run the honeypot sim inline (keeps
+    // the verdict fast + the token check is a distinct paid verdict), but when a
+    // Base token is supplied we surface the explicit next-call pointer so the
+    // caller folds rug/honeypot risk into the decision.
+    if (token && /^0x[a-fA-F0-9]{40}$/.test(token)) {
+      body.token_safety_hint = {
+        token,
+        note: "Underlying-token honeypot/rug risk is NOT included in this pool verdict. Run GET /chain/token-report?token=" + token + " ($0.01) before committing funds.",
+        resource: CANONICAL_ORIGIN + "/chain/token-report?token=" + token,
+      };
+    }
+    console.log(
+      JSON.stringify({ event: "paid_request", endpoint: "/defi/yield-entry-verdict", pool, verdict: result.verdict, risk_score: result.risk_score, ts: new Date().toISOString() }),
+    );
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /defi/yield-entry-verdict", rail, makeUsageCounter(c.env)));
+    return c.json(body);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+// Free keyless preview — the verdict for a demo pool so an agent can sample the
+// packaged output before paying, mirroring /defi/safe-yields/preview.
+app.get("/defi/yield-entry-verdict/preview", async (c) => {
+  try {
+    const sample = await fetchDefiYields(1, undefined, undefined, false);
+    if (sample.length === 0) {
+      return c.json({ preview: null, note: "No demo pool available right now.", status: 502 }, { status: 502 });
+    }
+    const result = computeYieldEntryVerdict(sample[0]);
+    return c.json({
+      preview: result,
+      note: "Free sample verdict for the current top-TVL pool. Full: GET /defi/yield-entry-verdict?pool=<poolId from /defi/yields> ($0.01) — packaged SUSTAINABLE|DECAYING|OUTLIER|AVOID + risk score + field-cited reasons, keyless x402 on Base.",
+    });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
