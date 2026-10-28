@@ -341,12 +341,27 @@ const BASE_RPCS = [
   "https://mainnet.base.org",
   "https://base-rpc.publicnode.com",
   "https://base.drpc.org",
-  "https://base.api.onfinality.io/public",
   "https://base-pokt.nodies.app",
   "https://base-mainnet.public.blastapi.io",
   "https://base.gateway.tenderly.co",
   "https://gateway.tenderly.co/public/base",
+  // Measured dead weight, kept last rather than deleted so a future fix can
+  // promote it back: 30 serial state-override eth_calls from this host returned
+  // 1/30 ok, 29/30 HTTP 429 "Please apply an OnFinality API key" — a hard per-IP
+  // free-tier quota, not a transient. Every other provider answered 29-30/30 at
+  // p50 67-98ms, so this one only ever costs a subrequest.
+  "https://base.api.onfinality.io/public",
 ];
+
+// Reliability-ordered subset used when we must retry narrowly (storm gate /
+// retry pass). Rotated independently so a burst does not stampede one provider.
+const RELIABLE_RPCS = BASE_RPCS.filter((u) => !u.includes("onfinality"));
+let rpcReliableRR = 0;
+function rpcReliableOrder(): string[] {
+  const n = RELIABLE_RPCS.length;
+  const start = rpcReliableRR++ % n;
+  return RELIABLE_RPCS.map((_, i) => RELIABLE_RPCS[(start + i) % n]);
+}
 
 
 // Per-isolate provider health: a provider that just 429'd / failed is skipped for a
@@ -7532,31 +7547,77 @@ interface OwnerInfo {
 // (as baseRpc's blind full-rotation would) risks tripping that cap on a
 // compute-heavy endpoint like this one, so every optional/may-revert call in
 // this file's token-security analysis uses this instead of baseRpc().
-async function baseRpcProbe(method: string, params: unknown[]): Promise<{ result?: string; error?: string; unavailable?: boolean }> {
-  for (const url of rpcOrder()) {
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-        signal: AbortSignal.timeout(5000),
-      });
-      if (!res.ok) { rpcMarkBad(url); continue; }
-      const j = (await res.json()) as { result?: string; error?: { message?: string } };
-      if (j.error) {
-        if (/rate limit|too many requests|429/i.test(j.error.message ?? "")) continue; // transient — try next provider
-        // Only a genuine EVM revert is "the answer". Provider-side refusals ("method not
-        // supported", auth, quota…) are infra failures — rotate, else a bad provider reached
-        // after the good ones rate-limit us turns every token into sim_status "unavailable".
-        if (!/revert|invalid opcode|out of gas|stack|abort/i.test(j.error.message ?? "")) { rpcMarkBad(url); continue; }
-        return { error: j.error.message ?? "execution reverted" };
-      }
-      return { result: j.result };
-    } catch {
-      rpcMarkBad(url);
-      continue;
+// Correlated-storm gate. A burst failure is not one bad provider: Cloudflare's
+// shared egress IPs get rate-limited fleet-wide, so every provider 429s at once
+// (that is how production AERO degraded to unavailable while a same-second
+// token-security call still succeeded — different rotations, different luck).
+// Rotating all 8 providers on every call *during* such a storm is what converts
+// one transient into an invocation-wide subrequest blowout and guarantees
+// `unavailable` for everything after it. So: after a pass fails transiently we
+// fail fast — narrow to 3 reliable providers — for a short window, and the first
+// success anywhere clears the flag again.
+let rpcStormUntil = 0;
+const RPC_STORM_COOLDOWN_MS = 1500;
+
+async function baseRpcProbe(
+  method: string,
+  params: unknown[],
+  // retries:0 (default) = exactly one pass over the provider set, the old
+  // behaviour, no extra subrequests. retries:1 adds at most ONE jittered retry
+  // pass over 3 reliable providers — used only where the answer is the product
+  // (slot discovery + the transfer probe), so a sub-second 429 burst does not
+  // silently degrade the verdict. Worst case per call is 8 + 3 = 11 subrequests
+  // and the common case is still 1.
+  opts?: { retries?: number },
+): Promise<{ result?: string; error?: string; unavailable?: boolean }> {
+  const passes = 1 + Math.max(0, Math.min(1, opts?.retries ?? 0));
+
+  for (let pass = 0; pass < passes; pass++) {
+    if (pass > 0) {
+      // Let the provider shed the burst; jitter so concurrent Workers don't
+      // retry in lockstep.
+      await new Promise((r) => setTimeout(r, 120 + Math.random() * 280));
     }
+    const narrow = pass > 0 || Date.now() < rpcStormUntil;
+    const rpcList = narrow ? rpcReliableOrder().slice(0, 3) : rpcOrder();
+
+    for (const url of rpcList) {
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+          signal: AbortSignal.timeout(5000),
+        });
+        if (!res.ok) { rpcMarkBad(url); continue; }
+        const j = (await res.json()) as { result?: string; error?: { message?: string } };
+        if (j.error) {
+          const msg = j.error.message ?? "";
+          // Transient capacity/quota refusals: demote this provider, keep going.
+          // "quota"/"capacity" added because providers word these differently
+          // ("Please apply an API key", "capacity exceeded") and a non-429 body
+          // used to fall through to the revert check below and be misread.
+          if (/rate limit|too many requests|429|quota|capacity|exceeded/i.test(msg)) {
+            rpcMarkBad(url, 10000);
+            continue;
+          }
+          // Only a genuine EVM revert is "the answer". Anything else is infra.
+          if (!/revert|invalid opcode|out of gas|stack|abort/i.test(msg)) { rpcMarkBad(url); continue; }
+          rpcStormUntil = 0;
+          return { error: msg || "execution reverted" };
+        }
+        rpcStormUntil = 0; // egress is healthy again
+        return { result: j.result };
+      } catch {
+        rpcMarkBad(url);
+        continue;
+      }
+    }
+
+    // Every provider in this pass failed transiently -> correlated storm.
+    rpcStormUntil = Date.now() + RPC_STORM_COOLDOWN_MS;
   }
+
   return { unavailable: true };
 }
 
@@ -7761,7 +7822,13 @@ async function simulateTransferProbe(token: string): Promise<HoneypotSim> {
   // WHOLE candidate set in one stateDiff and read balanceOf once — overriding
   // non-balance slots is harmless to a balanceOf read, so the call returns our
   // planted value iff the real slot is somewhere in the set. Then binary-narrow
-  // to the exact slot. This covers 17 candidate layouts in ~7 subrequests.
+  // to the exact slot. This covers 65 candidate layouts in ~7 subrequests.
+  //
+  // No retry on discovery: t_9daf3d13 (branch, unmerged) makes a repeat report
+  // skip discovery entirely via a re-confirmed SLOT_CACHE, which is the right fix
+  // for this cost — stacking retries here as well would only spend subrequests
+  // twice for the same failure. The single retry in this file is reserved for the
+  // transfer probe, which is the call production actually degraded on.
   let sawAnySuccess = false;
   const subsetHoldsSlot = async (subset: bigint[]): Promise<boolean> => {
     const stateDiff: Record<string, string> = {};
@@ -7811,11 +7878,18 @@ async function simulateTransferProbe(token: string): Promise<HoneypotSim> {
   const key = mappingSlotKey(PROBE_HOLDER, foundSlot);
   const override = { [token]: { stateDiff: { [key]: PROBE_VALUE_HEX } } };
   const sendAmount = PROBE_VALUE / 2n;
-  const simResult = await baseRpcProbe("eth_call", [
-    { to: token, from: PROBE_HOLDER, data: transferData(PROBE_RECIPIENT, sendAmount) },
-    "latest",
-    override,
-  ]);
+  // The one call whose failure *is* the product: this is what production degraded
+  // on (slot located, probe rate-limited). It gets the single extra jittered retry
+  // pass; everything optional stays at one pass to protect the subrequest cap.
+  const simResult = await baseRpcProbe(
+    "eth_call",
+    [
+      { to: token, from: PROBE_HOLDER, data: transferData(PROBE_RECIPIENT, sendAmount) },
+      "latest",
+      override,
+    ],
+    { retries: 1 },
+  );
 
   if (simResult.unavailable) {
     return {

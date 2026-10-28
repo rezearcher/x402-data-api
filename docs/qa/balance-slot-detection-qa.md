@@ -104,8 +104,56 @@ return `sim_status: unavailable`. Diagnosed, not assumed:
 
 So: the detection path is correct and degrades honestly (fail-closed with a truthful
 note). Burst reliability against the public Base RPCs is the weak link, not the slot
-search. Worth its own card if throughput matters (retry/backoff across more RPCs, or a
-paid endpoint); deliberately not folded into this verification.
+search — addressed separately below (t_ba0a27a7) and left out of this verification.
+
+## Burst hardening of the transfer probe (t_ba0a27a7)
+
+Scope: the RPC attempt loop only. What a successful probe *asserts* is unchanged, and a
+rate-limited probe still reports `unavailable` — never `tested`.
+
+Measured provider behaviour (30 serial state-override `eth_call`s per provider, one host,
+2026-10-28) — this is what the attempt order and the retry width are sized from:
+
+| provider | ok | p50 | note |
+|---|---|---|---|
+| mainnet.base.org | 30/30 | 75ms | |
+| base.drpc.org | 30/30 | 67ms | |
+| base-rpc.publicnode.com | 30/30 | 83ms | |
+| base-pokt.nodies.app | 30/30 | 72ms | |
+| base-mainnet.public.blastapi.io | 30/30 | 81ms | |
+| base.gateway.tenderly.co | 30/30 | 98ms | |
+| gateway.tenderly.co/public/base | 29/30 | 98ms | occasional 429 |
+| base.api.onfinality.io/public | **1/30** | — | hard per-IP free-tier quota (`Please apply an OnFinality API key`) |
+
+Three changes, all inside the subrequest budget:
+
+1. **Bounded retry, opt-in per call.** `baseRpcProbe(..., { retries: 1 })` adds *at most one*
+   extra pass over 3 reliable providers after a jittered 120-400ms wait. Only the transfer
+   probe asks for it; every optional call keeps the single pass. Worst case per call is
+   8 + 3 = 11 subrequests, common case still 1 (discovery is unchanged at 8).
+2. **Correlated-storm gate.** A burst is not one bad provider — Cloudflare egress IPs get
+   rate-limited fleet-wide, so all providers 429 at once. After a pass fails transiently the
+   worker narrows to 3 reliable providers for 1.5s instead of re-rotating all 8, and the
+   first success clears the flag. That is what keeps a storm from turning one transient into
+   an invocation-wide subrequest blowout.
+3. **Attempt order from measurement.** `onfinality` moved last (1/30 — pure subrequest cost);
+   quota/capacity-worded refusals are now classified as transient instead of falling through
+   to the revert test.
+
+Proof it is causal, not "the RPCs happened to be healthy": a mock Base RPC (`STORM_K`, three
+providers answering 429 to the transfer probe) reproduces the production failure exactly —
+HEAD gives AERO **0/3 tested, slot located, provider-only failures**, the same signature as
+the 3/8 burst. Same storm, hardened code: **3/3 tested, p50 375ms** (one jittered retry).
+Storm that never clears: still `unavailable`, fail-closed, 335ms — it degrades honestly and
+does not spin. Local real-RPC bursts cannot distinguish the two (HEAD also passes 20/20 and
+40/40 when upstreams are idle), which is exactly why the mock storm is the gate that matters.
+
+```bash
+# storm rig (3 mock providers, 429 on the first probe of every report) — see
+# tests/storm_rig/README.md; patch BASE_RPCS to the mock ports for the test Worker
+bash tests/storm_rig/start_mocks.sh 1
+BASE_URL=http://127.0.0.1:8788 RUNS=3 TOKENS=AERO node tests/test_balance_slot_detection.mjs
+```
 
 ## Coverage limits, stated plainly
 
