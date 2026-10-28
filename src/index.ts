@@ -12324,26 +12324,26 @@ const yields = await r.json(); // risk-adjusted stablecoin yields, paid inline</
 
 <h2>Building on the Vercel AI SDK?</h2>
 <div class=card>
-<p style="margin:.2rem 0 .7rem">Skip the hand-wiring. Drop-in AI SDK tools wrap the yields, prices and balance routes with the x402 payment rail built in &mdash; your agent's wallet pays per call, and a keyless install still returns a free preview so you can try before you fund it:</p>
+<p style="margin:.2rem 0 .7rem">Skip the hand-wiring. Drop-in AI SDK tools wrap the yields, prices, balance and Base-RPC routes with the x402 payment rail built in &mdash; your agent's wallet pays per call, and a keyless install still returns live data so you can try before you fund it:</p>
 <pre>npm i github:rezearcher/vercel-ai-defi-data ai zod
 
 import { generateText } from "ai";
 import { defiDataTools } from "@grey-ridge/vercel-ai-defi-data";
 // reads PRIVATE_KEY (your agent's Base wallet) from the env
-await generateText({ model, tools: { ...defiDataTools }, prompt: "Best stablecoin yield on Base right now?" });</pre>
-<p class=muted style="margin:.7rem 0 0">Three tools &mdash; <code>defiYields</code>, <code>cryptoPrices</code>, <code>baseBalance</code> &mdash; each returns a model-ready one-line summary and never throws into your agent loop. Source: <a href="https://github.com/rezearcher/vercel-ai-defi-data">github.com/rezearcher/vercel-ai-defi-data</a>.</p>
+await generateText({ model, tools: { ...defiDataTools }, prompt: "Best stablecoin yield on Base, and what's gas right now?" });</pre>
+<p class=muted style="margin:.7rem 0 0">Six tools &mdash; <code>defiYields</code>, <code>cryptoPrices</code>, <code>baseBalance</code>, <code>baseGasPrice</code>, <code>baseBlockNumber</code>, <code>baseTokenBalance</code> &mdash; each returns a model-ready one-line summary and never throws into your agent loop. The three Base-RPC reads return the real live value even with no wallet. Source: <a href="https://github.com/rezearcher/vercel-ai-defi-data">github.com/rezearcher/vercel-ai-defi-data</a>.</p>
 </div>
 
 <h2>Building on LangChain.js?</h2>
 <div class=card>
-<p style="margin:.2rem 0 .7rem">The same three routes as drop-in LangChain tools. They use <code>content_and_artifact</code> so your graph gets a readable string for the model and the structured object on <code>.artifact</code> &mdash; the wallet pays per call, and a keyless install still returns a free preview:</p>
+<p style="margin:.2rem 0 .7rem">The same routes as drop-in LangChain tools. They use <code>content_and_artifact</code> so your graph gets a readable string for the model and the structured object on <code>.artifact</code> &mdash; the wallet pays per call, and a keyless install still returns live data:</p>
 <pre>npm i github:rezearcher/langchain-defi-data @langchain/core zod
 
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { defiDataTools } from "@grey-ridge/langchain-defi-data";
 // reads PRIVATE_KEY (your agent's Base wallet) from the env
 const agent = createReactAgent({ llm, tools: defiDataTools });</pre>
-<p class=muted style="margin:.7rem 0 0">Three tools &mdash; <code>defi_yields</code>, <code>crypto_prices</code>, <code>base_balance</code> &mdash; degrade open to the free preview with no key, and the balance read returns an honest activation hint rather than a fabricated number. Source: <a href="https://github.com/rezearcher/langchain-defi-data">github.com/rezearcher/langchain-defi-data</a>.</p>
+<p class=muted style="margin:.7rem 0 0">Six tools &mdash; <code>defi_yields</code>, <code>crypto_prices</code>, <code>base_balance</code>, <code>base_gas_price</code>, <code>base_block_number</code>, <code>base_token_balance</code> &mdash; degrade open with no key. The three Base-RPC reads return the real live value (gas, block height, token balance), and the native-balance read returns an honest activation hint rather than a fabricated number. Source: <a href="https://github.com/rezearcher/langchain-defi-data">github.com/rezearcher/langchain-defi-data</a>.</p>
 </div>
 
 <h2>Where the data comes from</h2>
