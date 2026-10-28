@@ -1423,6 +1423,10 @@ const DATA_TOOL_ROUTES_8 = [
 // All framework packages also ship the pre-trade token-safety verdict
 // (/chain/token-report, $0.01) as a 9th tool.
 const DATA_TOOL_ROUTES_9 = [...DATA_TOOL_ROUTES_8, "/chain/token-report"];
+// v0.5.0 added the two higher-value decision routes: the per-pool yield
+// go/no-go (/defi/yield-entry-verdict, $0.01) and the prospective-tx dry-run
+// (/chain/simulate, $0.005). All three framework packages ship 11 tools.
+const DATA_TOOL_ROUTES_11 = [...DATA_TOOL_ROUTES_9, "/defi/yield-entry-verdict", "/chain/simulate"];
 const INSTALLABLE_TOOLS: Array<{
   framework: string;
   language: string;
@@ -1439,9 +1443,9 @@ const INSTALLABLE_TOOLS: Array<{
     package: "@grey-ridge/vercel-ai-defi-data",
     install: "npm i github:rezearcher/vercel-ai-defi-data",
     repository: "https://github.com/rezearcher/vercel-ai-defi-data",
-    tool_count: 9,
-    wraps: DATA_TOOL_ROUTES_9,
-    note: "Vercel AI SDK v5 tools (inputSchema); x402 paid inline, no API key; degrades to the free preview when unpaid; balance reads never fabricate a number; checkToken returns a pre-trade SAFE/CAUTION/AVOID verdict.",
+    tool_count: 11,
+    wraps: DATA_TOOL_ROUTES_11,
+    note: "Vercel AI SDK v5 tools (inputSchema); x402 paid inline, no API key; degrades to the free preview when unpaid; balance reads never fabricate a number; checkToken returns a pre-trade SAFE/CAUTION/AVOID verdict; yieldEntryVerdict gives a per-pool SUSTAINABLE/DECAYING/OUTLIER/AVOID go-no-go and simulateTx dry-runs a prospective transaction (revert + gas + asset changes) before you send it.",
   },
   {
     framework: "LangChain.js",
@@ -1449,9 +1453,9 @@ const INSTALLABLE_TOOLS: Array<{
     package: "@grey-ridge/langchain-defi-data",
     install: "npm i github:rezearcher/langchain-defi-data",
     repository: "https://github.com/rezearcher/langchain-defi-data",
-    tool_count: 9,
-    wraps: DATA_TOOL_ROUTES_9,
-    note: "LangChain.js tools (content_and_artifact responseFormat); x402 paid inline, no API key; degrades to the free preview when unpaid; check_token returns a pre-trade SAFE/CAUTION/AVOID verdict.",
+    tool_count: 11,
+    wraps: DATA_TOOL_ROUTES_11,
+    note: "LangChain.js tools (content_and_artifact responseFormat); x402 paid inline, no API key; degrades to the free preview when unpaid; check_token returns a pre-trade SAFE/CAUTION/AVOID verdict; yield_entry_verdict gives a per-pool SUSTAINABLE/DECAYING/OUTLIER/AVOID go-no-go and simulate_tx dry-runs a prospective transaction (revert + gas + asset changes) before you send it.",
   },
   {
     framework: "CrewAI / plain Python",
@@ -1459,9 +1463,9 @@ const INSTALLABLE_TOOLS: Array<{
     package: "grey-ridge-x402-data",
     install: "pip install git+https://github.com/rezearcher/crewai-defi-data",
     repository: "https://github.com/rezearcher/crewai-defi-data",
-    tool_count: 9,
-    wraps: DATA_TOOL_ROUTES_9,
-    note: "CrewAI BaseTool wrappers plus framework-agnostic plain functions; dep-free keyless stdlib core, x402 paid rail via the [pay] extra; check_token returns a pre-trade SAFE/CAUTION/AVOID verdict.",
+    tool_count: 11,
+    wraps: DATA_TOOL_ROUTES_11,
+    note: "CrewAI BaseTool wrappers plus framework-agnostic plain functions; dep-free keyless stdlib core, x402 paid rail via the [pay] extra; check_token returns a pre-trade SAFE/CAUTION/AVOID verdict; yield_entry_verdict gives a per-pool SUSTAINABLE/DECAYING/OUTLIER/AVOID go-no-go and simulate_tx dry-runs a prospective transaction (revert + gas + asset changes) before you send it.",
   },
 ];
 
@@ -13417,7 +13421,7 @@ import { generateText } from "ai";
 import { defiDataTools } from "@grey-ridge/vercel-ai-defi-data";
 // reads PRIVATE_KEY (your agent's Base wallet) from the env
 await generateText({ model, tools: { ...defiDataTools }, prompt: "Best stablecoin yield on Base, what's gas, and where's funding paying?" });</pre>
-<p class=muted style="margin:.7rem 0 0">Nine tools &mdash; <code>defiYields</code>, <code>cryptoPrices</code>, <code>baseBalance</code>, <code>baseGasPrice</code>, <code>baseBlockNumber</code>, <code>baseTokenBalance</code>, <code>cryptoFunding</code> (cross-venue perp funding + arb spread), <code>marketBrief</code> (one-call market snapshot), <code>checkToken</code> (pre-trade SAFE/CAUTION/AVOID rug verdict) &mdash; each returns a model-ready one-line summary and never throws into your agent loop. The Base-RPC reads, perp-funding sample and a demo token-safety verdict return real live values even with no wallet. Source: <a href="https://github.com/rezearcher/vercel-ai-defi-data">github.com/rezearcher/vercel-ai-defi-data</a>.</p>
+<p class=muted style="margin:.7rem 0 0">Eleven tools &mdash; <code>defiYields</code>, <code>cryptoPrices</code>, <code>baseBalance</code>, <code>baseGasPrice</code>, <code>baseBlockNumber</code>, <code>baseTokenBalance</code>, <code>cryptoFunding</code> (cross-venue perp funding + arb spread), <code>marketBrief</code> (one-call market snapshot), <code>checkToken</code> (pre-trade SAFE/CAUTION/AVOID rug verdict), <code>yieldEntryVerdict</code> (per-pool SUSTAINABLE/DECAYING/OUTLIER/AVOID go-no-go) and <code>simulateTx</code> (dry-run a prospective tx &mdash; revert, gas, asset changes &mdash; before you send it) &mdash; each returns a model-ready one-line summary and never throws into your agent loop. The Base-RPC reads, perp-funding sample and a demo token-safety verdict return real live values even with no wallet. Source: <a href="https://github.com/rezearcher/vercel-ai-defi-data">github.com/rezearcher/vercel-ai-defi-data</a>.</p>
 </div>
 
 <h2>Building on LangChain.js?</h2>
@@ -13429,7 +13433,7 @@ import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { defiDataTools } from "@grey-ridge/langchain-defi-data";
 // reads PRIVATE_KEY (your agent's Base wallet) from the env
 const agent = createReactAgent({ llm, tools: defiDataTools });</pre>
-<p class=muted style="margin:.7rem 0 0">Nine tools &mdash; <code>defi_yields</code>, <code>crypto_prices</code>, <code>base_balance</code>, <code>base_gas_price</code>, <code>base_block_number</code>, <code>base_token_balance</code>, <code>crypto_funding</code> (cross-venue perp funding + arb spread), <code>market_brief</code> (one-call market snapshot), <code>check_token</code> (pre-trade SAFE/CAUTION/AVOID rug verdict) &mdash; degrade open with no key. The Base-RPC reads, perp-funding sample and a demo token-safety verdict return the real live value, and the market-brief and native-balance reads return an honest activation hint rather than a fabricated number. Source: <a href="https://github.com/rezearcher/langchain-defi-data">github.com/rezearcher/langchain-defi-data</a>.</p>
+<p class=muted style="margin:.7rem 0 0">Eleven tools &mdash; <code>defi_yields</code>, <code>crypto_prices</code>, <code>base_balance</code>, <code>base_gas_price</code>, <code>base_block_number</code>, <code>base_token_balance</code>, <code>crypto_funding</code> (cross-venue perp funding + arb spread), <code>market_brief</code> (one-call market snapshot), <code>check_token</code> (pre-trade SAFE/CAUTION/AVOID rug verdict), <code>yield_entry_verdict</code> (per-pool SUSTAINABLE/DECAYING/OUTLIER/AVOID go-no-go) and <code>simulate_tx</code> (dry-run a prospective tx &mdash; revert, gas, asset changes &mdash; before you send it) &mdash; degrade open with no key. The Base-RPC reads, perp-funding sample and a demo token-safety verdict return the real live value, and the market-brief and native-balance reads return an honest activation hint rather than a fabricated number. Source: <a href="https://github.com/rezearcher/langchain-defi-data">github.com/rezearcher/langchain-defi-data</a>.</p>
 </div>
 
 <h2>Building on CrewAI or plain Python?</h2>
@@ -13441,7 +13445,7 @@ from grey_ridge_x402_data import crewai_tools, crypto_prices
 print(crypto_prices("bitcoin,ethereum")["summary"])  # keyless: real live price
 # reads PRIVATE_KEY (your agent's Base wallet) from the env when set
 agent = Agent(role="analyst", tools=crewai_tools())</pre>
-<p class=muted style="margin:.7rem 0 0">Nine tools &mdash; <code>defi_yields</code>, <code>crypto_prices</code>, <code>crypto_funding</code>, <code>market_brief</code>, <code>base_balance</code>, <code>base_gas_price</code>, <code>base_block_number</code>, <code>base_token_balance</code>, <code>check_token</code> (pre-trade SAFE/CAUTION/AVOID rug verdict) &mdash; each returns a plain dict and never raises into the crew; the Base-RPC reads return the real live value even with no wallet, <code>crypto_funding</code> ($0.004) degrades to a real top-1 perp-funding preview, <code>check_token</code> ($0.01) returns the full verdict on the free preview (demo token un-metered) so a keyless call still gets a REAL verdict, and the native-balance read and <code>market_brief</code> ($0.01) return an honest activation stub rather than a fabricated number. Source: <a href="https://github.com/rezearcher/crewai-defi-data">github.com/rezearcher/crewai-defi-data</a>.</p>
+<p class=muted style="margin:.7rem 0 0">Eleven tools &mdash; <code>defi_yields</code>, <code>crypto_prices</code>, <code>crypto_funding</code>, <code>market_brief</code>, <code>base_balance</code>, <code>base_gas_price</code>, <code>base_block_number</code>, <code>base_token_balance</code>, <code>check_token</code> (pre-trade SAFE/CAUTION/AVOID rug verdict), <code>yield_entry_verdict</code> (per-pool SUSTAINABLE/DECAYING/OUTLIER/AVOID go-no-go) and <code>simulate_tx</code> (dry-run a prospective tx &mdash; revert, gas, asset changes &mdash; before you send it) &mdash; each returns a plain dict and never raises into the crew; the Base-RPC reads return the real live value even with no wallet, <code>crypto_funding</code> ($0.004) degrades to a real top-1 perp-funding preview, <code>check_token</code> ($0.01) returns the full verdict on the free preview (demo token un-metered) so a keyless call still gets a REAL verdict, and the native-balance read and <code>market_brief</code> ($0.01) return an honest activation stub rather than a fabricated number. Source: <a href="https://github.com/rezearcher/crewai-defi-data">github.com/rezearcher/crewai-defi-data</a>.</p>
 </div>
 
 <h2>Where the data comes from</h2>
