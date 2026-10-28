@@ -2784,7 +2784,7 @@ export function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "MCP tools/call over x402 for Base/crypto data + token safety: crypto_prices, crypto_funding, defi_yields, pm_markets, chain_block_number, chain_gas_price, chain_balance, chain_token_balance, chain_tx, chain_wallet, gate_swap (go/hold/block pre-trade gate), chain_token_report (SAFE/CAUTION/AVOID verdict), chain_token_security (honeypot detector), enrich_tech_risk (CVE/EPSS/KEV), enrich_domain, scan_mcp_server (MCP tool-poisoning audit). Use when an agent needs Base data or token-safety over MCP.",
+        "MCP tools/call over x402 for Base/crypto data + token safety: crypto_prices, crypto_funding, defi_yields, yield_entry_verdict (per-pool SUSTAINABLE/DECAYING/OUTLIER/AVOID go/no-go), pm_markets, chain_block_number, chain_gas_price, chain_balance, chain_token_balance, chain_tx, chain_wallet, simulate (prospective-tx dry-run: will_revert + gas + asset changes), gate_swap (go/hold/block pre-trade gate), chain_token_report (SAFE/CAUTION/AVOID verdict), chain_token_security (honeypot detector), enrich_tech_risk (CVE/EPSS/KEV), enrich_domain, scan_mcp_server (MCP tool-poisoning audit). Use when an agent needs Base data or token-safety over MCP.",
       mimeType: "application/json",
     },
     "GET /scan/mcp": {
@@ -4937,6 +4937,8 @@ app.use(async (c, next) => {
       "chain_token_security_preview",
       "chain_token_report_preview",
       "gate_swap_preview",
+      "yield_entry_verdict_preview",
+      "simulate_preview",
     ]);
     // Batch bodies: evaluate EVERY element; any non-free tools/call requires payment.
     const requiresPayment = items.some((it) => {
@@ -14983,6 +14985,75 @@ const mcpHandler = createMcpHandler(() => {
   );
 
   server.registerTool(
+    "yield_entry_verdict",
+    {
+      description:
+        "Per-pool DeFi yield-entry go/no-go. Pass a DefiLlama poolId (the 'pool' field from defi_yields) and get a packaged SUSTAINABLE | DECAYING | OUTLIER | AVOID verdict + 0-100 risk score + field-cited reasons, built from the pool's APY trend (1d/7d/30d), DefiLlama stability forecast, impermanent loss (il7d), volatility (sigma), outlier flag and TVL. Optional token (0x underlying, Base) adds a honeypot-check pointer. The should-I-enter-THIS-pool call after defi_yields. Cost: $0.01 USDC per call via x402.",
+      inputSchema: {
+        pool: z.string().describe("DefiLlama poolId — the 'pool' field from defi_yields (required)"),
+        token: z.string().optional().describe("Optional underlying token (0x, Base) — adds a honeypot-check pointer"),
+      },
+    },
+    async ({ pool, token }) => {
+      try {
+        const pid = (pool || "").trim();
+        if (!pid) return { content: [{ type: "text" as const, text: JSON.stringify({ error: "pool required — pass the 'pool' field from defi_yields" }) }] };
+        const p = await fetchDefiPoolById(pid);
+        if (!p) return { content: [{ type: "text" as const, text: JSON.stringify({ pool: pid, verdict: null, error: "pool not found in DefiLlama's current universe — use the 'pool' field from defi_yields" }) }] };
+        const result = computeYieldEntryVerdict(p);
+        const body: Record<string, unknown> = { ...result };
+        const tok = (token || "").trim();
+        if (tok && /^0x[a-fA-F0-9]{40}$/.test(tok)) {
+          body.token_safety_hint = {
+            token: tok,
+            note: "Underlying-token honeypot/rug risk is NOT included in this pool verdict. Run chain_token_report (token=" + tok + ", $0.01) before committing funds.",
+            resource: CANONICAL_ORIGIN + "/chain/token-report?token=" + tok,
+          };
+        }
+        return { content: [{ type: "text" as const, text: JSON.stringify(body, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "simulate",
+    {
+      description:
+        "Will this Base transaction revert? Prospective-tx dry-run via eth_simulateV1: pass from, to, optional data (0x calldata) and value (wei) and get will_revert + revert_reason + gas_used + token asset_changes BEFORE the agent spends gas sending it. Keyless, Base-native, Tenderly/Alchemy-class output with no API key. Use before a swap/approve/transfer or alongside gate_swap. Cost: $0.005 USDC per call via x402.",
+      inputSchema: {
+        from: z.string().describe("Sender (0x, Base) — required"),
+        to: z.string().describe("Target contract or address (0x, Base) — required"),
+        data: z.string().optional().describe("Optional 0x calldata (omit for a plain transfer)"),
+        value: z.string().optional().describe("Optional wei to send (decimal or 0x hex)"),
+      },
+    },
+    async ({ from, to, data, value }) => {
+      try {
+        const f = (from || "").trim();
+        const t = (to || "").trim();
+        const d = (data || "").trim();
+        if (!ADDR_RE.test(f) || !ADDR_RE.test(t)) return { content: [{ type: "text" as const, text: JSON.stringify({ error: "from and to must be 0x-prefixed 20-byte Base addresses" }) }] };
+        if (d && !/^0x[a-fA-F0-9]*$/.test(d)) return { content: [{ type: "text" as const, text: JSON.stringify({ error: "data must be 0x-prefixed hex calldata" }) }] };
+        let v = 0n;
+        const vq = (value || "").trim();
+        if (vq) {
+          try { v = BigInt(vq); } catch { return { content: [{ type: "text" as const, text: JSON.stringify({ error: "value must be wei as a decimal or 0x-hex integer" }) }] }; }
+          if (v < 0n) return { content: [{ type: "text" as const, text: JSON.stringify({ error: "value must be non-negative" }) }] };
+        }
+        const sim = await simulateTx(f, t, d, v);
+        const body = sim.available
+          ? { from: f, to: t, data: d || "0x", value: v.toString(), will_revert: sim.will_revert, revert_reason: sim.revert_reason, gas_used: sim.gas_used, asset_changes: sim.asset_changes, raw_status: sim.status_hex, simulated_at: "latest" }
+          : { from: f, to: t, will_revert: null, reason: "simulation_unavailable", note: "No configured Base RPC provider served eth_simulateV1 — degraded open, retry." };
+        return { content: [{ type: "text" as const, text: JSON.stringify(body, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
     "pm_markets",
     {
       description:
@@ -15062,6 +15133,42 @@ const mcpHandler = createMcpHandler(() => {
           note: "Free sample. Full data via the paid defi_yields tool or GET /defi/yields ($0.001).",
         };
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "yield_entry_verdict_preview",
+    {
+      description:
+        "FREE sample yield-entry verdict for the current top-TVL pool. Shows the packaged SUSTAINABLE/DECAYING/OUTLIER/AVOID + risk-score output shape before you pay. No payment required.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const sample = await fetchDefiYields(1, undefined, undefined, false);
+        if (sample.length === 0) return { content: [{ type: "text" as const, text: JSON.stringify({ preview: null, note: "No demo pool available right now." }) }] };
+        const result = computeYieldEntryVerdict(sample[0]);
+        return { content: [{ type: "text" as const, text: JSON.stringify({ preview: result, note: "Free sample. Full verdict for a chosen pool via the paid yield_entry_verdict tool (pool=<poolId from defi_yields>, $0.01)." }, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "simulate_preview",
+    {
+      description:
+        "FREE sample prospective-tx dry-run (benign 0-value call) showing the will_revert/gas_used/asset_changes output shape before you pay. No payment required.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const sim = await simulateTx("0x1111111111111111111111111111111111111111", "0x2222222222222222222222222222222222222222", "0x", 0n);
+        return { content: [{ type: "text" as const, text: JSON.stringify({ preview: sim.available ? { will_revert: sim.will_revert, gas_used: sim.gas_used, asset_changes: sim.asset_changes, raw_status: sim.status_hex } : { will_revert: null, reason: "simulation_unavailable" }, note: "Free sample (benign 0-value call). Full dry-run for any prospective tx via the paid simulate tool (from, to, data, value — $0.005)." }, null, 2) }] };
       } catch (e) {
         return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
       }
