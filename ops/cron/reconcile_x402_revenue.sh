@@ -71,7 +71,14 @@ mkdir -p "${METRICS_DIR}" "${LOG_DIR}" 2>/dev/null || true
 # ── Logging ────────────────────────────────────────────────────────────────────
 log() {  # log <LEVEL> <message...>
     local level="$1"; shift
-    printf '[%s] %-5s %s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" "${level}" "$*" >>"${LOG_FILE}"
+    local line
+    line=$(printf '[%s] %-5s %s' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" "${level}" "$*")
+    # File is the durable record; stdout is also emitted so systemd captures it in the
+    # journal under SyslogIdentifier=x402-revenue-reconcile. Without the stdout leg,
+    # `journalctl --user -t x402-revenue-reconcile` is empty and the SRE-facing surface
+    # documented in docs/cron/x402-revenue-reconcile.md does not exist.
+    printf '%s\n' "${line}" >>"${LOG_FILE}"
+    printf '%s\n' "${line}"
 }
 
 # Keep the log bounded without depending on logrotate being installed.
