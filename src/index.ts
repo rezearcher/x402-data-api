@@ -12192,6 +12192,18 @@ await generateText({ model, tools: { ...defiDataTools }, prompt: "Best stablecoi
 <p class=muted style="margin:.7rem 0 0">Three tools &mdash; <code>defiYields</code>, <code>cryptoPrices</code>, <code>baseBalance</code> &mdash; each returns a model-ready one-line summary and never throws into your agent loop. Source: <a href="https://github.com/rezearcher/vercel-ai-defi-data">github.com/rezearcher/vercel-ai-defi-data</a>.</p>
 </div>
 
+<h2>Building on LangChain.js?</h2>
+<div class=card>
+<p style="margin:.2rem 0 .7rem">The same three routes as drop-in LangChain tools. They use <code>content_and_artifact</code> so your graph gets a readable string for the model and the structured object on <code>.artifact</code> &mdash; the wallet pays per call, and a keyless install still returns a free preview:</p>
+<pre>npm i github:rezearcher/langchain-defi-data @langchain/core zod
+
+import { createReactAgent } from "@langchain/langgraph/prebuilt";
+import { defiDataTools } from "@grey-ridge/langchain-defi-data";
+// reads PRIVATE_KEY (your agent's Base wallet) from the env
+const agent = createReactAgent({ llm, tools: defiDataTools });</pre>
+<p class=muted style="margin:.7rem 0 0">Three tools &mdash; <code>defi_yields</code>, <code>crypto_prices</code>, <code>base_balance</code> &mdash; degrade open to the free preview with no key, and the balance read returns an honest activation hint rather than a fabricated number. Source: <a href="https://github.com/rezearcher/langchain-defi-data">github.com/rezearcher/langchain-defi-data</a>.</p>
+</div>
+
 <h2>Where the data comes from</h2>
 <p class=muted>On-chain reads are live Base mainnet RPC. DeFi yields, TVL, fees and protocol data are sourced from DefiLlama; spot prices from DefiLlama and CoinGecko; perp funding from Hyperliquid, OKX and dYdX; Chainlink routes read the on-chain aggregators directly. Each response carries its source and a timestamp. Market data is informational, not financial advice; the pre-trade token-safety gate is a static + simulation check, not a guarantee a token is safe.</p>
 
