@@ -1234,9 +1234,9 @@ const DATA_TOOL_ROUTES_8 = [
   "/defi/yields", "/crypto/prices", "/crypto/funding", "/brief/market",
   "/chain/balance", "/chain/gas-price", "/chain/block-number", "/chain/token-balance",
 ];
-// The JS packages also ship the pre-trade token-safety verdict (/chain/token-report,
-// $0.01) as a 9th tool; the Python package stays at the 8 above.
-const DATA_TOOL_ROUTES_9_JS = [...DATA_TOOL_ROUTES_8, "/chain/token-report"];
+// All framework packages also ship the pre-trade token-safety verdict
+// (/chain/token-report, $0.01) as a 9th tool.
+const DATA_TOOL_ROUTES_9 = [...DATA_TOOL_ROUTES_8, "/chain/token-report"];
 const INSTALLABLE_TOOLS: Array<{
   framework: string;
   language: string;
@@ -1254,7 +1254,7 @@ const INSTALLABLE_TOOLS: Array<{
     install: "npm i github:rezearcher/vercel-ai-defi-data",
     repository: "https://github.com/rezearcher/vercel-ai-defi-data",
     tool_count: 9,
-    wraps: DATA_TOOL_ROUTES_9_JS,
+    wraps: DATA_TOOL_ROUTES_9,
     note: "Vercel AI SDK v5 tools (inputSchema); x402 paid inline, no API key; degrades to the free preview when unpaid; balance reads never fabricate a number; checkToken returns a pre-trade SAFE/CAUTION/AVOID verdict.",
   },
   {
@@ -1264,7 +1264,7 @@ const INSTALLABLE_TOOLS: Array<{
     install: "npm i github:rezearcher/langchain-defi-data",
     repository: "https://github.com/rezearcher/langchain-defi-data",
     tool_count: 9,
-    wraps: DATA_TOOL_ROUTES_9_JS,
+    wraps: DATA_TOOL_ROUTES_9,
     note: "LangChain.js tools (content_and_artifact responseFormat); x402 paid inline, no API key; degrades to the free preview when unpaid; check_token returns a pre-trade SAFE/CAUTION/AVOID verdict.",
   },
   {
@@ -1273,9 +1273,9 @@ const INSTALLABLE_TOOLS: Array<{
     package: "grey-ridge-x402-data",
     install: "pip install git+https://github.com/rezearcher/crewai-defi-data",
     repository: "https://github.com/rezearcher/crewai-defi-data",
-    tool_count: 8,
-    wraps: DATA_TOOL_ROUTES_8,
-    note: "CrewAI BaseTool wrappers plus framework-agnostic plain functions; dep-free keyless stdlib core, x402 paid rail via the [pay] extra.",
+    tool_count: 9,
+    wraps: DATA_TOOL_ROUTES_9,
+    note: "CrewAI BaseTool wrappers plus framework-agnostic plain functions; dep-free keyless stdlib core, x402 paid rail via the [pay] extra; check_token returns a pre-trade SAFE/CAUTION/AVOID verdict.",
   },
 ];
 
@@ -12640,7 +12640,7 @@ from grey_ridge_x402_data import crewai_tools, crypto_prices
 print(crypto_prices("bitcoin,ethereum")["summary"])  # keyless: real live price
 # reads PRIVATE_KEY (your agent's Base wallet) from the env when set
 agent = Agent(role="analyst", tools=crewai_tools())</pre>
-<p class=muted style="margin:.7rem 0 0">Eight tools &mdash; <code>defi_yields</code>, <code>crypto_prices</code>, <code>crypto_funding</code>, <code>market_brief</code>, <code>base_balance</code>, <code>base_gas_price</code>, <code>base_block_number</code>, <code>base_token_balance</code> &mdash; each returns a plain dict and never raises into the crew; the Base-RPC reads return the real live value even with no wallet, <code>crypto_funding</code> ($0.004) degrades to a real top-1 perp-funding preview, and the native-balance read and <code>market_brief</code> ($0.01) return an honest activation stub rather than a fabricated number. Source: <a href="https://github.com/rezearcher/crewai-defi-data">github.com/rezearcher/crewai-defi-data</a>.</p>
+<p class=muted style="margin:.7rem 0 0">Nine tools &mdash; <code>defi_yields</code>, <code>crypto_prices</code>, <code>crypto_funding</code>, <code>market_brief</code>, <code>base_balance</code>, <code>base_gas_price</code>, <code>base_block_number</code>, <code>base_token_balance</code>, <code>check_token</code> (pre-trade SAFE/CAUTION/AVOID rug verdict) &mdash; each returns a plain dict and never raises into the crew; the Base-RPC reads return the real live value even with no wallet, <code>crypto_funding</code> ($0.004) degrades to a real top-1 perp-funding preview, <code>check_token</code> ($0.01) returns the full verdict on the free preview (demo token un-metered) so a keyless call still gets a REAL verdict, and the native-balance read and <code>market_brief</code> ($0.01) return an honest activation stub rather than a fabricated number. Source: <a href="https://github.com/rezearcher/crewai-defi-data">github.com/rezearcher/crewai-defi-data</a>.</p>
 </div>
 
 <h2>Where the data comes from</h2>

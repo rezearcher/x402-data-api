@@ -246,5 +246,87 @@ class TestFundingAndBrief(unittest.TestCase):
         self.assertEqual(out["funding"], [])
 
 
+class TestTokenReport(unittest.TestCase):
+    def setUp(self):
+        self._orig_plain_get = d.plain_get
+
+    def tearDown(self):
+        d.plain_get = self._orig_plain_get
+
+    def test_token_report_urls_default_demo(self):
+        u = d.build_token_report_url()
+        self.assertIn("/chain/token-report?", u)
+        self.assertIn(d.DEMO_TOKEN, u)
+        p = d.build_token_report_preview_url()
+        self.assertIn("/chain/token-report/preview?", p)
+        self.assertIn(d.DEMO_TOKEN, p)
+
+    def test_token_report_bad_token_no_raise(self):
+        out = d.run_token_report(lambda u: (200, {}), token="not-an-address", has_key=True)
+        self.assertIn("error", out)
+        self.assertIsNone(out["verdict"])
+        self.assertTrue(out["summary"].startswith("ERROR"))
+
+    def test_summarize_token_report(self):
+        s = d.summarize_token_report({"verdict": "SAFE", "risk_score": 15,
+                                      "token_meta": {"symbol": "AERO"},
+                                      "reasons": ["owner can mint new supply"]})
+        self.assertIn("AERO: SAFE", s)
+        self.assertIn("risk 15/100", s)
+        self.assertIn("owner can mint", s)
+        self.assertEqual(d.summarize_token_report({}), "no token report")
+        self.assertIn("free trial exhausted",
+                      d.summarize_token_report({"trial_exhausted": True}))
+
+    def test_keyless_returns_real_verdict(self):
+        # Preview carries the full verdict for the demo token (un-metered) → REAL, not a stub.
+        d.plain_get = lambda url, timeout=15.0: (200, {
+            "token": d.DEMO_TOKEN, "verdict": "SAFE", "risk_score": 15,
+            "token_meta": {"symbol": "AERO"}, "reasons": ["owner can mint new supply"],
+            "security": {"is_honeypot": False}, "liquidity": {"weth_usd": 1_000_000}})
+        out = d.run_token_report(lambda u: (0, None), has_key=False)
+        self.assertFalse(out["paid"])
+        self.assertEqual(out["verdict"], "SAFE")
+        self.assertEqual(out["risk_score"], 15)
+        self.assertEqual(out["symbol"], "AERO")
+        self.assertEqual(out["activation"]["price_usdc"], "0.01")
+
+    def test_trial_exhausted_degrades_open_no_fabrication(self):
+        d.plain_get = lambda url, timeout=15.0: (429, {
+            "error": "free real-token trial exhausted (3/day/IP)",
+            "trial": {"real_token_checks_left_today": 0},
+            "paid_url": "https://x402-data-api.sigrunner.workers.dev/chain/token-report"})
+        out = d.run_token_report(lambda u: (0, None), token="0x" + "a" * 40, has_key=False)
+        self.assertFalse(out["paid"])
+        self.assertTrue(out["trial_exhausted"])
+        self.assertIsNone(out["verdict"])  # honest — no fabricated verdict
+        self.assertIn("paid_url", out)
+
+    def test_paid_verdict(self):
+        out = d.run_token_report(lambda u: (200, {
+            "token": "0x" + "b" * 40, "verdict": "AVOID", "risk_score": 88,
+            "token_meta": {"symbol": "SCAM"}, "reasons": ["honeypot: cannot sell"]}),
+            token="0x" + "b" * 40, has_key=True)
+        self.assertTrue(out["paid"])
+        self.assertEqual(out["verdict"], "AVOID")
+        self.assertIn("SCAM: AVOID", out["summary"])
+
+    def test_paid_402_degrades_to_preview(self):
+        d.plain_get = lambda url, timeout=15.0: (200, {
+            "token": d.DEMO_TOKEN, "verdict": "SAFE", "risk_score": 15,
+            "token_meta": {"symbol": "AERO"}, "reasons": []})
+        out = d.run_token_report(lambda u: (402, None), has_key=True)
+        self.assertFalse(out["paid"])
+        self.assertEqual(out["verdict"], "SAFE")
+        self.assertIn("402", out["activation"]["reason"])
+
+    def test_never_raises_on_outage(self):
+        def boom(u):
+            raise RuntimeError("network down")
+        out = d.run_token_report(boom, has_key=True)
+        self.assertIn("error", out)
+        self.assertIsNone(out["verdict"])
+
+
 if __name__ == "__main__":
     unittest.main()

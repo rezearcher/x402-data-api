@@ -17,6 +17,12 @@ Drop-in tools wrapping Grey Ridge's live x402 data routes:
 | `base_gas_price` | `/chain/gas-price` | $0.002 | Base EIP-1559 gas: base/priority fee (gwei), `gas_price_usd` |
 | `base_block_number` | `/chain/block-number` | $0.002 | Current Base mainnet block height |
 | `base_token_balance` | `/chain/token-balance` | $0.002 | ERC-20 balance of a Base address (`token` defaults to USDC) |
+| `check_token` | `/chain/token-report` | $0.01 | Pre-trade safety verdict for a Base ERC-20: SAFE/CAUTION/AVOID + 0-100 risk score + reasons (honeypot sim, buy/sell tax, owner/mint/pause checks, owner supply %, WETH liquidity) |
+
+`check_token` returns the **full verdict** on the free preview too (capped at 3
+real tokens/IP/day; the demo tokens are un-metered), so a keyless call still gets
+a REAL SAFE/CAUTION/AVOID verdict — never a fabricated one. When the daily free
+trial is spent it honestly reports `trial_exhausted` and points at the paid route.
 
 `crypto_funding` degrades open to a **real top-1 preview** (live perp funding for
 the top coin) when run keyless; `market_brief` has no preview, so keyless returns

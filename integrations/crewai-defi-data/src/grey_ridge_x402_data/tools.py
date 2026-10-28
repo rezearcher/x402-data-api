@@ -90,6 +90,13 @@ def market_brief(*, private_key: Optional[str] = None,
     return _d.run_market_brief(c["pay_get"], has_key=c["has_key"], base=base)
 
 
+def check_token(token: Optional[str] = None, *, private_key: Optional[str] = None,
+                base: str = _d.DATA_BASE) -> Dict[str, Any]:
+    """Pre-trade token-safety verdict for a Base ERC-20: SAFE/CAUTION/AVOID + 0-100 risk_score + reasons. $0.01 — free preview returns the full verdict (3 real tokens/IP/day; demo tokens un-metered)."""
+    c = _ctx(private_key)
+    return _d.run_token_report(c["pay_get"], token=token, has_key=c["has_key"], base=base)
+
+
 # ---------------------------------------------------------------------------
 # CrewAI tool wrappers (lazy import — crewai only required for crewai_tools())
 # ---------------------------------------------------------------------------
@@ -134,6 +141,9 @@ def crewai_tools(private_key: Optional[str] = None) -> List[Any]:
 
     class _FundingArgs(BaseModel):
         limit: int = Field(20, description="Max coins to rank by 24h notional volume (1–100).")
+
+    class _CheckTokenArgs(BaseModel):
+        token: Optional[str] = Field(None, description="A 0x… Base ERC-20 contract to vet before trading (defaults to a demo token).")
 
     def _emit(d: Dict[str, Any]) -> str:
         return json.dumps(d, default=str)
@@ -221,6 +231,20 @@ def crewai_tools(private_key: Optional[str] = None) -> List[Any]:
         def _run(self) -> str:
             return _emit(market_brief(private_key=pk))
 
+    class CheckTokenTool(BaseTool):
+        name: str = "check_token"
+        description: str = ("Pre-trade safety check for a Base ERC-20: a SAFE / CAUTION / AVOID "
+                            "verdict with a 0-100 risk score and the reasons — honeypot/sellability "
+                            "simulation, buy/sell tax, owner-renounced + mint/pause/blacklist/"
+                            "upgradeable-proxy checks, owner supply %, and WETH-pool liquidity. Paid "
+                            "$0.01/call via x402 USDC on Base; the free preview returns the full "
+                            "verdict (3 real tokens/IP/day, demo tokens un-metered), so a keyless "
+                            "call still returns a REAL verdict — never a fabricated one.")
+        args_schema: type = _CheckTokenArgs
+
+        def _run(self, token: Optional[str] = None) -> str:
+            return _emit(check_token(token, private_key=pk))
+
     return [DefiYieldsTool(), CryptoPricesTool(), BaseBalanceTool(),
             BaseGasPriceTool(), BaseBlockNumberTool(), BaseTokenBalanceTool(),
-            CryptoFundingTool(), MarketBriefTool()]
+            CryptoFundingTool(), MarketBriefTool(), CheckTokenTool()]

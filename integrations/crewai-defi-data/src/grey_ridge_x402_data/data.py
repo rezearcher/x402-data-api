@@ -574,3 +574,141 @@ def run_market_brief(pay_get: PayGet, *, has_key: bool = True,
     except Exception as err:  # noqa: BLE001
         msg = f"brief/market unavailable: {err}"
         return {"error": msg, "paid": False, "summary": f"ERROR: {msg}"}
+
+
+# ---------------------------------------------------------------------------
+# Token-safety route — pre-trade rug/honeypot verdict
+# ---------------------------------------------------------------------------
+# /chain/token-report ($0.01) answers "is this Base ERC-20 safe to buy?" with a
+# decision-grade verdict — SAFE | CAUTION | AVOID — plus a 0-100 risk_score and
+# the reasons (honeypot/sellability simulation, buy/sell tax, owner-renounced +
+# mint/pause/blacklist/fee-setter/upgradeable-proxy checks, owner supply %, and
+# Uniswap-v3 WETH-pool liquidity in USD). The FREE preview returns the SAME full
+# verdict for ANY Base token, but is capped at 3 real tokens/IP/day; the five
+# demo tokens (WETH/USDC/cbBTC/AERO/DEGEN) are un-metered. So a keyless install
+# returns a REAL verdict (never a stub) — on the default demo token when none is
+# given, or on the caller's token until the daily trial is spent, after which it
+# honestly reports the trial is exhausted and points at the paid route rather
+# than fabricating a verdict. Lifts $/payer above the $0.001 data tier and
+# matches GoPlus/honeypot.is/TokenSniffer — but keyless and key-free over x402.
+
+# Aerodrome on Base — an un-metered demo token, used as the default so a keyless
+# token-safety probe always returns a real verdict.
+DEMO_TOKEN = "0x940181a94a35a4569e4529a3cdfb74e38fd98631"
+
+
+def build_token_report_url(token: Optional[str] = None,
+                           base: str = DATA_BASE) -> str:
+    """Paid /chain/token-report URL. Raises on a malformed token so a bad call
+    never silently costs a payment."""
+    tok = _validate_addr(token) if token else DEMO_TOKEN
+    return f"{base}/chain/token-report?{_qs({'token': tok})}"
+
+
+def build_token_report_preview_url(token: Optional[str] = None,
+                                   base: str = DATA_BASE) -> str:
+    """FREE /chain/token-report/preview URL (same full verdict, capped 3 real
+    tokens/IP/day; demo tokens un-metered)."""
+    tok = _validate_addr(token) if token else DEMO_TOKEN
+    return f"{base}/chain/token-report/preview?{_qs({'token': tok})}"
+
+
+def summarize_token_report(out: Any) -> str:
+    if not isinstance(out, dict):
+        return "no token report"
+    if out.get("trial_exhausted"):
+        return "token-safety free trial exhausted for today (3/day/IP) — pay $0.01 for any token"
+    if out.get("verdict") is None:
+        note = out.get("note")
+        return f"token report unavailable — {note}" if note else "no token report"
+    meta = out.get("token_meta") if isinstance(out.get("token_meta"), dict) else {}
+    sym = meta.get("symbol") or out.get("symbol") or "token"
+    bits: List[str] = [f"{sym}: {out['verdict']}"]
+    if isinstance(out.get("risk_score"), (int, float)):
+        bits.append(f"risk {out['risk_score']}/100")
+    reasons = out.get("reasons")
+    if isinstance(reasons, list) and reasons:
+        bits.append("; ".join(str(r) for r in reasons[:3]))
+    return " · ".join(bits)
+
+
+def _shape_token_report(out: Any, *, paid: bool) -> Dict[str, Any]:
+    """Shape the preview/paid body into a compact, model-ready verdict object
+    (keeps the structured fields an agent needs to gate a trade)."""
+    meta = out.get("token_meta") if isinstance(out, dict) and isinstance(out.get("token_meta"), dict) else {}
+    reasons = out.get("reasons") if isinstance(out, dict) else None
+    result: Dict[str, Any] = {
+        "token": out.get("token") if isinstance(out, dict) else None,
+        "verdict": out.get("verdict") if isinstance(out, dict) else None,
+        "risk_score": out.get("risk_score") if isinstance(out, dict) and isinstance(out.get("risk_score"), (int, float)) else None,
+        "symbol": meta.get("symbol"),
+        "reasons": [str(r) for r in reasons[:5]] if isinstance(reasons, list) else [],
+        "security": out.get("security") if isinstance(out, dict) else None,
+        "liquidity": out.get("liquidity") if isinstance(out, dict) else None,
+        "paid": paid,
+    }
+    result["summary"] = summarize_token_report({**(out if isinstance(out, dict) else {}), **result})
+    return result
+
+
+def run_token_report(pay_get: PayGet, *, token: Optional[str] = None,
+                     has_key: bool = True, base: str = DATA_BASE) -> Dict[str, Any]:
+    """/chain/token-report ($0.01) — the pre-trade safety verdict.
+
+    ``token`` defaults to an un-metered demo token so a keyless probe always
+    returns a REAL verdict. A keyless / unfunded install reads the free preview
+    (same full verdict, capped 3 real tokens/IP/day); when that daily trial is
+    spent the preview returns 429 and this degrades OPEN to an honest
+    ``{verdict: None, trial_exhausted: True}`` pointing at the paid route — never
+    a fabricated verdict and never a raise into the agent runtime.
+    """
+    resolved_token = token or DEMO_TOKEN
+    try:
+        paid_url = build_token_report_url(token, base)
+        preview_url = build_token_report_preview_url(token, base)
+    except ValueError as err:
+        msg = f"chain/token-report bad input: {err}"
+        return {"error": msg, "token": token, "verdict": None, "risk_score": None,
+                "reasons": [], "paid": False, "summary": f"ERROR: {msg}"}
+
+    def take_preview(reason: str) -> Dict[str, Any]:
+        status, out = plain_get(preview_url)
+        trial = out.get("trial") if isinstance(out, dict) else None
+        trial_left = trial.get("real_token_checks_left_today") if isinstance(trial, dict) else None
+        if status == 429 or trial_left == 0:
+            # Trial spent — honest degrade-open: no verdict, point at the paid route.
+            return {
+                "token": resolved_token, "verdict": None, "risk_score": None,
+                "reasons": [], "trial_exhausted": True,
+                "note": (out.get("error") if isinstance(out, dict) else None)
+                or "free real-token trial exhausted (3/day/IP)",
+                "paid_url": (out.get("paid_url") if isinstance(out, dict) else None) or paid_url,
+                "paid": False,
+                "summary": summarize_token_report({"trial_exhausted": True}),
+                "activation": _activation(reason, paid_url, "0.01"),
+                "guard_reasons": [fund_onramp_hint()],
+            }
+        if status != 200 or not isinstance(out, dict):
+            msg = f"chain/token-report preview unavailable (HTTP {status})"
+            return {"error": msg, "token": resolved_token, "verdict": None,
+                    "risk_score": None, "reasons": [], "paid": False,
+                    "summary": f"ERROR: {msg}"}
+        shaped = _shape_token_report(out, paid=False)
+        shaped["activation"] = _activation(reason, paid_url, "0.01")
+        shaped["guard_reasons"] = [fund_onramp_hint()]
+        return shaped
+
+    try:
+        if not has_key:
+            return take_preview("no PRIVATE_KEY configured — free preview returns the full verdict (capped 3 real tokens/IP/day)")
+        status, out = pay_get(paid_url)
+        if status == 200 and isinstance(out, dict):
+            return _shape_token_report(out, paid=True)
+        reason = ("wallet not funded (paid /chain/token-report returned 402)"
+                  if status == 402 else f"paid /chain/token-report returned HTTP {status}")
+        return take_preview(reason)
+    except Exception as err:  # noqa: BLE001
+        msg = f"chain/token-report unavailable: {err}"
+        return {"error": msg, "token": resolved_token, "verdict": None,
+                "risk_score": None, "reasons": [], "paid": False,
+                "summary": f"ERROR: {msg}"}
