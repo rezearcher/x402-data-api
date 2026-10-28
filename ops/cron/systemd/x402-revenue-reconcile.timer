@@ -1,0 +1,18 @@
+[Unit]
+Description=15-min refresher for the x402 revenue_usd_corrected gap metric
+Documentation=file:///home/rez/projects/x402-data-api/docs/cron/x402-revenue-reconcile.md
+
+[Timer]
+# Wall-clock aligned quarters, not a 15-min interval from boot: the metric goes STALE at
+# 1800 s, so predictable :00/:15/:30/:45 refreshes keep the worst-case age bounded and
+# legible in the journal. Persistent=true fires a catch-up run if the host was down.
+OnCalendar=*:0/15
+Persistent=true
+
+# Up to 60 s of accuracy lets systemd coalesce this with other quarter-hour jobs
+# (money_loop, hc_status_sensor, issue_reply_watch all run on */15).
+AccuracySec=1min
+RandomizedDelaySec=10s
+
+[Install]
+WantedBy=timers.target

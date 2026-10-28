@@ -1,0 +1,28 @@
+[Unit]
+Description=x402 revenue_usd_corrected gap-metric refresher (two-rail reconciler)
+Documentation=file:///home/rez/projects/x402-data-api/docs/cron/x402-revenue-reconcile.md
+Documentation=file:///home/rez/projects/x402-data-api/.metrics/reconcile_live_revenue.py
+# This is a *user* unit. Do NOT add User=/Group= here: a user manager cannot switch
+# identity, and the attempt aborts the service with status=216/GROUP before ExecStart
+# ever runs. (That exact mistake is what made the first install of this timer fail
+# silently every 15 minutes — see docs/cron/x402-revenue-reconcile.md.)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/rez/projects/x402-data-api/ops/cron/reconcile_x402_revenue.sh
+
+# The wrapper writes a structured log of its own; the journal is the SRE-facing surface
+# (systemctl --user --failed, journalctl --user -t x402-revenue-reconcile).
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=x402-revenue-reconcile
+
+# The producer's HTTP read is capped at 10 s, so a healthy run finishes in ~1 s.
+# 120 s is 12x headroom and still detects a hung run well inside one timer period.
+TimeoutStartSec=120
+
+# Keep the failure visible but don't let a flapping producer burn the journal.
+StartLimitIntervalSec=900
+StartLimitBurst=3

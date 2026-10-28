@@ -32,5 +32,12 @@ data/*_demand_lane.log
 integrations/*/dist/
 integrations/*/package-lock.json
 
-# machine-state sidecar written by .metrics/reconcile_live_revenue.py (epoch; not source)
+# machine-state sidecars written by .metrics/reconcile_live_revenue.py (not source)
 .metrics/.revenue_usd_corrected_timestamp
+# The tracked value file is now the repo MIRROR only: the authoritative copy is
+# ~/.hermes/data/x402-data-api/metrics/revenue_usd_corrected, which milestone.sh reads
+# first (breathing-life/scripts/milestone.sh:201). The cron producer rewrites this repo
+# copy every 15 min, so keeping it tracked means the shared main tree is permanently
+# dirty and every metrics-touching branch gets a guaranteed merge conflict on a file
+# nobody should hand-edit. The file stays on disk, so milestone.sh's fallback still works.
+.metrics/revenue_usd_corrected
