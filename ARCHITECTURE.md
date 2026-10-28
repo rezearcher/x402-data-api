@@ -110,6 +110,39 @@ conflict is recorded in [§13 Doc-drift corrections](#13-doc-drift-corrections).
   `compute_revenue_usd.py` (file table) are **two writers of the same repo file**; the last cron to
   run wins. Not re-derived here: whether the two agree on every run.
 
+**Changed since the 2026-08-31 sync** (verified by live run, 2026-10-28, `t_02287fdb`):
+- **The revenue reconciler is now TWO-RAIL and reads a live source, not a stale sidecar.**
+  `.metrics/reconcile_live_revenue.py` was rewritten (59 → ~370 lines) around the additive contract
+  `revenue_usd_corrected = organic_x402_usdc + fiat_gross_usd`:
+  - *organic* ← `~/.hermes/data/x402-revenue/latest.json` :: `total_external_usdc` (the on-chain sensor
+    at `~/.hermes/scripts/x402_revenue_sensor.py`, cron `7,27,47`, which already excludes the three
+    documented self wallets, dust-spam fan-out and pre-launch funding). The old basis —
+    re-summing `scan_state.json` and keeping only payers listed in `probe_check_summary.json` — is
+    **gone**: that sidecar has been frozen since 2026-08-03 with **2** addresses, so the old code's
+    double bug (iterating dict keys as if a list, case-sensitive address matching) caused it to
+    match zero transactions and report **0.005**. The sensor's live count: 388 external + 110 self
+    from 504 total transfers in `scan_state.json`. Repointing is the sanctioned path; the
+    probe-check rewire is a board-policy dead end (`t_fad358a7` archived 2026-09-02, kill
+    rationale + the `pre_launch_usdc=70.00 == 2×$35` finding on `t_b8b2e3ef`).
+  - *fiat* ← live `GET /metrics` :: `fiat.total_gross_usd` (Stripe `checkout_paid` + `invoice_paid`).
+    HTTP 200 only; every failure (timeout, non-200, bad JSON, missing/non-numeric key) yields `0` and
+    exit `0`. Cache-busted by default (`?cb=<ns>`) because the edge pins a healthy body for 3600 s and
+    the whole point is to see a fiat dollar inside one cron window.
+  - **New outputs:** `~/.hermes/data/x402-data-api/metrics/.revenue_usd_corrected_timestamp` (epoch;
+    `milestone.sh` marks the metric **STALE** past 1800 s — the refresher is `t_b6f5ee38`) and
+    `.revenue_usd_corrected_status.json` (per-run component + read-outcome record).
+  - **Verified live:** the gap verdict moved `0.005 → 0.80402` (OPEN, not STALE) — a 160× correction,
+    80 % of the `>= 1.0` milestone. Tests: `tests/test_revenue_fiat_term.py` (40, network-free).
+- **The two-writer clobber on `.metrics/revenue_usd_corrected` is resolved.** `compute_revenue_usd.py`
+  no longer writes the corrected file (it owns `revenue_usd` only, still `0.005`), so the last cron to
+  run can no longer decide the milestone reading with a ledger-only basis. See the row below.
+- **Known limit, deliberately not hidden:** a fiat read failure and a genuine "no sales yet" are both
+  `0`. The endpoint cannot disambiguate them for us — `getFiatMetrics` swallows its own throw into
+  zeros (`src/usage.ts:490-515`) and the handler's `degraded` flag omits fiat (`src/index.ts:567`) — so
+  every run records the read outcome (`fiat_status=` on stdout, `fiat.status` in the sidecar). An
+  *organic* read failure, by contrast, preserves the last good value and does **not** refresh the
+  timestamp, so the sensor ages into STALE rather than reporting a fabricated flat line.
+
 **Changed since the 2026-08-26 sync** (verified by file read, 2026-08-27):
 - **The "rewire probe-check to LIVE `scan_state.json`" card (`t_b0e428b2`, "3rd attempt --
   retry-capped") shipped NOTHING — it is a fabricated-done, and the probe-check still reads its
@@ -664,8 +697,8 @@ secret, and generates no x402 revenue — it is a distribution surface. Note `_f
 | `fund_buyer.js` (49) | One-time: generate a throwaway buyer wallet and fund it with 0.03 USDC from the main wallet. Needed because CDP rejects self-sends, so seeds require `from != payTo`. |
 | `register_x402scan.js` (57) | SIWX (wallet-signature, not payment) registration with x402scan.com — `register-origin` by default, or a single resource URL as `argv[2]`. |
 | `scripts/verify_revenue_ledger.py` (601) | Two modes. Normal: reads `~/.hermes/data/<play>-revenue/ledger.jsonl`, resolves each row's USDC `Transfer` `from` via `eth_getTransactionReceipt`, classifies self-traffic vs external, writes `ledger_verified_summary.json`. `--probe-check` (`:586`→`run_probe_check`, `:507`): scores each "external" payer on three bot heuristics — total nonce, identical-method bursts within 120s, unsolicited farm-token receipts — writing `probe_check_summary.json` **without mutating** normal-mode files. |
-| `.metrics/compute_revenue_usd.py` (91) | Reads both sidecars, sums only `external` rows whose payer is **not** probe-flagged, writes the same value to `.metrics/revenue_usd` **and** `.metrics/revenue_usd_corrected`. Hard-fails if either sidecar is missing. Both files currently read **`0.005`** (unfrozen 2026-08-26; see the "Changed since 2026-08-19" header). |
-| `.metrics/reconcile_live_revenue.py` (59) | The **live on-chain** organic-revenue reconciler (distinct from `compute_revenue_usd.py`, which reads ledger sidecars). Loads `~/.hermes/data/x402-revenue/scan_state.json` (`transfers` **dict** keyed by `<txhash>:<index>`) and `~/.hermes/data/x402-data-api-revenue/probe_check_summary.json`, sums each transfer `value` whose lowercased `from` is neither a self-owned `EXCLUDED_ADDRESSES` wallet (PAY_TO / buyer / farming-bot) nor unprobed/bot-flagged, and writes the total to **both** the gap sensor `~/.hermes/data/x402-data-api/metrics/revenue_usd_corrected` and the repo mirror `.metrics/revenue_usd_corrected`. Dict-iteration + case-sensitivity bugs fixed by `t_0392bc5e` (`c66b5e1`); now reads **`0.005`**. |
+| `.metrics/compute_revenue_usd.py` (91) | Reads both sidecars (`ledger_verified_summary.json`, `probe_check_summary.json`), sums only `external` rows whose payer is **not** probe-flagged, and writes the result to `.metrics/revenue_usd` **only**. No longer writes `revenue_usd_corrected` (exclusive ownership moved to `reconcile_live_revenue.py`). Hard-fails if either sidecar is missing. Currently reads **`0.005`** (ledger-basis). See "two writers of the same repo file" in the 2026-08-31 section. |
+| `.metrics/reconcile_live_revenue.py` (~370) | The **live two-rail** revenue reconciler (rewritten 2026-10-28 by `t_02287fdb`). Reads `~/.hermes/data/x402-revenue/latest.json` (on-chain organic USDC from the sensor cron at 7,27,47) and live `GET /metrics` (Stripe fiat `checkout_paid` + `invoice_paid`), adds them per the contract `revenue_usd_corrected = organic_x402_usdc + fiat_gross_usd`, and persists both the metric and status sidecar to `~/.hermes/data/x402-data-api/metrics/`. Network failures and missing keys degrade open to `0`; the status sidecar records read outcomes. Timestamp `_timestamp` file preserves last refresh, so `milestone.sh` can age metrics into STALE (1800 s) when reads stop. Live run 2026-10-28 reads **`0.80402`** (160× uplift from the prior single-source `0.005`, curing the two-writer clobber). |
 | `scripts/auto-merge.sh` | `kanban_task_completed` hook: merges `wt/<task_id>` into `main`, pushes, deletes the branch **and now removes the `.worktrees/<task_id>` directory** (`cleanup_worktree_dir`, only after the push is verified against `origin/main`). **Fail-OPEN by construction** — every terminal path is `exit 0` and writes a trace to `~/.hermes/data/x402-data-api-health/auto_merge_failures/<task_id>.log` so a no-op is never silent. On an **untracked-file** merge failure it now grep-detects `"untracked working tree files would be overwritten"` and logs the conflicting paths before aborting (commits `b023713`, `t_819dd337`/`t_c7d8bcf7`). |
 | `scripts/deploy.sh` (39) | Resolves `CF_WORKERS_TOKEN` (Workers:Write scope — **not** `CF_API_TOKEN`) then `npx wrangler deploy`. |
 | `scripts/probe_mcp_surface.sh` (t_48f97251) | **Live /mcp surface probe + manifest drift gate** (`t_48f97251`). JSON-RPC `POST tools/list` round-trip to `https://x402-data-api.sigrunner.workers.dev/mcp` (streamable-HTTP SSE or plain JSON), extracts the returned tool names, diffs them as a **set** against `glama.json` `toolList` (server = truth). Prints `LIVE MCP PROBE: MATCH <count>` (exit 0) or `LIVE MCP PROBE: DRIFT missing:<…> extra:<…>` (exit 1); exit 2 = probe failure. Self-locating repo root — safe from any CWD (wrong-CWD failure class of `t_56ed3a6f`). Re-runnable 1-command gate that catches a tool drift (e.g. the 19→22 drift, which took 4 cards + blocked PR #10277) in a single run. `MCP_ENDPOINT` env overrides the target. |

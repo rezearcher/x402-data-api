@@ -11,6 +11,15 @@ Sources (read-only):
 
 Output:
   Overwrites .metrics/revenue_usd (sibling file) with the corrected float.
+
+OWNERSHIP NOTE (2026-10-28)
+  This script used to ALSO write .metrics/revenue_usd_corrected. It no longer does:
+  that metric is owned single-writer by .metrics/reconcile_live_revenue.py, which now
+  computes it from BOTH rails (on-chain x402 + Stripe fiat) and persists it to the gap
+  sensor. Two writers of one file meant the last cron to run silently decided the
+  milestone reading — this script's ledger-sidecar basis (0.005) could clobber the
+  two-rail value (0.80+) and report a flat line that was not real. See ARCHITECTURE.md
+  §"two writers of the same repo file". `revenue_usd` (ledger-derived) stays here.
 """
 
 import json
@@ -21,7 +30,6 @@ DATA_BASE = os.path.expanduser("~/.hermes/data")
 PLAY = "x402-data-api"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_PATH = os.path.join(SCRIPT_DIR, "revenue_usd")
-OUTPUT_PATH_CORRECTED = os.path.join(SCRIPT_DIR, "revenue_usd_corrected")
 
 
 def main():
@@ -74,17 +82,18 @@ def main():
     organic_total = round(organic_total, 6)
 
     # ── Write outputs ──────────────────────────────────────────────
+    # Single output on purpose: `revenue_usd_corrected` belongs to
+    # reconcile_live_revenue.py (two rails). Writing it here would clobber the
+    # milestone reading with this script's ledger-only basis.
     with open(OUTPUT_PATH, "w") as f:
-        f.write(f"{organic_total}\n")
-    with open(OUTPUT_PATH_CORRECTED, "w") as f:
         f.write(f"{organic_total}\n")
 
     print(f"revenue_usd={organic_total}")
-    print(f"revenue_usd_corrected={organic_total}")
     print(f"  external rows from ledger:   {counts['external_from_ledger']}")
     print(f"  probe-flagged rows deducted: {counts['probe_flagged']}")
     print(f"  organic rows remaining:      {counts['organic_remaining']}")
     print(f"  output: {OUTPUT_PATH}")
+    print("  (revenue_usd_corrected is produced by reconcile_live_revenue.py — x402 + fiat)")
 
 
 if __name__ == "__main__":

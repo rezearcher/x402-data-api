@@ -31,3 +31,6 @@ data/*_demand_lane.log
 # plugin build artifacts + local lockfiles (standalone repos carry their own committed dist)
 integrations/*/dist/
 integrations/*/package-lock.json
+
+# machine-state sidecar written by .metrics/reconcile_live_revenue.py (epoch; not source)
+.metrics/.revenue_usd_corrected_timestamp
