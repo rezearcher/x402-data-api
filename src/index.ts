@@ -5239,12 +5239,32 @@ function verdictFromScore(score: number): Verdict {
 // verdict so the two never disagree (F = block, C/D = review, A/B = clear). This is the
 // Grey Ridge Signals grade, not an external certification — label it as ours wherever
 // it is shown, never imply a third-party standard endorsed it.
-function mcpGrade(risk_score: number, hasCritical: boolean): "A" | "B" | "C" | "D" | "F" {
+export function mcpGrade(risk_score: number, hasCritical: boolean): "A" | "B" | "C" | "D" | "F" {
   if (hasCritical || risk_score >= 70) return "F";
   if (risk_score >= 50) return "D";
   if (risk_score >= 30) return "C";
   if (risk_score >= 10) return "B";
   return "A";
+}
+
+// Compare two A-F letter grades for the monitoring drift signal. Returns the
+// transition plus a signed direction so a subscriber's automation can route a
+// REGRESSION (A is best, F worst) differently from an improvement, and a human
+// alert can read "grade regressed B -> D (down 2)". `letters` is the magnitude
+// of the move on the 5-band scale (A=4 … F=0). Degrade-open: an unknown/absent
+// prior grade yields direction "unknown" with letters 0 (first baseline, never
+// a false "regressed"). Pure + exported so the unit corpus locks the mapping.
+export function mcpGradeDelta(
+  prev: string | null | undefined,
+  cur: string,
+): { from: string | null; to: string; direction: "improved" | "worsened" | "same" | "unknown"; letters: number } {
+  const rank: Record<string, number> = { A: 4, B: 3, C: 2, D: 1, F: 0 };
+  const to = cur;
+  const from = typeof prev === "string" && prev in rank ? prev : null;
+  if (from === null || !(to in rank)) return { from, to, direction: "unknown", letters: 0 };
+  const d = rank[to] - rank[from];
+  const direction = d > 0 ? "improved" : d < 0 ? "worsened" : "same";
+  return { from, to, direction, letters: Math.abs(d) };
 }
 
 // MCP-scan verdict + summary, shared by every scan site (GET/POST, paid + preview)
@@ -12261,6 +12281,12 @@ function grsgScheduleRevalidate(c: any, host: string, rec: any): void {
 function grsgPostureSummary(result: McpScanResult): {
   verdict: string;
   risk_score: number;
+  // A-F letter grade (our own SSL-Labs-style band, derived from risk_score +
+  // critical count) carried alongside the raw score so the monitoring timeline
+  // and drift alert can report a human-legible "grade regressed B -> D" the way
+  // Snyk/Detectify trend a letter/severity grade — far more actionable than a
+  // bare risk-score delta. Not a third-party certification; always our grade.
+  grade: "A" | "B" | "C" | "D" | "F";
   tools_scanned: number;
   classes: string[];
   by_severity: Record<string, number>;
@@ -12294,6 +12320,7 @@ function grsgPostureSummary(result: McpScanResult): {
   return {
     verdict: String(result.verdict),
     risk_score: result.risk_score,
+    grade: mcpGrade(result.risk_score, (by_severity.critical ?? 0) > 0),
     tools_scanned: result.tools_scanned,
     classes,
     by_severity,
@@ -12410,6 +12437,7 @@ async function grsgPostureDriftCheck(
             kind,
             verdict: summary.verdict,
             risk_score: summary.risk_score,
+            grade: summary.grade,
             tools_scanned: summary.tools_scanned,
             by_severity: summary.by_severity,
             // The sorted (tool|rule|severity) finding classes AT this transition.
@@ -12438,6 +12466,7 @@ async function grsgPostureDriftCheck(
       fp,
       verdict: summary.verdict,
       risk_score: summary.risk_score,
+      grade: summary.grade,
       tools_scanned: summary.tools_scanned,
       by_severity: summary.by_severity,
       classes: Array.isArray(summary.classes) ? summary.classes.slice(0, 60) : [],
@@ -12476,10 +12505,24 @@ async function grsgPostureDriftCheck(
           : directoryChanged
             ? "directory_readiness_changed"
             : "scan_verdict_changed";
+        // Letter-grade delta is the headline, human-legible drift signal: a prior
+        // baseline written before the grade field existed has no prev.grade, so we
+        // recompute it from the stored prev.risk_score + prev critical count rather
+        // than reporting "unknown" on the first post-upgrade regression.
+        const prevGrade =
+          typeof prev.grade === "string"
+            ? prev.grade
+            : typeof prev.risk_score === "number"
+              ? mcpGrade(prev.risk_score, (prev.by_severity?.critical ?? 0) > 0)
+              : null;
+        const gradeDelta = mcpGradeDelta(prevGrade, summary.grade);
         await grsgSendDriftAlert(c, host, updated, eventType, {
+          // "grade regressed B -> D (down 2)" — the first line a subscriber reads.
+          grade_delta: gradeDelta,
           previous: {
             verdict: prev.verdict ?? null,
             risk_score: prev.risk_score ?? null,
+            grade: prevGrade,
             tools_scanned: prev.tools_scanned ?? null,
             by_severity: prev.by_severity ?? null,
             directory: prev.directory
@@ -12489,6 +12532,7 @@ async function grsgPostureDriftCheck(
           current: {
             verdict: summary.verdict,
             risk_score: summary.risk_score,
+            grade: summary.grade,
             tools_scanned: summary.tools_scanned,
             by_severity: summary.by_severity,
             directory: {
@@ -12650,6 +12694,15 @@ app.get("/scan/verify/status", async (c) => {
       ? {
           verdict: rec.posture.verdict ?? null,
           risk_score: rec.posture.risk_score ?? null,
+          // A-F grade for the current baseline — recomputed from the stored score
+          // for records baselined before the field existed, so status is complete
+          // without waiting for the next re-scan. Our grade, not a certification.
+          grade:
+            typeof rec.posture.grade === "string"
+              ? rec.posture.grade
+              : typeof rec.posture.risk_score === "number"
+                ? mcpGrade(rec.posture.risk_score, (rec.posture.by_severity?.critical ?? 0) > 0)
+                : null,
           tools_scanned: rec.posture.tools_scanned ?? null,
           by_severity: rec.posture.by_severity ?? null,
           checked_at: rec.posture.checked_at ?? null,
