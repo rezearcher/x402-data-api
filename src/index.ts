@@ -11539,6 +11539,11 @@ pre{background:#0b1021;color:#e6edf3;padding:.8rem;border-radius:8px;overflow:au
 code{background:#eef2f7;padding:.1rem .35rem;border-radius:4px;font-size:.85em}
 .muted{color:var(--muted);font-size:.9rem}
 a{color:var(--accent)}
+.badgeblock{padding:.9rem 0;border-top:1px solid var(--line)}
+.badgeblock:first-of-type{border-top:0;padding-top:.2rem}
+.blabel{display:block;font-size:.9rem;margin:0 0 .5rem}
+.cprow{display:flex;align-items:center;gap:.6rem;margin:.6rem 0 0;flex-wrap:wrap}
+.cprow .muted{font-size:.8rem}
 footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);color:var(--muted);font-size:.82rem}
 </style>
 <body>
@@ -11546,7 +11551,7 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
 <p class=sub>Show the agents and developers who connect to your MCP server that its advertised tools are free of prompt-injection and tool-poisoning. The badge re-scans every six hours and links to the full audit.</p>
 
 <h2>Live example</h2>
-<p class=muted>A real public MCP server, scanned right now (static metadata only — we never call its tools):</p>
+<p class=muted>A real public MCP server, scanned right now (static metadata only — we never call its tools). Three badges your users can verify:</p>
 <div class=card>
   <div class=badge-row id=demo><span class=muted>loading…</span></div>
   <p class=muted style="margin:.6rem 0 0"><code>https://mcp.deepwiki.com/mcp</code></p>
@@ -11557,10 +11562,25 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
 <input id=u placeholder="https://your-server.example/mcp" autocomplete=off>
 <button id=b>Scan &amp; generate badge</button>
 <div class=card id=out style="display:none">
-  <div class=badge-row id=img></div>
-  <p style="margin:.6rem 0 0"><a id=rep href="#" target=_blank rel=noopener>View this server's full report &rarr;</a></p>
-  <div style="display:flex;align-items:center;gap:.6rem;margin:.8rem 0 0"><strong style="font-size:.85rem">README markdown</strong><button class=ghost id=copy>Copy</button></div>
-  <pre id=md></pre>
+  <p style="margin:0 0 .4rem"><a id=rep href="#" target=_blank rel=noopener>View this server's full report &rarr;</a></p>
+  <div class=badgeblock>
+    <strong class=blabel>Security verdict badge</strong>
+    <div class=badge-row id=img_sec></div>
+    <div class=cprow><button class=ghost data-copy=md_sec>Copy</button><span class=muted>Prompt-injection &amp; tool-poisoning scan, re-checked every 6h.</span></div>
+    <pre id=md_sec></pre>
+  </div>
+  <div class=badgeblock>
+    <strong class=blabel>Claude Directory readiness badge</strong>
+    <div class=badge-row id=img_dir></div>
+    <div class=cprow><button class=ghost data-copy=md_dir>Copy</button><span class=muted>Shows your server meets connector-directory submission criteria.</span></div>
+    <pre id=md_dir></pre>
+  </div>
+  <div class=badgeblock>
+    <strong class=blabel>Security rank badge</strong>
+    <div class=badge-row id=img_rank></div>
+    <div class=cprow><button class=ghost data-copy=md_rank>Copy</button><span class=muted>Your public rank among scanned MCP servers (once your report is published).</span></div>
+    <pre id=md_rank></pre>
+  </div>
 </div>
 
 <h2>Claim your server &amp; monitor it</h2>
@@ -11571,6 +11591,7 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
 
 <h2>What the verdict means</h2>
 <p class=muted><strong style="color:#16a34a">clear</strong> — no injection/poisoning patterns in any advertised tool. <strong style="color:#ca8a04">review</strong> — suspicious metadata worth a human look. <strong style="color:#dc2626">block</strong> — do not admit this server until resolved.</p>
+<p class=muted>This is static analysis of advertised tool metadata (OWASP LLM01/LLM08); &ldquo;clear&rdquo; is not a guarantee of safety — it means none of the patterns we check were present.</p>
 <p class=muted>Want the itemized findings — which tool, the injected text, the OWASP mapping (LLM01/LLM08) and remediation? That's the full audit: <code>GET /scan/mcp?url=…</code> ($0.05 USDC via x402), or zero-egress <code>POST /scan/mcp</code> with your <code>tools/list</code> for private servers.</p>
 
 <h2>Run it in your CI</h2>
@@ -11587,19 +11608,31 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
 
 <script>
 var ORIGIN=location.origin;
-function badgeSrc(target){return "https://img.shields.io/endpoint?url="+encodeURIComponent(ORIGIN+"/scan/mcp/badge?url="+encodeURIComponent(target))+"&style=flat-square";}
-function reportUrl(target){return ORIGIN+"/scan/report?url="+encodeURIComponent(target);}
-function render(el,target,withLink){var src=badgeSrc(target);var img='<img alt="MCP scan verdict" src="'+src+'">';el.innerHTML=withLink?'<a href="'+reportUrl(target)+'">'+img+'</a>':img;return src;}
-render(document.getElementById("demo"),"https://mcp.deepwiki.com/mcp",true);
-var md=document.getElementById("md"),out=document.getElementById("out");
+var HUB="https://rezearcher.github.io/greyridge-x402-tools/mcp-server-scorecards.html";
+function shields(path){return "https://img.shields.io/endpoint?url="+encodeURIComponent(ORIGIN+path)+"&style=flat-square";}
+function secSrc(t){return shields("/scan/mcp/badge?url="+encodeURIComponent(t));}
+function dirSrc(t){return shields("/scan/verify/badge?kind=directory&url="+encodeURIComponent(t));}
+function rankSrc(t){return shields("/scan/leaderboard/rank-badge?url="+encodeURIComponent(t));}
+function reportUrl(t){return ORIGIN+"/scan/report?url="+encodeURIComponent(t);}
+function linkImg(src,href,alt){return '<a href="'+href+'"><img alt="'+alt+'" src="'+src+'"></a>';}
+// Live example: render all three badges in one row.
+(function(){var t="https://mcp.deepwiki.com/mcp";var r=reportUrl(t);
+document.getElementById("demo").innerHTML=linkImg(secSrc(t),r,"MCP security verdict")+" "+linkImg(dirSrc(t),r,"Claude Directory readiness")+" "+linkImg(rankSrc(t),HUB,"MCP security rank");})();
+var out=document.getElementById("out");
 function go(){var t=document.getElementById("u").value.trim();if(!/^https?:\\/\\//.test(t)){document.getElementById("u").focus();return;}
-out.style.display="block";var src=render(document.getElementById("img"),t,true);
-var rep=document.getElementById("rep");if(rep)rep.href=reportUrl(t);
-var cl=document.getElementById("claim");if(cl)cl.href=ORIGIN+"/scan/verify?url="+encodeURIComponent(t);
-md.textContent="[![MCP security]("+src+")]("+reportUrl(t)+")";}
+out.style.display="block";
+var r=reportUrl(t),sec=secSrc(t),dir=dirSrc(t),rank=rankSrc(t);
+document.getElementById("img_sec").innerHTML=linkImg(sec,r,"MCP security verdict");
+document.getElementById("img_dir").innerHTML=linkImg(dir,r,"Claude Directory readiness");
+document.getElementById("img_rank").innerHTML=linkImg(rank,HUB,"MCP security rank");
+document.getElementById("md_sec").textContent="[![MCP security]("+sec+")]("+r+")";
+document.getElementById("md_dir").textContent="[![Claude Directory readiness]("+dir+")]("+r+")";
+document.getElementById("md_rank").textContent="[![MCP Security Rank]("+rank+")]("+HUB+")";
+var rep=document.getElementById("rep");if(rep)rep.href=r;
+var cl=document.getElementById("claim");if(cl)cl.href=ORIGIN+"/scan/verify?url="+encodeURIComponent(t);}
 document.getElementById("b").onclick=go;
 document.getElementById("u").addEventListener("keydown",function(e){if(e.key==="Enter")go();});
-document.getElementById("copy").onclick=function(){navigator.clipboard&&navigator.clipboard.writeText(md.textContent);this.textContent="Copied";var b=this;setTimeout(function(){b.textContent="Copy";},1400);};
+Array.prototype.forEach.call(document.querySelectorAll("button.ghost[data-copy]"),function(btn){btn.onclick=function(){var tgt=document.getElementById(btn.getAttribute("data-copy"));if(!tgt)return;navigator.clipboard&&navigator.clipboard.writeText(tgt.textContent);btn.textContent="Copied";setTimeout(function(){btn.textContent="Copy";},1400);};});
 var sub=document.getElementById("sub");
 if(sub)sub.onclick=async function(){sub.disabled=true;var o=sub.textContent;sub.textContent="Opening checkout…";try{var r=await fetch("/stripe/create-checkout-session",{method:"POST"});var j=await r.json();if(j.url){window.location.href=j.url;return;}alert("Could not start checkout: "+(j.error||"unknown"));}catch(e){alert("Could not start checkout: "+e);}sub.disabled=false;sub.textContent=o;};
 </script>`;
