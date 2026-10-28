@@ -66,7 +66,7 @@ const FORCE = process.argv.includes('--force'); // bypass cooldown only, never t
 // (`scam`, `honeypot`, `rug-pull`).
 const ROUTE_META = {
   route: '/chain/token-security',
-  desc: 'Is this Base token a honeypot or rug-pull / scam risk? Token safety & security scan for a Base ERC-20: honeypot & sellability simulation, proxy/upgradeability check, mint/pause/blacklist/fee-setter bytecode scan, ownership-renounced check, measured transfer tax. Returns a 0-100 risk score, verdict and flags. A pre-trade token safety check for agents before buying or approving a Base ERC-20.',
+  desc: 'Is this Base token a scam or rug pull? Honeypot detector for a Base ERC-20: EIP-1967 proxy + upgradeability check, bytecode scan for mint/pause/blacklist/fee-setter/ownership, owner() renouncement, and a live eth_call state-override sim proving a real wallet can transfer() it. Returns risk_score (0-100) + verdict (clear/review/block) + honeypot/scam/rug flags. Use before an agent buys, holds or approves a token.',
   serviceName: 'Base Token Safety & Honeypot Scanner',
   tags: ['token-safety', 'token-security', 'honeypot', 'rug-check', 'scam-check', 'pre-trade', 'base', 'evm', 'smart-contract', 'security'],
   disc: {
