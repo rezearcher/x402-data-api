@@ -18,7 +18,7 @@ import { register } from "node:module";
 
 register(new URL("./cfw-hooks.mjs", import.meta.url));
 
-const { matchesProjectFamily } = await import("../src/index.ts");
+const { matchesProjectFamily, resolveProtocolFamily } = await import("../src/index.ts");
 
 let pass = 0;
 const ok = (cond, msg) => { assert.ok(cond, msg); pass++; };
@@ -51,4 +51,23 @@ ok(!matchesProjectFamily("aave-v3", "uniswap"), "wrong family does not cross-mat
 // Empty filter matches everything (no project query -> unfiltered).
 ok(matchesProjectFamily("aave-v3", ""), "empty query matches all");
 
-console.log(`defi_yields project-family contract: ${pass}/${pass} checks passed`);
+// --- /defi/protocol-risk family resolution (same convention, $0.01 route) ---
+// protocol=aave must resolve the highest-TVL version instead of 404-ing.
+const protos = [
+  { slug: "aave-v3", tvl: 20e9 },
+  { slug: "aave-v4", tvl: 1e9 },
+  { slug: "uniswap-v3", tvl: 5e9 },
+  { slug: "lido", tvl: 30e9 },
+  { slug: "curve-dex", tvl: 2e9 },
+];
+ok(resolveProtocolFamily(protos, "aave")?.slug === "aave-v3", "protocol aave -> highest-TVL aave-v3");
+ok(resolveProtocolFamily(protos, "uniswap")?.slug === "uniswap-v3", "protocol uniswap -> uniswap-v3");
+ok(resolveProtocolFamily(protos, "curve")?.slug === "curve-dex", "protocol curve -> curve-dex");
+ok(resolveProtocolFamily(protos, "aave-v4")?.slug === "aave-v4", "exact slug aave-v4 preserved");
+ok(resolveProtocolFamily(protos, "lido")?.slug === "lido", "exact slug lido preserved");
+ok(resolveProtocolFamily(protos, "AAVE")?.slug === "aave-v3", "protocol query case-insensitive");
+ok(resolveProtocolFamily(protos, "uni") === undefined, "protocol uni does NOT over-match uniswap");
+ok(resolveProtocolFamily(protos, "zzznotreal") === undefined, "bogus protocol -> undefined (404)");
+ok(resolveProtocolFamily(protos, "") === undefined, "empty protocol -> undefined");
+
+console.log(`defi_yields + protocol-risk family contract: ${pass}/${pass} checks passed`);

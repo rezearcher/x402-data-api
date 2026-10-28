@@ -225,7 +225,7 @@ const ROUTE_CATALOG: Array<[string, string, string, string, string, string[]]> =
   ["/crypto/categories", "GET", "0.003", "3000", "Crypto sector performance (CoinGecko categories): market cap, 24h change, volume per sector, top by market cap. No params. Use when an agent needs sector rotation signals.", ["crypto", "sectors", "categories", "data"]],
   ["/defi/hacks-recent", "GET", "0.003", "3000", "Most recent DeFi/crypto hacks and exploits (DefiLlama): date, name, amount lost USD, chain, technique, bridge-hack flag; ?limit= up to 50. No required params. Use when an agent needs live security-incident risk signals.", ["defi", "security", "hacks", "exploits", "data"]],
   ["/crypto/derivatives-exchanges", "GET", "0.003", "3000", "Top crypto derivatives exchanges (CoinGecko): open interest BTC, 24h volume BTC, perpetual and futures pair counts, year established. No params. Use when an agent needs perp/futures venue liquidity data.", ["crypto", "derivatives", "futures", "open-interest", "data"]],
-  ["/defi/protocol-risk", "GET", "0.01", "10000", "Protocol risk score from DefiLlama: joins TVL, 1d/7d TVL change, age, audits, chain count and matching hack history into one 0-100 score with flags; ?protocol=<slug> (default aave-v3). Use when an agent needs a due-diligence check before routing funds to a DeFi protocol.", ["defi", "risk", "security", "due-diligence", "data"]],
+  ["/defi/protocol-risk", "GET", "0.01", "10000", "Protocol risk score from DefiLlama: joins TVL, 1d/7d TVL change, age, audits, chain count and matching hack history into one 0-100 score with flags; ?protocol= accepts a family name (aave, uniswap) that resolves to the highest-TVL version, or an exact slug (default aave-v3). Use when an agent needs a due-diligence check before routing funds to a DeFi protocol.", ["defi", "risk", "security", "due-diligence", "data"]],
   ["/defi/safe-yields", "GET", "0.01", "10000", "Vetted stablecoin yields: top stablecoin pools (DefiLlama, TVL>$5M, APY 1-25%) joined with each protocol's age and hack history, safest-yield first; optional ?chain= & ?limit=. No required params. Use when an agent needs where to park stablecoins with due-diligence already applied.", ["defi", "yield", "stablecoin", "risk", "data"]],
   ["/defi/yields-top", "GET", "0.003", "3000", "Top DeFi yield pools by TVL (DefiLlama): chain, project, symbol, APY, TVL USD; optional ?chain= & ?stable=true. Use when an agent needs where to earn yield.", ["defi", "yield", "apy", "data"]],
   ["/ai/classify", "GET", "0.003", "3000", "Zero-shot text classification (Llama 3.2 3B): ?text=<up to 1000 chars>&labels=<comma-separated labels, 2-10> returns the single best label. Use when an agent needs to route or tag text (intent, sentiment, topic, spam) in one cheap call.", ["ai", "llm", "classification", "text", "data"]],
@@ -2182,7 +2182,7 @@ app.get("/openapi.json", (c) => {
       "/crypto/categories": paid("Crypto sector performance (CoinGecko categories).", "0.003", []),
       "/defi/hacks-recent": paid("Most recent DeFi hacks and exploits (DefiLlama).", "0.003", [{ name: "limit", desc: "optional, max 50", example: "10" }]),
       "/crypto/derivatives-exchanges": paid("Top crypto derivatives exchanges (CoinGecko).", "0.003", []),
-      "/defi/protocol-risk": paid("DeFi protocol risk score (TVL, age, audits, hacks).", "0.01", [{ name: "protocol", desc: "DefiLlama slug, default aave-v3", example: "aave-v3" }]),
+      "/defi/protocol-risk": paid("DeFi protocol risk score (TVL, age, audits, hacks).", "0.01", [{ name: "protocol", desc: "protocol family name (aave, uniswap) resolves highest-TVL version, or exact slug; default aave-v3", example: "aave" }]),
       "/defi/safe-yields": paid("Vetted stablecoin yields with protocol age and hack flags (DefiLlama).", "0.01", [{ name: "chain", desc: "optional chain filter", example: "Ethereum" }, { name: "limit", desc: "optional, max 30", example: "10" }]),
       "/defi/yields-top": paid("Top DeFi yield pools by TVL (DefiLlama).", "0.003", [{ name: "chain", desc: "optional chain filter", example: "Ethereum" }, { name: "stable", desc: "true = stablecoin pools only", example: "true" }, { name: "limit", desc: "optional", example: "20" }]),
       "/ai/classify": paid("Classify text into one of your labels.", "0.003", [{ name: "text", desc: "text, max 1000 chars", required: true, example: "My card was charged twice" }, { name: "labels", desc: "comma-separated labels, 2-10", required: true, example: "billing,bug,feature_request,other" }]),
@@ -3390,12 +3390,12 @@ export function makeRoutes(payTo: string) {
     },
     "GET /defi/protocol-risk": {
       accepts: { scheme: "exact" as const, price: "$0.01", network: NETWORK, payTo },
-      description: "Protocol risk score from DefiLlama: joins TVL, 1d/7d TVL change, age, audits, chain count and matching hack history into one 0-100 score with flags; ?protocol=<slug> (default aave-v3). Use when an agent needs a due-diligence check before routing funds to a DeFi protocol.",
+      description: "Protocol risk score from DefiLlama: joins TVL, 1d/7d TVL change, age, audits, chain count and matching hack history into one 0-100 score with flags; ?protocol= accepts a family name (aave, uniswap) that resolves to the highest-TVL version, or an exact slug (default aave-v3). Use when an agent needs a due-diligence check before routing funds to a DeFi protocol.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
         input: { protocol: "aave-v3" },
-        inputSchema: { type: "object", properties: { protocol: { type: "string", description: "DefiLlama slug, default aave-v3" } } },
+        inputSchema: { type: "object", properties: { protocol: { type: "string", description: "Protocol family name (aave, uniswap) resolves the highest-TVL version, or an exact DefiLlama slug; default aave-v3" } } },
         output: { example: { protocol: "aave-v3", risk_score: 82, flags: [] } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
@@ -7137,14 +7137,36 @@ app.get("/crypto/derivatives-exchanges", async (c) => {
   }
 });
 
+// Resolve a DefiLlama protocol by exact slug, else by family name, picking the
+// highest-TVL version in the family. Shares the "<family>-<version>" convention
+// with matchesProjectFamily: "aave" -> aave-v3 (higher TVL than aave-v4), but
+// "uni" does NOT match "uniswap" and a bogus name resolves to undefined (404).
+export function resolveProtocolFamily<T extends { slug: string; tvl: number | null }>(
+  protos: T[],
+  slug: string,
+): T | undefined {
+  const q = slug.trim().toLowerCase();
+  if (!q) return undefined;
+  const exact = protos.find((x) => x.slug.toLowerCase() === q);
+  if (exact) return exact;
+  return protos
+    .filter((x) => x.slug.toLowerCase().startsWith(`${q}-`))
+    .sort((a, b) => (b.tvl ?? 0) - (a.tvl ?? 0))[0];
+}
+
 async function protocolRisk(c: any, paid: boolean) {
   try {
     const slug = paid ? (c.req.query("protocol") ?? "aave-v3").trim().toLowerCase().slice(0, 80) : "aave-v3";
     const [pr, hr] = await Promise.all([fetch("https://api.llama.fi/protocols"), fetch("https://api.llama.fi/hacks")]);
     if (!pr.ok) return c.json({ error: "upstream " + pr.status }, { status: 502 });
     const protos = (await pr.json()) as Array<{ id: string; parentProtocol?: string; name: string; slug: string; tvl: number | null; change_1d: number | null; change_7d: number | null; category: string | null; chains: string[]; audits: string | null; listedAt: number | null }>;
-    const p = protos.find((x) => x.slug === slug);
-    if (!p) return c.json({ error: "unknown protocol slug", hint: "use a DefiLlama slug e.g. aave-v3, uniswap-v3, lido" }, { status: 404 });
+    // Resolve by exact slug first, then fall back to the protocol family name.
+    // DefiLlama namespaces as "<family>-<version>" (aave-v3, uniswap-v3), so an
+    // agent asking for protocol=aave must not 404 on a paid route — pick the
+    // highest-TVL version in the family. Trailing dash keeps it precise ("uni"
+    // will not match "uniswap") and degrade-open (a bogus name still 404s).
+    const p = resolveProtocolFamily(protos, slug);
+    if (!p) return c.json({ error: "unknown protocol slug", hint: "use a protocol family name (aave, uniswap) or an exact DefiLlama slug (aave-v3, lido)" }, { status: 404 });
     const hacks = hr.ok ? ((await hr.json()) as Array<{ date: number; name: string; amount: number | null; defillamaId?: string | null; parentProtocolId?: string | null }>) : [];
     const mine = hacks.filter((h) => (h.defillamaId != null && String(h.defillamaId) === String(p.id)) || (!!p.parentProtocol && h.parentProtocolId === p.parentProtocol)).sort((a, b) => b.date - a.date);
     const tvl = p.tvl ?? 0;
