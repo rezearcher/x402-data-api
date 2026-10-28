@@ -9,8 +9,16 @@ Drop-in LangChain tools wrapping Grey Ridge's live x402 data routes:
 | `defiYields` | `/defi/yields` | $0.001 | Top lending/LP pools: project, chain, symbol, APY + 1d/7d/30d trend, IL risk, TVL, risk-adjusted score |
 | `cryptoPrices` | `/crypto/prices` | $0.001 | Spot price, 24h change, symbol, confidence (≤25 CoinGecko ids) |
 | `baseBalance` | `/chain/balance` | $0.002 | Native ETH balance + `balance_usd` for a Base address |
+| `baseGasPrice` | `/chain/gas-price` | $0.002 | Base EIP-1559 gas: `base_fee_gwei`, `priority_fee_gwei`, `gas_price_gwei/_wei`, `gas_price_usd` |
+| `baseBlockNumber` | `/chain/block-number` | $0.002 | Current Base mainnet block height |
+| `baseTokenBalance` | `/chain/token-balance` | $0.002 | ERC-20 balance of a Base address: `symbol`, `decimals`, `balance`, `balance_formatted` (`token` defaults to USDC) |
 
 Upstream data is DefiLlama + Base RPC, served from a sub-cent Cloudflare Worker.
+
+`baseGasPrice`, `baseBlockNumber` and `baseTokenBalance` back a keyless install
+with the **real live value**: their free preview is identical to the paid route,
+so an agent with no wallet still gets the true gas price, block height and token
+balance (never a stub); a funded wallet moves the read onto the metered paid route.
 
 ## Install
 

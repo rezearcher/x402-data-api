@@ -1,6 +1,6 @@
 {
   "name": "@grey-ridge/vercel-ai-defi-data",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "DeFi yields, token prices and Base balances for Vercel AI SDK trading agents — paid inline per call with x402 USDC on Base ($0.001/call), no API key. Drop-in tools wrapping Grey Ridge /defi/yields, /crypto/prices and /chain/balance; degrade open to a free preview.",
   "type": "module",
   "main": "dist/index.js",

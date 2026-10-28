@@ -288,3 +288,174 @@ export async function runBalance(payFetch, args = {}, { hasKey = true } = {}) {
     return { error: msg, address: args.address, paid: false, summary: `ERROR: ${msg}` };
   }
 }
+
+// --------------------------------------------------------------------------
+// Base-RPC read routes — gas-price, block-number, token-balance
+// --------------------------------------------------------------------------
+// These three expose a FREE preview that returns the SAME full live data as the
+// paid route: gas-price and block-number are byte-identical; token-balance
+// returns the real balance for the caller's own address+token. So a keyless
+// install gets REAL on-chain data — never a 1-row sample and never a fabricated
+// number; a funded wallet simply moves the read onto the metered paid route.
+
+/** USDC on Base — the default token for a token-balance read when none is given (mirrors the server preview default). */
+export const BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+
+/** Build the paid /chain/gas-price URL. */
+export function buildGasPriceUrl({ base = DATA_BASE } = {}) {
+  return `${base}/chain/gas-price`;
+}
+/** Build the FREE /chain/gas-price/preview URL (full live data, identical to paid). */
+export function buildGasPricePreviewUrl({ base = DATA_BASE } = {}) {
+  return `${base}/chain/gas-price/preview`;
+}
+
+/** Build the paid /chain/block-number URL. */
+export function buildBlockNumberUrl({ base = DATA_BASE } = {}) {
+  return `${base}/chain/block-number`;
+}
+/** Build the FREE /chain/block-number/preview URL (full live data, identical to paid). */
+export function buildBlockNumberPreviewUrl({ base = DATA_BASE } = {}) {
+  return `${base}/chain/block-number/preview`;
+}
+
+/** Build the paid /chain/token-balance URL. Throws on a malformed address/token so a bad call never silently costs a payment. */
+export function buildTokenBalanceUrl({ address, token = BASE_USDC, base = DATA_BASE } = {}) {
+  if (!ADDR_RE.test(String(address || ""))) throw new Error(`invalid Base address: ${address}`);
+  if (!ADDR_RE.test(String(token || ""))) throw new Error(`invalid Base token address: ${token}`);
+  const qs = new URLSearchParams({ address, token });
+  return `${base}/chain/token-balance?${qs.toString()}`;
+}
+/** Build the FREE /chain/token-balance/preview URL (returns the real balance for the given address+token). */
+export function buildTokenBalancePreviewUrl({ address, token = BASE_USDC, base = DATA_BASE } = {}) {
+  if (!ADDR_RE.test(String(address || ""))) throw new Error(`invalid Base address: ${address}`);
+  if (!ADDR_RE.test(String(token || ""))) throw new Error(`invalid Base token address: ${token}`);
+  const qs = new URLSearchParams({ address, token });
+  return `${base}/chain/token-balance/preview?${qs.toString()}`;
+}
+
+function gwei(n) {
+  if (typeof n !== "number" || !Number.isFinite(n)) return null;
+  return `${n < 0.001 && n > 0 ? n.toExponential(2) : n.toFixed(n < 1 ? 4 : 2)} gwei`;
+}
+
+/** One-line summary of a /chain/gas-price object. */
+export function summarizeGasPrice(out) {
+  if (!out || typeof out !== "object" || out.gas_price_gwei == null) return "no gas price";
+  const bits = [];
+  const g = gwei(Number(out.gas_price_gwei));
+  if (g) bits.push(`gas ${g}`);
+  const bf = gwei(typeof out.base_fee_gwei === "number" ? out.base_fee_gwei : NaN);
+  if (bf) bits.push(`base ${bf}`);
+  const pf = gwei(typeof out.priority_fee_gwei === "number" ? out.priority_fee_gwei : NaN);
+  if (pf) bits.push(`priority ${pf}`);
+  return `Base ${bits.join(" · ") || "gas price"}`;
+}
+
+/** One-line summary of a /chain/block-number object. */
+export function summarizeBlockNumber(out) {
+  if (!out || typeof out !== "object" || out.block_number == null) return "no block number";
+  return `Base mainnet block #${Number(out.block_number).toLocaleString("en-US")}`;
+}
+
+/** One-line summary of a /chain/token-balance object. */
+export function summarizeTokenBalance(out) {
+  if (!out || typeof out !== "object" || out.balance == null) return "no token balance";
+  const sym = out.symbol || "token";
+  const addr = out.address ? `${String(out.address).slice(0, 10)}…` : "address";
+  const bal = Number(out.balance);
+  const amt = Number.isFinite(bal)
+    ? bal.toLocaleString("en-US", { maximumFractionDigits: 6 })
+    : out.balance_formatted;
+  return `${addr} holds ${amt} ${sym} on Base`;
+}
+
+/**
+ * Shared runner for the two "full-preview" Base-RPC reads (gas-price,
+ * block-number) whose free preview is byte-identical to the paid route. Keyless
+ * or 402 → the preview (real full data, `paid:false` + activation); funded →
+ * the metered paid route. Never throws into the agent runtime.
+ */
+async function runFullPreviewRead(payFetch, { paidUrl, previewUrl, summarize, priceUsdc, label }, { hasKey, previewFetch }) {
+  try {
+    if (hasKey) {
+      const res = await payFetch(paidUrl);
+      if (res.ok || res.status === 200) {
+        const out = await res.json();
+        return { ...out, paid: true, summary: summarize(out) };
+      }
+      const reason = res.status === 402 ? `wallet not funded (paid ${label} returned 402)` : `paid ${label} returned HTTP ${res.status}`;
+      const out = await plainGet(previewFetch, previewUrl);
+      return { ...out, paid: false, summary: summarize(out), activation: activationBlock(reason, { paidUrl, priceUsdc }) };
+    }
+    const out = await plainGet(previewFetch, previewUrl);
+    return {
+      ...out,
+      paid: false,
+      summary: summarize(out),
+      activation: activationBlock("no PRIVATE_KEY configured — free preview returns identical full data", { paidUrl, priceUsdc }),
+    };
+  } catch (err) {
+    const msg = `${label} unavailable: ${err?.message || err}`;
+    return { error: msg, paid: false, summary: `ERROR: ${msg}` };
+  }
+}
+
+/** Run /chain/gas-price (Base EIP-1559 gas, base/priority fee, gas_price_usd). Keyless gets the real price via the identical free preview. Returns the gas object + `summary` (+ `paid`, + `activation` on the free path). */
+export async function runGasPrice(payFetch, args = {}, { hasKey = true, previewFetch } = {}) {
+  return runFullPreviewRead(
+    payFetch,
+    { paidUrl: buildGasPriceUrl(args), previewUrl: buildGasPricePreviewUrl(args), summarize: summarizeGasPrice, priceUsdc: "0.002", label: "/chain/gas-price" },
+    { hasKey, previewFetch },
+  );
+}
+
+/** Run /chain/block-number (current Base mainnet block). Keyless gets the real block via the identical free preview. Returns `{ block_number, chain, summary, paid, activation? }`. */
+export async function runBlockNumber(payFetch, args = {}, { hasKey = true, previewFetch } = {}) {
+  return runFullPreviewRead(
+    payFetch,
+    { paidUrl: buildBlockNumberUrl(args), previewUrl: buildBlockNumberPreviewUrl(args), summarize: summarizeBlockNumber, priceUsdc: "0.002", label: "/chain/block-number" },
+    { hasKey, previewFetch },
+  );
+}
+
+/**
+ * Run /chain/token-balance (ERC-20 balance of a Base address). The free preview
+ * returns the REAL balance for the caller's own address+token, so a keyless
+ * install gets a real number (never a fabricated one). `token` defaults to USDC.
+ * Never throws into the agent runtime.
+ */
+export async function runTokenBalance(payFetch, args = {}, { hasKey = true, previewFetch } = {}) {
+  const resolved = { ...args, token: args.token || BASE_USDC };
+  let paidUrl;
+  let previewUrl;
+  try {
+    paidUrl = buildTokenBalanceUrl(resolved);
+    previewUrl = buildTokenBalancePreviewUrl(resolved);
+  } catch (err) {
+    const msg = `chain/token-balance unavailable: ${err?.message || err}`;
+    return { error: msg, address: args.address, token: resolved.token, paid: false, summary: `ERROR: ${msg}` };
+  }
+  try {
+    if (hasKey) {
+      const res = await payFetch(paidUrl);
+      if (res.ok || res.status === 200) {
+        const out = await res.json();
+        return { ...out, paid: true, summary: summarizeTokenBalance(out) };
+      }
+      const reason = res.status === 402 ? "wallet not funded (paid /chain/token-balance returned 402)" : `paid /chain/token-balance returned HTTP ${res.status}`;
+      const out = await plainGet(previewFetch, previewUrl);
+      return { ...out, paid: false, summary: summarizeTokenBalance(out), activation: activationBlock(reason, { paidUrl, priceUsdc: "0.002" }) };
+    }
+    const out = await plainGet(previewFetch, previewUrl);
+    return {
+      ...out,
+      paid: false,
+      summary: summarizeTokenBalance(out),
+      activation: activationBlock("no PRIVATE_KEY configured — free preview returns the real balance", { paidUrl, priceUsdc: "0.002" }),
+    };
+  } catch (err) {
+    const msg = `chain/token-balance unavailable: ${err?.message || err}`;
+    return { error: msg, address: args.address, token: resolved.token, paid: false, summary: `ERROR: ${msg}` };
+  }
+}

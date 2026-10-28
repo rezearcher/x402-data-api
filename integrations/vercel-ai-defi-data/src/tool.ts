@@ -3,7 +3,7 @@ import { z } from "zod";
 import { makePayFetch, type PayFetch } from "./client.js";
 // Core fetch/shaping logic lives in a dependency-free module so it is unit-
 // tested without the AI SDK runtime. Imported with the .mjs extension on purpose.
-import { runYields, runPrices, runBalance, DATA_BASE } from "./data.mjs";
+import { runYields, runPrices, runBalance, runGasPrice, runBlockNumber, runTokenBalance, BASE_USDC, DATA_BASE } from "./data.mjs";
 
 function envKey(): string | undefined {
   return typeof process !== "undefined" ? process.env?.PRIVATE_KEY : undefined;
@@ -112,10 +112,78 @@ export function createBaseBalance(opts: DataToolOptions = {}) {
   });
 }
 
+/**
+ * Vercel AI SDK tool: current Base mainnet gas price via Grey Ridge
+ * `/chain/gas-price` ($0.002 USDC/call, paid inline with x402 — no API key).
+ * Returns EIP-1559 base_fee_gwei / priority_fee_gwei, gas_price_gwei/_wei and
+ * gas_price_usd. The free preview is byte-identical to the paid route, so a
+ * keyless install gets the REAL live gas price (never a stub). Use to decide
+ * when a Base transaction is cheap to send.
+ */
+export function createBaseGasPrice(opts: DataToolOptions = {}) {
+  const { base, payFetch, hasKey } = resolve(opts);
+  return tool({
+    description:
+      "Current Base mainnet gas price via Grey Ridge /chain/gas-price ($0.002 USDC/call, paid inline with x402 — no API key). Returns EIP-1559 base_fee_gwei, priority_fee_gwei, gas_price_gwei/_wei and gas_price_usd. Use to time a Base transaction around cheap gas.",
+    inputSchema: z.object({}),
+    execute: async () => runGasPrice(payFetch, { base }, { hasKey }),
+  });
+}
+
+/**
+ * Vercel AI SDK tool: current Base mainnet block number via Grey Ridge
+ * `/chain/block-number` ($0.002 USDC/call, paid inline with x402 — no API key).
+ * The free preview is byte-identical to the paid route, so a keyless install
+ * gets the REAL current block. Use for chain height / confirmation math.
+ */
+export function createBaseBlockNumber(opts: DataToolOptions = {}) {
+  const { base, payFetch, hasKey } = resolve(opts);
+  return tool({
+    description:
+      "Current Base mainnet block number via Grey Ridge /chain/block-number ($0.002 USDC/call, paid inline with x402 — no API key). Use for chain height or confirmation math.",
+    inputSchema: z.object({}),
+    execute: async () => runBlockNumber(payFetch, { base }, { hasKey }),
+  });
+}
+
+/**
+ * Vercel AI SDK tool: ERC-20 token balance of a Base address via Grey Ridge
+ * `/chain/token-balance` ($0.002 USDC/call, paid inline with x402 — no API key).
+ * Returns symbol, decimals and the formatted balance. The free preview returns
+ * the REAL balance for the given address+token, so a keyless install gets a real
+ * number (never fabricated). `token` defaults to USDC on Base.
+ */
+export function createBaseTokenBalance(opts: DataToolOptions = {}) {
+  const { base, payFetch, hasKey } = resolve(opts);
+  return tool({
+    description:
+      "ERC-20 token balance of a Base mainnet address via Grey Ridge /chain/token-balance ($0.002 USDC/call, paid inline with x402 — no API key). Returns symbol, decimals, balance and balance_formatted. token defaults to USDC on Base.",
+    inputSchema: z.object({
+      address: z.string().describe("0x-prefixed Base mainnet address to read the balance of (40 hex chars)."),
+      token: z
+        .string()
+        .optional()
+        .describe(`0x-prefixed ERC-20 contract on Base. Defaults to USDC (${BASE_USDC}).`),
+    }),
+    execute: async ({ address, token }: { address: string; token?: string }) =>
+      runTokenBalance(payFetch, { address, token, base }, { hasKey }),
+  });
+}
+
 /** Zero-config tool instances: read `PRIVATE_KEY` (agent wallet) + optional `X402_DATA_BASE_URL` from env. */
 export const defiYields = createDefiYields({ privateKey: envKey(), base: envBase() });
 export const cryptoPrices = createCryptoPrices({ privateKey: envKey(), base: envBase() });
 export const baseBalance = createBaseBalance({ privateKey: envKey(), base: envBase() });
+export const baseGasPrice = createBaseGasPrice({ privateKey: envKey(), base: envBase() });
+export const baseBlockNumber = createBaseBlockNumber({ privateKey: envKey(), base: envBase() });
+export const baseTokenBalance = createBaseTokenBalance({ privateKey: envKey(), base: envBase() });
 
-/** All three data tools as a ready-to-spread toolset: `tools: { ...defiDataTools }`. */
-export const defiDataTools = { defiYields, cryptoPrices, baseBalance };
+/** All six data tools as a ready-to-spread toolset: `tools: { ...defiDataTools }`. */
+export const defiDataTools = {
+  defiYields,
+  cryptoPrices,
+  baseBalance,
+  baseGasPrice,
+  baseBlockNumber,
+  baseTokenBalance,
+};

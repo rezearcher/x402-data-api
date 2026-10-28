@@ -129,3 +129,80 @@ export declare function runBalance(
   args?: BalanceArgs,
   opts?: { hasKey?: boolean }
 ): Promise<BalanceResult>;
+
+// --- Base-RPC read routes: gas-price, block-number, token-balance ---
+
+export declare const BASE_USDC: string;
+
+export interface ReadArgs {
+  base?: string;
+}
+export interface TokenBalanceArgs {
+  address: string;
+  token?: string;
+  base?: string;
+}
+
+export interface GasPriceResponse {
+  gas_price_wei?: string;
+  gas_price_gwei?: number;
+  base_fee_gwei?: number | null;
+  priority_fee_gwei?: number | null;
+  gas_price_usd?: number | null;
+  chain?: string;
+  note?: string;
+  [k: string]: unknown;
+}
+export interface BlockNumberResponse {
+  block_number?: number;
+  chain?: string;
+  note?: string;
+  [k: string]: unknown;
+}
+export interface TokenBalanceResponse {
+  address?: string;
+  token?: string;
+  symbol?: string;
+  name?: string;
+  decimals?: number | null;
+  balance_raw?: string;
+  balance?: number | null;
+  balance_formatted?: string | null;
+  chain?: string;
+  note?: string;
+  [k: string]: unknown;
+}
+
+export interface GasPriceResult extends GasPriceResponse {
+  summary: string;
+  paid: boolean;
+  activation?: Activation;
+  error?: string;
+}
+export interface BlockNumberResult extends BlockNumberResponse {
+  summary: string;
+  paid: boolean;
+  activation?: Activation;
+  error?: string;
+}
+export interface TokenBalanceResult extends TokenBalanceResponse {
+  summary: string;
+  paid: boolean;
+  activation?: Activation;
+  error?: string;
+}
+
+export declare function buildGasPriceUrl(args?: ReadArgs): string;
+export declare function buildGasPricePreviewUrl(args?: ReadArgs): string;
+export declare function buildBlockNumberUrl(args?: ReadArgs): string;
+export declare function buildBlockNumberPreviewUrl(args?: ReadArgs): string;
+export declare function buildTokenBalanceUrl(args?: TokenBalanceArgs): string;
+export declare function buildTokenBalancePreviewUrl(args?: TokenBalanceArgs): string;
+
+export declare function summarizeGasPrice(out: GasPriceResponse): string;
+export declare function summarizeBlockNumber(out: BlockNumberResponse): string;
+export declare function summarizeTokenBalance(out: TokenBalanceResponse): string;
+
+export declare function runGasPrice(payFetch: PayFetch, args?: ReadArgs, opts?: RunOpts): Promise<GasPriceResult>;
+export declare function runBlockNumber(payFetch: PayFetch, args?: ReadArgs, opts?: RunOpts): Promise<BlockNumberResult>;
+export declare function runTokenBalance(payFetch: PayFetch, args?: TokenBalanceArgs, opts?: RunOpts): Promise<TokenBalanceResult>;

@@ -10,8 +10,17 @@ sign-up. Your agent's own wallet signs a sub-cent micropayment per call.
 | `defiYields` | `/defi/yields` | **$0.001** | Ranked lending/LP pools — project, chain, symbol, APY + 1d/7d/30d trend, IL risk, TVL, risk-adjusted score |
 | `cryptoPrices` | `/crypto/prices` | **$0.001** | Spot price, 24h change, symbol, confidence, timestamp (up to 25 tokens) |
 | `baseBalance` | `/chain/balance` | **$0.002** | ETH balance of a Base address incl. `balance_usd` |
+| `baseGasPrice` | `/chain/gas-price` | **$0.002** | Base EIP-1559 gas — `base_fee_gwei`, `priority_fee_gwei`, `gas_price_gwei/_wei`, `gas_price_usd` |
+| `baseBlockNumber` | `/chain/block-number` | **$0.002** | Current Base mainnet block height |
+| `baseTokenBalance` | `/chain/token-balance` | **$0.002** | ERC-20 balance of a Base address — `symbol`, `decimals`, `balance`, `balance_formatted` (`token` defaults to USDC) |
 
 Data is sourced from DefiLlama and Base RPC.
+
+The three Base-RPC reads (`baseGasPrice`, `baseBlockNumber`, `baseTokenBalance`)
+back a **keyless install with the real live value** — their free preview is
+identical to the paid route, so an agent with no wallet still gets the true gas
+price, block height and token balance (never a stub or fabricated number); a
+funded wallet simply moves the read onto the metered paid route.
 
 ## Install
 

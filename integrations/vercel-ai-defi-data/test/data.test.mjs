@@ -2,22 +2,36 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   DATA_BASE,
+  BASE_USDC,
   normalizeCoins,
   buildYieldsUrl,
   buildYieldsPreviewUrl,
   buildPricesUrl,
   buildPricesPreviewUrl,
   buildBalanceUrl,
+  buildGasPriceUrl,
+  buildGasPricePreviewUrl,
+  buildBlockNumberUrl,
+  buildBlockNumberPreviewUrl,
+  buildTokenBalanceUrl,
+  buildTokenBalancePreviewUrl,
   summarizeYields,
   summarizePrices,
   summarizeBalance,
+  summarizeGasPrice,
+  summarizeBlockNumber,
+  summarizeTokenBalance,
   fundOnrampHint,
   runYields,
   runPrices,
   runBalance,
+  runGasPrice,
+  runBlockNumber,
+  runTokenBalance,
 } from "../src/data.mjs";
 
 const ADDR = "0x4200000000000000000000000000000000000006";
+const HOLDER = "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10";
 
 // ---- helpers ----
 function jsonResponse(body, status = 200) {
@@ -182,4 +196,122 @@ test("runYields true outage returns {error}, never throws", async () => {
 test("runPrices bad coin id surfaces as {error}, never throws", async () => {
   const out = await runPrices(payStub(jsonResponse([])), { coins: "BAD ID" }, { hasKey: true });
   assert.match(out.error, /invalid coingecko/);
+});
+
+// ==========================================================================
+// Base-RPC read routes: gas-price, block-number, token-balance
+// ==========================================================================
+
+// ---- URL builders ----
+test("gas-price / block-number URL builders target the right routes", () => {
+  assert.equal(buildGasPriceUrl(), `${DATA_BASE}/chain/gas-price`);
+  assert.equal(buildGasPricePreviewUrl(), `${DATA_BASE}/chain/gas-price/preview`);
+  assert.equal(buildBlockNumberUrl(), `${DATA_BASE}/chain/block-number`);
+  assert.equal(buildBlockNumberPreviewUrl(), `${DATA_BASE}/chain/block-number/preview`);
+});
+
+test("buildTokenBalanceUrl validates, defaults token to USDC", () => {
+  const u = buildTokenBalanceUrl({ address: HOLDER });
+  assert.ok(u.startsWith(`${DATA_BASE}/chain/token-balance?`));
+  assert.ok(u.includes(`address=${HOLDER}`));
+  assert.ok(u.includes(encodeURIComponent(BASE_USDC)));
+  assert.ok(buildTokenBalancePreviewUrl({ address: HOLDER }).startsWith(`${DATA_BASE}/chain/token-balance/preview?`));
+  assert.throws(() => buildTokenBalanceUrl({ address: "0xdead" }), /invalid Base address/);
+  assert.throws(() => buildTokenBalanceUrl({ address: HOLDER, token: "0xdead" }), /invalid Base token/);
+});
+
+// ---- summarisers ----
+test("summarizeGasPrice renders gas/base/priority", () => {
+  const s = summarizeGasPrice({ gas_price_gwei: 0.006, base_fee_gwei: 0.005, priority_fee_gwei: 0.001 });
+  assert.match(s, /^Base /);
+  assert.match(s, /gas /);
+  assert.match(s, /gwei/);
+  assert.equal(summarizeGasPrice({}), "no gas price");
+});
+
+test("summarizeBlockNumber renders the block height", () => {
+  assert.match(summarizeBlockNumber({ block_number: 53190830 }), /block #53,190,830/);
+  assert.equal(summarizeBlockNumber({}), "no block number");
+});
+
+test("summarizeTokenBalance renders amount + symbol + short addr", () => {
+  const s = summarizeTokenBalance({ address: HOLDER, symbol: "USDC", balance: 33.11324, balance_formatted: "33.11324" });
+  assert.match(s, /0x5765ae06…/);
+  assert.match(s, /33\.11324 USDC/);
+  assert.equal(summarizeTokenBalance({}), "no token balance");
+});
+
+// ---- runners: PAID path ----
+test("runGasPrice paid returns gas object + summary + paid:true", async () => {
+  const body = { gas_price_wei: "6000000", gas_price_gwei: 0.006, base_fee_gwei: 0.005, priority_fee_gwei: 0.001, chain: "base" };
+  const out = await runGasPrice(payStub(jsonResponse(body)), {}, { hasKey: true });
+  assert.equal(out.paid, true);
+  assert.equal(out.gas_price_gwei, 0.006);
+  assert.match(out.summary, /^Base /);
+  assert.equal(out.activation, undefined);
+});
+
+test("runBlockNumber paid returns block + summary + paid:true", async () => {
+  const out = await runBlockNumber(payStub(jsonResponse({ block_number: 53190830, chain: "base" })), {}, { hasKey: true });
+  assert.equal(out.paid, true);
+  assert.equal(out.block_number, 53190830);
+  assert.match(out.summary, /53,190,830/);
+});
+
+test("runTokenBalance paid returns balance + summary + paid:true", async () => {
+  const body = { address: HOLDER, token: BASE_USDC, symbol: "USDC", decimals: 6, balance: 33.11324, balance_formatted: "33.11324", chain: "base" };
+  const out = await runTokenBalance(payStub(jsonResponse(body)), { address: HOLDER }, { hasKey: true });
+  assert.equal(out.paid, true);
+  assert.equal(out.balance, 33.11324);
+  assert.match(out.summary, /33\.11324 USDC/);
+});
+
+// ---- runners: keyless path returns the REAL preview value (identical to paid, never a stub) ----
+test("runGasPrice keyless reads the identical free preview as REAL data", async () => {
+  const previewFetch = async () => jsonResponse({ gas_price_gwei: 0.006, base_fee_gwei: 0.005, priority_fee_gwei: 0.001, chain: "base", note: "free" });
+  const out = await runGasPrice(payStub(jsonResponse({})), {}, { hasKey: false, previewFetch });
+  assert.equal(out.paid, false);
+  assert.equal(out.gas_price_gwei, 0.006); // REAL value, not fabricated/stubbed
+  assert.ok(out.activation && out.activation.needed);
+  assert.equal(out.activation.price_usdc, "0.002");
+  assert.match(out.activation.reason, /identical full data/);
+});
+
+test("runBlockNumber keyless reads the identical free preview as REAL data", async () => {
+  const previewFetch = async () => jsonResponse({ block_number: 53190830, chain: "base" });
+  const out = await runBlockNumber(payStub(jsonResponse({})), {}, { hasKey: false, previewFetch });
+  assert.equal(out.paid, false);
+  assert.equal(out.block_number, 53190830);
+  assert.ok(out.activation.needed);
+});
+
+test("runTokenBalance keyless reads REAL balance via preview (never fabricated)", async () => {
+  const previewFetch = async () => jsonResponse({ address: HOLDER, token: BASE_USDC, symbol: "USDC", balance: 33.11324, balance_formatted: "33.11324", chain: "base" });
+  const out = await runTokenBalance(payStub(jsonResponse({})), { address: HOLDER }, { hasKey: false, previewFetch });
+  assert.equal(out.paid, false);
+  assert.equal(out.balance, 33.11324); // real
+  assert.ok(out.activation.needed);
+  assert.match(out.activation.reason, /real balance/);
+});
+
+// ---- runners: degrade-open on 402, and never throw ----
+test("runGasPrice degrades open on a 402 to the identical preview", async () => {
+  const previewFetch = async () => jsonResponse({ gas_price_gwei: 0.006, chain: "base" });
+  const out = await runGasPrice(payStub(jsonResponse(null, 402)), {}, { hasKey: true, previewFetch });
+  assert.equal(out.paid, false);
+  assert.equal(out.gas_price_gwei, 0.006);
+  assert.match(out.activation.reason, /402/);
+});
+
+test("runGasPrice true outage returns {error}, never throws", async () => {
+  const boom = async () => { throw new Error("rpc down"); };
+  const out = await runGasPrice(boom, {}, { hasKey: false, previewFetch: boom });
+  assert.match(out.error, /rpc down/);
+  assert.match(out.summary, /^ERROR:/);
+});
+
+test("runTokenBalance bad address surfaces as {error}, never throws", async () => {
+  const out = await runTokenBalance(payStub(jsonResponse({})), { address: "0xdead" }, { hasKey: true });
+  assert.match(out.error, /invalid Base address/);
+  assert.equal(out.paid, false);
 });

@@ -7,10 +7,17 @@ import {
   runYields,
   runPrices,
   runBalance,
+  runGasPrice,
+  runBlockNumber,
+  runTokenBalance,
+  BASE_USDC,
   DATA_BASE,
   type YieldsResult,
   type PricesResult,
   type BalanceResult,
+  type GasPriceResult,
+  type BlockNumberResult,
+  type TokenBalanceResult,
 } from "./data.mjs";
 
 function envKey(): string | undefined {
@@ -145,10 +152,97 @@ export function createBaseBalance(opts: DataToolOptions = {}) {
   );
 }
 
+/**
+ * LangChain tool: current Base mainnet gas price via Grey Ridge
+ * `/chain/gas-price` ($0.002 USDC/call, paid inline with x402 — no API key).
+ * Returns EIP-1559 base_fee_gwei / priority_fee_gwei, gas_price_gwei/_wei and
+ * gas_price_usd. The free preview is byte-identical to the paid route, so a
+ * keyless install gets the REAL live gas price (never a stub).
+ */
+export function createBaseGasPrice(opts: DataToolOptions = {}) {
+  const { base, payFetch, hasKey } = resolve(opts);
+  return tool(
+    async (): Promise<[string, GasPriceResult]> => {
+      const out = await runGasPrice(payFetch, { base }, { hasKey });
+      return [JSON.stringify(out), out];
+    },
+    {
+      name: "base_gas_price",
+      description:
+        "Current Base mainnet gas price via Grey Ridge /chain/gas-price ($0.002 USDC/call, paid inline with x402 — no API key). Returns EIP-1559 base_fee_gwei, priority_fee_gwei, gas_price_gwei/_wei and gas_price_usd. Use to time a Base transaction around cheap gas.",
+      schema: z.object({}),
+      responseFormat: "content_and_artifact",
+    }
+  );
+}
+
+/**
+ * LangChain tool: current Base mainnet block number via Grey Ridge
+ * `/chain/block-number` ($0.002 USDC/call, paid inline with x402 — no API key).
+ * The free preview is byte-identical to the paid route, so a keyless install
+ * gets the REAL current block.
+ */
+export function createBaseBlockNumber(opts: DataToolOptions = {}) {
+  const { base, payFetch, hasKey } = resolve(opts);
+  return tool(
+    async (): Promise<[string, BlockNumberResult]> => {
+      const out = await runBlockNumber(payFetch, { base }, { hasKey });
+      return [JSON.stringify(out), out];
+    },
+    {
+      name: "base_block_number",
+      description:
+        "Current Base mainnet block number via Grey Ridge /chain/block-number ($0.002 USDC/call, paid inline with x402 — no API key). Use for chain height or confirmation math.",
+      schema: z.object({}),
+      responseFormat: "content_and_artifact",
+    }
+  );
+}
+
+/**
+ * LangChain tool: ERC-20 token balance of a Base address via Grey Ridge
+ * `/chain/token-balance` ($0.002 USDC/call, paid inline with x402 — no API key).
+ * Returns symbol, decimals and the formatted balance. The free preview returns
+ * the REAL balance for the given address+token, so a keyless install gets a real
+ * number (never fabricated). `token` defaults to USDC on Base.
+ */
+export function createBaseTokenBalance(opts: DataToolOptions = {}) {
+  const { base, payFetch, hasKey } = resolve(opts);
+  return tool(
+    async ({ address, token }: { address: string; token?: string }): Promise<[string, TokenBalanceResult]> => {
+      const out = await runTokenBalance(payFetch, { address, token, base }, { hasKey });
+      return [JSON.stringify(out), out];
+    },
+    {
+      name: "base_token_balance",
+      description:
+        "ERC-20 token balance of a Base mainnet address via Grey Ridge /chain/token-balance ($0.002 USDC/call, paid inline with x402 — no API key). Returns symbol, decimals, balance and balance_formatted. token defaults to USDC on Base.",
+      schema: z.object({
+        address: z.string().describe("0x-prefixed Base mainnet address to read the balance of (40 hex chars)."),
+        token: z
+          .string()
+          .optional()
+          .describe(`0x-prefixed ERC-20 contract on Base. Defaults to USDC (${BASE_USDC}).`),
+      }),
+      responseFormat: "content_and_artifact",
+    }
+  );
+}
+
 /** Zero-config tool instances: read `PRIVATE_KEY` (agent wallet) + optional `X402_DATA_BASE_URL` from env. */
 export const defiYields = createDefiYields({ privateKey: envKey(), base: envBase() });
 export const cryptoPrices = createCryptoPrices({ privateKey: envKey(), base: envBase() });
 export const baseBalance = createBaseBalance({ privateKey: envKey(), base: envBase() });
+export const baseGasPrice = createBaseGasPrice({ privateKey: envKey(), base: envBase() });
+export const baseBlockNumber = createBaseBlockNumber({ privateKey: envKey(), base: envBase() });
+export const baseTokenBalance = createBaseTokenBalance({ privateKey: envKey(), base: envBase() });
 
-/** All three data tools as a ready-to-spread array: `tools: [...defiDataTools]`. */
-export const defiDataTools = [defiYields, cryptoPrices, baseBalance];
+/** All six data tools as a ready-to-spread array: `tools: [...defiDataTools]`. */
+export const defiDataTools = [
+  defiYields,
+  cryptoPrices,
+  baseBalance,
+  baseGasPrice,
+  baseBlockNumber,
+  baseTokenBalance,
+];
