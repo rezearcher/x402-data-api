@@ -106,6 +106,26 @@ Corollary for orchestrators: do not create a fixed-delay re-check card ("verify 
 Either poll `--write-verdict` until it exits 0 or 1, or re-check at +90 min. A card with a
 30-minute deadline will systematically produce a false INDEX-BROKEN.
 
+### Seq 7 outcome (2026-10-28, the second measurement)
+
+| settlement | `lastCalledAt` flipped at | lag |
+|---|---|---|
+| seq 1 — 06:02:47Z | between 06:57Z and 07:23Z | 55–81 min |
+| seq 7 — 07:14:09Z | **not by 08:44Z** | **> 90 min (window expired)** |
+
+So the 75-minute figure is **not a bound** — it is one sample of an unbounded, variable
+lag. Seq 7 outran even that. Two consequences:
+
+1. **Product truth:** the counter is not what makes us buyable. The buyer-facing outcome
+   (415-char description + rank 10/13, 7/11, 15/18) landed synchronously at settlement and
+   was stable for the entire 90-minute watch. `lastCalledAt` is telemetry about CDP's own
+   bookkeeping; do not gate re-listing on it and do not pay to advance it.
+2. **Safety truth:** `>90 min` is the point to *escalate*, never the point to re-settle.
+   Seq 7's counter may still flip later; that changes nothing about the verdict being
+   "do not spend".
+
+Trajectory evidence: `logs/cdp-index-latency-probe.jsonl` (45 reads, 120s apart, read-only).
+
 ## 4. The 30-day window and the monitoring that prevents a re-delisting
 
 - A resource with **no settlement for 30 days** is dropped from catalog *and* search.
