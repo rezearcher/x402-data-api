@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "grey-ridge-x402-data"
+version = "0.1.0"
+description = "DeFi yields, token prices and Base-chain reads for CrewAI and Python agents — paid inline per call with x402 USDC on Base, no API key."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Grey Ridge Signals Group" }]
+keywords = ["x402", "crewai", "defi", "base", "agent", "tools", "coingecko", "defillama"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Intended Audience :: Developers",
+    "Topic :: Office/Business :: Financial",
+]
+# Core is standard-library only — the keyless / preview tier needs no third-party
+# packages at all. Paid x402 settlement and CrewAI wrappers are optional extras.
+dependencies = []
+
+[project.optional-dependencies]
+# Paid tier: sign the per-call USDC payment with the agent's Base wallet.
+pay = ["x402[requests]>=0.1", "eth-account>=0.11"]
+# CrewAI BaseTool wrappers.
+crewai = ["crewai>=0.70", "pydantic>=2"]
+all = ["x402[requests]>=0.1", "eth-account>=0.11", "crewai>=0.70", "pydantic>=2"]
+
+[project.urls]
+Homepage = "https://api.greyridgesignals.ai/for-agents"
+Source = "https://github.com/rezearcher/crewai-defi-data"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/grey_ridge_x402_data"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/grey_ridge_x402_data", "README.md", "tests"]
