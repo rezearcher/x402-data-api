@@ -290,3 +290,78 @@ curl -s "https://x402-data-api.sigrunner.workers.dev/chain/token-security?token=
 Sources: `docs.cdp.coinbase.com/x402/seller/get-discovered.md`,
 `.../x402/seller/facilitator.md`, `.../api-reference/v2/rest-api/x402-facilitator`
 (retrieved 2026-10-28).
+
+---
+
+## MEASURED — first real settlement executed (2026-10-28T06:02:47Z)
+
+One paid call, `/chain/token-security`, 9,000 units = **0.009 USDC**, executed
+via the relay `POST /internal/cdp-settle-raw` with a client-signed EIP-3009
+payload from buyer `0xC4852c26498d3187dEc2ce1b19e840710e302d1e`.
+
+```
+tx        0x51bcdd08defd9f3c32320e1ae7d6be4a2d8538d153945ee1d7dbcbe97420bd6d
+block     53189010 (Base, status success)
+transfer  USDC 9000 units  buyer -> 0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10 (our payTo)
+relay     verify 200 / settle 200
+settle.body  {"success":true,"transaction":"0x51bc…","network":"eip155:8453"}
+EXTENSION-RESPONSES  {"bazaar":{"status":"processing"}}
+balance   1.23 -> 1.221 USDC (spend exactly the quoted amount, 0% deviation)
+```
+
+Journal: `logs/cdp-settlement-tx.log` (attempt → confirmed).
+Re-verifiable offline: `node scripts/verify_settlement_tx.js --route /chain/token-security`
+(it re-derives proof from the Base receipt and refuses to certify on a mismatch).
+
+### What `processing` actually means — and what it does NOT prove
+
+`processing` is neither `success` nor `rejected`. It is not a failure signal (the
+money moved, one Transfer, correct amount), but it is also **not** proof of a
+listing refresh. Measured 22 min after settlement, against
+`/discovery/merchant?payTo=0x5765…`:
+
+| field | before | 22 min after |
+|---|---|---|
+| `lastUpdated` | 2026-10-20T17:03:32Z | **2026-10-28T06:02:47Z** (moved) |
+| `lastCalledAt` | 2026-10-20T17:03:32.666Z | **unchanged** |
+| `description` | 493 chars, no `scam` | **unchanged** |
+| `output.example.analyzed_at` | 2026-07-17 | **unchanged** |
+
+`GET /discovery/search?query=is+this+token+a+scam` at the same time returned 14
+resources, **none of them ours** (top hits: trust-check.gm-tools.workers.dev,
+grok-backtest-api.fly.dev, api.checkpoint402.com).
+
+So the extension wrote *something* (the record's `lastUpdated` advanced to the
+settlement second) without advancing `lastCalledAt` or republishing content.
+
+### Client-side description override does NOT publish — the 402 is the source
+
+The settle payload carried a rewritten 393-char description in **both**
+`paymentPayload.resource.description` and `paymentRequirements.description`, and a
+rebuilt `extensions.bazaar` (`declareDiscoveryExtension`). Neither landed: the
+catalog still serves the old 493-char text and the frozen 2026-07-17 output
+example.
+
+The stored description is byte-identical to what the **live 402 still serves**
+(both 493 chars) — the worker's route table in `src/index.ts` was never updated,
+so the indexer is re-reading the resource rather than trusting the payload.
+**Conclusion: rewriting the description in the client is necessary but not
+sufficient — the Worker must serve the new text before a settlement, then the
+settlement publishes it.** That makes "rewrite" a deploy-then-settle action, not
+a settle-only action, which is a correction to the "settlement is the publish
+button" model earlier in this document.
+
+Reproduce the comparison (no spend):
+
+```bash
+curl -s "https://x402-data-api.sigrunner.workers.dev/chain/token-security" -D- -o/dev/null \
+  | grep -i '^payment-required' | cut -d' ' -f2 | tr -d '\r' | base64 -d | jq -r .resource.description | wc -c
+curl -s "https://api.cdp.coinbase.com/platform/v2/x402/discovery/merchant?payTo=0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10&limit=60" \
+  | jq -r '.resources[]|select(.resource|test("token-security"))|.description' | wc -c
+```
+
+Open question for the re-listing card: whether `processing` eventually flips to
+`success` and advances `lastCalledAt` (documented phase-one lag is ≤15 min; this
+was measured at 22 min and had not), or whether the extension stays pending and
+the settlement must be repeated after the Worker serves the corrected text.
+
