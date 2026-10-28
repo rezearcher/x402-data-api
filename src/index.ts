@@ -182,7 +182,7 @@ const ROUTE_CATALOG: Array<[string, string, string, string, string, string[]]> =
   ["/pm/markets", "GET", "0.005", "5000", "Live Polymarket prediction markets — question, outcomes, bestBid/bestAsk/spread, volume24hr/volume1wk, oneDayPriceChange, clobTokenIds, conditionId, category tags, liquidity, end date. Ranked by volume24hr; filter by keyword.", ["prediction-markets", "polymarket", "markets", "crypto", "data"]],
   ["/crypto/funding", "GET", "0.004", "4000", "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, premium/basis, annualized_hl/annualized_okx, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices, open interest.", ["crypto", "funding", "perps", "hyperliquid", "okx", "dydx", "arbitrage", "defi", "market-data", "data"]],
   ["/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, pool id, APY breakdown + 1d/7d/30d APY trend, IL risk (incl. il7d), exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL. Filter by project, chain, or stablecoin-only; sort by TVL or risk-adjusted APY.", ["defi", "yield", "lending", "apy", "tvl", "defi-yields", "data"]],
-  ["/crypto/prices", "GET", "0.001", "1000", "Spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/change_24h/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "market-data", "defi", "data"]],
+  ["/crypto/prices", "GET", "0.001", "1000", "Spot token prices from DefiLlama — pass comma-separated ticker symbols or CoinGecko ids, get price/change_24h/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "market-data", "defi", "data"]],
   ["/scan/mcp", "GET", "0.05", "50000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score + verdict (clear/review/block).", ["security", "mcp", "audit", "prompt-injection"]],
   ["/enrich/tech-risk", "GET", "0.01", "10000", "Tech-stack fingerprint -> CVE (NVD) + EPSS + CISA-KEV attack-surface risk + verdict (clear/review/block) for a domain.", ["security", "cve", "risk"]],
   ["/enrich/domain", "GET", "0.01", "10000", "Firmographic + tech-stack enrichment for a domain, incl. full subdomain enumeration via certificate-transparency logs (crt.sh, RDAP, DoH, HTTP fingerprint) + verdict (clear/review/block, based on domain age).", ["data", "domain", "enrichment"]],
@@ -1551,7 +1551,7 @@ app.get("/.well-known/agent-card.json", (c) => {
         id: "crypto-prices",
         name: "Spot Token Prices",
         description:
-          "Live spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/change_24h/symbol/confidence/timestamp. " +
+          "Live spot token prices from DefiLlama — pass comma-separated ticker symbols or CoinGecko ids, get price/change_24h/symbol/confidence/timestamp. " +
           "Route: GET /crypto/prices. Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. " +
           "Price: $0.001. Free preview at GET /crypto/prices/preview. " +
           "Machine-readable payment manifest: /.well-known/x402. MCP tool interface: /mcp (tool: crypto_prices).",
@@ -2830,7 +2830,7 @@ export function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Spot token prices from DefiLlama — pass comma-separated CoinGecko ids, get price/change_24h/symbol/confidence/timestamp.",
+        "Spot token prices from DefiLlama — pass comma-separated ticker symbols or CoinGecko ids, get price/change_24h/symbol/confidence/timestamp.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -12597,8 +12597,8 @@ const AGENT_TOPICS: Record<
     metaDesc:
       "A pay-per-call crypto market-data API for autonomous agents: spot token prices with 24h change and confidence, cross-venue perp funding rates and arb spread, Fear & Greed, trending coins, global market stats and sector rotation. No account, no API key — the agent pays each call inline in USDC on Base from $0.001 (the x402 standard).",
     lead_p:
-      "Most price APIs gate the first quote behind a signup, a dashboard and a secret key the agent has to store and rotate. These routes do not. Pass CoinGecko ids to <code>/crypto/prices</code> and get price, 24h change, symbol and a confidence score back; or read cross-venue perp funding, market sentiment, trending coins and sector performance — each a single call the agent settles in USDC on Base for exactly what it reads.",
-    ex_path: "/crypto/prices?ids=ethereum,bitcoin,solana",
+      "Most price APIs gate the first quote behind a signup, a dashboard and a secret key the agent has to store and rotate. These routes do not. Pass ticker symbols or CoinGecko ids to <code>/crypto/prices</code> and get price, 24h change, symbol and a confidence score back; or read cross-venue perp funding, market sentiment, trending coins and sector performance — each a single call the agent settles in USDC on Base for exactly what it reads.",
+    ex_path: "/crypto/prices?coins=ETH,BTC,SOL",
     ex_comment: "spot prices with 24h change, paid inline",
     ex_var: "prices",
     intent_h2: "Spot, funding and sentiment in one keyless surface",

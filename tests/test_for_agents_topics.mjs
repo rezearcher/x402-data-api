@@ -23,7 +23,7 @@ const ok = (cond, msg) => { assert.ok(cond, msg); pass++; };
 
 const topics = {
   "defi-yields": { lead: "/defi/yields", prefix: "/defi/", foreign: "/crypto/prices", ex: "/defi/yields?stable=true", advice: true },
-  "crypto-prices": { lead: "/crypto/prices", prefix: "/crypto/", foreign: "/defi/yields", ex: "/crypto/prices?ids=", advice: true },
+  "crypto-prices": { lead: "/crypto/prices", prefix: "/crypto/", foreign: "/defi/yields", ex: "/crypto/prices?coins=", advice: true },
   "base-rpc": { lead: "/chain/block-number", prefix: "/chain/", foreign: "/defi/yields", ex: "/chain/gas-price", advice: false },
 };
 
