@@ -170,7 +170,7 @@ const PREVIEW_ROUTES = new Set<string>([
   "/crypto/funding", "/defi/yields", "/pm/markets", "/chain/gas-price",
   "/chain/block-number", "/chain/token-balance", "/defi/protocol-risk",
   "/defi/safe-yields", "/enrich/tech-risk", "/scan/mcp", "/ai/ask", "/ai/extract",
-  "/v1/chat/completions",
+  "/v1/chat/completions", "/chain/simulate",
 ]);
 
 // Single source of truth for paid routes: [path, method, price_usdc, atomic_units, description, tags].
@@ -192,6 +192,7 @@ export const ROUTE_CATALOG: Array<[string, string, string, string, string, strin
   ["/chain/balance", "GET", "0.002", "2000", "ETH balance of a Base mainnet address, incl. balance_usd (internal ETH price cross-call).", ["rpc", "base", "onchain", "blockchain", "data"]],
   ["/chain/token-balance", "GET", "0.002", "2000", "ERC-20 token balance of a Base mainnet address, incl. symbol, decimals, balance_formatted.", ["rpc", "base", "onchain", "blockchain", "data"]],
   ["/chain/tx", "GET", "0.005", "5000", "Transaction details by hash on Base mainnet.", ["rpc", "base", "onchain", "blockchain", "data"]],
+  ["/chain/simulate", "GET", "0.005", "5000", "Will this Base transaction revert? Prospective-tx dry-run via eth_simulateV1: pass ?from=&to=&data=&value= and get will_revert + revert_reason + gas_used + token asset_changes BEFORE the agent spends gas sending it. Keyless, Base-native, per-call — Tenderly/Alchemy-class output with no API key or signup. Use before a swap/approve/transfer or alongside /gate/swap.", ["chain", "simulation", "pre-trade", "security", "rpc", "base", "onchain", "data"]],
   ["/chain/receipt", "GET", "0.005", "5000", "Transaction receipt by hash on Base mainnet — status, gas used, full logs, and the L1 fee breakdown (l1_fee_wei, l1_gas_price_wei, l1_gas_used, effective_gas_price_wei) + l1_fee_usd/total_fee_usd an ETH-only competitor can't offer.", ["rpc", "base", "onchain", "blockchain", "data"]],
   ["/chain/code", "GET", "0.002", "2000", "Contract-code check for a Base mainnet address (is_contract + code size + EIP-7702 delegated-EOA detection).", ["rpc", "base", "onchain", "blockchain", "data"]],
   ["/chain/erc20-meta", "GET", "0.002", "2000", "ERC-20 metadata on Base: name, symbol, decimals, totalSupply for any token contract.", ["rpc", "base", "onchain", "token", "erc20", "data"]],
@@ -1538,6 +1539,12 @@ const MANIFEST_IO: Record<string, ManifestIO> = {
   "/chain/receipt": { name: "Base transaction receipt by hash (status, gas, logs, L1 fee)", category: "blockchain", params: [
     { name: "hash", required: true, desc: "Base mainnet transaction hash (0x… 66 chars)." },
   ] },
+  "/chain/simulate": { name: "Prospective Base tx dry-run: will it revert, gas used, token asset changes (eth_simulateV1)", category: "blockchain", params: [
+    { name: "from", required: true, example: "0x1111111111111111111111111111111111111111", desc: "Sender (0x, Base)." },
+    { name: "to", required: true, example: "0x4200000000000000000000000000000000000006", desc: "Target contract or address (0x, Base)." },
+    { name: "data", example: "0x", desc: "Optional 0x calldata (omit for a plain value transfer)." },
+    { name: "value", example: "0", desc: "Optional wei to send (decimal or 0x hex)." },
+  ] },
   "/dns": { name: "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain", category: "infrastructure", params: [
     { name: "domain", required: true, example: "stripe.com", desc: "Domain to resolve." },
   ] },
@@ -2172,6 +2179,7 @@ Proof pack for integrators (a real settled Base-mainnet x402 tx + decoded receip
 - GET ${BASE}/chain/allowance?token=<0x…>&owner=<0x…>&spender=<0x…> — $0.002 — ERC-20 allowance, flags unlimited approvals.
 - GET ${BASE}/chain/code?address=<0x…> — $0.002 — contract-code check for a Base address (EIP-7702 delegated-EOA aware).
 - GET ${BASE}/chain/wallet?address=<0x…> — $0.003 — wallet bundle: balance + balance_usd + tx count + contract check (EIP-7702 delegated-EOA aware), one call.
+- GET ${BASE}/chain/simulate?from=<0x…>&to=<0x…>&data=<0x…>&value=<wei> — $0.005 — prospective-tx dry-run: will_revert + revert_reason + gas_used + token asset_changes BEFORE you send it. Keyless, Base-native, Tenderly/Alchemy-class output with no API key. The pre-trade check for any swap/approve/transfer.
 - WHY /gate/swap vs raw honeypot-flag APIs: raw flags make your agent interpret; this returns ONE decision (GO|HOLD|BLOCK) sized to YOUR trade (notional_usd vs Uniswap v3 liquidity price impact) plus a reason. Try free: ${BASE}/gate/swap/preview?token=degen
 - GET ${BASE}/gate/swap?token=<0x…>&side=buy&notional_usd=500 — $0.008 — pre-trade GO/HOLD/BLOCK gate for Base trading agents: honeypot/sellability + liquidity-vs-trade-size price impact in one fast call.
 - GET ${BASE}/chain/token-report?token=<0x…> — $0.01 — DECISION-GRADE token trade-safety verdict: one call returns SAFE|CAUTION|AVOID + risk_score 0-100 + reasons, bundling honeypot/sellability simulation, owner-renounced/mint/pause/blacklist/fee-setter/upgradeable checks, symbol/name/decimals and Uniswap v3 WETH-pool liquidity USD. Replaces many RPC calls and prevents a bad trade.
@@ -2187,6 +2195,7 @@ Proof pack for integrators (a real settled Base-mainnet x402 tx + decoded receip
 - GET ${BASE}/pm/markets/preview — free top-1 sample of /pm/markets.
 - GET ${BASE}/chain/block-number/preview — free, full live data (identical to the paid route).
 - GET ${BASE}/chain/gas-price/preview — free, full live data (identical to the paid route).
+- GET ${BASE}/chain/simulate/preview — free sample dry-run (benign 0-value call) of the paid /chain/simulate.
 - GET ${BASE}/gate/swap/preview?token=usdc|weth|cbbtc|aero|degen — free live sample of the go/hold/block gate (default Base USDC, buy, $100). ALSO: pass any real Base 0x token address for 3 free checks/day/IP.
 - GET ${BASE}/chain/token-report/preview?token=usdc|weth|cbbtc|aero|degen — free, full real trade-safety report, same depth as the paid route.
 - GET ${BASE}/chain/token-security/preview — free, full real analysis of a fixed well-known token (Base WETH), same depth as the paid route.
@@ -2500,6 +2509,7 @@ app.get("/openapi.json", (c) => {
       "/chain/token-balance": paid("ERC-20 token balance of a Base mainnet address, incl. symbol/decimals/balance_formatted.", "0.01", [{ name: "address", desc: "0x-prefixed holder address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "token", desc: "0x-prefixed ERC-20 contract address", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
       "/chain/tx": paid("Transaction details by hash on Base mainnet.", "0.005", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }]),
       "/chain/receipt": paid("Transaction receipt by hash on Base mainnet: status, gas used, full logs, L1 fee breakdown, l1_fee_usd/total_fee_usd.", "0.005", [{ name: "hash", desc: "0x-prefixed 32-byte transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }]),
+      "/chain/simulate": paid("Prospective Base transaction dry-run via eth_simulateV1: will_revert + revert_reason + gas_used + token asset_changes before you send. Keyless, Base-native, per-call (no API key).", "0.005", [{ name: "from", desc: "sender (0x, Base)", required: true, example: "0x1111111111111111111111111111111111111111" }, { name: "to", desc: "target contract or address (0x, Base)", required: true, example: "0x4200000000000000000000000000000000000006" }, { name: "data", desc: "optional 0x calldata (omit for a plain transfer)", example: "0x" }, { name: "value", desc: "optional wei to send (decimal or 0x hex)", example: "0" }]),
       "/chain/erc20-meta": paid("ERC-20 name/symbol/decimals/totalSupply on Base.", "0.01", [{ name: "token", desc: "0x-prefixed ERC-20 address on Base", required: true, example: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" }]),
       "/chain/nonce": paid("Nonce (tx count) of a Base address, latest and pending.", "0.01", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
       "/chain/is-contract": paid("Is a Base address a smart contract or an EOA (is_contract + bytecode size).", "0.002", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x4200000000000000000000000000000000000006" }]),
@@ -3315,6 +3325,33 @@ export function makeRoutes(payTo: string) {
         },
         output: {
           example: { hash: "0x571284385ad512a3ffc984a6c2f335113ada217215b6296847944f9d0bc613ef", blockNumber: "48747709", from: "0xd80217bd14c4d4a4fe37bb1354be1830ed815a60", to: "0x6211a3742cf9d3b6677ecc7fd9dd102ab101d8e2", value: "0", gas: "5000000", gasPrice: "322017256", nonce: "6937" },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /chain/simulate": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.005",
+        network: NETWORK,
+        payTo,
+      },
+      description: "Will this Base transaction revert? Prospective-tx dry-run via eth_simulateV1: pass ?from=&to=&data=&value= and get will_revert + revert_reason + gas_used + token asset_changes BEFORE the agent spends gas sending it. Keyless, Base-native, per-call — Tenderly/Alchemy-class output with no API key or signup. Use before a swap/approve/transfer or alongside /gate/swap.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { from: "0x1111111111111111111111111111111111111111", to: "0x4200000000000000000000000000000000000006", value: "0" },
+        inputSchema: {
+          type: "object",
+          properties: {
+            from: { type: "string", description: "sender (0x, Base)" },
+            to: { type: "string", description: "target contract or address (0x, Base)" },
+            data: { type: "string", description: "optional 0x calldata (omit for a plain value transfer)" },
+            value: { type: "string", description: "optional wei to send (decimal or 0x hex)" },
+          },
+          required: ["from", "to"],
+        },
+        output: {
+          example: { from: "0x1111111111111111111111111111111111111111", to: "0x4200000000000000000000000000000000000006", data: "0x", value: "0", will_revert: false, revert_reason: null, gas_used: 21000, asset_changes: [], raw_status: "0x1", simulated_at: "latest" },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
@@ -7058,6 +7095,73 @@ app.get("/chain/tx", async (c) => {
   }
 });
 
+// GET /chain/simulate — paid ($0.005). Prospective-transaction dry-run: does THIS
+// tx revert, how much gas does it burn, and what tokens actually move — answered
+// BEFORE the agent spends gas sending it. The Line-A pre-trade safety thesis for
+// the chain lane; the natural companion to /gate/swap and /chain/token-report.
+app.get("/chain/simulate", async (c) => {
+  const from = (c.req.query("from") || "").trim();
+  const to = (c.req.query("to") || "").trim();
+  const data = (c.req.query("data") || "").trim();
+  const valueQ = (c.req.query("value") || "").trim();
+  if (!ADDR_RE.test(from) || !ADDR_RE.test(to)) {
+    return c.json({ error: "from and to are required and must be 0x-prefixed 20-byte Base addresses. Optional: data (0x calldata), value (wei — decimal or 0x hex)." }, { status: 400 });
+  }
+  if (data && !/^0x[a-fA-F0-9]*$/.test(data)) {
+    return c.json({ error: "data must be 0x-prefixed hex calldata" }, { status: 400 });
+  }
+  let value = 0n;
+  if (valueQ) {
+    try { value = BigInt(valueQ); } catch { return c.json({ error: "value must be wei as a decimal or 0x-hex integer" }, { status: 400 }); }
+    if (value < 0n) return c.json({ error: "value must be non-negative" }, { status: 400 });
+  }
+  try {
+    const sim = await simulateTx(from, to, data, value);
+    const body: Record<string, unknown> = sim.available
+      ? {
+          from, to, data: data || "0x", value: value.toString(),
+          will_revert: sim.will_revert,
+          revert_reason: sim.revert_reason,
+          gas_used: sim.gas_used,
+          asset_changes: sim.asset_changes,
+          raw_status: sim.status_hex,
+          simulated_at: "latest",
+        }
+      : {
+          from, to, will_revert: null, reason: "simulation_unavailable",
+          note: "No configured Base RPC provider served eth_simulateV1 for this request. The gate degraded open rather than returning a false verdict — retry.",
+        };
+    console.log(
+      JSON.stringify({ event: "paid_request", endpoint: "/chain/simulate", from, to, will_revert: sim.will_revert, ts: new Date().toISOString() }),
+    );
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /chain/simulate", rail, makeUsageCounter(c.env)));
+    return c.json(body);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+// Free keyless preview — a REAL benign dry-run so an agent sees the output shape
+// before paying, mirroring /defi/yield-entry-verdict/preview.
+app.get("/chain/simulate/preview", async (c) => {
+  // Plain 0-value call between two synthetic addresses: never reverts, deterministic
+  // gas, zero asset moves — shows the will_revert:false shape without touching funds.
+  const demoFrom = "0x1111111111111111111111111111111111111111";
+  const demoTo = "0x2222222222222222222222222222222222222222";
+  try {
+    const sim = await simulateTx(demoFrom, demoTo, "0x", 0n);
+    return c.json({
+      preview: sim.available
+        ? { from: demoFrom, to: demoTo, value: "0", will_revert: sim.will_revert, gas_used: sim.gas_used, asset_changes: sim.asset_changes, raw_status: sim.status_hex }
+        : { will_revert: null, reason: "simulation_unavailable" },
+      note: "Free sample dry-run (benign 0-value call). Full: GET /chain/simulate?from=<0x>&to=<0x>&data=<0x calldata>&value=<wei> ($0.005) — will_revert + revert_reason + gas_used + token asset_changes for any prospective Base tx, keyless x402 on Base.",
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
 app.get("/chain/receipt", async (c) => {
   const hash = c.req.query("hash");
   if (!hash || !HASH_RE.test(hash)) {
@@ -8686,6 +8790,100 @@ async function measurePairTransferTaxBps(
     } catch { continue; }
   }
   return null;
+}
+
+// Prospective-transaction dry-run via eth_simulateV1 (the same proven RPC method
+// the honeypot sims use, here on a caller-supplied call). Runs ONE blockStateCalls
+// block with {from,to,data,value} and traceTransfers:true so we return will_revert
+// + revert_reason + gas_used + the ERC-20/native asset deltas BEFORE the agent
+// spends gas sending it. Own fetch loop (no rpcMarkBad): a provider lacking
+// eth_simulateV1 must not be demoted for other calls. Degrade-open: returns
+// {available:false} rather than throwing or returning a false verdict.
+interface SimulateResult {
+  available: boolean;
+  will_revert: boolean | null;
+  revert_reason: string | null;
+  gas_used: number | null;
+  status_hex: string | null;
+  asset_changes: { token: string; from: string; to: string; amount: string }[];
+  logs_count: number | null;
+}
+
+// Decode a Solidity revert payload: Error(string) (0x08c379a0) or Panic(uint256)
+// (0x4e487b71). Anything else (custom error / empty) → null (we still report
+// will_revert:true, just without a human string).
+export function decodeRevertReason(returnData: string | undefined): string | null {
+  if (!returnData || returnData.length < 10) return null;
+  const sel = returnData.slice(0, 10).toLowerCase();
+  if (sel === "0x08c379a0") {
+    try {
+      const hex = returnData.slice(10);
+      const len = Number(BigInt("0x" + hex.slice(64, 128)));
+      const strHex = hex.slice(128, 128 + len * 2);
+      let s = "";
+      for (let i = 0; i < strHex.length; i += 2) s += String.fromCharCode(parseInt(strHex.slice(i, i + 2), 16));
+      return s || null;
+    } catch { return null; }
+  }
+  if (sel === "0x4e487b71") {
+    try { return `Panic(0x${BigInt("0x" + returnData.slice(10, 74)).toString(16)})`; } catch { return "Panic"; }
+  }
+  return null;
+}
+
+// keccak256("Transfer(address,address,uint256)") — traceTransfers emits synthetic
+// Transfer-shaped logs for both ERC-20 and native-value moves.
+const SIM_TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+// Pure: fold eth_simulateV1 traceTransfers logs → token/from/to/amount deltas.
+// Only standard 3-topic Transfer events are kept (indexed from+to, amount in data).
+export function parseSimTransfers(
+  logs: { address?: string; topics?: string[]; data?: string }[] | undefined,
+): { token: string; from: string; to: string; amount: string }[] {
+  const out: { token: string; from: string; to: string; amount: string }[] = [];
+  for (const lg of logs ?? []) {
+    if (lg.topics && lg.topics.length === 3 && (lg.topics[0] || "").toLowerCase() === SIM_TRANSFER_TOPIC) {
+      out.push({
+        token: (lg.address || "").toLowerCase(),
+        from: "0x" + (lg.topics[1] || "").slice(26),
+        to: "0x" + (lg.topics[2] || "").slice(26),
+        amount: lg.data && lg.data !== "0x" ? BigInt(lg.data).toString() : "0",
+      });
+    }
+  }
+  return out;
+}
+
+export async function simulateTx(from: string, to: string, data: string, value: bigint): Promise<SimulateResult> {
+  const unavailable: SimulateResult = { available: false, will_revert: null, revert_reason: null, gas_used: null, status_hex: null, asset_changes: [], logs_count: null };
+  const call: Record<string, string> = { from, to };
+  if (data && data !== "0x") call.data = data;
+  if (value > 0n) call.value = "0x" + value.toString(16);
+  const body = JSON.stringify({
+    jsonrpc: "2.0", id: 1, method: "eth_simulateV1",
+    params: [{ blockStateCalls: [{ calls: [call] }], traceTransfers: true, validation: false }, "latest"],
+  });
+  for (const url of rpcOrder().slice(0, 3)) {
+    try {
+      const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body, signal: AbortSignal.timeout(5000) });
+      if (!res.ok) continue;
+      const j = (await res.json()) as { result?: { calls?: { status?: string; gasUsed?: string; returnData?: string; logs?: { address?: string; topics?: string[]; data?: string }[] }[] }[]; error?: unknown };
+      if (j.error) continue;
+      const cl = j.result?.[0]?.calls?.[0];
+      if (!cl || typeof cl.status !== "string") continue;
+      const willRevert = cl.status === "0x0";
+      return {
+        available: true,
+        will_revert: willRevert,
+        revert_reason: willRevert ? decodeRevertReason(cl.returnData) : null,
+        gas_used: cl.gasUsed ? Number(BigInt(cl.gasUsed)) : null,
+        status_hex: cl.status,
+        asset_changes: parseSimTransfers(cl.logs),
+        logs_count: (cl.logs ?? []).length,
+      };
+    } catch { continue; }
+  }
+  return unavailable;
 }
 
 // Rebuild the exact _balances mapping slot (as a bigint) that simulateTransferProbe

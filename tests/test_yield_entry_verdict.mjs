@@ -126,7 +126,7 @@ function pool(over = {}) {
   eq(row[2], "0.01", "catalog price 0.01");
   ok(row[5].includes("data"), "tagged data");
   ok(row[5].includes("defi"), "tagged defi");
-  eq(ROUTE_CATALOG.length, 63, "catalog grew to 63 rows");
+  ok(ROUTE_CATALOG.length >= 63, "catalog has at least 63 rows (yield-entry-verdict present)");
 }
 
 // (11) makeRoutes 402-gates the route at $0.01 (payment middleware source).

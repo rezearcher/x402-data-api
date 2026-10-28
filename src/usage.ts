@@ -47,6 +47,7 @@ export type Route =
   | "GET /chain/balance"
   | "GET /chain/token-balance"
   | "GET /chain/tx"
+  | "GET /chain/simulate"
   | "GET /chain/receipt"
   | "GET /chain/code"
   | "GET /chain/erc20-meta"
