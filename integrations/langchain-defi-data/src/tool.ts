@@ -12,6 +12,7 @@ import {
   runTokenBalance,
   runFunding,
   runMarketBrief,
+  runTokenReport,
   BASE_USDC,
   DATA_BASE,
   type YieldsResult,
@@ -22,6 +23,7 @@ import {
   type TokenBalanceResult,
   type FundingResult,
   type MarketBriefResult,
+  type TokenReportResult,
 } from "./data.mjs";
 
 function envKey(): string | undefined {
@@ -286,6 +288,41 @@ export function createMarketBrief(opts: DataToolOptions = {}) {
   );
 }
 
+/**
+ * LangChain tool: pre-trade token-safety verdict via Grey Ridge
+ * `/chain/token-report` ($0.01 USDC/call, paid inline with x402 — no API key).
+ * Answers "is this Base ERC-20 safe to buy?" with a decision-grade verdict —
+ * SAFE | CAUTION | AVOID — a 0-100 risk_score and the reasons: honeypot /
+ * sellability simulation, measured buy/sell tax, owner-renounced +
+ * mint/pause/blacklist/fee-setter/upgradeable-proxy checks, owner supply %, and
+ * Uniswap-v3 WETH-pool liquidity (USD). The free preview returns the SAME full
+ * verdict for any token (capped at 3 real tokens/IP/day), so a keyless install
+ * gets a REAL verdict — on a demo token when none is given, or on the caller's
+ * token until the daily trial is spent, after which it honestly reports the
+ * trial is exhausted and points at the paid route (never a fabricated verdict).
+ */
+export function createCheckToken(opts: DataToolOptions = {}) {
+  const { base, payFetch, hasKey } = resolve(opts);
+  return tool(
+    async ({ token }: { token?: string }): Promise<[string, TokenReportResult]> => {
+      const out = await runTokenReport(payFetch, { token, base }, { hasKey });
+      return [JSON.stringify(out), out];
+    },
+    {
+      name: "check_token",
+      description:
+        "Pre-trade token-safety verdict for a Base ERC-20 via Grey Ridge /chain/token-report ($0.01 USDC/call, paid inline with x402 — no API key). Returns SAFE/CAUTION/AVOID, a 0-100 risk_score and reasons: honeypot/sellability simulation, measured buy/sell tax, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, owner supply %, and Uniswap-v3 WETH-pool liquidity (USD). Call before buying or swapping a Base ERC-20 to avoid a rug/honeypot.",
+      schema: z.object({
+        token: z
+          .string()
+          .optional()
+          .describe("0x-prefixed Base ERC-20 contract to check (40 hex chars). Omit to probe a demo token."),
+      }),
+      responseFormat: "content_and_artifact",
+    }
+  );
+}
+
 /** Zero-config tool instances: read `PRIVATE_KEY` (agent wallet) + optional `X402_DATA_BASE_URL` from env. */
 export const defiYields = createDefiYields({ privateKey: envKey(), base: envBase() });
 export const cryptoPrices = createCryptoPrices({ privateKey: envKey(), base: envBase() });
@@ -295,8 +332,9 @@ export const baseBlockNumber = createBaseBlockNumber({ privateKey: envKey(), bas
 export const baseTokenBalance = createBaseTokenBalance({ privateKey: envKey(), base: envBase() });
 export const cryptoFunding = createCryptoFunding({ privateKey: envKey(), base: envBase() });
 export const marketBrief = createMarketBrief({ privateKey: envKey(), base: envBase() });
+export const checkToken = createCheckToken({ privateKey: envKey(), base: envBase() });
 
-/** All eight data tools as a ready-to-spread array: `tools: [...defiDataTools]`. */
+/** All nine data tools as a ready-to-spread array: `tools: [...defiDataTools]`. */
 export const defiDataTools = [
   defiYields,
   cryptoPrices,
@@ -306,4 +344,5 @@ export const defiDataTools = [
   baseTokenBalance,
   cryptoFunding,
   marketBrief,
+  checkToken,
 ];

@@ -591,3 +591,129 @@ export async function runMarketBrief(payFetch, args = {}, { hasKey = true } = {}
     return { error: msg, paid: false, summary: `ERROR: ${msg}` };
   }
 }
+
+// --------------------------------------------------------------------------
+// Token-safety route — pre-trade rug/honeypot verdict
+// --------------------------------------------------------------------------
+// /chain/token-report ($0.01) answers "is this Base ERC-20 safe to buy?" with a
+// decision-grade verdict — SAFE | CAUTION | AVOID — plus a 0-100 risk_score and
+// the reasons (honeypot/sellability simulation, buy/sell tax, owner-renounced +
+// mint/pause/blacklist/fee-setter/upgradeable-proxy checks, owner supply %, and
+// Uniswap-v3 WETH-pool liquidity in USD). The FREE preview returns the SAME full
+// verdict for ANY Base token, but is capped at 3 real tokens/IP/day; the five
+// demo tokens (WETH/USDC/cbBTC/AERO/DEGEN) are un-metered. So a keyless install
+// returns a REAL verdict (never a stub) — on the default demo token when none is
+// given, or on the caller's token until the daily trial is spent, after which it
+// honestly reports the trial is exhausted and points at the paid route rather
+// than fabricating a verdict. This lifts $/payer above the $0.001 data tier and
+// matches GoPlus/honeypot.is/TokenSniffer — but keyless and key-free over x402.
+
+/** Aerodrome on Base — an un-metered demo token, used as the default so a keyless token-safety probe always returns a real verdict. */
+export const DEMO_TOKEN = "0x940181a94a35a4569e4529a3cdfb74e38fd98631";
+
+/** Build the paid /chain/token-report URL. Throws on a malformed token so a bad call never silently costs a payment. */
+export function buildTokenReportUrl({ token = DEMO_TOKEN, base = DATA_BASE } = {}) {
+  if (!ADDR_RE.test(String(token || ""))) throw new Error(`invalid Base token address: ${token}`);
+  const qs = new URLSearchParams({ token });
+  return `${base}/chain/token-report?${qs.toString()}`;
+}
+/** Build the FREE /chain/token-report/preview URL (same full verdict, capped 3 real tokens/IP/day). */
+export function buildTokenReportPreviewUrl({ token = DEMO_TOKEN, base = DATA_BASE } = {}) {
+  if (!ADDR_RE.test(String(token || ""))) throw new Error(`invalid Base token address: ${token}`);
+  const qs = new URLSearchParams({ token });
+  return `${base}/chain/token-report/preview?${qs.toString()}`;
+}
+
+/** One-line summary of a /chain/token-report object (verdict + risk score + symbol + top reasons). */
+export function summarizeTokenReport(out) {
+  if (!out || typeof out !== "object") return "no token report";
+  if (out.trial_exhausted) return "token-safety free trial exhausted for today (3/day/IP) — pay $0.01 for any token";
+  if (out.verdict == null) return out.note ? `token report unavailable — ${out.note}` : "no token report";
+  const sym = (out.token_meta && out.token_meta.symbol) || out.symbol || "token";
+  const bits = [`${sym}: ${out.verdict}`];
+  if (typeof out.risk_score === "number") bits.push(`risk ${out.risk_score}/100`);
+  const reasons = Array.isArray(out.reasons) ? out.reasons.slice(0, 3) : [];
+  if (reasons.length) bits.push(reasons.join("; "));
+  return bits.join(" · ");
+}
+
+/** Shape the preview/paid body into a compact, model-ready verdict object (keeps the structured fields the agent needs to gate a trade). */
+function shapeTokenReport(out, { paid }) {
+  const symbol = (out && out.token_meta && out.token_meta.symbol) || undefined;
+  const result = {
+    token: out && out.token,
+    verdict: (out && out.verdict) ?? null,
+    risk_score: out && typeof out.risk_score === "number" ? out.risk_score : null,
+    symbol,
+    reasons: Array.isArray(out && out.reasons) ? out.reasons.slice(0, 5) : [],
+    security: out && out.security,
+    liquidity: out && out.liquidity,
+    paid,
+  };
+  result.summary = summarizeTokenReport({ ...out, ...result });
+  return result;
+}
+
+/**
+ * Run /chain/token-report — the pre-trade safety verdict. `token` defaults to an
+ * un-metered demo token so a keyless probe always returns a REAL verdict. A
+ * keyless/unfunded install reads the free preview (same full verdict, capped at
+ * 3 real tokens/IP/day); when that daily trial is spent the preview returns 429
+ * and this degrades OPEN to an honest `{verdict:null, trial_exhausted:true}` that
+ * points at the paid route — never a fabricated verdict and never a throw into
+ * the agent runtime.
+ */
+export async function runTokenReport(payFetch, args = {}, { hasKey = true, previewFetch } = {}) {
+  const resolved = { ...args, token: args.token || DEMO_TOKEN };
+  let paidUrl;
+  let previewUrl;
+  try {
+    paidUrl = buildTokenReportUrl(resolved);
+    previewUrl = buildTokenReportPreviewUrl(resolved);
+  } catch (err) {
+    const msg = `chain/token-report unavailable: ${err?.message || err}`;
+    return { error: msg, token: args.token, verdict: null, risk_score: null, reasons: [], paid: false, summary: `ERROR: ${msg}` };
+  }
+  const takePreview = async (reason) => {
+    const f = previewFetch || (typeof fetch !== "undefined" ? fetch : null);
+    if (!f) throw new Error("no fetch available");
+    const res = await f(previewUrl);
+    const body = await res.json();
+    if (res.status === 429 || body?.trial?.real_token_checks_left_today === 0) {
+      // Trial spent — honest degrade-open: no verdict, point at the paid route.
+      return {
+        token: resolved.token,
+        verdict: null,
+        risk_score: null,
+        reasons: [],
+        trial_exhausted: true,
+        note: body?.error || "free real-token trial exhausted (3/day/IP)",
+        paid_url: body?.paid_url || paidUrl,
+        paid: false,
+        summary: summarizeTokenReport({ trial_exhausted: true }),
+        activation: activationBlock(reason, { paidUrl, priceUsdc: "0.01" }),
+        guard_reasons: [fundOnrampHint()],
+      };
+    }
+    if (!res.ok && res.status !== 200) throw new Error(`preview failed: HTTP ${res.status}`);
+    const shaped = shapeTokenReport(body, { paid: false });
+    shaped.activation = activationBlock(reason, { paidUrl, priceUsdc: "0.01" });
+    shaped.guard_reasons = [fundOnrampHint()];
+    return shaped;
+  };
+  try {
+    if (hasKey) {
+      const res = await payFetch(paidUrl);
+      if (res.ok || res.status === 200) {
+        const out = await res.json();
+        return shapeTokenReport(out, { paid: true });
+      }
+      const reason = res.status === 402 ? "wallet not funded (paid /chain/token-report returned 402)" : `paid /chain/token-report returned HTTP ${res.status}`;
+      return await takePreview(reason);
+    }
+    return await takePreview("no PRIVATE_KEY configured — free preview returns the full verdict (capped 3 real tokens/IP/day)");
+  } catch (err) {
+    const msg = `chain/token-report unavailable: ${err?.message || err}`;
+    return { error: msg, token: resolved.token, verdict: null, risk_score: null, reasons: [], paid: false, summary: `ERROR: ${msg}` };
+  }
+}

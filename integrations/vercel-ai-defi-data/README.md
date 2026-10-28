@@ -13,6 +13,9 @@ sign-up. Your agent's own wallet signs a sub-cent micropayment per call.
 | `baseGasPrice` | `/chain/gas-price` | **$0.002** | Base EIP-1559 gas — `base_fee_gwei`, `priority_fee_gwei`, `gas_price_gwei/_wei`, `gas_price_usd` |
 | `baseBlockNumber` | `/chain/block-number` | **$0.002** | Current Base mainnet block height |
 | `baseTokenBalance` | `/chain/token-balance` | **$0.002** | ERC-20 balance of a Base address — `symbol`, `decimals`, `balance`, `balance_formatted` (`token` defaults to USDC) |
+| `cryptoFunding` | `/crypto/funding` | **$0.004** | Cross-venue perp funding (Hyperliquid/OKX/dYdX) — per-venue rate, arb spread (bps), cheapest-long/richest-short venue, LONGS_PAY/SHORTS_PAY signal |
+| `marketBrief` | `/brief/market` | **$0.01** | One-call market snapshot — Fear & Greed, global market cap + BTC/ETH dominance, top gainers/losers, trending, top DeFi fee earners |
+| `checkToken` | `/chain/token-report` | **$0.01** | Pre-trade token-safety verdict — `SAFE`/`CAUTION`/`AVOID`, 0-100 `risk_score`, honeypot/sellability sim, buy/sell tax, owner-renounced + mint/pause/blacklist/proxy checks, owner supply %, WETH-pool liquidity |
 
 Data is sourced from DefiLlama and Base RPC.
 

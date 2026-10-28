@@ -289,3 +289,35 @@ export declare function runMarketBrief(
   args?: BriefArgs,
   opts?: { hasKey?: boolean }
 ): Promise<MarketBriefResult>;
+
+// --- Token-safety route: pre-trade rug/honeypot verdict ---
+
+export declare const DEMO_TOKEN: string;
+
+export interface TokenReportArgs {
+  token?: string;
+  base?: string;
+}
+
+export interface TokenReportResult {
+  token?: string;
+  verdict: "SAFE" | "CAUTION" | "AVOID" | null | string;
+  risk_score: number | null;
+  symbol?: string;
+  reasons: string[];
+  security?: Record<string, unknown>;
+  liquidity?: Record<string, unknown>;
+  paid: boolean;
+  summary: string;
+  trial_exhausted?: boolean;
+  note?: string;
+  paid_url?: string;
+  activation?: Activation;
+  guard_reasons?: string[];
+  error?: string;
+}
+
+export declare function buildTokenReportUrl(args?: TokenReportArgs): string;
+export declare function buildTokenReportPreviewUrl(args?: TokenReportArgs): string;
+export declare function summarizeTokenReport(out: Record<string, unknown>): string;
+export declare function runTokenReport(payFetch: PayFetch, args?: TokenReportArgs, opts?: RunOpts): Promise<TokenReportResult>;

@@ -11,6 +11,7 @@
  *   - `baseTokenBalance` → /chain/token-balance($0.002) ERC-20 balance (symbol/decimals)
  *   - `cryptoFunding`    → /crypto/funding    ($0.004) cross-venue perp funding + arb spread
  *   - `marketBrief`      → /brief/market      ($0.01)  one-call market snapshot
+ *   - `checkToken`       → /chain/token-report($0.01)  pre-trade SAFE/CAUTION/AVOID verdict
  *
  * Each tool uses `responseFormat: "content_and_artifact"` (readable string for
  * the model + structured object on `.artifact`) and degrades OPEN to the free
@@ -28,6 +29,7 @@ export {
   createBaseTokenBalance,
   createCryptoFunding,
   createMarketBrief,
+  createCheckToken,
   defiYields,
   cryptoPrices,
   baseBalance,
@@ -36,6 +38,7 @@ export {
   baseTokenBalance,
   cryptoFunding,
   marketBrief,
+  checkToken,
   defiDataTools,
 } from "./tool.js";
 export type { DataToolOptions } from "./tool.js";
@@ -59,6 +62,9 @@ export {
   buildFundingUrl,
   buildFundingPreviewUrl,
   buildMarketBriefUrl,
+  DEMO_TOKEN,
+  buildTokenReportUrl,
+  buildTokenReportPreviewUrl,
   summarizeYields,
   summarizePrices,
   summarizeBalance,
@@ -67,6 +73,7 @@ export {
   summarizeTokenBalance,
   summarizeFunding,
   summarizeMarketBrief,
+  summarizeTokenReport,
   fundOnrampHint,
   fetchYieldsOrPreview,
   fetchPricesOrPreview,
@@ -79,6 +86,7 @@ export {
   runTokenBalance,
   runFunding,
   runMarketBrief,
+  runTokenReport,
 } from "./data.mjs";
 export type {
   YieldArgs,
@@ -104,6 +112,8 @@ export type {
   MarketBriefResponse,
   FundingResult,
   MarketBriefResult,
+  TokenReportArgs,
+  TokenReportResult,
   Activation,
 } from "./data.mjs";
 

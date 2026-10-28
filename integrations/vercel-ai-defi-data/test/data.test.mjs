@@ -35,6 +35,11 @@ import {
   summarizeMarketBrief,
   runFunding,
   runMarketBrief,
+  DEMO_TOKEN,
+  buildTokenReportUrl,
+  buildTokenReportPreviewUrl,
+  summarizeTokenReport,
+  runTokenReport,
 } from "../src/data.mjs";
 
 const ADDR = "0x4200000000000000000000000000000000000006";
@@ -408,4 +413,84 @@ test("runMarketBrief 402 returns activation (no data), never throws", async () =
   const out = await runMarketBrief(payStub(jsonResponse(null, 402)), {}, { hasKey: true });
   assert.equal(out.paid, false);
   assert.match(out.activation.reason, /402/);
+});
+
+// ---- token-safety route: /chain/token-report ----
+const SAFE_PREVIEW = {
+  token: DEMO_TOKEN,
+  token_meta: { symbol: "AERO", name: "Aerodrome", decimals: 18 },
+  security: { isHoneypot: false, sellable: true, buyTaxBps: 0, sellTaxBps: 0 },
+  liquidity: { wethPoolUsd: 1383288 },
+  verdict: "SAFE",
+  risk_score: 15,
+  reasons: ["owner can mint new supply"],
+};
+
+test("buildTokenReportUrl defaults to the demo token and validates", () => {
+  assert.equal(buildTokenReportUrl(), `${DATA_BASE}/chain/token-report?token=${DEMO_TOKEN}`);
+  assert.match(buildTokenReportPreviewUrl({ token: ADDR }), /\/chain\/token-report\/preview\?token=0x4200/);
+  assert.throws(() => buildTokenReportUrl({ token: "nope" }), /invalid Base token/);
+});
+
+test("summarizeTokenReport renders verdict + risk + symbol + reasons", () => {
+  const s = summarizeTokenReport(SAFE_PREVIEW);
+  assert.match(s, /AERO: SAFE/);
+  assert.match(s, /risk 15\/100/);
+  assert.match(s, /owner can mint/);
+  assert.equal(summarizeTokenReport({ trial_exhausted: true }), "token-safety free trial exhausted for today (3/day/IP) — pay $0.01 for any token");
+  assert.equal(summarizeTokenReport({ verdict: null, note: "x" }), "token report unavailable — x");
+});
+
+test("runTokenReport keyless reads the full free-preview verdict (real, not a stub)", async () => {
+  const previewFetch = async () => jsonResponse(SAFE_PREVIEW);
+  const out = await runTokenReport(payStub(jsonResponse({})), {}, { hasKey: false, previewFetch });
+  assert.equal(out.paid, false);
+  assert.equal(out.verdict, "SAFE");
+  assert.equal(out.risk_score, 15);
+  assert.equal(out.symbol, "AERO");
+  assert.deepEqual(out.reasons, ["owner can mint new supply"]);
+  assert.ok(out.activation.needed);
+  assert.equal(out.activation.price_usdc, "0.01");
+});
+
+test("runTokenReport paid path returns the verdict with paid:true, no activation", async () => {
+  const out = await runTokenReport(payStub(jsonResponse({ ...SAFE_PREVIEW, verdict: "AVOID", risk_score: 85 })), { token: ADDR }, { hasKey: true });
+  assert.equal(out.paid, true);
+  assert.equal(out.verdict, "AVOID");
+  assert.equal(out.risk_score, 85);
+  assert.equal(out.activation, undefined);
+});
+
+test("runTokenReport degrades OPEN on a spent daily trial (429) — no fabricated verdict", async () => {
+  const previewFetch = async () =>
+    jsonResponse({ error: "free real-token trial exhausted (3/day/IP)", trial: { real_token_checks_left_today: 0 }, paid_url: `${DATA_BASE}/chain/token-report?token=${ADDR}` }, 429);
+  const out = await runTokenReport(payStub(jsonResponse({})), { token: ADDR }, { hasKey: false, previewFetch });
+  assert.equal(out.paid, false);
+  assert.equal(out.verdict, null); // never fabricates a verdict
+  assert.equal(out.trial_exhausted, true);
+  assert.match(out.paid_url, /\/chain\/token-report\?token=/);
+  assert.match(out.summary, /trial exhausted/);
+});
+
+test("runTokenReport on a 402 falls back to the preview verdict", async () => {
+  const previewFetch = async () => jsonResponse(SAFE_PREVIEW);
+  const out = await runTokenReport(payStub(jsonResponse(null, 402)), { token: ADDR }, { hasKey: true, previewFetch });
+  assert.equal(out.paid, false);
+  assert.equal(out.verdict, "SAFE");
+  assert.match(out.activation.reason, /402/);
+});
+
+test("runTokenReport bad token surfaces as {error}, never throws", async () => {
+  const out = await runTokenReport(payStub(jsonResponse({})), { token: "0xnope" }, { hasKey: true });
+  assert.match(out.error, /invalid Base token|unavailable/);
+  assert.equal(out.verdict, null);
+  assert.match(out.summary, /^ERROR:/);
+});
+
+test("runTokenReport true outage returns {error}, never throws", async () => {
+  const boom = async () => { throw new Error("rpc down"); };
+  const out = await runTokenReport(boom, { token: ADDR }, { hasKey: false, previewFetch: boom });
+  assert.match(out.error, /rpc down/);
+  assert.equal(out.verdict, null);
+  assert.match(out.summary, /^ERROR:/);
 });

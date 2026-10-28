@@ -3,7 +3,7 @@ import { z } from "zod";
 import { makePayFetch, type PayFetch } from "./client.js";
 // Core fetch/shaping logic lives in a dependency-free module so it is unit-
 // tested without the AI SDK runtime. Imported with the .mjs extension on purpose.
-import { runYields, runPrices, runBalance, runGasPrice, runBlockNumber, runTokenBalance, runFunding, runMarketBrief, BASE_USDC, DATA_BASE } from "./data.mjs";
+import { runYields, runPrices, runBalance, runGasPrice, runBlockNumber, runTokenBalance, runFunding, runMarketBrief, runTokenReport, BASE_USDC, DATA_BASE } from "./data.mjs";
 
 function envKey(): string | undefined {
   return typeof process !== "undefined" ? process.env?.PRIVATE_KEY : undefined;
@@ -211,6 +211,35 @@ export function createMarketBrief(opts: DataToolOptions = {}) {
   });
 }
 
+/**
+ * Vercel AI SDK tool: pre-trade token-safety verdict via Grey Ridge
+ * `/chain/token-report` ($0.01 USDC/call, paid inline with x402 — no API key).
+ * Answers "is this Base ERC-20 safe to buy?" with a decision-grade verdict —
+ * SAFE | CAUTION | AVOID — a 0-100 risk_score and the reasons: honeypot /
+ * sellability simulation, measured buy/sell tax, owner-renounced +
+ * mint/pause/blacklist/fee-setter/upgradeable-proxy checks, owner supply %, and
+ * Uniswap-v3 WETH-pool liquidity (USD). The free preview returns the SAME full
+ * verdict for any token (capped at 3 real tokens/IP/day), so a keyless install
+ * gets a REAL verdict — on a demo token when none is given, or on the caller's
+ * token until the daily trial is spent, after which it honestly reports the
+ * trial is exhausted and points at the paid route (never a fabricated verdict).
+ * Use before an agent buys or swaps a Base ERC-20.
+ */
+export function createCheckToken(opts: DataToolOptions = {}) {
+  const { base, payFetch, hasKey } = resolve(opts);
+  return tool({
+    description:
+      "Pre-trade token-safety verdict for a Base ERC-20 via Grey Ridge /chain/token-report ($0.01 USDC/call, paid inline with x402 — no API key). Returns SAFE/CAUTION/AVOID, a 0-100 risk_score and reasons: honeypot/sellability simulation, measured buy/sell tax, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, owner supply %, and Uniswap-v3 WETH-pool liquidity (USD). Call before buying or swapping a Base ERC-20 to avoid a rug/honeypot.",
+    inputSchema: z.object({
+      token: z
+        .string()
+        .optional()
+        .describe("0x-prefixed Base ERC-20 contract to check (40 hex chars). Omit to probe a demo token."),
+    }),
+    execute: async ({ token }: { token?: string }) => runTokenReport(payFetch, { token, base }, { hasKey }),
+  });
+}
+
 /** Zero-config tool instances: read `PRIVATE_KEY` (agent wallet) + optional `X402_DATA_BASE_URL` from env. */
 export const defiYields = createDefiYields({ privateKey: envKey(), base: envBase() });
 export const cryptoPrices = createCryptoPrices({ privateKey: envKey(), base: envBase() });
@@ -220,8 +249,9 @@ export const baseBlockNumber = createBaseBlockNumber({ privateKey: envKey(), bas
 export const baseTokenBalance = createBaseTokenBalance({ privateKey: envKey(), base: envBase() });
 export const cryptoFunding = createCryptoFunding({ privateKey: envKey(), base: envBase() });
 export const marketBrief = createMarketBrief({ privateKey: envKey(), base: envBase() });
+export const checkToken = createCheckToken({ privateKey: envKey(), base: envBase() });
 
-/** All eight data tools as a ready-to-spread toolset: `tools: { ...defiDataTools }`. */
+/** All nine data tools as a ready-to-spread toolset: `tools: { ...defiDataTools }`. */
 export const defiDataTools = {
   defiYields,
   cryptoPrices,
@@ -231,4 +261,5 @@ export const defiDataTools = {
   baseTokenBalance,
   cryptoFunding,
   marketBrief,
+  checkToken,
 };
