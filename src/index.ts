@@ -1747,6 +1747,11 @@ Runnable version: https://github.com/rezearcher/x402-data-api/blob/main/examples
 
 Already run a generic x402 buyer adapter? This API is wire-compatible with OpenAPI-driven x402 MCP clients: our /openapi.json tags every billable route with x-billable/x-availability/x-price-usdc and honors ?preview=true on the paid path, and /.well-known/agent-capabilities.json?q=&limit=N returns ranked products whose operation_id resolves straight back to the OpenAPI operation. e.g. point the npm MCP adapter dopaminedesk-ai-data-marketplace-mcp at us with one env var — MARKETPLACE_URL=${BASE} — to discover, preview, and buy Grey Ridge routes with no code change.
 
+## Install as a drop-in tool for your framework (one line, pay inline over x402)
+You run a framework, not raw HTTP — so install the data tools for it instead of hand-wiring calls. Each package pays inline in USDC over x402 (no account, no API key) and degrades to the free preview when unpaid:
+${INSTALLABLE_TOOLS.map((t) => `- ${t.framework} (${t.language}): \`${t.install}\` — ${t.tool_count} tools wrapping ${t.wraps.join(", ")}. ${t.repository}`).join("\n")}
+The same index is machine-readable in /.well-known/x402 (integrations.installable_tools) and /.well-known/agent-capabilities.json, so an agent can discover the install path for its own framework.
+
 ## Start here — two flagships (what agents actually pay us for)
 
 ### 1. MCP server security scan — prompt-injection / tool-poisoning audit (unique; no free equivalent)
