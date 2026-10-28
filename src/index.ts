@@ -390,6 +390,54 @@ function rpcMarkBad(url: string, ms = 30000): void {
 const ADDR_RE = /^0x[a-fA-F0-9]{40}$/;
 const HASH_RE = /^0x[a-fA-F0-9]{64}$/;
 
+// ---------------------------------------------------------------------------
+// Demo token aliases — the SINGLE source of truth for "?token=usdc".
+//
+// These live here (not next to the preview routes) because THREE layers need to
+// agree on them: the free previews, the paid handlers, and the x402 discovery
+// surfaces (the 402 body's bazaar input sample + /.well-known/x402). They used
+// to be preview-only, so the manifest advertised the canonical USDC address
+// while the paid handler 400'd the alias it had just advertised (t_53e0754d):
+// an agent that negotiated payment off the manifest could never complete the
+// demo funnel. Every one of those layers now calls resolveTokenQuery(), so a
+// value the manifest resolves can never be rejected by the handler serving it.
+//
+// Addresses verified on Base mainnet by eth_call symbol()/decimals():
+// usdc=USDC/6, weth=WETH/18, cbbtc=cbBTC/8, cbeth=cbETH/18, aero=AERO/18,
+// degen=DEGEN/18 (2026-10-28).
+export const DEMO_TOKEN_ALIASES: Record<string, string> = {
+  usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  weth: "0x4200000000000000000000000000000000000006",
+  cbbtc: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+  cbeth: "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22",
+  aero: "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+  degen: "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
+};
+// Rendered into every error hint so the accepted alias set can never be stale.
+export const DEMO_TOKEN_ALIAS_HINT = Object.keys(DEMO_TOKEN_ALIASES).join("|");
+
+export type TokenQueryResolution =
+  | { ok: true; token: string; alias: boolean }
+  | { ok: false; error: string };
+
+// Resolve a ?token= value into a Base ERC-20 contract address:
+//   * a syntactically valid 20-byte address passes through untouched (case kept),
+//   * a known demo alias (case-INSENSITIVE: USDC, Usdc, weth…) maps to its
+//     canonical address — this is the value the 402 manifest advertises,
+//   * anything else is a hard failure so a genuinely unknown symbol still 400s
+//     and (on a paid route) never settles.
+// One resolver, so manifest and handler cannot drift.
+export function resolveTokenQuery(raw: string | undefined): TokenQueryResolution {
+  const v = (raw ?? "").trim();
+  if (ADDR_RE.test(v)) return { ok: true, token: v, alias: false };
+  const hit = DEMO_TOKEN_ALIASES[v.toLowerCase()];
+  if (hit) return { ok: true, token: hit, alias: true };
+  return {
+    ok: false,
+    error: `token must be a 0x-prefixed 20-byte Base address (or demo alias: ${DEMO_TOKEN_ALIAS_HINT})`,
+  };
+}
+
 async function baseRpc(method: string, params: unknown[]): Promise<any> {
   let lastErr = "no rpc tried";
   for (const url of rpcOrder()) {
@@ -1291,6 +1339,13 @@ app.get("/.well-known/x402", (c) => {
     x402Version: 2,
     network: NETWORK,
     networks: [NETWORK],
+    // Demo aliases the PAID handlers accept, published from the same table the
+    // handlers and the 402 body resolve through (DEMO_TOKEN_ALIASES). Until
+    // t_53e0754d the 402 manifest advertised the canonical address for `usdc`
+    // while the paid route 400'd the alias — an agent could negotiate payment and
+    // then be refused the product. Now `?token=usdc` is a supported input on the
+    // paid route and is documented here so a buyer-agent can discover it.
+    demo_token_aliases: DEMO_TOKEN_ALIASES,
     mcp_endpoint: `${BASE}/mcp`,
     resources: ROUTE_CATALOG.map((r) => mk(...r)),
   });
@@ -2270,7 +2325,7 @@ function bazaarTagsFor(routeKey: string): string[] {
   return out;
 }
 
-function makeRoutes(payTo: string) {
+export function makeRoutes(payTo: string) {
   const routes: Record<string, any> = {
     "POST /mcp": {
       accepts: {
@@ -2905,7 +2960,7 @@ function makeRoutes(payTo: string) {
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
-        input: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" },
+        input: { token: DEMO_TOKEN_ALIASES.usdc },
         inputSchema: { type: "object", properties: { token: { type: "string", description: "0x-prefixed ERC-20 contract address on Base" } } },
         output: { example: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913", name: "USD Coin", symbol: "USDC", decimals: 6, total_supply_raw: "3500000000000000", total_supply: 3500000000, chain: "base" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
@@ -3043,7 +3098,7 @@ function makeRoutes(payTo: string) {
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
-        input: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913" },
+        input: { token: DEMO_TOKEN_ALIASES.usdc },
         inputSchema: { type: "object", properties: { token: { type: "string", description: "0x-prefixed ERC-20 contract address on Base" } } },
         output: { example: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913", symbol: "USDC", decimals: 6, total_supply_raw: "3500000000000000", total_supply: 3500000000, chain: "base" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
@@ -3076,7 +3131,7 @@ function makeRoutes(payTo: string) {
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
-        input: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913", owner: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10", spender: "0x4200000000000000000000000000000000000006" },
+        input: { token: DEMO_TOKEN_ALIASES.usdc, owner: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10", spender: "0x4200000000000000000000000000000000000006" },
         inputSchema: { type: "object", properties: { token: { type: "string", description: "ERC-20 address" }, owner: { type: "string", description: "owner address" }, spender: { type: "string", description: "spender address" } } },
         output: { example: { token: "0x833589fCd6eDb6E08f4c7C32D4f71b54bdA02913", owner: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10", spender: "0x4200000000000000000000000000000000000006", allowance_raw: "0", allowance: 0, decimals: 6, is_unlimited: false, chain: "base" } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
@@ -3403,7 +3458,7 @@ function makeRoutes(payTo: string) {
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
-        input: { token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
+        input: { token: DEMO_TOKEN_ALIASES.usdc },
         inputSchema: {
           type: "object",
           required: ["token"],
@@ -3460,7 +3515,7 @@ function makeRoutes(payTo: string) {
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
-        input: { token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", side: "buy", notional_usd: "500" },
+        input: { token: DEMO_TOKEN_ALIASES.usdc, side: "buy", notional_usd: "500" },
         inputSchema: {
           type: "object",
           required: ["token"],
@@ -3502,7 +3557,7 @@ function makeRoutes(payTo: string) {
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
-        input: { token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
+        input: { token: DEMO_TOKEN_ALIASES.usdc },
         inputSchema: {
           type: "object",
           required: ["token"],
@@ -6138,13 +6193,13 @@ app.get("/chain/token-balance/preview", async (c) => {
 
 app.get("/chain/token-balance", async (c) => {
   const address = c.req.query("address");
-  const token = c.req.query("token");
+  const tokenQ_ = resolveTokenQuery(c.req.query("token"));
   if (!address || !ADDR_RE.test(address)) {
     return c.json({ error: "address query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
   }
-  if (!token || !ADDR_RE.test(token)) {
-    return c.json({ error: "token query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
-  }
+  // Paid route: accept the demo aliases its own 402 manifest advertises.
+  if (!tokenQ_.ok) return c.json({ error: tokenQ_.error }, { status: 400 });
+  const token = tokenQ_.token;
 
   try {
     const result = await buildTokenBalance(address, token);
@@ -6308,10 +6363,9 @@ app.get("/chain/code", async (c) => {
 });
 
 app.get("/chain/erc20-meta", async (c) => {
-  const token = c.req.query("token");
-  if (!token || !ADDR_RE.test(token)) {
-    return c.json({ error: "token query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
-  }
+  const tq = resolveTokenQuery(c.req.query("token"));
+  if (!tq.ok) return c.json({ error: tq.error }, { status: 400 });
+  const token = tq.token;
   try {
     const call = (data: string) => baseRpc("eth_call", [{ to: token, data }, "latest"]).catch(() => "0x") as Promise<string>;
     const [n, sy, d, ts] = await Promise.all([call("0x06fdde03"), call("0x95d89b41"), call("0x313ce567"), call("0x18160ddd")]);
@@ -6564,10 +6618,9 @@ app.get("/chain/fee-history", async (c) => {
 });
 
 app.get("/chain/total-supply", async (c) => {
-  const token = c.req.query("token");
-  if (!token || !ADDR_RE.test(token)) {
-    return c.json({ error: "token query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
-  }
+  const tq = resolveTokenQuery(c.req.query("token"));
+  if (!tq.ok) return c.json({ error: tq.error }, { status: 400 });
+  const token = tq.token;
   try {
     const call = (data: string) => baseRpc("eth_call", [{ to: token, data }, "latest"]).catch(() => "0x") as Promise<string>;
     const [sy, d, ts] = await Promise.all([call("0x95d89b41"), call("0x313ce567"), call("0x18160ddd")]);
@@ -6636,10 +6689,11 @@ app.get("/chain/proxy-info", async (c) => {
 });
 
 app.get("/chain/allowance", async (c) => {
-  const token = c.req.query("token"), owner = c.req.query("owner"), spender = c.req.query("spender");
-  if (!token || !owner || !spender || ![token, owner, spender].every((x) => ADDR_RE.test(x))) {
-    return c.json({ error: "token, owner and spender query params must be 0x-prefixed 20-byte addresses" }, { status: 400 });
+  const tq = resolveTokenQuery(c.req.query("token")), owner = c.req.query("owner"), spender = c.req.query("spender");
+  if (!tq.ok || !owner || !spender || ![owner, spender].every((x) => ADDR_RE.test(x))) {
+    return c.json({ error: tq.ok ? "owner and spender query params must be 0x-prefixed 20-byte addresses" : tq.error }, { status: 400 });
   }
+  const token = tq.token;
   try {
     const pad = (a: string) => a.slice(2).toLowerCase().padStart(64, "0");
     const [al, d] = await Promise.all([
@@ -8090,10 +8144,11 @@ async function analyzeTokenSecurity(token: string): Promise<TokenSecurityResult>
 }
 
 app.get("/chain/token-security", async (c) => {
-  const token = c.req.query("token");
-  if (!token || !ADDR_RE.test(token)) {
-    return c.json({ error: "token query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
-  }
+  // Paid route: resolve the SAME way the 402 manifest does, so the demo alias it
+  // advertises (?token=USDC) is accepted on the paid retry instead of 400'ing.
+  const tq = resolveTokenQuery(c.req.query("token"));
+  if (!tq.ok) return c.json({ error: tq.error }, { status: 400 });
+  const token = tq.token;
   try {
     const result = await analyzeTokenSecurity(token);
     console.log(
@@ -8127,7 +8182,7 @@ const TOKEN_SECURITY_PREVIEW_TOKEN = "0x4200000000000000000000000000000000000006
 app.get("/chain/token-security/preview", async (c) => {
   const tq = tokenQ(c);
   if (tq !== undefined && !ADDR_RE.test(tq) && !PREVIEW_DEMO_TOKENS[tq.toLowerCase()]) {
-    return c.json({ error: "token must be a 0x-prefixed 20-byte Base address (or demo: usdc|weth|cbbtc|aero|degen)" }, { status: 400 });
+    return c.json({ error: `token must be a 0x-prefixed 20-byte Base address (or demo: ${DEMO_TOKEN_ALIAS_HINT})` }, { status: 400 });
   }
   const ORIGIN = new URL(c.req.url).origin;
   try {
@@ -8517,10 +8572,12 @@ async function buildTokenReport(token: string) {
 }
 
 app.get("/chain/token-report", async (c) => {
-  const token = tokenQ(c);
-  if (!token || !ADDR_RE.test(token)) {
-    return c.json({ error: "token query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
-  }
+  // Paid route: resolve the SAME way the 402 manifest does. The manifest (and the
+  // bazaar input sample in the 402 body) advertises the canonical address for a
+  // demo alias, so the retried ?token=USDC must resolve here, not 400 (t_53e0754d).
+  const tq = resolveTokenQuery(tokenQ(c));
+  if (!tq.ok) return c.json({ error: tq.error }, { status: 400 });
+  const token = tq.token;
   try {
     const result = await buildTokenReport(token);
     console.log(
@@ -8724,10 +8781,11 @@ async function buildSwapGate(token: string, side: "buy" | "sell", notional: numb
 
 // Pre-trade gate: compact go/hold/block built on the token-report engine.
 app.get("/gate/swap", async (c) => {
-  const token = tokenQ(c);
-  if (!token || !ADDR_RE.test(token)) {
-    return c.json({ error: "token query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
-  }
+  // Paid route: same resolver as the 402 manifest / free preview, so ?token=USDC
+  // (a value this route's own manifest advertises) is accepted on the paid call.
+  const tq = resolveTokenQuery(tokenQ(c));
+  if (!tq.ok) return c.json({ error: tq.error }, { status: 400 });
+  const token = tq.token;
   const side = (c.req.query("side") ?? "buy").toLowerCase();
   if (side !== "buy" && side !== "sell") return c.json({ error: "side must be buy or sell" }, { status: 400 });
   const notional = notionalQ(c);
@@ -8970,8 +9028,10 @@ export function sizedVerdictLine(
 }
 
 app.get("/gate/swap/unlock", async (c) => {
-  const token = tokenQ(c);
-  if (!token || !ADDR_RE.test(token)) return c.json({ error: "token query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
+  // Same alias resolution as the paid routes it unlocks (t_53e0754d).
+  const tq = resolveTokenQuery(tokenQ(c));
+  if (!tq.ok) return c.json({ error: tq.error }, { status: 400 });
+  const token = tq.token;
   const side = (c.req.query("side") ?? "buy").toLowerCase();
   if (side !== "buy" && side !== "sell") return c.json({ error: "side must be buy or sell" }, { status: 400 });
   const notional = notionalQ(c);
@@ -9013,14 +9073,11 @@ app.get("/gate/swap/unlock", async (c) => {
 
 // Free preview — full real report for Base USDC (same depth as paid). ?token= is
 // honored only for the fixed demo set so the preview can't substitute the paid route.
-const TOKEN_REPORT_PREVIEW_TOKEN = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // USDC on Base
-const PREVIEW_DEMO_TOKENS: Record<string, string> = {
-  usdc: TOKEN_REPORT_PREVIEW_TOKEN,
-  weth: "0x4200000000000000000000000000000000000006",
-  cbbtc: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
-  aero: "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
-  degen: "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
-};
+const TOKEN_REPORT_PREVIEW_TOKEN = DEMO_TOKEN_ALIASES.usdc; // USDC on Base
+// Local name for the shared table defined next to ADDR_RE (DEMO_TOKEN_ALIASES).
+// Same object, not a copy: the previews, the paid handlers and the x402 manifest
+// all read one list, so an alias advertised anywhere resolves everywhere.
+const PREVIEW_DEMO_TOKENS: Record<string, string> = DEMO_TOKEN_ALIASES;
 // Detection-regression canary control (Line-A A0). A burn address holds no code and
 // no deployer key exists for it, so it is STRUCTURALLY non-contract forever => no pool =>
 // the gate must return decision=block / verdict=AVOID / risk=100 permanently. The uptime
@@ -9674,7 +9731,7 @@ export function previewGateArgs(c: any): { error: string } | { side: "buy" | "se
 }
 app.get("/chain/token-report/preview", async (c) => {
   const tq = tokenQ(c);
-  if (tq !== undefined && !ADDR_RE.test(tq) && !PREVIEW_DEMO_TOKENS[tq.toLowerCase()]) return c.json({ error: "token must be a 0x-prefixed 20-byte Base address (or demo: usdc|weth|cbbtc|aero|degen)" }, { status: 400 });
+  if (tq !== undefined && !ADDR_RE.test(tq) && !PREVIEW_DEMO_TOKENS[tq.toLowerCase()]) return c.json({ error: `token must be a 0x-prefixed 20-byte Base address (or demo: ${DEMO_TOKEN_ALIAS_HINT})` }, { status: 400 });
   try {
     const t = await trialToken(c, tq);
     if (t.exhausted) { const pu = paidUrlFrom(c); return c.json({ error: "free real-token trial exhausted (3/day/IP) - this is NOT a result for the token you asked about", trial: { real_token_checks_left_today: 0 }, paid: pu, paid_url: pu, price_usdc: "0.01", pay_with: `x402: npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f("${pu}") - pays USDC on Base automatically. Docs: https://api.greyridgesignals.ai/llms.txt` }, { status: 429 }); }
@@ -9709,7 +9766,7 @@ async function trialToken(c: any, q: string | undefined): Promise<{ token: strin
 }
 app.get("/gate/swap/preview", async (c) => {
   const tq = tokenQ(c);
-  if (tq !== undefined && !ADDR_RE.test(tq) && !PREVIEW_DEMO_TOKENS[tq.toLowerCase()]) return c.json({ error: "token must be a 0x-prefixed 20-byte Base address (or demo: usdc|weth|cbbtc|aero|degen)" }, { status: 400 });
+  if (tq !== undefined && !ADDR_RE.test(tq) && !PREVIEW_DEMO_TOKENS[tq.toLowerCase()]) return c.json({ error: `token must be a 0x-prefixed 20-byte Base address (or demo: ${DEMO_TOKEN_ALIAS_HINT})` }, { status: 400 });
   // Validate BEFORE trialToken: a malformed request must not burn one of the 3
   // free real-token checks per IP per day, and must not fall through to a default
   // that answers a different question than the caller asked.
