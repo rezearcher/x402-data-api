@@ -40,19 +40,38 @@ if (!fs.existsSync(LOG_PATH)) {
   process.exit(1);
 }
 const lines = fs.readFileSync(LOG_PATH, 'utf8').split('\n').filter(Boolean);
-if (lines.some((l) => l.includes('settlement_confirmed'))) {
-  console.log('already confirmed — no-op');
-  process.exit(2);
-}
+
+// The log is APPEND-ONLY as of 2026-10-28 (card t_4ed8918e), so it accumulates
+// `settlement_confirmed` lines forever. "The log contains a confirmed line" therefore
+// cannot mean "this attempt is done" — read that way the verifier is permanently a
+// no-op, and truncating the log to re-enable it is exactly how the 06:02Z settlement
+// lost its three lines (commit f6e2c2c). Confirmation is per-TX, not per-file.
+const confirmedTxs = new Set(
+  lines
+    .filter((l) => l.includes('settlement_confirmed'))
+    .map((l) => (/tx=(0x[0-9a-fA-F]{64})/.exec(l) || [])[1])
+    .filter(Boolean)
+);
 
 const attempts = lines
   .map((l) => { try { return JSON.parse(l); } catch { return null; } })
   .filter((o) => o && o.event === 'settlement_attempt' && o.route === ROUTE);
-if (attempts.length !== 1) {
-  console.error(`expected exactly 1 settlement_attempt for ${ROUTE}, found ${attempts.length} — refusing`);
+const unconfirmed = attempts.filter((x) => !(x.tx_hash && confirmedTxs.has(x.tx_hash)));
+if (unconfirmed.length === 0) {
+  if (attempts.length) {
+    console.log(`already confirmed — no-op (${attempts.length} attempt(s) for ${ROUTE}, every tx already confirmed on-chain)`);
+    process.exit(2);
+  }
+  console.error(`no settlement_attempt for ${ROUTE} in the append-only log — nothing to verify`);
   process.exit(1);
 }
-const a = attempts[0];
+if (unconfirmed.length !== 1) {
+  console.error(
+    `expected exactly 1 unconfirmed settlement_attempt for ${ROUTE}, found ${unconfirmed.length} — refusing (reconcile one settlement at a time)`
+  );
+  process.exit(1);
+}
+const a = unconfirmed[0];
 if (!a.tx_hash) { console.error('attempt has no tx hash — cannot prove payment'); process.exit(1); }
 
 (async () => {

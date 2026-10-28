@@ -20,10 +20,18 @@ WHY THIS EXISTS (learned the hard way on 2026-10-28):
       entry that contradicts the chain is provable fraud rather than a typo
 
 SUBCOMMANDS
-  audit    [--days N]                  enumerate every buyer->payTo USDC transfer on Base
-  verify   [--file PATH]               recompute the hash chain; exit 1 on any mutation
-  append   [--file PATH] --entry JSON  append one entry (JSON on argv or stdin via '-')
-  show     [--file PATH]               print a summary table
+  guard    --route ROUTE [--window-days N]   idempotency gate: exit 0 clear / 2 already settled / 1 fail closed
+  init     [--file PATH]                     create an empty (unsettled) day file, deliberately, once
+  audit    [--days N]                        enumerate every buyer->payTo USDC transfer on Base
+  verify   [--file PATH]                     recompute the hash chain; exit 1 on any mutation
+  append   [--file PATH] --entry JSON        append one entry (JSON on argv or stdin via '-')
+  show     [--file PATH]                     print a summary table
+
+`guard` is what `scripts/settle_once.js` calls before it spends anything. It is
+deliberately FAIL-CLOSED: a missing ledger, an unreadable ledger, or a chain that
+does not verify all mean "I cannot prove this route was not already settled", and
+that is a refusal — not a pass. Exit 2 means a duplicate was found (the guard that
+actually holds); exit 1 means the guard itself could not do its job.
 
 Ledger file default: ledger/cdp-settlement-<UTC date>.json  (one file per day).
 
@@ -127,6 +135,29 @@ def verify(doc: dict) -> list[str]:
             problems.append("entry %d (%s): entry_sha256 mismatch — entry was modified" % (i, entry.get("tx_hash", "?")[:12]))
         prev = entry.get("entry_sha256")
     return problems
+
+
+def ledger_files() -> list[str]:
+    """Every day-file in the ledger directory, oldest first. Never invents one."""
+    if not os.path.isdir(LEDGER_DIR):
+        return []
+    names = [n for n in os.listdir(LEDGER_DIR) if n.startswith("cdp-settlement-") and n.endswith(".json")]
+    return sorted(os.path.join(LEDGER_DIR, n) for n in names)
+
+
+def parse_settled_at(value) -> float | None:
+    """ISO-8601 'Z' timestamp -> epoch seconds. None when absent/unparseable."""
+    if not value:
+        return None
+    text = str(value).strip()
+    try:
+        return datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+    except ValueError:
+        pass
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
 
 
 # ------------------------------------------------------------------------ chain audit
@@ -237,6 +268,108 @@ def cmd_verify(args) -> int:
     return 0
 
 
+def cmd_guard(args) -> int:
+    """Fail-closed idempotency gate over the ledger.
+
+    0 = clear to settle, 2 = this route was already settled inside the window,
+    1 = the guard could not prove anything (missing/corrupt/unverifiable ledger).
+    """
+    route, window = args.route, args.window_days
+    # `not (window >= 0)` rather than `window < 0` so NaN (a typo'd --window-days) is
+    # refused too: NaN compared against a timestamp silently matches nothing, i.e. it
+    # would read as "clear".
+    if not (window >= 0):
+        print("GUARD: BLOCKED route=%s reason=bad_window_days=%s" % (route, window))
+        return 1
+
+    if args.file:
+        # load() synthesises an empty document for a missing path — fine for `append`,
+        # fatal for a guard: an absent ledger would read as "nothing settled, go".
+        if not os.path.exists(args.file):
+            print("GUARD: BLOCKED route=%s reason=ledger_missing file=%s" % (route, args.file))
+            print("  fail closed: the named ledger does not exist, so nothing can prove %s was not already settled." % route)
+            return 1
+        files = [args.file]
+    else:
+        files = ledger_files()
+    if not files:
+        print("GUARD: BLOCKED route=%s reason=no_ledger_files dir=%s" % (route, LEDGER_DIR))
+        print("  fail closed: no cdp-settlement-*.json exists, so nothing can prove %s was not already settled." % route)
+        print("  the only way past this is a deliberate, recorded bootstrap: python3 scripts/cdp_settlement_ledger.py init")
+        return 1
+
+    cutoff = time.time() - window * 86400.0
+    broken: list[str] = []
+    matches: list[tuple[str, dict]] = []
+    scanned = 0
+
+    for path in files:
+        try:
+            doc = load(path)
+        except SystemExit as exc:  # load() hard-fails on a foreign schema
+            broken.append("%s: %s" % (os.path.basename(path), exc))
+            continue
+        except (OSError, ValueError) as exc:
+            broken.append("%s: unreadable (%s)" % (os.path.basename(path), exc))
+            continue
+        problems = verify(doc)
+        if problems:
+            broken.extend("%s: %s" % (os.path.basename(path), p) for p in problems)
+            continue
+        for entry in doc.get("entries", []):
+            scanned += 1
+            if (entry.get("endpoint") or {}).get("route") != route:
+                continue
+            ts = parse_settled_at(entry.get("settled_at"))
+            # An entry we cannot date cannot be excluded from the window: fail closed.
+            if ts is None or ts >= cutoff:
+                matches.append((path, entry))
+
+    if broken:
+        print("GUARD: BLOCKED route=%s reason=ledger_untrustworthy files=%d" % (route, len(files)))
+        for line in broken:
+            print("  FAIL %s" % line)
+        print("  fail closed: the ledger is the idempotency key, so a ledger that does not")
+        print("  verify cannot prove anything. Repair the chain (never delete entries) first.")
+        return 1
+
+    if matches:
+        matches.sort(key=lambda m: parse_settled_at(m[1].get("settled_at")) or 0.0, reverse=True)
+        print("GUARD: BLOCKED route=%s window_days=%g matches=%d" % (route, window, len(matches)))
+        for path, entry in matches:
+            print(
+                "  seq=%s settled_at=%s tx=%s usdc=%.6f ext=%s file=%s"
+                % (
+                    entry.get("seq", "?"),
+                    entry.get("settled_at", "?"),
+                    entry.get("tx_hash", "?"),
+                    float(entry.get("amount_usdc") or 0),
+                    entry.get("extension_status", "?"),
+                    os.path.relpath(path, PROJECT),
+                )
+            )
+        print("  this route is inside its re-listing window; it must not be settled again.")
+        return 2
+
+    print(
+        "GUARD: CLEAR route=%s window_days=%g scanned=%d entries in %d ledger file(s)"
+        % (route, window, scanned, len(files))
+    )
+    return 0
+
+
+def cmd_init(args) -> int:
+    """Create an empty day file. INSERT-only means init never touches an existing one."""
+    path = args.file or default_path()
+    if os.path.exists(path):
+        print("refusing: %s already exists (init never modifies an existing ledger)" % path)
+        return 1
+    save(path, load(path))
+    print("initialised empty ledger %s" % path)
+    print("  verify: python3 scripts/cdp_settlement_ledger.py verify --file %s" % path)
+    return 0
+
+
 def cmd_show(args) -> int:
     path = args.file or default_path()
     doc = load(path)
@@ -272,6 +405,8 @@ def main() -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     a = sub.add_parser("append"); a.add_argument("--file"); a.add_argument("--entry", required=True); a.set_defaults(fn=cmd_append)
     v = sub.add_parser("verify"); v.add_argument("--file"); v.set_defaults(fn=cmd_verify)
+    g = sub.add_parser("guard"); g.add_argument("--route", required=True); g.add_argument("--window-days", type=float, default=25.0); g.add_argument("--file"); g.set_defaults(fn=cmd_guard)
+    n = sub.add_parser("init"); n.add_argument("--file"); n.set_defaults(fn=cmd_init)
     s = sub.add_parser("show"); s.add_argument("--file"); s.set_defaults(fn=cmd_show)
     au = sub.add_parser("audit"); au.add_argument("--days", type=float, default=1.0); au.set_defaults(fn=cmd_audit)
     args = ap.parse_args()

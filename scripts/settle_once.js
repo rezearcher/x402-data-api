@@ -16,13 +16,31 @@
  * pre/post USDC balance delta.
  *
  * HARD GUARDS (any failure = no POST):
- *   - logs/cdp-settlement-tx.log already contains `settlement_confirmed` => refuse
+ *   - the INSERT-only settlement ledger already holds an entry for the route
+ *     inside --guard-window-days (default 25) => refuse. See "IDEMPOTENCY" below.
  *   - live 402 amount != --expect-units (default 9000 = 0.009 USDC) => refuse
  *   - live 402 amount > --cap (default 0.01 USDC) => refuse
  *   - payTo is not ours / asset is not Base USDC / network is not eip155:8453 => refuse
  *   - description > 500 chars or missing the buyer vocabulary => refuse
  *   - buyer wallet lacks balance for quote + floor => refuse
  *   - RAPIDAPI_PROXY_SECRET / CDP_INTERNAL_SECRET absent => refuse
+ *
+ * IDEMPOTENCY (fixed 2026-10-28, card t_4ed8918e):
+ *   The guard used to grep logs/cdp-settlement-tx.log for `settlement_confirmed`.
+ *   That log is the *evidence* file, so archiving it to preserve evidence silently
+ *   disabled the guard — and because the same log was rewritten each run, it also
+ *   let a second settlement run on a one-call card (tx 0xc2e023e9 replaced tx
+ *   0x51bcdd08's three lines; git diff 3 deletions / 2 insertions). The guard now
+ *   asks the INSERT-only, sha256-chained ledger via
+ *   `scripts/cdp_settlement_ledger.py guard`, and refuses when it cannot prove the
+ *   route is unsettled (missing ledger, unreadable ledger, broken chain = refuse).
+ *   On success the run appends its own ledger entry, so "settled but unledgered"
+ *   cannot happen silently.
+ *
+ *   logs/cdp-settlement-tx.log is now an APPEND-ONLY convenience journal
+ *   (fs.appendFileSync with flags:'a'). Never truncate it, never rewrite it to
+ *   "clean it up": it is one of two evidence copies, and the ledger is the record
+ *   of record.
  *
  * REVENUE EXCLUSION: payer = buyer-wallet, payee = our PAY_TO. Both are
  * SELF_ADDRS (scripts/verify_revenue_ledger.py) / SELF_PAYERS (src/index.ts), so
@@ -31,21 +49,33 @@
  *
  * Usage:
  *   RAPIDAPI_PROXY_SECRET=... node scripts/settle_once.js [--route /chain/token-security]
- *        [--cap 0.01] [--expect-units 9000] [--force] [--dry-run]
+ *        [--cap 0.01] [--expect-units 9000] [--guard-window-days 25] [--purpose "..."] [--force] [--dry-run]
  *
- * Exit: 0 = settled + `settlement_confirmed` logged; 1 = refused/failed (nothing
- * spent on refusal); 2 = already settled (idempotent no-op).
+ * Exit: 0 = settled + ledgered + `settlement_confirmed` journaled;
+ *       1 = refused/failed (nothing spent on refusal);
+ *       2 = already settled per the ledger (idempotent no-op);
+ *       3 = SETTLED BUT UNLEDGERED — money moved and the ledger append failed. Recover
+ *           from the .pending-unledgered-*.json file before doing anything else.
  */
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 const projectDir = path.resolve(process.env.HOME, 'projects/x402-data-api');
 const BASE = 'https://x402-data-api.sigrunner.workers.dev';
 const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const OUR_PAYTO = '0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10';
+// APPEND-ONLY evidence journal. Every write goes through appendFileSync with
+// flags:'a'. Nothing in this file may truncate, rewrite, or rotate it away — the
+// 06:02Z settlement lost its three lines to a rewrite on 2026-10-28 and that is
+// exactly the failure this comment exists to prevent.
 const LOG_PATH = path.join(projectDir, 'logs/cdp-settlement-tx.log');
+const LOG_APPEND = { flags: 'a', encoding: 'utf8' };
+const LEDGER_DIR = path.join(projectDir, 'ledger');
+// The idempotency key. Never a log file, never a cooldown file: only the ledger.
+const LEDGER_CLI = path.join(projectDir, 'scripts/cdp_settlement_ledger.py');
 const COOLDOWN_PATH = path.join(projectDir, 'scripts/.bazaar_refresh_cooldown.json');
 const RPC = process.env.BASE_RPC_URL || 'https://mainnet.base.org';
 
@@ -57,7 +87,17 @@ const ROUTE = arg('route', '/chain/token-security');
 const CAP_USDC = Number(arg('cap', '0.01'));
 const EXPECT_UNITS = arg('expect-units', '9000');
 const DRY = process.argv.includes('--dry-run');
-const FORCE = process.argv.includes('--force'); // bypass cooldown only, never the log guard
+const FORCE = process.argv.includes('--force'); // bypass cooldown only, NEVER the ledger guard
+// Re-listing validity window: the catalogue claims a 30-day freshness cliff and the
+// monitor fires at 25 days, so a route settled inside 25 days must not be re-settled.
+// The flag may only WIDEN this window, never shrink it — a guard you can shorten with a
+// one-word flag is not a guard. NaN (typo'd arg) falls back to the floor.
+const GUARD_WINDOW_DAYS = (() => {
+  const n = Number(arg('guard-window-days', '25'));
+  return Number.isFinite(n) ? Math.max(25, n) : 25;
+})();
+const PURPOSE = arg('purpose', 're-list / refresh route via settle_once.js');
+const CARD = arg('card', null);
 
 // Route metadata. Mirrors the /chain/token-security entry in
 // scripts/refresh_bazaar_catalog.js — the settlement snapshots whatever these
@@ -90,13 +130,52 @@ const ROUTE_META = {
 
 function journal(obj) {
   fs.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
-  fs.appendFileSync(LOG_PATH, JSON.stringify(obj) + '\n');
+  // flags:'a' — APPEND ONLY. Never writeFileSync here.
+  fs.appendFileSync(LOG_PATH, JSON.stringify(obj) + '\n', LOG_APPEND);
 }
 function refuse(msg, code) {
   console.error('REFUSED: ' + msg);
   journal({ event: 'settlement_refused', route: ROUTE, timestamp: new Date().toISOString(), reason: msg, spent_usdc: 0 });
   process.exit(code || 1);
 }
+
+// ---- idempotency guard, keyed on the INSERT-only ledger ---------------------
+// Deliberately shells out to the Python ledger tool instead of re-implementing the
+// sha256 chain in JS: one verifier, one canonicalisation, no drift.
+// Fail-closed contract — only an explicit exit 0 lets this run proceed:
+//   0 => clear       2 => already settled (refuse)       anything else => refuse
+function ledgerGuard() {
+  if (!fs.existsSync(LEDGER_CLI)) {
+    refuse(`ledger tool missing at ${LEDGER_CLI} — cannot prove this route is unsettled (fail closed)`);
+  }
+  const r = spawnSync(
+    'python3',
+    [LEDGER_CLI, 'guard', '--route', ROUTE, '--window-days', String(GUARD_WINDOW_DAYS)],
+    { encoding: 'utf8', timeout: 60000 }
+  );
+  const out = `${r.stdout || ''}${r.stderr || ''}`.trim();
+  if (out) console.log(out);
+  if (r.error) refuse(`ledger guard could not execute (${r.error.message}) — fail closed`);
+  if (r.status === 2) {
+    console.error(`ALREADY SETTLED: the ledger already holds an entry for ${ROUTE} inside ${GUARD_WINDOW_DAYS}d.`);
+    console.error('This route is not re-settled: a repeat settlement is the 1-payer wash pattern and it spends real USDC.');
+    console.error('If a re-publish is genuinely required, raise --guard-window-days deliberately and record why in --purpose.');
+    process.exit(2);
+  }
+  if (r.status !== 0) {
+    refuse(`ledger guard returned exit ${r.status} (not 0, not 2) — fail closed rather than spend blind`);
+  }
+}
+
+// ---- ledger write-up on success --------------------------------------------
+function ledgerAppend(file, entry) {
+  return spawnSync('python3', [LEDGER_CLI, 'append', '--file', file, '--entry', '-'], {
+    input: JSON.stringify(entry),
+    encoding: 'utf8',
+    timeout: 60000,
+  });
+}
+
 function decodeExt(raw) {
   if (!raw) return null;
   for (const attempt of [() => JSON.parse(raw), () => JSON.parse(Buffer.from(raw, 'base64').toString('utf8'))]) {
@@ -107,11 +186,10 @@ function decodeExt(raw) {
 }
 
 (async () => {
-  // ---- guard: exactly one settlement, ever ----
-  if (fs.existsSync(LOG_PATH) && fs.readFileSync(LOG_PATH, 'utf8').includes('settlement_confirmed')) {
-    console.error('ALREADY SETTLED: logs/cdp-settlement-tx.log contains settlement_confirmed — this card allows one call.');
-    process.exit(2);
-  }
+  // ---- guard 1: idempotency, keyed on the INSERT-only ledger ----
+  // (was: grep logs/cdp-settlement-tx.log for `settlement_confirmed` — the evidence
+  // file doubled as the guard key, so archiving evidence disabled the guard)
+  ledgerGuard();
 
   // ---- guard: auth secret present ----
   const headerName = process.env.CDP_INTERNAL_SECRET ? 'X-CDP-Internal-Secret' : 'X-RapidAPI-Proxy-Secret';
@@ -310,12 +388,87 @@ function decodeExt(raw) {
     process.exit(1);
   }
 
+  // ---- 6. durable write-up: the ledger entry (settled => ledgered, by construction) ----
+  // The ledger is the guard's key, so a settlement that is not in it silently re-arms
+  // the guard. Write it FIRST, retry once, and if it still fails make that loud and
+  // recoverable instead of quietly leaving an unguarded settlement behind.
+  const ledgerFile = path.join(LEDGER_DIR, `cdp-settlement-${receivedAt.slice(0, 10)}.json`);
+  const extensionStatus = extRejected ? 'rejected' : extProcessing ? 'processing' : 'success';
+  const ledgerEntry = {
+    tx_hash: txHash,
+    amount_usdc: quotedUsdc,
+    amount_units: Number(units),
+    endpoint: { route: ROUTE, url: resourceUrl, method: 'GET', host: new URL(resourceUrl).host },
+    settled_at: receivedAt,
+    // Placeholder by design: re-listing is MEASURED afterwards (index lag has been
+    // observed at 4 s and at ~75 min), never assumed at settle time. It is resolved by
+    // appending a follow-up measurement entry — never by editing this one: the ledger is
+    // INSERT-only and hash-chained, so an edit breaks `verify` for every later entry.
+    re_listing: {
+      verdict: 'PENDING — not yet measured',
+      measured_at: null,
+      measure_with: 'python3 scripts/check_rediscovery_verdict.py --since <settled_at>, at +15 min and +2 h',
+      resolve_by: 'append a follow-up measurement entry for this tx_hash (do not edit this entry)',
+    },
+    extension_status: extensionStatus,
+    facilitator: 'CDP /platform/v2/x402/settle (verify-then-settle), relay /internal/cdp-settle-raw',
+    purpose: PURPOSE,
+    ...(CARD ? { card: CARD } : {}),
+    evidence_source: 'logs/cdp-settlement-tx.log (append-only journal) + facilitator relay response',
+    evidence_tier: 'on-chain receipt + facilitator relay response',
+    balance_before_usdc: balanceBefore,
+    balance_after_usdc: balanceAfter,
+    payer,
+    payee: a.payTo,
+    description_published_chars: ROUTE_META.desc.length,
+    revenue_recognized_usdc: 0.0,
+  };
+
+  let ledgerSeq = null;
+  let ledgerErr = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const r = ledgerAppend(ledgerFile, ledgerEntry);
+    const out = `${r.stdout || ''}${r.stderr || ''}`.trim();
+    if (out) console.log(out);
+    // "already in the ledger" is the desired end state (crash-and-rerun), not a failure.
+    if (r.status === 0 || /already in the ledger/i.test(out)) {
+      const m = /seq=(\d+)/.exec(out);
+      ledgerSeq = m ? Number(m[1]) : null;
+      ledgerErr = null;
+      break;
+    }
+    ledgerErr = r.error ? r.error.message : `exit ${r.status}: ${out.split('\n')[0]}`;
+    if (attempt === 0) await new Promise((res) => setTimeout(res, 1500));
+  }
+
+  if (ledgerErr) {
+    const pendingPath = path.join(LEDGER_DIR, `.pending-unledgered-${txHash}.json`);
+    try {
+      fs.mkdirSync(path.dirname(pendingPath), { recursive: true });
+      fs.writeFileSync(pendingPath, JSON.stringify({ entry: ledgerEntry, error: ledgerErr }, null, 2), { flag: 'wx' });
+    } catch { /* best effort: the journal line below is the other copy */ }
+    journal({
+      event: 'settlement_unledgered',
+      route: ROUTE,
+      timestamp: receivedAt,
+      tx_hash: txHash,
+      spent_usdc: spent,
+      error: ledgerErr,
+      pending_entry_path: pendingPath,
+    });
+    console.error(`\nSETTLED BUT UNLEDGERED — tx ${txHash} moved ${spent} USDC and could NOT be written to ${ledgerFile}`);
+    console.error(`reason: ${ledgerErr}`);
+    console.error(`DO NOT re-run settle_once.js for ${ROUTE} until this entry is in the ledger (the guard cannot see it).`);
+    console.error(`recover: python3 scripts/cdp_settlement_ledger.py append --file ${ledgerFile} --entry "$(python3 -c 'import json,sys;print(json.dumps(json.load(open(sys.argv[1]))["entry"]))' ${pendingPath})"`);
+    process.exit(3);
+  }
+
   // cooldown + durable confirmation line
   cooldowns[ROUTE] = Date.now();
   try { fs.writeFileSync(COOLDOWN_PATH, JSON.stringify(cooldowns, null, 2)); } catch { /* non-fatal */ }
 
-  const line = `settlement_confirmed route=${ROUTE} tx=${txHash} ts=${receivedAt} units=${units} usdc=${quotedUsdc} extension=success spent_usdc=${spent}`;
-  fs.appendFileSync(LOG_PATH, line + '\n');
+  const line = `settlement_confirmed route=${ROUTE} tx=${txHash} ts=${receivedAt} units=${units} usdc=${quotedUsdc} extension=${extensionStatus} spent_usdc=${spent} ledger=${path.basename(ledgerFile)}#${ledgerSeq}`;
+  fs.appendFileSync(LOG_PATH, line + '\n', LOG_APPEND);
   console.log('\n' + line);
   console.log(`logged to ${LOG_PATH}`);
 })().catch((e) => {

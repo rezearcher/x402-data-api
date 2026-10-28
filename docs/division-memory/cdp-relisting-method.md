@@ -34,7 +34,10 @@ the old text and buys nothing.
    Proves key→address, balance, live quote, payTo, asset, network, and signs a real
    EIP-3009 payload in dry-run. 17 checks. Run it immediately before spending.
 3. **One settlement — exactly one, never a loop:**
-   `RAPIDAPI_PROXY_SECRET=... node scripts/settle_once.js --route /chain/token-security`
+   `RAPIDAPI_PROXY_SECRET=... node scripts/settle_once.js --route /chain/token-security --purpose "..."`
+   Its first gate is the ledger guard: if `cdp_settlement_ledger.py guard` finds this
+   route already settled inside 25 days it exits 2 without touching the network, and if
+   the ledger cannot be read or does not verify it refuses rather than spend blind (§7).
    The facilitator path is `POST https://api.cdp.coinbase.com/platform/v2/x402/settle`,
    **verify first**, body `{x402Version:2, paymentPayload, paymentRequirements}`, Bearer
    CDP JWT bound to the path, reached in our stack through the `/internal/cdp-settle-raw`
@@ -48,8 +51,10 @@ the old text and buys nothing.
 5. **Verify re-listing ~15 min later, and again at +2 h:**
    `python3 scripts/check_rediscovery_verdict.py --since <settlement ISO ts>`
    Exit 0 = re-listed. Exit 1 prints which leg failed.
-6. **Record it in the ledger** (see §6). A settlement that is not in the ledger did not
-   happen, for audit purposes.
+6. **Record the measurement.** The settle-time ledger entry is written by step 3
+   automatically; what is left is the `re_listing: PENDING` placeholder, resolved by
+   **appending** a follow-up measurement entry (§6, §7). A settlement that is not in the
+   ledger did not happen, for audit purposes.
 
 ## 3. What "re-listed" actually means — and the acceptance string that can never pass
 
@@ -124,16 +129,42 @@ no revenue row, and every ledger entry carries `revenue_recognized_usdc: 0.0`.
   Each reason is recorded in the entry's `purpose` field. "Testing" twice on the same
   route with the same unchanged description is not a reason.
 
-## 7. Two defects this work exposed (do not re-learn them)
+## 7. Two defects this work exposed — both fixed 2026-10-28 (card t_4ed8918e)
 
-1. **`logs/cdp-settlement-tx.log` is not append-only.** Each run rewrites it; the 07:14
-   settlement deleted the 06:02 settlement's three lines (git diff: 3 deletions / 2
-   insertions). The first run survives only in an ad-hoc `.confirmed-*` copy and in git.
-   **The ledger is now the record of record.** Never treat the log as the audit trail.
-2. **`settle_once.js`'s "refuse to run twice" guard greps that same log** — so archiving
-   the log to preserve evidence *disables the guard*. A future fix must key idempotency
-   off the ledger's tx list (`cdp_settlement_ledger.py verify/show`), not off a mutable
-   log file.
+1. **The settlement log is append-only now, and it is still not the audit trail.**
+   Each run used to rewrite `logs/cdp-settlement-tx.log`; the 07:14 settlement deleted
+   the 06:02 settlement's three lines (git diff: 3 deletions / 2 insertions). Every
+   write is now `fs.appendFileSync(..., {flags:'a'})` and nothing may truncate, rewrite
+   or "clean" it. **The ledger remains the record of record**; the log is the
+   convenience journal.
+   *Why it was being rewritten:* `verify_settlement_tx.js` treated **any**
+   `settlement_confirmed` line as "already confirmed — no-op", so the only way to get a
+   second settlement verified was to empty the log first. That check is now per-tx
+   (`tx=<hash>` must match the attempt being verified), so there is no longer a reason
+   to touch the file.
+2. **Idempotency is keyed on the ledger, never on the log.**
+   `settle_once.js` used to grep the log for `settlement_confirmed`. Because the guard's
+   key was the same file the evidence lived in, archiving evidence *disabled the guard*
+   — and because the log was rewritten per run, the guard re-armed and a second
+   settlement ran on a one-call card. The guard now shells out to
+   `python3 scripts/cdp_settlement_ledger.py guard --route <r> --window-days 25`:
+
+   | guard exit | meaning | settle_once.js |
+   |---|---|---|
+   | 0 | no entry for this route in the window | proceed to the pre-spend gates |
+   | 2 | route already settled inside the window | refuse (exit 2) |
+   | 1 | ledger missing / unreadable / chain fails `verify` | refuse (exit 1) — **fail closed** |
+
+   On success the run appends its own ledger entry (tx, amount, endpoint, settled_at,
+   `re_listing` placeholder, `extension_status`) before it writes the journal line, so
+   "settled but unledgered" is a loud exit 3 with a `ledger/.pending-unledgered-<tx>.json`
+   to replay — not a silent gap the guard cannot see.
+   The `re_listing: PENDING` placeholder is resolved by **appending** a measurement
+   entry later; editing it in place would break the hash chain for every later entry.
+
+   Only the honest path is left: `python3 scripts/cdp_settlement_ledger.py guard --route /chain/token-security`
+   prints exactly which `seq`/`tx` blocks a re-settlement, so a refusal is evidence
+   rather than a mystery.
 
 ## 8. One-liner runbook
 
@@ -141,16 +172,18 @@ no revenue row, and every ledger entry carries `revenue_recognized_usdc: 0.0`.
 cd ~/projects/x402-data-api
 # 0. description live?
 curl -s https://x402-data-api.sigrunner.workers.dev/chain/token-security | grep -qi scam
-# 1. gate
+# 1. is this route even allowed to settle? (exit 2 = already settled inside 25d)
+python3 scripts/cdp_settlement_ledger.py guard --route /chain/token-security
+# 2. gate
 node scripts/wallet_settlement_gate.js --route /chain/token-security
-# 2. settle once
-RAPIDAPI_PROXY_SECRET=$RAPIDAPI_PROXY_SECRET node scripts/settle_once.js --route /chain/token-security
-# 3. money truth
+# 3. settle once — it re-runs step 1 itself, then appends its own ledger entry
+RAPIDAPI_PROXY_SECRET=$RAPIDAPI_PROXY_SECRET node scripts/settle_once.js --route /chain/token-security --purpose "why this settlement is legitimate"
+# 4. money truth
 node scripts/verify_settlement_tx.js --route /chain/token-security
-# 4. index truth (run at +15 min and +2 h)
+# 5. index truth (run at +15 min and +2 h)
 python3 scripts/check_rediscovery_verdict.py --since "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-# 5. record
-python3 scripts/cdp_settlement_ledger.py append --entry "$(cat /tmp/entry.json)"
+# 6. record the MEASUREMENT — append a follow-up entry, never edit the settle-time one
+python3 scripts/cdp_settlement_ledger.py append --entry "$(cat /tmp/measurement.json)"
 python3 scripts/cdp_settlement_ledger.py verify
 ```
 
