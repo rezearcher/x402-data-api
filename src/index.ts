@@ -12403,6 +12403,18 @@ const agent = createReactAgent({ llm, tools: defiDataTools });</pre>
 <p class=muted style="margin:.7rem 0 0">Eight tools &mdash; <code>defi_yields</code>, <code>crypto_prices</code>, <code>base_balance</code>, <code>base_gas_price</code>, <code>base_block_number</code>, <code>base_token_balance</code>, <code>crypto_funding</code> (cross-venue perp funding + arb spread), <code>market_brief</code> (one-call market snapshot) &mdash; degrade open with no key. The Base-RPC reads and perp-funding sample return the real live value, and the market-brief and native-balance reads return an honest activation hint rather than a fabricated number. Source: <a href="https://github.com/rezearcher/langchain-defi-data">github.com/rezearcher/langchain-defi-data</a>.</p>
 </div>
 
+<h2>Building on CrewAI or plain Python?</h2>
+<div class=card>
+<p style="margin:.2rem 0 .7rem">The same routes for Python agents &mdash; CrewAI tools or framework-agnostic functions. The data core is standard-library only, so the keyless preview tier installs with no third-party packages; the x402 paid rail and CrewAI wrappers are optional extras. No PyPI account needed &mdash; install straight from git:</p>
+<pre>pip install "git+https://github.com/rezearcher/crewai-defi-data"
+
+from grey_ridge_x402_data import crewai_tools, crypto_prices
+print(crypto_prices("bitcoin,ethereum")["summary"])  # keyless: real live price
+# reads PRIVATE_KEY (your agent's Base wallet) from the env when set
+agent = Agent(role="analyst", tools=crewai_tools())</pre>
+<p class=muted style="margin:.7rem 0 0">Six tools &mdash; <code>defi_yields</code>, <code>crypto_prices</code>, <code>base_balance</code>, <code>base_gas_price</code>, <code>base_block_number</code>, <code>base_token_balance</code> &mdash; each returns a plain dict and never raises into the crew; the Base-RPC reads return the real live value even with no wallet, and the native-balance read returns an honest activation stub rather than a fabricated number. Source: <a href="https://github.com/rezearcher/crewai-defi-data">github.com/rezearcher/crewai-defi-data</a>.</p>
+</div>
+
 <h2>Where the data comes from</h2>
 <p class=muted>On-chain reads are live Base mainnet RPC. DeFi yields, TVL, fees and protocol data are sourced from DefiLlama; spot prices from DefiLlama and CoinGecko; perp funding from Hyperliquid, OKX and dYdX; Chainlink routes read the on-chain aggregators directly. Each response carries its source and a timestamp. Market data is informational, not financial advice; the pre-trade token-safety gate is a static + simulation check, not a guarantee a token is safe.</p>
 
