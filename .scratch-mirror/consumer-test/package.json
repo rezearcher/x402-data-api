@@ -1,0 +1,1 @@
+{"name":"c","version":"1.0.0","type":"module","private":true,"dependencies":{"@grey-ridge/vercel-ai-defi-data":"github:rezearcher/vercel-ai-defi-data","ai":"^7.0.155","zod":"^4.6.7"}}

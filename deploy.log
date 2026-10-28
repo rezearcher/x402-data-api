@@ -1,0 +1,18 @@
+
+> x402-data-api@0.1.4 deploy
+> wrangler deploy
+
+
+ ⛅️ wrangler 4.120.0 (update available 4.154.0)
+───────────────────────────────────────────────
+Using "CF_API_TOKEN" environment variable. This is deprecated. Please use "CLOUDFLARE_API_TOKEN", instead.
+Using "CF_ACCOUNT_ID" environment variable. This is deprecated. Please use "CLOUDFLARE_ACCOUNT_ID", instead.
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mA request to the Cloudflare API (/accounts/9b5a408f758c052fd9ab99f5d0f32bea/workers/services/x402-data-api) failed.[0m
+
+  No access to the specified service.
+  
+  If you think this is a bug, please open an issue at: [4mhttps://github.com/cloudflare/workers-sdk/issues/new/choose[0m
+
+
+🪵  Logs were written to "/home/rez/.wrangler/logs/wrangler-2026-10-28_07-00-25_822.log"

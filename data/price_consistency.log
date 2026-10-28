@@ -292,3 +292,496 @@
   "n_enforced_routes": 62,
   "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
 }
+{
+  "ts": "2026-10-24T05:25:01.543690+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 61,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 0,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}
+{
+  "ts": "2026-10-24T11:25:01.132831+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 61,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 0,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}
+{
+  "ts": "2026-10-24T17:25:01.227036+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 61,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 0,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}
+{
+  "ts": "2026-10-24T23:25:01.708621+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 61,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 0,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}
+{
+  "ts": "2026-10-25T05:25:02.006515+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 61,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 0,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}
+{
+  "ts": "2026-10-25T11:25:01.890848+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 61,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 0,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}
+{
+  "ts": "2026-10-25T17:25:01.070691+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 61,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 0,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}
+{
+  "ts": "2026-10-25T23:25:01.675686+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 61,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 0,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}
+{
+  "ts": "2026-10-26T05:25:01.569829+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 61,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 0,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}
+{
+  "ts": "2026-10-26T11:25:01.363454+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 61,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 0,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}
+{
+  "ts": "2026-10-26T17:25:02.000936+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 61,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 0,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}
+{
+  "ts": "2026-10-26T23:25:01.944909+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 61,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 0,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}
+{
+  "ts": "2026-10-27T05:25:01.522242+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 61,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 0,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}
+{
+  "ts": "2026-10-27T11:25:02.010824+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 61,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 0,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}
+{
+  "ts": "2026-10-27T17:25:01.398043+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 61,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 0,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}
+{
+  "ts": "2026-10-27T23:25:01.227113+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 61,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 0,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}
+{
+  "ts": "2026-10-28T05:25:01.635062+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 61,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 0,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}

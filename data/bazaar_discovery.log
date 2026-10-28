@@ -77,3 +77,158 @@ DERIVED distribution candidates (rank top-3 across >=2 categories = aggregator/p
   api.marketintelligenceapi.com            categories=['prediction', 'token-safety', 'yields'] hits=4
   crypto.openverbs.com                     categories=['funding', 'yields'] hits=2
 written -> /home/rez/.hermes/data/x402_bazaar_index/discovery_rank.json
+bazaar discovery coverage: 2/10 queries surface us (20.0%)
+  [STRUCTURAL / dead lever — not an actionable alert] CDP metadata frozen at first-registration: 2/20 indexed routes carry a serviceName despite the catalog refresh sending it for weeks. CDP settlements only bump quality.lastCalledAt; serviceName/desc are not overwritten. Production revenue settles via xpay (never CDP facilitator), so the only catalog-touching settlements are forbidden self-pays. => CDP need-phrase rank is NOT a legitimately movable lever; pursue direct dev integrations (wire-our-URL PRs) + x402scan browse instead.
+  [agentpay] not in scores.json yet (of 366 svcs) — Bazaar-gated out, expected
+  'token safety check before swap'         n=11  NOT in top-20 | top3: api.usesaferoute.com, chain.tollkit.dev, agent-data-tools.revmesh2074.workers.dev
+  'is this token a scam'                   n=18  NOT in top-20 | top3: trust-check.gm-tools.workers.dev, saylorinnovations.com, api.marketintelligenceapi.com
+  'rug pull check base token'              n=15  NOT in top-20 | top3: api.marketintelligenceapi.com, 402.com.tr, crypto.theboredlab.com
+  'honeypot detector base erc20'           n=11  NOT in top-20 | top3: crypto.theboredlab.com, api.x402node.dev, chain.intel.rallylive.ca
+  'token risk report'                      n=10  NOT in top-20 | top3: token-risk.com, api.zkrobotics.fr, agent402.tools
+  'pre-trade safety gate'                  n=15  rank 12 x402-data-api.sigrunner.workers.dev/gate/swap | top3: 402.com.tr, api.tradebot.devs.surf, agentpay.tools
+  'gas price base'                         n=11  NOT in top-20 | top3: base-gas-x402-production.up.railway.app, base-facts.yankii.fr, base-gas-x402-production.up.railway.app
+  'crypto funding rates'                   n=18  NOT in top-20 | top3: crypto.openverbs.com, perpsignals.use.x402atlas.com, derivs.duoleads.com
+  'defi yields'                            n=18  rank 1 02-data-api.sigrunner.workers.dev/defi/yields | top3: api.marketintelligenceapi.com, crypto.openverbs.com, bess-x402.onrender.com
+  'prediction market odds'                 n=18  NOT in top-20 | top3: api.agentstools.dev, x402.shizu.me, api.marketintelligenceapi.com
+DERIVED distribution candidates (rank top-3 across >=2 categories = aggregator/platform surface):
+  api.marketintelligenceapi.com            categories=['prediction', 'token-safety', 'yields'] hits=4
+  crypto.openverbs.com                     categories=['funding', 'yields'] hits=2
+written -> /home/rez/.hermes/data/x402_bazaar_index/discovery_rank.json
+bazaar discovery coverage: 2/10 queries surface us (20.0%)
+  [STRUCTURAL / dead lever — not an actionable alert] CDP metadata frozen at first-registration: 2/20 indexed routes carry a serviceName despite the catalog refresh sending it for weeks. CDP settlements only bump quality.lastCalledAt; serviceName/desc are not overwritten. Production revenue settles via xpay (never CDP facilitator), so the only catalog-touching settlements are forbidden self-pays. => CDP need-phrase rank is NOT a legitimately movable lever; pursue direct dev integrations (wire-our-URL PRs) + x402scan browse instead.
+  [agentpay] not in scores.json yet (of 366 svcs) — Bazaar-gated out, expected
+  'token safety check before swap'         n=12  NOT in top-20 | top3: api.usesaferoute.com, chain.tollkit.dev, agent-data-tools.revmesh2074.workers.dev
+  'is this token a scam'                   n=18  NOT in top-20 | top3: trust-check.gm-tools.workers.dev, saylorinnovations.com, api.marketintelligenceapi.com
+  'rug pull check base token'              n=17  NOT in top-20 | top3: api.marketintelligenceapi.com, 402.com.tr, crypto.theboredlab.com
+  'honeypot detector base erc20'           n=10  NOT in top-20 | top3: crypto.theboredlab.com, api.x402node.dev, chain.intel.rallylive.ca
+  'token risk report'                      n=11  NOT in top-20 | top3: token-risk.com, api.zkrobotics.fr, agent402.tools
+  'pre-trade safety gate'                  n=15  rank 12 x402-data-api.sigrunner.workers.dev/gate/swap | top3: api.tradebot.devs.surf, agentpay.tools, 402.com.tr
+  'gas price base'                         n=11  NOT in top-20 | top3: base-gas-x402-production.up.railway.app, base-facts.yankii.fr, base-gas-x402-production.up.railway.app
+  'crypto funding rates'                   n=18  NOT in top-20 | top3: perpsignals.use.x402atlas.com, crypto.openverbs.com, derivs.duoleads.com
+  'defi yields'                            n=18  rank 1 02-data-api.sigrunner.workers.dev/defi/yields | top3: api.marketintelligenceapi.com, bess-x402.onrender.com, crypto.openverbs.com
+  'prediction market odds'                 n=18  NOT in top-20 | top3: api.agentstools.dev, x402.shizu.me, api.marketintelligenceapi.com
+DERIVED distribution candidates (rank top-3 across >=2 categories = aggregator/platform surface):
+  api.marketintelligenceapi.com            categories=['prediction', 'token-safety', 'yields'] hits=4
+  crypto.openverbs.com                     categories=['funding', 'yields'] hits=2
+written -> /home/rez/.hermes/data/x402_bazaar_index/discovery_rank.json
+bazaar discovery coverage: 2/10 queries surface us (20.0%)
+  [STRUCTURAL / dead lever — not an actionable alert] CDP metadata frozen at first-registration: 2/20 indexed routes carry a serviceName despite the catalog refresh sending it for weeks. CDP settlements only bump quality.lastCalledAt; serviceName/desc are not overwritten. Production revenue settles via xpay (never CDP facilitator), so the only catalog-touching settlements are forbidden self-pays. => CDP need-phrase rank is NOT a legitimately movable lever; pursue direct dev integrations (wire-our-URL PRs) + x402scan browse instead.
+  [agentpay] not in scores.json yet (of 366 svcs) — Bazaar-gated out, expected
+  'token safety check before swap'         n=11  NOT in top-20 | top3: api.usesaferoute.com, chain.tollkit.dev, agent-data-tools.revmesh2074.workers.dev
+  'is this token a scam'                   n=18  NOT in top-20 | top3: trust-check.gm-tools.workers.dev, saylorinnovations.com, api.marketintelligenceapi.com
+  'rug pull check base token'              n=17  NOT in top-20 | top3: api.marketintelligenceapi.com, 402.com.tr, crypto.theboredlab.com
+  'honeypot detector base erc20'           n=10  NOT in top-20 | top3: crypto.theboredlab.com, api.x402node.dev, chain.intel.rallylive.ca
+  'token risk report'                      n=11  NOT in top-20 | top3: token-risk.com, api.zkrobotics.fr, agent402.tools
+  'pre-trade safety gate'                  n=13  rank 11 x402-data-api.sigrunner.workers.dev/gate/swap | top3: api.tradebot.devs.surf, agentpay.tools, 402.com.tr
+  'gas price base'                         n=13  NOT in top-20 | top3: base-gas-x402-production.up.railway.app, base-facts.yankii.fr, agent-data-tools.revmesh2074.workers.dev
+  'crypto funding rates'                   n=17  NOT in top-20 | top3: perpsignals.use.x402atlas.com, crypto.openverbs.com, derivs.duoleads.com
+  'defi yields'                            n=17  rank 2 02-data-api.sigrunner.workers.dev/defi/yields | top3: api.marketintelligenceapi.com, bess-x402.onrender.com, crypto.openverbs.com
+  'prediction market odds'                 n=17  NOT in top-20 | top3: api.agentstools.dev, x402.shizu.me, agentsvc.io
+DERIVED distribution candidates (rank top-3 across >=2 categories = aggregator/platform surface):
+  api.marketintelligenceapi.com            categories=['token-safety', 'yields'] hits=3
+  agent-data-tools.revmesh2074.workers.dev categories=['gas', 'token-safety'] hits=2
+  crypto.openverbs.com                     categories=['funding', 'yields'] hits=2
+written -> /home/rez/.hermes/data/x402_bazaar_index/discovery_rank.json
+bazaar discovery coverage: 2/10 queries surface us (20.0%)
+  [STRUCTURAL / dead lever — not an actionable alert] CDP metadata frozen at first-registration: 6/20 indexed routes carry a serviceName despite the catalog refresh sending it for weeks. CDP settlements only bump quality.lastCalledAt; serviceName/desc are not overwritten. Production revenue settles via xpay (never CDP facilitator), so the only catalog-touching settlements are forbidden self-pays. => CDP need-phrase rank is NOT a legitimately movable lever; pursue direct dev integrations (wire-our-URL PRs) + x402scan browse instead.
+  [agentpay] not in scores.json yet (of 366 svcs) — Bazaar-gated out, expected
+  'token safety check before swap'         n=10  NOT in top-20 | top3: api.usesaferoute.com, chain.tollkit.dev, agent-data-tools.revmesh2074.workers.dev
+  'is this token a scam'                   n=17  NOT in top-20 | top3: trust-check.gm-tools.workers.dev, saylorinnovations.com, api.marketintelligenceapi.com
+  'rug pull check base token'              n=17  NOT in top-20 | top3: api.marketintelligenceapi.com, 402.com.tr, crypto.theboredlab.com
+  'honeypot detector base erc20'           n= 9  NOT in top-20 | top3: crypto.theboredlab.com, api.x402node.dev, chain.intel.rallylive.ca
+  'token risk report'                      n=11  NOT in top-20 | top3: token-risk.com, api.zkrobotics.fr, agent402.tools
+  'pre-trade safety gate'                  n=13  rank 12 x402-data-api.sigrunner.workers.dev/gate/swap | top3: api.tradebot.devs.surf, agentpay.tools, 402.com.tr
+  'gas price base'                         n=12  NOT in top-20 | top3: base-gas-x402-production.up.railway.app, base-facts.yankii.fr, agent-data-tools.revmesh2074.workers.dev
+  'crypto funding rates'                   n=17  NOT in top-20 | top3: perpsignals.use.x402atlas.com, crypto.openverbs.com, derivs.duoleads.com
+  'defi yields'                            n=17  rank 1 02-data-api.sigrunner.workers.dev/defi/yields | top3: api.marketintelligenceapi.com, bess-x402.onrender.com, crypto.openverbs.com
+  'prediction market odds'                 n=17  NOT in top-20 | top3: api.agentstools.dev, x402.shizu.me, agentsvc.io
+DERIVED distribution candidates (rank top-3 across >=2 categories = aggregator/platform surface):
+  api.marketintelligenceapi.com            categories=['token-safety', 'yields'] hits=3
+  agent-data-tools.revmesh2074.workers.dev categories=['gas', 'token-safety'] hits=2
+  crypto.openverbs.com                     categories=['funding', 'yields'] hits=2
+written -> /home/rez/.hermes/data/x402_bazaar_index/discovery_rank.json
+bazaar discovery coverage: 2/10 queries surface us (20.0%)  [ALERT: most buyer queries don't find us]
+  [agentpay] indexed but not yet paid-probed: [{'url': 'https://x402-data-api.sigrunner.workers.dev/defi/yields', 'need': 'defi yields', 'paid_probes': 0, 'delivery_rate': None, 'delivery_factor': 1.0, 'flags': []}]
+  'token safety check before swap'         n=10  NOT in top-20 | top3: api.usesaferoute.com, agent-data-tools.revmesh2074.workers.dev, chain.tollkit.dev
+  'is this token a scam'                   n=16  NOT in top-20 | top3: trust-check.gm-tools.workers.dev, api.checkpoint402.com, saylorinnovations.com
+  'rug pull check base token'              n=16  NOT in top-20 | top3: api.marketintelligenceapi.com, 402.com.tr, crypto.theboredlab.com
+  'honeypot detector base erc20'           n= 9  NOT in top-20 | top3: crypto.theboredlab.com, api.x402node.dev, chain.intel.rallylive.ca
+  'token risk report'                      n=10  NOT in top-20 | top3: token-risk.com, api.zkrobotics.fr, agent402.tools
+  'pre-trade safety gate'                  n=12  rank 11 x402-data-api.sigrunner.workers.dev/gate/swap | top3: api.tradebot.devs.surf, agentpay.tools, 402.com.tr
+  'gas price base'                         n=12  NOT in top-20 | top3: base-gas-x402-production.up.railway.app, base-facts.yankii.fr, agent-data-tools.revmesh2074.workers.dev
+  'crypto funding rates'                   n=16  NOT in top-20 | top3: perpsignals.use.x402atlas.com, crypto.openverbs.com, derivs.duoleads.com
+  'defi yields'                            n=17  rank 1 02-data-api.sigrunner.workers.dev/defi/yields | top3: api.marketintelligenceapi.com, bess-x402.onrender.com, crypto.openverbs.com
+  'prediction market odds'                 n=17  NOT in top-20 | top3: api.agentstools.dev, x402.shizu.me, agentsvc.io
+DERIVED distribution candidates (rank top-3 across >=2 categories = aggregator/platform surface):
+  agent-data-tools.revmesh2074.workers.dev categories=['gas', 'token-safety'] hits=2
+  api.marketintelligenceapi.com            categories=['token-safety', 'yields'] hits=2
+  crypto.openverbs.com                     categories=['funding', 'yields'] hits=2
+written -> /home/rez/.hermes/data/x402_bazaar_index/discovery_rank.json
+bazaar discovery coverage: 2/10 queries surface us (20.0%)  [ALERT: most buyer queries don't find us]
+  [agentpay] indexed but not yet paid-probed: [{'url': 'https://x402-data-api.sigrunner.workers.dev/defi/yields', 'need': 'defi yields', 'paid_probes': 0, 'delivery_rate': None, 'delivery_factor': 1.0, 'flags': []}]
+  'token safety check before swap'         n=10  NOT in top-20 | top3: api.usesaferoute.com, agent-data-tools.revmesh2074.workers.dev, chain.tollkit.dev
+  'is this token a scam'                   n=15  NOT in top-20 | top3: trust-check.gm-tools.workers.dev, api.checkpoint402.com, saylorinnovations.com
+  'rug pull check base token'              n=15  NOT in top-20 | top3: api.marketintelligenceapi.com, 402.com.tr, crypto.theboredlab.com
+  'honeypot detector base erc20'           n= 9  NOT in top-20 | top3: crypto.theboredlab.com, api.x402node.dev, chain.intel.rallylive.ca
+  'token risk report'                      n=11  NOT in top-20 | top3: token-risk.com, api.zkrobotics.fr, agent402.tools
+  'pre-trade safety gate'                  n=11  rank 11 x402-data-api.sigrunner.workers.dev/gate/swap | top3: agentpay.tools, api.tradebot.devs.surf, 402.com.tr
+  'gas price base'                         n=11  NOT in top-20 | top3: base-gas-x402-production.up.railway.app, base-facts.yankii.fr, agent-data-tools.revmesh2074.workers.dev
+  'crypto funding rates'                   n=16  NOT in top-20 | top3: api.firstmention.uk, crypto.openverbs.com, perpsignals.use.x402atlas.com
+  'defi yields'                            n=17  rank 1 02-data-api.sigrunner.workers.dev/defi/yields | top3: api.marketintelligenceapi.com, bess-x402.onrender.com, crypto.openverbs.com
+  'prediction market odds'                 n=17  NOT in top-20 | top3: api.agentstools.dev, x402.shizu.me, agentsvc.io
+DERIVED distribution candidates (rank top-3 across >=2 categories = aggregator/platform surface):
+  agent-data-tools.revmesh2074.workers.dev categories=['gas', 'token-safety'] hits=2
+  api.marketintelligenceapi.com            categories=['token-safety', 'yields'] hits=2
+  crypto.openverbs.com                     categories=['funding', 'yields'] hits=2
+written -> /home/rez/.hermes/data/x402_bazaar_index/discovery_rank.json
+bazaar discovery coverage: 3/10 queries surface us (30.0%)  [ALERT: most buyer queries don't find us]
+  [agentpay] indexed but not yet paid-probed: [{'url': 'https://x402-data-api.sigrunner.workers.dev/defi/yields', 'need': 'defi yields', 'paid_probes': 0, 'delivery_rate': None, 'delivery_factor': 1.0, 'flags': []}]
+  'token safety check before swap'         n=10  NOT in top-20 | top3: api.usesaferoute.com, chain.tollkit.dev, agent-data-tools.revmesh2074.workers.dev
+  'is this token a scam'                   n=15  NOT in top-20 | top3: trust-check.gm-tools.workers.dev, grok-backtest-api.fly.dev, api.checkpoint402.com
+  'rug pull check base token'              n=16  NOT in top-20 | top3: api.marketintelligenceapi.com, 402.com.tr, crypto.theboredlab.com
+  'honeypot detector base erc20'           n= 9  NOT in top-20 | top3: crypto.theboredlab.com, api.x402node.dev, chain.intel.rallylive.ca
+  'token risk report'                      n=11  NOT in top-20 | top3: token-risk.com, api.zkrobotics.fr, agent402.tools
+  'pre-trade safety gate'                  n=13  rank 11 x402-data-api.sigrunner.workers.dev/gate/swap | top3: agentpay.tools, api.tradebot.devs.surf, 402.com.tr
+  'gas price base'                         n=12  rank 4 tps://api.greyridgesignals.ai/chain/gas-price | top3: base-gas-x402-production.up.railway.app, base-facts.yankii.fr, agent-data-tools.revmesh2074.workers.dev
+  'crypto funding rates'                   n=16  NOT in top-20 | top3: api.firstmention.uk, perpsignals.use.x402atlas.com, crypto.openverbs.com
+  'defi yields'                            n=17  rank 1 02-data-api.sigrunner.workers.dev/defi/yields | top3: api.marketintelligenceapi.com, bess-x402.onrender.com, crypto.openverbs.com
+  'prediction market odds'                 n=15  NOT in top-20 | top3: api.agentstools.dev, x402.shizu.me, agentsvc.io
+DERIVED distribution candidates (rank top-3 across >=2 categories = aggregator/platform surface):
+  agent-data-tools.revmesh2074.workers.dev categories=['gas', 'token-safety'] hits=2
+  api.marketintelligenceapi.com            categories=['token-safety', 'yields'] hits=2
+  crypto.openverbs.com                     categories=['funding', 'yields'] hits=2
+written -> /home/rez/.hermes/data/x402_bazaar_index/discovery_rank.json
+bazaar discovery coverage: 3/10 queries surface us (30.0%)  [ALERT: most buyer queries don't find us]
+  [agentpay] indexed but not yet paid-probed: [{'url': 'https://x402-data-api.sigrunner.workers.dev/defi/yields', 'need': 'defi yields', 'paid_probes': 0, 'delivery_rate': None, 'delivery_factor': 1.0, 'flags': []}]
+  'token safety check before swap'         n=10  NOT in top-20 | top3: api.usesaferoute.com, chain.tollkit.dev, agent-data-tools.revmesh2074.workers.dev
+  'is this token a scam'                   n=15  NOT in top-20 | top3: trust-check.gm-tools.workers.dev, grok-backtest-api.fly.dev, api.checkpoint402.com
+  'rug pull check base token'              n=15  NOT in top-20 | top3: api.marketintelligenceapi.com, 402.com.tr, crypto.theboredlab.com
+  'honeypot detector base erc20'           n= 9  NOT in top-20 | top3: api.x402node.dev, crypto.theboredlab.com, chain.intel.rallylive.ca
+  'token risk report'                      n=12  NOT in top-20 | top3: token-risk.com, agent402.tools, agent402.tools
+  'pre-trade safety gate'                  n=12  rank 10 x402-data-api.sigrunner.workers.dev/gate/swap | top3: agentpay.tools, api.tradebot.devs.surf, 402.com.tr
+  'gas price base'                         n=11  rank 4 tps://api.greyridgesignals.ai/chain/gas-price | top3: base-gas-x402-production.up.railway.app, base-facts.yankii.fr, agent-data-tools.revmesh2074.workers.dev
+  'crypto funding rates'                   n=17  NOT in top-20 | top3: api.firstmention.uk, perpsignals.use.x402atlas.com, crypto.openverbs.com
+  'defi yields'                            n=17  rank 1 02-data-api.sigrunner.workers.dev/defi/yields | top3: api.marketintelligenceapi.com, bess-x402.onrender.com, crypto.openverbs.com
+  'prediction market odds'                 n=16  NOT in top-20 | top3: api.agentstools.dev, x402.shizu.me, hubvibe-io.com
+DERIVED distribution candidates (rank top-3 across >=2 categories = aggregator/platform surface):
+  agent-data-tools.revmesh2074.workers.dev categories=['gas', 'token-safety'] hits=2
+  api.marketintelligenceapi.com            categories=['token-safety', 'yields'] hits=2
+  crypto.openverbs.com                     categories=['funding', 'yields'] hits=2
+written -> /home/rez/.hermes/data/x402_bazaar_index/discovery_rank.json
+bazaar discovery coverage: 3/10 queries surface us (30.0%)  [ALERT: most buyer queries don't find us]
+  [agentpay] indexed but not yet paid-probed: [{'url': 'https://x402-data-api.sigrunner.workers.dev/defi/yields', 'need': 'defi yields', 'paid_probes': 0, 'delivery_rate': None, 'delivery_factor': 1.0, 'flags': []}]
+  'token safety check before swap'         n=10  NOT in top-20 | top3: api.usesaferoute.com, agent-data-tools.revmesh2074.workers.dev, chain.tollkit.dev
+  'is this token a scam'                   n=14  NOT in top-20 | top3: trust-check.gm-tools.workers.dev, grok-backtest-api.fly.dev, api.checkpoint402.com
+  'rug pull check base token'              n=15  NOT in top-20 | top3: api.marketintelligenceapi.com, 402.com.tr, crypto.theboredlab.com
+  'honeypot detector base erc20'           n= 9  NOT in top-20 | top3: api.x402node.dev, crypto.theboredlab.com, chain.intel.rallylive.ca
+  'token risk report'                      n=13  NOT in top-20 | top3: token-risk.com, agent402.tools, agent402.tools
+  'pre-trade safety gate'                  n=12  rank 10 x402-data-api.sigrunner.workers.dev/gate/swap | top3: agentpay.tools, api.tradebot.devs.surf, 402.com.tr
+  'gas price base'                         n=11  rank 4 tps://api.greyridgesignals.ai/chain/gas-price | top3: base-gas-x402-production.up.railway.app, base-facts.yankii.fr, agent-data-tools.revmesh2074.workers.dev
+  'crypto funding rates'                   n=17  NOT in top-20 | top3: api.firstmention.uk, perpsignals.use.x402atlas.com, crypto.openverbs.com
+  'defi yields'                            n=17  rank 1 02-data-api.sigrunner.workers.dev/defi/yields | top3: api.marketintelligenceapi.com, bess-x402.onrender.com, crypto.openverbs.com
+  'prediction market odds'                 n=16  NOT in top-20 | top3: api.agentstools.dev, x402.shizu.me, hubvibe-io.com
+DERIVED distribution candidates (rank top-3 across >=2 categories = aggregator/platform surface):
+  agent-data-tools.revmesh2074.workers.dev categories=['gas', 'token-safety'] hits=2
+  api.marketintelligenceapi.com            categories=['token-safety', 'yields'] hits=2
+  crypto.openverbs.com                     categories=['funding', 'yields'] hits=2
+written -> /home/rez/.hermes/data/x402_bazaar_index/discovery_rank.json

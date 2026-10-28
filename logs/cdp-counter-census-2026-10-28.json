@@ -1,0 +1,2111 @@
+{
+ "api": "https://api.cdp.coinbase.com/platform/v2/x402/discovery",
+ "generated_at": "2026-10-28T08:57:06Z",
+ "rows": [
+  {
+   "calls30d": 11,
+   "delta_s": 75898.571,
+   "lastCalledAt": "2026-10-27T10:09:18.548Z",
+   "lastUpdated": "2026-10-28T07:14:17.119Z",
+   "payers30d": 5,
+   "resource": "https://jmt-x402-proxy.jmthomasofficial.workers.dev/v2/api/search"
+  },
+  {
+   "calls30d": 1051,
+   "delta_s": 25220.46,
+   "lastCalledAt": "2026-10-28T00:49:37.422Z",
+   "lastUpdated": "2026-10-28T07:49:57.882Z",
+   "payers30d": 46,
+   "resource": "https://stableenrich.dev/api/pdl/people-enrich"
+  },
+  {
+   "calls30d": 1250,
+   "delta_s": 14396.354,
+   "lastCalledAt": "2026-10-28T03:00:43.014Z",
+   "lastUpdated": "2026-10-28T07:00:39.368Z",
+   "payers30d": 49,
+   "resource": "https://api.nansen.ai/api/v1/profiler/address/current-balance"
+  },
+  {
+   "calls30d": 33,
+   "delta_s": 14072.504,
+   "lastCalledAt": "2026-10-28T04:18:42.31Z",
+   "lastUpdated": "2026-10-28T08:13:14.814Z",
+   "payers30d": 27,
+   "resource": "https://api.402rates.com/v1/ping"
+  },
+  {
+   "calls30d": 115,
+   "delta_s": 9493.569,
+   "lastCalledAt": "2026-10-28T05:39:17.694Z",
+   "lastUpdated": "2026-10-28T08:17:31.263Z",
+   "payers30d": 22,
+   "resource": "https://api.x402node.dev/chain/honeypot"
+  },
+  {
+   "calls30d": 26,
+   "delta_s": 8363.898,
+   "lastCalledAt": "2026-10-28T05:00:59.503Z",
+   "lastUpdated": "2026-10-28T07:20:23.401Z",
+   "payers30d": 20,
+   "resource": "https://hyperliquid-predict.use.x402atlas.com/outcomes"
+  },
+  {
+   "calls30d": 14628,
+   "delta_s": 7857.092,
+   "lastCalledAt": "2026-10-28T06:25:26.054Z",
+   "lastUpdated": "2026-10-28T08:36:23.146Z",
+   "payers30d": 63,
+   "resource": "https://keyring-agent.blockchhub.link/api/send-token"
+  },
+  {
+   "calls30d": 30110,
+   "delta_s": 6319.941,
+   "lastCalledAt": "2026-10-28T06:58:53.769Z",
+   "lastUpdated": "2026-10-28T08:44:13.71Z",
+   "payers30d": 164,
+   "resource": "https://stableenrich.dev/api/exa/search"
+  },
+  {
+   "calls30d": 79201,
+   "delta_s": 6256.489,
+   "lastCalledAt": "2026-10-28T07:00:17.137Z",
+   "lastUpdated": "2026-10-28T08:44:33.626Z",
+   "payers30d": 294,
+   "resource": "https://blockrun.ai/api/v1/chat/completions"
+  },
+  {
+   "calls30d": 14610,
+   "delta_s": 5737.712,
+   "lastCalledAt": "2026-10-28T07:00:02.439Z",
+   "lastUpdated": "2026-10-28T08:35:40.151Z",
+   "payers30d": 59,
+   "resource": "https://keyring-agent.blockchhub.link/api/send-native"
+  },
+  {
+   "calls30d": 9879,
+   "delta_s": 5729.7,
+   "lastCalledAt": "2026-10-28T06:40:12.852Z",
+   "lastUpdated": "2026-10-28T08:15:42.552Z",
+   "payers30d": 96,
+   "resource": "https://api.exa.ai/search"
+  },
+  {
+   "calls30d": 1272,
+   "delta_s": 5400.374,
+   "lastCalledAt": "2026-10-28T06:52:59.11Z",
+   "lastUpdated": "2026-10-28T08:22:59.484Z",
+   "payers30d": 7,
+   "resource": "https://api.solenrich.com/entrypoints/stonk-gems/invoke"
+  },
+  {
+   "calls30d": 9,
+   "delta_s": 4283.366,
+   "lastCalledAt": "2026-10-28T06:02:46.377Z",
+   "lastUpdated": "2026-10-28T07:14:09.743Z",
+   "payers30d": 2,
+   "resource": "https://x402-data-api.sigrunner.workers.dev/chain/token-security"
+  },
+  {
+   "calls30d": 3189,
+   "delta_s": 4077.657,
+   "lastCalledAt": "2026-10-28T06:59:12.76Z",
+   "lastUpdated": "2026-10-28T08:07:10.417Z",
+   "payers30d": 28,
+   "resource": "https://x402.twit.sh/tweets/search"
+  },
+  {
+   "calls30d": 657,
+   "delta_s": 3600.006,
+   "lastCalledAt": "2026-10-28T07:00:01.599Z",
+   "lastUpdated": "2026-10-28T08:00:01.605Z",
+   "payers30d": 15,
+   "resource": "https://base-gas-x402-production.up.railway.app/gas"
+  },
+  {
+   "calls30d": 7190,
+   "delta_s": 2394.652,
+   "lastCalledAt": "2026-10-28T06:53:30.178Z",
+   "lastUpdated": "2026-10-28T07:33:24.83Z",
+   "payers30d": 234,
+   "resource": "https://www.api-xpay.com/x402/payment"
+  },
+  {
+   "calls30d": 7148,
+   "delta_s": 2277.415,
+   "lastCalledAt": "2026-10-28T06:55:33.452Z",
+   "lastUpdated": "2026-10-28T07:33:30.867Z",
+   "payers30d": 227,
+   "resource": "https://www.api-xpay.com/x402/quote"
+  },
+  {
+   "calls30d": 7127,
+   "delta_s": 2160.439,
+   "lastCalledAt": "2026-10-28T06:57:36.409Z",
+   "lastUpdated": "2026-10-28T07:33:36.848Z",
+   "payers30d": 234,
+   "resource": "https://www.api-xpay.com/x402/status"
+  },
+  {
+   "calls30d": 7094,
+   "delta_s": 2042.625,
+   "lastCalledAt": "2026-10-28T06:59:39.469Z",
+   "lastUpdated": "2026-10-28T07:33:42.094Z",
+   "payers30d": 238,
+   "resource": "https://www.api-xpay.com/x402/time"
+  },
+  {
+   "calls30d": 6963,
+   "delta_s": 2015.433,
+   "lastCalledAt": "2026-10-28T07:00:30.134Z",
+   "lastUpdated": "2026-10-28T07:34:05.567Z",
+   "payers30d": 240,
+   "resource": "https://www.api-xpay.com/x402/network"
+  },
+  {
+   "calls30d": 6972,
+   "delta_s": 2014.835,
+   "lastCalledAt": "2026-10-28T07:00:24.731Z",
+   "lastUpdated": "2026-10-28T07:33:59.566Z",
+   "payers30d": 229,
+   "resource": "https://www.api-xpay.com/x402/ip"
+  },
+  {
+   "calls30d": 7045,
+   "delta_s": 2014.457,
+   "lastCalledAt": "2026-10-28T07:00:13.44Z",
+   "lastUpdated": "2026-10-28T07:33:47.897Z",
+   "payers30d": 239,
+   "resource": "https://www.api-xpay.com/x402/uuid"
+  },
+  {
+   "calls30d": 7228,
+   "delta_s": 1962.63,
+   "lastCalledAt": "2026-10-28T07:00:35.885Z",
+   "lastUpdated": "2026-10-28T07:33:18.515Z",
+   "payers30d": 248,
+   "resource": "https://www.api-xpay.com/x402/ping"
+  },
+  {
+   "calls30d": 7021,
+   "delta_s": 1960.855,
+   "lastCalledAt": "2026-10-28T07:00:19.328Z",
+   "lastUpdated": "2026-10-28T07:33:00.183Z",
+   "payers30d": 232,
+   "resource": "https://www.api-xpay.com/x402/random"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 2.041,
+   "lastCalledAt": "2026-10-25T20:20:24.29Z",
+   "lastUpdated": "2026-10-25T20:20:26.331Z",
+   "payers30d": 2,
+   "resource": "https://agent-data-tools.revmesh2074.workers.dev/v1/images/generations"
+  },
+  {
+   "calls30d": 4,
+   "delta_s": 1.824,
+   "lastCalledAt": "2026-10-27T18:07:47.867Z",
+   "lastUpdated": "2026-10-27T18:07:49.691Z",
+   "payers30d": 3,
+   "resource": "https://agent-data-tools.revmesh2074.workers.dev/weather"
+  },
+  {
+   "calls30d": 79,
+   "delta_s": 1.689,
+   "lastCalledAt": "2026-10-28T01:23:37.025Z",
+   "lastUpdated": "2026-10-28T01:23:38.714Z",
+   "payers30d": 12,
+   "resource": "https://ip402.xyz/v1/geo"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 1.382,
+   "lastCalledAt": "2026-10-26T20:05:15.563Z",
+   "lastUpdated": "2026-10-26T20:05:16.945Z",
+   "payers30d": 1,
+   "resource": "https://api.greyridgesignals.ai/chain/gas-price"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 1.192,
+   "lastCalledAt": "2026-10-07T04:52:27.985Z",
+   "lastUpdated": "2026-10-07T04:52:29.177Z",
+   "payers30d": 1,
+   "resource": "https://shop.netlobo.com/quick-brief"
+  },
+  {
+   "calls30d": 64,
+   "delta_s": 1.141,
+   "lastCalledAt": "2026-10-28T01:22:58.698Z",
+   "lastUpdated": "2026-10-28T01:22:59.839Z",
+   "payers30d": 16,
+   "resource": "https://api.aidress.ai/pay/agent_ottoai_crypto_news"
+  },
+  {
+   "calls30d": 5,
+   "delta_s": 1.141,
+   "lastCalledAt": "2026-10-25T12:21:45.728Z",
+   "lastUpdated": "2026-10-25T12:21:46.869Z",
+   "payers30d": 2,
+   "resource": "https://agent-data-tools.revmesh2074.workers.dev/image"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 1.135,
+   "lastCalledAt": "2026-10-10T23:10:30.478Z",
+   "lastUpdated": "2026-10-10T23:10:31.613Z",
+   "payers30d": 2,
+   "resource": "https://tanod.dev/v1/defi/funding"
+  },
+  {
+   "calls30d": 3,
+   "delta_s": 0.933,
+   "lastCalledAt": "2026-10-27T19:05:20.375Z",
+   "lastUpdated": "2026-10-27T19:05:21.308Z",
+   "payers30d": 2,
+   "resource": "https://api.chainmarket-api.workers.dev/api/crypto/honeypot-detector"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.932,
+   "lastCalledAt": "2026-10-27T08:47:10.861Z",
+   "lastUpdated": "2026-10-27T08:47:11.793Z",
+   "payers30d": 1,
+   "resource": "https://x402.billionaireorder.com/v1/token-honeypot-scanner"
+  },
+  {
+   "calls30d": 16,
+   "delta_s": 0.913,
+   "lastCalledAt": "2026-10-25T11:42:44.397Z",
+   "lastUpdated": "2026-10-25T11:42:45.31Z",
+   "payers30d": 15,
+   "resource": "https://api-dev-v2.ixs.finance/x402/vaults"
+  },
+  {
+   "calls30d": 16,
+   "delta_s": 0.902,
+   "lastCalledAt": "2026-10-27T10:00:04.515Z",
+   "lastUpdated": "2026-10-27T10:00:05.417Z",
+   "payers30d": 6,
+   "resource": "https://agentsvc.io/api/v1/proxy/defi-yields"
+  },
+  {
+   "calls30d": 501,
+   "delta_s": 0.841,
+   "lastCalledAt": "2026-10-27T18:12:28.456Z",
+   "lastUpdated": "2026-10-27T18:12:29.297Z",
+   "payers30d": 42,
+   "resource": "https://api.nansen.ai/api/v1/tgm/who-bought-sold"
+  },
+  {
+   "calls30d": 28,
+   "delta_s": 0.812,
+   "lastCalledAt": "2026-10-24T15:56:00.266Z",
+   "lastUpdated": "2026-10-24T15:56:01.078Z",
+   "payers30d": 15,
+   "resource": "https://agentpay.tools/tools/pre_trade_check/call"
+  },
+  {
+   "calls30d": 50,
+   "delta_s": 0.789,
+   "lastCalledAt": "2026-10-27T16:18:06.199Z",
+   "lastUpdated": "2026-10-27T16:18:06.988Z",
+   "payers30d": 36,
+   "resource": "https://x402.ottoai.services/token-details"
+  },
+  {
+   "calls30d": 21,
+   "delta_s": 0.769,
+   "lastCalledAt": "2026-10-27T04:32:42.649Z",
+   "lastUpdated": "2026-10-27T04:32:43.418Z",
+   "payers30d": 16,
+   "resource": "https://theartillerist.com/api/v1/x402-trial"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.74,
+   "lastCalledAt": "2026-10-15T05:39:32.64Z",
+   "lastUpdated": "2026-10-15T05:39:33.38Z",
+   "payers30d": 2,
+   "resource": "https://agents.citiviewgroup.com/v1/defi/yields"
+  },
+  {
+   "calls30d": 11,
+   "delta_s": 0.739,
+   "lastCalledAt": "2026-10-28T05:18:25.601Z",
+   "lastUpdated": "2026-10-28T05:18:26.34Z",
+   "payers30d": 5,
+   "resource": "https://x402.shizu.me/weather"
+  },
+  {
+   "calls30d": 3,
+   "delta_s": 0.722,
+   "lastCalledAt": "2026-10-25T15:04:33.309Z",
+   "lastUpdated": "2026-10-25T15:04:34.031Z",
+   "payers30d": 3,
+   "resource": "https://tanod.dev/v1/chain/token-honeypot"
+  },
+  {
+   "calls30d": 3,
+   "delta_s": 0.685,
+   "lastCalledAt": "2026-10-25T12:26:48.423Z",
+   "lastUpdated": "2026-10-25T12:26:49.108Z",
+   "payers30d": 2,
+   "resource": "https://agent-data-tools.revmesh2074.workers.dev/pack/crypto-market"
+  },
+  {
+   "calls30d": 83,
+   "delta_s": 0.682,
+   "lastCalledAt": "2026-10-26T18:16:41.501Z",
+   "lastUpdated": "2026-10-26T18:16:42.183Z",
+   "payers30d": 15,
+   "resource": "https://wallets-demo-seller-server.calebgcarithers.workers.dev/weather"
+  },
+  {
+   "calls30d": 22,
+   "delta_s": 0.682,
+   "lastCalledAt": "2026-10-27T18:07:24.844Z",
+   "lastUpdated": "2026-10-27T18:07:25.526Z",
+   "payers30d": 14,
+   "resource": "https://skycast.clawca.sh/weather"
+  },
+  {
+   "calls30d": 54,
+   "delta_s": 0.676,
+   "lastCalledAt": "2026-10-28T02:54:22.505Z",
+   "lastUpdated": "2026-10-28T02:54:23.181Z",
+   "payers30d": 12,
+   "resource": "https://api.justaname.id/ens/v2/reverse"
+  },
+  {
+   "calls30d": 4,
+   "delta_s": 0.626,
+   "lastCalledAt": "2026-10-20T13:11:49.609Z",
+   "lastUpdated": "2026-10-20T13:11:50.235Z",
+   "payers30d": 3,
+   "resource": "https://x402.agentindex.world/search"
+  },
+  {
+   "calls30d": 41,
+   "delta_s": 0.608,
+   "lastCalledAt": "2026-10-27T10:10:32.427Z",
+   "lastUpdated": "2026-10-27T10:10:33.035Z",
+   "payers30d": 16,
+   "resource": "https://omniterminal.app/api/x402/v1/news"
+  },
+  {
+   "calls30d": 284,
+   "delta_s": 0.604,
+   "lastCalledAt": "2026-10-28T05:35:33.602Z",
+   "lastUpdated": "2026-10-28T05:35:34.206Z",
+   "payers30d": 10,
+   "resource": "https://api.geoprimitives.dev/v1/marine/depth"
+  },
+  {
+   "calls30d": 61,
+   "delta_s": 0.601,
+   "lastCalledAt": "2026-10-27T18:31:40.628Z",
+   "lastUpdated": "2026-10-27T18:31:41.229Z",
+   "payers30d": 14,
+   "resource": "https://search.cyberwarex.com/news"
+  },
+  {
+   "calls30d": 4,
+   "delta_s": 0.598,
+   "lastCalledAt": "2026-10-11T08:40:01.234Z",
+   "lastUpdated": "2026-10-11T08:40:01.832Z",
+   "payers30d": 4,
+   "resource": "https://base-facts.yankii.fr/v1/wallet"
+  },
+  {
+   "calls30d": 40,
+   "delta_s": 0.595,
+   "lastCalledAt": "2026-10-27T23:50:20.076Z",
+   "lastUpdated": "2026-10-27T23:50:20.671Z",
+   "payers30d": 19,
+   "resource": "https://api.chit402.com/v1/chat/completions"
+  },
+  {
+   "calls30d": 38,
+   "delta_s": 0.594,
+   "lastCalledAt": "2026-10-28T03:43:27.658Z",
+   "lastUpdated": "2026-10-28T03:43:28.252Z",
+   "payers30d": 25,
+   "resource": "https://api.hyperextend.xyz/v1/candles/BTC/1m/latest"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.581,
+   "lastCalledAt": "2026-10-27T16:48:39.877Z",
+   "lastUpdated": "2026-10-27T16:48:40.458Z",
+   "payers30d": 2,
+   "resource": "https://ask.singitai.app/v1/images/generations"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.533,
+   "lastCalledAt": "2026-10-12T10:04:37.411Z",
+   "lastUpdated": "2026-10-12T10:04:37.944Z",
+   "payers30d": 1,
+   "resource": "https://crypto-asistent.com/api/x402/data/funding-oi"
+  },
+  {
+   "calls30d": 84,
+   "delta_s": 0.527,
+   "lastCalledAt": "2026-10-27T10:13:09.333Z",
+   "lastUpdated": "2026-10-27T10:13:09.86Z",
+   "payers30d": 17,
+   "resource": "https://search.cyberwarex.com/search"
+  },
+  {
+   "calls30d": 16,
+   "delta_s": 0.519,
+   "lastCalledAt": "2026-10-27T09:47:10.525Z",
+   "lastUpdated": "2026-10-27T09:47:11.044Z",
+   "payers30d": 6,
+   "resource": "https://agentsvc.io/api/v1/proxy/gas-price"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.518,
+   "lastCalledAt": "2026-10-26T15:07:23.446Z",
+   "lastUpdated": "2026-10-26T15:07:23.964Z",
+   "payers30d": 1,
+   "resource": "https://scv-agent.online/honeypot"
+  },
+  {
+   "calls30d": 373,
+   "delta_s": 0.515,
+   "lastCalledAt": "2026-10-27T09:23:04.085Z",
+   "lastUpdated": "2026-10-27T09:23:04.6Z",
+   "payers30d": 17,
+   "resource": "https://web.cyberwarex.com/fetch"
+  },
+  {
+   "calls30d": 181,
+   "delta_s": 0.508,
+   "lastCalledAt": "2026-10-28T01:22:46.913Z",
+   "lastUpdated": "2026-10-28T01:22:47.421Z",
+   "payers30d": 65,
+   "resource": "https://crypto.apitoll.cloud/v1/crypto/price"
+  },
+  {
+   "calls30d": 21,
+   "delta_s": 0.506,
+   "lastCalledAt": "2026-10-27T10:03:55.301Z",
+   "lastUpdated": "2026-10-27T10:03:55.807Z",
+   "payers30d": 6,
+   "resource": "https://agentsvc.io/api/v1/proxy/token-security"
+  },
+  {
+   "calls30d": 13,
+   "delta_s": 0.503,
+   "lastCalledAt": "2026-10-25T23:38:10.76Z",
+   "lastUpdated": "2026-10-25T23:38:11.263Z",
+   "payers30d": 8,
+   "resource": "https://x402.agentindex.world/weather"
+  },
+  {
+   "calls30d": 90,
+   "delta_s": 0.502,
+   "lastCalledAt": "2026-10-28T01:23:52.073Z",
+   "lastUpdated": "2026-10-28T01:23:52.575Z",
+   "payers30d": 28,
+   "resource": "https://edgar.apitoll.cloud/v1/edgar/filings"
+  },
+  {
+   "calls30d": 3,
+   "delta_s": 0.488,
+   "lastCalledAt": "2026-10-11T13:35:00.699Z",
+   "lastUpdated": "2026-10-11T13:35:01.187Z",
+   "payers30d": 2,
+   "resource": "https://api.zkrobotics.fr/x402/crypto/token-report"
+  },
+  {
+   "calls30d": 11,
+   "delta_s": 0.488,
+   "lastCalledAt": "2026-10-21T21:45:49.429Z",
+   "lastUpdated": "2026-10-21T21:45:49.917Z",
+   "payers30d": 5,
+   "resource": "https://x402.ochinimus.app/api/funding-rate"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.481,
+   "lastCalledAt": "2026-10-16T15:53:47.999Z",
+   "lastUpdated": "2026-10-16T15:53:48.48Z",
+   "payers30d": 2,
+   "resource": "https://saylorinnovations.com/api/crypto/funding-rates"
+  },
+  {
+   "calls30d": 282,
+   "delta_s": 0.47,
+   "lastCalledAt": "2026-10-28T01:18:33.421Z",
+   "lastUpdated": "2026-10-28T01:18:33.891Z",
+   "payers30d": 47,
+   "resource": "https://stableupload.dev/api/upload"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.465,
+   "lastCalledAt": "2026-10-01T04:16:08.048Z",
+   "lastUpdated": "2026-10-01T04:16:08.513Z",
+   "payers30d": 1,
+   "resource": "https://chain.intel.rallylive.ca/token/security"
+  },
+  {
+   "calls30d": 11,
+   "delta_s": 0.463,
+   "lastCalledAt": "2026-10-27T09:53:51.718Z",
+   "lastUpdated": "2026-10-27T09:53:52.181Z",
+   "payers30d": 3,
+   "resource": "https://agentsvc.io/api/v1/proxy/token-precheck"
+  },
+  {
+   "calls30d": 5,
+   "delta_s": 0.463,
+   "lastCalledAt": "2026-10-25T14:46:49.611Z",
+   "lastUpdated": "2026-10-25T14:46:50.074Z",
+   "payers30d": 4,
+   "resource": "https://api.marketintelligenceapi.com/api/v1/markets/yields"
+  },
+  {
+   "calls30d": 7,
+   "delta_s": 0.46,
+   "lastCalledAt": "2026-10-26T13:44:55.493Z",
+   "lastUpdated": "2026-10-26T13:44:55.953Z",
+   "payers30d": 4,
+   "resource": "https://x402-gateway.blackwoodstate8.workers.dev/v1/gas-fees"
+  },
+  {
+   "calls30d": 12,
+   "delta_s": 0.459,
+   "lastCalledAt": "2026-10-25T23:37:35.502Z",
+   "lastUpdated": "2026-10-25T23:37:35.961Z",
+   "payers30d": 7,
+   "resource": "https://x402.agentindex.world/gas-price"
+  },
+  {
+   "calls30d": 118,
+   "delta_s": 0.454,
+   "lastCalledAt": "2026-10-27T17:52:14.604Z",
+   "lastUpdated": "2026-10-27T17:52:15.058Z",
+   "payers30d": 41,
+   "resource": "https://api.bitrefill.com/x402/gift-cards/search"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.452,
+   "lastCalledAt": "2026-10-25T00:00:15.942Z",
+   "lastUpdated": "2026-10-25T00:00:16.394Z",
+   "payers30d": 2,
+   "resource": "https://defi.genexxis.com/yields"
+  },
+  {
+   "calls30d": 3,
+   "delta_s": 0.448,
+   "lastCalledAt": "2026-10-25T14:59:09.942Z",
+   "lastUpdated": "2026-10-25T14:59:10.39Z",
+   "payers30d": 3,
+   "resource": "https://api.marketintelligenceapi.com/api/v1/markets/defi-yields"
+  },
+  {
+   "calls30d": 89,
+   "delta_s": 0.439,
+   "lastCalledAt": "2026-10-27T18:18:32.159Z",
+   "lastUpdated": "2026-10-27T18:18:32.598Z",
+   "payers30d": 16,
+   "resource": "https://api.bitrefill.com/x402/checkout/info"
+  },
+  {
+   "calls30d": 177,
+   "delta_s": 0.434,
+   "lastCalledAt": "2026-10-26T02:27:47.883Z",
+   "lastUpdated": "2026-10-26T02:27:48.317Z",
+   "payers30d": 15,
+   "resource": "https://rpc.nodeflare.app/base/x402"
+  },
+  {
+   "calls30d": 66,
+   "delta_s": 0.425,
+   "lastCalledAt": "2026-10-27T13:30:55.781Z",
+   "lastUpdated": "2026-10-27T13:30:56.206Z",
+   "payers30d": 15,
+   "resource": "https://scvd.store/api/buy/spot_check"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.423,
+   "lastCalledAt": "2026-10-27T10:00:13.514Z",
+   "lastUpdated": "2026-10-27T10:00:13.937Z",
+   "payers30d": 2,
+   "resource": "https://api.firstmention.uk/s/funding-rates/funding"
+  },
+  {
+   "calls30d": 6,
+   "delta_s": 0.421,
+   "lastCalledAt": "2026-10-21T21:20:09.676Z",
+   "lastUpdated": "2026-10-21T21:20:10.097Z",
+   "payers30d": 4,
+   "resource": "https://x402-seller-pmlm.onrender.com/balance"
+  },
+  {
+   "calls30d": 8,
+   "delta_s": 0.42,
+   "lastCalledAt": "2026-10-27T10:03:56.359Z",
+   "lastUpdated": "2026-10-27T10:03:56.779Z",
+   "payers30d": 8,
+   "resource": "https://base-facts.yankii.fr/v1/gas"
+  },
+  {
+   "calls30d": 137,
+   "delta_s": 0.415,
+   "lastCalledAt": "2026-10-27T18:54:33.554Z",
+   "lastUpdated": "2026-10-27T18:54:33.969Z",
+   "payers30d": 127,
+   "resource": "https://www.api-xpay.com/x402/keywords"
+  },
+  {
+   "calls30d": 6,
+   "delta_s": 0.414,
+   "lastCalledAt": "2026-10-25T23:38:08.657Z",
+   "lastUpdated": "2026-10-25T23:38:09.071Z",
+   "payers30d": 5,
+   "resource": "https://x402.tbs-digital.com/defi/yields"
+  },
+  {
+   "calls30d": 33,
+   "delta_s": 0.411,
+   "lastCalledAt": "2026-10-28T05:19:19.894Z",
+   "lastUpdated": "2026-10-28T05:19:20.305Z",
+   "payers30d": 22,
+   "resource": "https://hypernatt.com/api/m2m/liq-radar"
+  },
+  {
+   "calls30d": 4,
+   "delta_s": 0.411,
+   "lastCalledAt": "2026-10-12T14:30:49.216Z",
+   "lastUpdated": "2026-10-12T14:30:49.627Z",
+   "payers30d": 4,
+   "resource": "https://coil.trade/api/board/brief"
+  },
+  {
+   "calls30d": 225,
+   "delta_s": 0.405,
+   "lastCalledAt": "2026-10-27T18:52:24.61Z",
+   "lastUpdated": "2026-10-27T18:52:25.015Z",
+   "payers30d": 209,
+   "resource": "https://www.api-xpay.com/x402/sentiment"
+  },
+  {
+   "calls30d": 8,
+   "delta_s": 0.402,
+   "lastCalledAt": "2026-10-27T04:28:19.561Z",
+   "lastUpdated": "2026-10-27T04:28:19.963Z",
+   "payers30d": 4,
+   "resource": "https://bess-x402.onrender.com/v1/geo/weather"
+  },
+  {
+   "calls30d": 838,
+   "delta_s": 0.398,
+   "lastCalledAt": "2026-10-27T20:00:13.782Z",
+   "lastUpdated": "2026-10-27T20:00:14.18Z",
+   "payers30d": 56,
+   "resource": "https://x402.ottoai.services/crypto-news"
+  },
+  {
+   "calls30d": 5,
+   "delta_s": 0.396,
+   "lastCalledAt": "2026-10-27T09:58:49.593Z",
+   "lastUpdated": "2026-10-27T09:58:49.989Z",
+   "payers30d": 5,
+   "resource": "https://api.aifoundry.sh/v1/weather"
+  },
+  {
+   "calls30d": 290,
+   "delta_s": 0.392,
+   "lastCalledAt": "2026-10-28T03:28:51.569Z",
+   "lastUpdated": "2026-10-28T03:28:51.961Z",
+   "payers30d": 10,
+   "resource": "https://x402.clashofcoins.com/x402/cheap-health"
+  },
+  {
+   "calls30d": 13,
+   "delta_s": 0.392,
+   "lastCalledAt": "2026-10-22T08:46:17.369Z",
+   "lastUpdated": "2026-10-22T08:46:17.761Z",
+   "payers30d": 1,
+   "resource": "https://api.messyvirgo.com/api/v1/paid/token-due-diligence/report"
+  },
+  {
+   "calls30d": 101,
+   "delta_s": 0.391,
+   "lastCalledAt": "2026-10-28T01:21:59.299Z",
+   "lastUpdated": "2026-10-28T01:21:59.69Z",
+   "payers30d": 23,
+   "resource": "https://minifetch.com/api/v1/x402/preflight/url-check"
+  },
+  {
+   "calls30d": 67,
+   "delta_s": 0.386,
+   "lastCalledAt": "2026-10-27T09:14:44.076Z",
+   "lastUpdated": "2026-10-27T09:14:44.462Z",
+   "payers30d": 23,
+   "resource": "https://api.bitrefill.com/x402/invoice/pay"
+  },
+  {
+   "calls30d": 3,
+   "delta_s": 0.386,
+   "lastCalledAt": "2026-10-07T04:56:45.62Z",
+   "lastUpdated": "2026-10-07T04:56:46.006Z",
+   "payers30d": 1,
+   "resource": "https://shop.netlobo.com/brief"
+  },
+  {
+   "calls30d": 365,
+   "delta_s": 0.385,
+   "lastCalledAt": "2026-10-27T18:56:36.203Z",
+   "lastUpdated": "2026-10-27T18:56:36.588Z",
+   "payers30d": 227,
+   "resource": "https://www.api-xpay.com/x402/rewrite"
+  },
+  {
+   "calls30d": 3,
+   "delta_s": 0.384,
+   "lastCalledAt": "2026-10-10T07:07:58.638Z",
+   "lastUpdated": "2026-10-10T07:07:59.022Z",
+   "payers30d": 1,
+   "resource": "https://api.manylives.me/paid/market/brief"
+  },
+  {
+   "calls30d": 53,
+   "delta_s": 0.383,
+   "lastCalledAt": "2026-10-28T02:18:49.661Z",
+   "lastUpdated": "2026-10-28T02:18:50.044Z",
+   "payers30d": 16,
+   "resource": "https://stablestudio.dev/api/upload"
+  },
+  {
+   "calls30d": 493,
+   "delta_s": 0.378,
+   "lastCalledAt": "2026-10-28T06:40:42.303Z",
+   "lastUpdated": "2026-10-28T06:40:42.681Z",
+   "payers30d": 8,
+   "resource": "https://api.kadec0.xyz/v1/papers"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.378,
+   "lastCalledAt": "2026-10-23T10:36:32.769Z",
+   "lastUpdated": "2026-10-23T10:36:33.147Z",
+   "payers30d": 2,
+   "resource": "https://bess-x402.onrender.com/v1/crypto/yields"
+  },
+  {
+   "calls30d": 453,
+   "delta_s": 0.373,
+   "lastCalledAt": "2026-10-28T06:00:04.359Z",
+   "lastUpdated": "2026-10-28T06:00:04.732Z",
+   "payers30d": 20,
+   "resource": "https://cheaptokens.ai/api/buy"
+  },
+  {
+   "calls30d": 14,
+   "delta_s": 0.36,
+   "lastCalledAt": "2026-10-17T23:43:07.409Z",
+   "lastUpdated": "2026-10-17T23:43:07.769Z",
+   "payers30d": 8,
+   "resource": "https://app.suedeai.ai/agent/image"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.343,
+   "lastCalledAt": "2026-10-24T23:40:29.707Z",
+   "lastUpdated": "2026-10-24T23:40:30.05Z",
+   "payers30d": 2,
+   "resource": "https://bess-x402.onrender.com/v1/crypto/funding-compare"
+  },
+  {
+   "calls30d": 4,
+   "delta_s": 0.332,
+   "lastCalledAt": "2026-10-27T10:06:02.178Z",
+   "lastUpdated": "2026-10-27T10:06:02.51Z",
+   "payers30d": 3,
+   "resource": "https://derivs.duoleads.com/v1/funding-history"
+  },
+  {
+   "calls30d": 3,
+   "delta_s": 0.33,
+   "lastCalledAt": "2026-10-20T03:20:47.36Z",
+   "lastUpdated": "2026-10-20T03:20:47.69Z",
+   "payers30d": 3,
+   "resource": "https://saylorinnovations.com/api/defi/yields"
+  },
+  {
+   "calls30d": 2717,
+   "delta_s": 0.327,
+   "lastCalledAt": "2026-10-28T01:43:13.502Z",
+   "lastUpdated": "2026-10-28T01:43:13.829Z",
+   "payers30d": 53,
+   "resource": "https://blockrun.ai/api/v1/exa/contents"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.324,
+   "lastCalledAt": "2026-10-18T17:02:54.593Z",
+   "lastUpdated": "2026-10-18T17:02:54.917Z",
+   "payers30d": 1,
+   "resource": "https://automaton-tx-explainer.vercel.app/v1/wallet-report"
+  },
+  {
+   "calls30d": 32,
+   "delta_s": 0.319,
+   "lastCalledAt": "2026-10-27T17:53:06.39Z",
+   "lastUpdated": "2026-10-27T17:53:06.709Z",
+   "payers30d": 24,
+   "resource": "https://quartermaster.surewhynot.app/v1/gas"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.313,
+   "lastCalledAt": "2026-10-01T04:21:14.401Z",
+   "lastUpdated": "2026-10-01T04:21:14.714Z",
+   "payers30d": 1,
+   "resource": "https://chain.intel.rallylive.ca/token/honeypot/bsc"
+  },
+  {
+   "calls30d": 5,
+   "delta_s": 0.312,
+   "lastCalledAt": "2026-10-19T17:10:42.057Z",
+   "lastUpdated": "2026-10-19T17:10:42.369Z",
+   "payers30d": 5,
+   "resource": "https://mcp.dropenginehq.com/api/token-security-audit"
+  },
+  {
+   "calls30d": 4,
+   "delta_s": 0.309,
+   "lastCalledAt": "2026-10-25T16:42:05.454Z",
+   "lastUpdated": "2026-10-25T16:42:05.763Z",
+   "payers30d": 2,
+   "resource": "https://agent-data-tools.revmesh2074.workers.dev/pack/token-analysis"
+  },
+  {
+   "calls30d": 226,
+   "delta_s": 0.306,
+   "lastCalledAt": "2026-10-28T01:20:02.204Z",
+   "lastUpdated": "2026-10-28T01:20:02.51Z",
+   "payers30d": 31,
+   "resource": "https://laso.finance/auth"
+  },
+  {
+   "calls30d": 18,
+   "delta_s": 0.288,
+   "lastCalledAt": "2026-10-28T00:18:04.422Z",
+   "lastUpdated": "2026-10-28T00:18:04.71Z",
+   "payers30d": 17,
+   "resource": "https://vibesprings.net/api/price/base-gas"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.288,
+   "lastCalledAt": "2026-10-18T03:16:49.907Z",
+   "lastUpdated": "2026-10-18T03:16:50.195Z",
+   "payers30d": 1,
+   "resource": "https://cryptofeed402.site/brief/latest"
+  },
+  {
+   "calls30d": 12,
+   "delta_s": 0.287,
+   "lastCalledAt": "2026-10-20T21:42:02.425Z",
+   "lastUpdated": "2026-10-20T21:42:02.712Z",
+   "payers30d": 7,
+   "resource": "https://data.tollkit.dev/weather"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.277,
+   "lastCalledAt": "2026-10-01T04:16:14.13Z",
+   "lastUpdated": "2026-10-01T04:16:14.407Z",
+   "payers30d": 1,
+   "resource": "https://chain.intel.rallylive.ca/token/honeypot"
+  },
+  {
+   "calls30d": 170,
+   "delta_s": 0.271,
+   "lastCalledAt": "2026-10-28T04:15:51.61Z",
+   "lastUpdated": "2026-10-28T04:15:51.881Z",
+   "payers30d": 167,
+   "resource": "https://api.onesource.io/api/chain/erc721-tokens"
+  },
+  {
+   "calls30d": 162,
+   "delta_s": 0.27,
+   "lastCalledAt": "2026-10-28T06:05:16.121Z",
+   "lastUpdated": "2026-10-28T06:05:16.391Z",
+   "payers30d": 158,
+   "resource": "https://api.onesource.io/api/chain/allowance"
+  },
+  {
+   "calls30d": 3,
+   "delta_s": 0.27,
+   "lastCalledAt": "2026-10-24T15:02:40.541Z",
+   "lastUpdated": "2026-10-24T15:02:40.811Z",
+   "payers30d": 2,
+   "resource": "https://api.checkpoint402.com/v1/defi-yields"
+  },
+  {
+   "calls30d": 123,
+   "delta_s": 0.269,
+   "lastCalledAt": "2026-10-26T23:35:21.511Z",
+   "lastUpdated": "2026-10-26T23:35:21.78Z",
+   "payers30d": 11,
+   "resource": "https://api.gondola-ai.com/v1/images/generations"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.269,
+   "lastCalledAt": "2026-10-08T06:09:00.855Z",
+   "lastUpdated": "2026-10-08T06:09:01.124Z",
+   "payers30d": 2,
+   "resource": "https://shelf.thirdmade.net/probe/token-security"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.264,
+   "lastCalledAt": "2026-10-08T06:11:28.642Z",
+   "lastUpdated": "2026-10-08T06:11:28.906Z",
+   "payers30d": 2,
+   "resource": "https://crypto.openverbs.com/v1/yields"
+  },
+  {
+   "calls30d": 54,
+   "delta_s": 0.263,
+   "lastCalledAt": "2026-10-27T07:12:04.801Z",
+   "lastUpdated": "2026-10-27T07:12:05.064Z",
+   "payers30d": 35,
+   "resource": "https://laso.finance/get-card"
+  },
+  {
+   "calls30d": 3,
+   "delta_s": 0.263,
+   "lastCalledAt": "2026-10-25T18:43:49.331Z",
+   "lastUpdated": "2026-10-25T18:43:49.594Z",
+   "payers30d": 3,
+   "resource": "https://crypto.openverbs.com/v1/funding"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.261,
+   "lastCalledAt": "2026-10-22T11:23:12.753Z",
+   "lastUpdated": "2026-10-22T11:23:13.014Z",
+   "payers30d": 1,
+   "resource": "https://agentsvc.io/api/v1/proxy/research-report"
+  },
+  {
+   "calls30d": 4,
+   "delta_s": 0.259,
+   "lastCalledAt": "2026-10-27T10:06:47.466Z",
+   "lastUpdated": "2026-10-27T10:06:47.725Z",
+   "payers30d": 3,
+   "resource": "https://derivs.duoleads.com/v1/funding-rates"
+  },
+  {
+   "calls30d": 49,
+   "delta_s": 0.258,
+   "lastCalledAt": "2026-10-21T21:07:39.345Z",
+   "lastUpdated": "2026-10-21T21:07:39.603Z",
+   "payers30d": 32,
+   "resource": "https://x402.ottoai.services/tradfi-data"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.257,
+   "lastCalledAt": "2026-10-01T04:20:14.104Z",
+   "lastUpdated": "2026-10-01T04:20:14.361Z",
+   "payers30d": 1,
+   "resource": "https://chain.intel.rallylive.ca/token/honeypot/optimism"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.256,
+   "lastCalledAt": "2026-10-01T04:20:44.189Z",
+   "lastUpdated": "2026-10-01T04:20:44.445Z",
+   "payers30d": 1,
+   "resource": "https://chain.intel.rallylive.ca/token/honeypot/polygon"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.255,
+   "lastCalledAt": "2026-10-10T02:52:00.762Z",
+   "lastUpdated": "2026-10-10T02:52:01.017Z",
+   "payers30d": 1,
+   "resource": "https://trust-agent.io/v1/token/honeypot"
+  },
+  {
+   "calls30d": 2625,
+   "delta_s": 0.253,
+   "lastCalledAt": "2026-10-28T05:46:53.495Z",
+   "lastUpdated": "2026-10-28T05:46:53.748Z",
+   "payers30d": 63,
+   "resource": "https://blockrun.ai/api/v1/exa/search"
+  },
+  {
+   "calls30d": 13,
+   "delta_s": 0.249,
+   "lastCalledAt": "2026-10-27T10:31:54.764Z",
+   "lastUpdated": "2026-10-27T10:31:55.013Z",
+   "payers30d": 6,
+   "resource": "https://x402.ottoai.services/token-security"
+  },
+  {
+   "calls30d": 2056,
+   "delta_s": 0.247,
+   "lastCalledAt": "2026-10-28T03:06:18.34Z",
+   "lastUpdated": "2026-10-28T03:06:18.587Z",
+   "payers30d": 34,
+   "resource": "https://blockrun.ai/api/v1/images/generations"
+  },
+  {
+   "calls30d": 43,
+   "delta_s": 0.246,
+   "lastCalledAt": "2026-10-27T19:08:17.381Z",
+   "lastUpdated": "2026-10-27T19:08:17.627Z",
+   "payers30d": 16,
+   "resource": "https://www.blockchainiq.co/api/x402/v1/brief"
+  },
+  {
+   "calls30d": 82,
+   "delta_s": 0.244,
+   "lastCalledAt": "2026-10-28T04:31:24.545Z",
+   "lastUpdated": "2026-10-28T04:31:24.789Z",
+   "payers30d": 47,
+   "resource": "https://api.oblique.markets/api/v1/paid/time"
+  },
+  {
+   "calls30d": 5,
+   "delta_s": 0.237,
+   "lastCalledAt": "2026-10-27T09:03:25.521Z",
+   "lastUpdated": "2026-10-27T09:03:25.758Z",
+   "payers30d": 2,
+   "resource": "https://apexfaucet.xyz/api/x402/evm-wallet-balance"
+  },
+  {
+   "calls30d": 14,
+   "delta_s": 0.236,
+   "lastCalledAt": "2026-10-27T09:46:33.512Z",
+   "lastUpdated": "2026-10-27T09:46:33.748Z",
+   "payers30d": 4,
+   "resource": "https://agentsvc.io/api/v1/proxy/evm-balance"
+  },
+  {
+   "calls30d": 6,
+   "delta_s": 0.232,
+   "lastCalledAt": "2026-10-27T09:52:55.558Z",
+   "lastUpdated": "2026-10-27T09:52:55.79Z",
+   "payers30d": 5,
+   "resource": "https://netintel.dev/wallet/balance"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.232,
+   "lastCalledAt": "2026-10-11T05:17:57.541Z",
+   "lastUpdated": "2026-10-11T05:17:57.773Z",
+   "payers30d": 1,
+   "resource": "https://x402-seller-0ay3.onrender.com/api/defi/yields"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.231,
+   "lastCalledAt": "2026-10-08T06:09:00.085Z",
+   "lastUpdated": "2026-10-08T06:09:00.316Z",
+   "payers30d": 2,
+   "resource": "https://api.agentstools.dev/derivs/funding"
+  },
+  {
+   "calls30d": 3,
+   "delta_s": 0.23,
+   "lastCalledAt": "2026-10-27T11:21:17.751Z",
+   "lastUpdated": "2026-10-27T11:21:17.981Z",
+   "payers30d": 1,
+   "resource": "https://agent402.tools/v1/research/market-brief"
+  },
+  {
+   "calls30d": 4663,
+   "delta_s": 0.227,
+   "lastCalledAt": "2026-10-25T23:32:44.447Z",
+   "lastUpdated": "2026-10-25T23:32:44.674Z",
+   "payers30d": 14,
+   "resource": "https://api.gondola-ai.com/v1/chat/completions"
+  },
+  {
+   "calls30d": 24,
+   "delta_s": 0.227,
+   "lastCalledAt": "2026-10-27T09:49:34.801Z",
+   "lastUpdated": "2026-10-27T09:49:35.028Z",
+   "payers30d": 7,
+   "resource": "https://agentsvc.io/api/v1/proxy/weather"
+  },
+  {
+   "calls30d": 4,
+   "delta_s": 0.227,
+   "lastCalledAt": "2026-10-27T00:52:03.429Z",
+   "lastUpdated": "2026-10-27T00:52:03.656Z",
+   "payers30d": 2,
+   "resource": "https://agent-data-tools.revmesh2074.workers.dev/arb/gas-history"
+  },
+  {
+   "calls30d": 6,
+   "delta_s": 0.225,
+   "lastCalledAt": "2026-10-27T11:34:19.585Z",
+   "lastUpdated": "2026-10-27T11:34:19.81Z",
+   "payers30d": 1,
+   "resource": "https://agent402.tools/api/image-gen-hd"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.224,
+   "lastCalledAt": "2026-10-19T00:55:51.859Z",
+   "lastUpdated": "2026-10-19T00:55:52.083Z",
+   "payers30d": 1,
+   "resource": "https://x402-seller-pmlm.onrender.com/honeypot-check"
+  },
+  {
+   "calls30d": 11,
+   "delta_s": 0.22,
+   "lastCalledAt": "2026-10-27T10:04:47.313Z",
+   "lastUpdated": "2026-10-27T10:04:47.533Z",
+   "payers30d": 8,
+   "resource": "https://chain.tollkit.dev/chain/balance"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.218,
+   "lastCalledAt": "2026-09-28T11:30:39.682Z",
+   "lastUpdated": "2026-09-28T11:30:39.9Z",
+   "payers30d": 1,
+   "resource": "https://47620.xyz/x/base/token-report/:address"
+  },
+  {
+   "calls30d": 290,
+   "delta_s": 0.217,
+   "lastCalledAt": "2026-10-28T02:54:14.091Z",
+   "lastUpdated": "2026-10-28T02:54:14.308Z",
+   "payers30d": 288,
+   "resource": "https://api.onesource.io/api/chain/ens/:input"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.217,
+   "lastCalledAt": "2026-10-27T01:08:25.35Z",
+   "lastUpdated": "2026-10-27T01:08:25.567Z",
+   "payers30d": 1,
+   "resource": "https://agent-data-tools.revmesh2074.workers.dev/unichain/balance"
+  },
+  {
+   "calls30d": 5,
+   "delta_s": 0.217,
+   "lastCalledAt": "2026-10-27T09:58:52.232Z",
+   "lastUpdated": "2026-10-27T09:58:52.449Z",
+   "payers30d": 5,
+   "resource": "https://alphapipeline-eu.onrender.com/v1/derivatives/funding-rate"
+  },
+  {
+   "calls30d": 46,
+   "delta_s": 0.214,
+   "lastCalledAt": "2026-10-28T02:45:01.512Z",
+   "lastUpdated": "2026-10-28T02:45:01.726Z",
+   "payers30d": 12,
+   "resource": "https://kronossignals.com/api/v1/funding-extremes"
+  },
+  {
+   "calls30d": 3,
+   "delta_s": 0.214,
+   "lastCalledAt": "2026-10-19T22:25:31.375Z",
+   "lastUpdated": "2026-10-19T22:25:31.589Z",
+   "payers30d": 2,
+   "resource": "https://agentx402pay.com/api/wallet-balance"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.214,
+   "lastCalledAt": "2026-10-23T19:40:21.44Z",
+   "lastUpdated": "2026-10-23T19:40:21.654Z",
+   "payers30d": 2,
+   "resource": "https://api.fadeandco.workers.dev/api/agent-intel/honeypot-trap-detector"
+  },
+  {
+   "calls30d": 11,
+   "delta_s": 0.213,
+   "lastCalledAt": "2026-10-27T09:55:13.504Z",
+   "lastUpdated": "2026-10-27T09:55:13.717Z",
+   "payers30d": 6,
+   "resource": "https://crypto.apitoll.cloud/v1/crypto/yields"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.212,
+   "lastCalledAt": "2026-10-27T11:31:22.218Z",
+   "lastUpdated": "2026-10-27T11:31:22.43Z",
+   "payers30d": 1,
+   "resource": "https://agent402.tools/v1/token-risk"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.211,
+   "lastCalledAt": "2026-10-01T20:10:21.411Z",
+   "lastUpdated": "2026-10-01T20:10:21.622Z",
+   "payers30d": 1,
+   "resource": "https://twin.unykorn.org/defi/yields"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.211,
+   "lastCalledAt": "2026-10-08T06:12:13.673Z",
+   "lastUpdated": "2026-10-08T06:12:13.884Z",
+   "payers30d": 2,
+   "resource": "https://x402.shizu.me/funding"
+  },
+  {
+   "calls30d": 74,
+   "delta_s": 0.211,
+   "lastCalledAt": "2026-10-27T00:10:28.593Z",
+   "lastUpdated": "2026-10-27T00:10:28.804Z",
+   "payers30d": 4,
+   "resource": "https://api.losbeto.xyz/research-brief"
+  },
+  {
+   "calls30d": 445,
+   "delta_s": 0.208,
+   "lastCalledAt": "2026-10-28T03:04:27.464Z",
+   "lastUpdated": "2026-10-28T03:04:27.672Z",
+   "payers30d": 390,
+   "resource": "https://api.onesource.io/api/chain/block-number"
+  },
+  {
+   "calls30d": 160,
+   "delta_s": 0.207,
+   "lastCalledAt": "2026-10-28T04:28:25.438Z",
+   "lastUpdated": "2026-10-28T04:28:25.645Z",
+   "payers30d": 100,
+   "resource": "https://blockrun.ai/api/v1/pm/polymarket/markets"
+  },
+  {
+   "calls30d": 18,
+   "delta_s": 0.206,
+   "lastCalledAt": "2026-10-27T11:57:43.743Z",
+   "lastUpdated": "2026-10-27T11:57:43.949Z",
+   "payers30d": 9,
+   "resource": "https://agent402.tools/api/gas-estimate"
+  },
+  {
+   "calls30d": 11,
+   "delta_s": 0.205,
+   "lastCalledAt": "2026-10-27T11:40:18.262Z",
+   "lastUpdated": "2026-10-27T11:40:18.467Z",
+   "payers30d": 4,
+   "resource": "https://agent402.tools/v1/images/fast"
+  },
+  {
+   "calls30d": 13,
+   "delta_s": 0.204,
+   "lastCalledAt": "2026-10-27T10:16:58.481Z",
+   "lastUpdated": "2026-10-27T10:16:58.685Z",
+   "payers30d": 8,
+   "resource": "https://x402-seller-pmlm.onrender.com/gas"
+  },
+  {
+   "calls30d": 60,
+   "delta_s": 0.203,
+   "lastCalledAt": "2026-10-28T01:07:07.348Z",
+   "lastUpdated": "2026-10-28T01:07:07.551Z",
+   "payers30d": 52,
+   "resource": "https://api.oblique.markets/api/v1/paid/base-block-number"
+  },
+  {
+   "calls30d": 11,
+   "delta_s": 0.203,
+   "lastCalledAt": "2026-10-27T11:36:14.597Z",
+   "lastUpdated": "2026-10-27T11:36:14.8Z",
+   "payers30d": 5,
+   "resource": "https://agent402.tools/v1/images/pro"
+  },
+  {
+   "calls30d": 7,
+   "delta_s": 0.203,
+   "lastCalledAt": "2026-10-28T03:05:29.566Z",
+   "lastUpdated": "2026-10-28T03:05:29.769Z",
+   "payers30d": 3,
+   "resource": "https://api.tickersfeed.net/defi/yields"
+  },
+  {
+   "calls30d": 12,
+   "delta_s": 0.202,
+   "lastCalledAt": "2026-10-25T23:38:49.32Z",
+   "lastUpdated": "2026-10-25T23:38:49.522Z",
+   "payers30d": 7,
+   "resource": "https://x402.agentindex.world/wallet-balance"
+  },
+  {
+   "calls30d": 5,
+   "delta_s": 0.2,
+   "lastCalledAt": "2026-10-27T18:09:47.762Z",
+   "lastUpdated": "2026-10-27T18:09:47.962Z",
+   "payers30d": 3,
+   "resource": "https://agent-data-tools.revmesh2074.workers.dev/base/balance"
+  },
+  {
+   "calls30d": 62,
+   "delta_s": 0.199,
+   "lastCalledAt": "2026-10-27T15:25:25.314Z",
+   "lastUpdated": "2026-10-27T15:25:25.513Z",
+   "payers30d": 3,
+   "resource": "https://agent402.tools/v1/images/generations"
+  },
+  {
+   "calls30d": 8,
+   "delta_s": 0.199,
+   "lastCalledAt": "2026-10-27T11:42:40.44Z",
+   "lastUpdated": "2026-10-27T11:42:40.639Z",
+   "payers30d": 3,
+   "resource": "https://agent402.tools/api/sol-token-report"
+  },
+  {
+   "calls30d": 13,
+   "delta_s": 0.197,
+   "lastCalledAt": "2026-10-26T05:14:06.096Z",
+   "lastUpdated": "2026-10-26T05:14:06.293Z",
+   "payers30d": 10,
+   "resource": "https://token-risk.com/v1/scan"
+  },
+  {
+   "calls30d": 10,
+   "delta_s": 0.196,
+   "lastCalledAt": "2026-10-27T11:51:54.127Z",
+   "lastUpdated": "2026-10-27T11:51:54.323Z",
+   "payers30d": 3,
+   "resource": "https://agent402.tools/api/defi-yields"
+  },
+  {
+   "calls30d": 38,
+   "delta_s": 0.195,
+   "lastCalledAt": "2026-10-27T17:52:59.727Z",
+   "lastUpdated": "2026-10-27T17:52:59.922Z",
+   "payers30d": 24,
+   "resource": "https://rubric-protocol.com/v1/x402/hedera-facts/exchange-rate"
+  },
+  {
+   "calls30d": 10,
+   "delta_s": 0.191,
+   "lastCalledAt": "2026-10-27T11:54:39.367Z",
+   "lastUpdated": "2026-10-27T11:54:39.558Z",
+   "payers30d": 3,
+   "resource": "https://agent402.tools/api/wallet-balance"
+  },
+  {
+   "calls30d": 4,
+   "delta_s": 0.187,
+   "lastCalledAt": "2026-10-27T11:33:28.221Z",
+   "lastUpdated": "2026-10-27T11:33:28.408Z",
+   "payers30d": 2,
+   "resource": "https://agent402.tools/api/image-gen-premium"
+  },
+  {
+   "calls30d": 14,
+   "delta_s": 0.185,
+   "lastCalledAt": "2026-10-27T11:54:52.402Z",
+   "lastUpdated": "2026-10-27T11:54:52.587Z",
+   "payers30d": 6,
+   "resource": "https://agent402.tools/api/weather-current"
+  },
+  {
+   "calls30d": 85,
+   "delta_s": 0.182,
+   "lastCalledAt": "2026-10-28T01:25:39.108Z",
+   "lastUpdated": "2026-10-28T01:25:39.29Z",
+   "payers30d": 27,
+   "resource": "https://pro-api.coingecko.com/api/v3/x402/onchain/search/pools"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.182,
+   "lastCalledAt": "2026-10-24T06:08:35.371Z",
+   "lastUpdated": "2026-10-24T06:08:35.553Z",
+   "payers30d": 1,
+   "resource": "https://gogeta2-u35175.vm.elestio.app/agents/v1/product/price"
+  },
+  {
+   "calls30d": 1051,
+   "delta_s": 0.179,
+   "lastCalledAt": "2026-10-24T00:17:12.808Z",
+   "lastUpdated": "2026-10-24T00:17:12.987Z",
+   "payers30d": 7,
+   "resource": "https://api.solenrich.com/entrypoints/stonk-yield/invoke"
+  },
+  {
+   "calls30d": 55,
+   "delta_s": 0.177,
+   "lastCalledAt": "2026-10-04T00:11:44.777Z",
+   "lastUpdated": "2026-10-04T00:11:44.954Z",
+   "payers30d": 19,
+   "resource": "https://api.urbangametheory.xyz/agent/oracle/facts"
+  },
+  {
+   "calls30d": 51,
+   "delta_s": 0.175,
+   "lastCalledAt": "2026-10-25T12:26:19.473Z",
+   "lastUpdated": "2026-10-25T12:26:19.648Z",
+   "payers30d": 30,
+   "resource": "https://x402tap.com/api/weather"
+  },
+  {
+   "calls30d": 3,
+   "delta_s": 0.172,
+   "lastCalledAt": "2026-10-27T05:08:17.795Z",
+   "lastUpdated": "2026-10-27T05:08:17.967Z",
+   "payers30d": 2,
+   "resource": "https://agent-data-tools.revmesh2074.workers.dev/scroll/balance"
+  },
+  {
+   "calls30d": 12,
+   "delta_s": 0.166,
+   "lastCalledAt": "2026-10-28T04:06:46.428Z",
+   "lastUpdated": "2026-10-28T04:06:46.594Z",
+   "payers30d": 7,
+   "resource": "https://x402-data-api.sigrunner.workers.dev/defi/yields"
+  },
+  {
+   "calls30d": 26,
+   "delta_s": 0.165,
+   "lastCalledAt": "2026-10-26T00:12:25.392Z",
+   "lastUpdated": "2026-10-26T00:12:25.557Z",
+   "payers30d": 19,
+   "resource": "https://rubric-protocol.com/v1/x402/hedera-facts/supply"
+  },
+  {
+   "calls30d": 43,
+   "delta_s": 0.165,
+   "lastCalledAt": "2026-10-25T21:48:04.327Z",
+   "lastUpdated": "2026-10-25T21:48:04.492Z",
+   "payers30d": 14,
+   "resource": "https://x402.aispace.bot/api/v1/image/generate"
+  },
+  {
+   "calls30d": 247,
+   "delta_s": 0.164,
+   "lastCalledAt": "2026-10-27T21:36:54.19Z",
+   "lastUpdated": "2026-10-27T21:36:54.354Z",
+   "payers30d": 237,
+   "resource": "https://api.onesource.io/api/chain/network-info"
+  },
+  {
+   "calls30d": 874,
+   "delta_s": 0.164,
+   "lastCalledAt": "2026-10-28T04:55:20.158Z",
+   "lastUpdated": "2026-10-28T04:55:20.322Z",
+   "payers30d": 39,
+   "resource": "https://api.exa.ai/contents"
+  },
+  {
+   "calls30d": 179,
+   "delta_s": 0.163,
+   "lastCalledAt": "2026-10-27T21:28:25.722Z",
+   "lastUpdated": "2026-10-27T21:28:25.885Z",
+   "payers30d": 177,
+   "resource": "https://api.onesource.io/api/chain/nft-metadata"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.16,
+   "lastCalledAt": "2026-10-08T06:02:44.604Z",
+   "lastUpdated": "2026-10-08T06:02:44.764Z",
+   "payers30d": 2,
+   "resource": "https://intel.degenscan.io/v1/defi/yields"
+  },
+  {
+   "calls30d": 25,
+   "delta_s": 0.159,
+   "lastCalledAt": "2026-10-28T05:00:44.833Z",
+   "lastUpdated": "2026-10-28T05:00:44.992Z",
+   "payers30d": 17,
+   "resource": "https://headers.use.x402atlas.com/"
+  },
+  {
+   "calls30d": 205,
+   "delta_s": 0.158,
+   "lastCalledAt": "2026-10-27T21:37:06.791Z",
+   "lastUpdated": "2026-10-27T21:37:06.949Z",
+   "payers30d": 205,
+   "resource": "https://api.onesource.io/api/chain/events"
+  },
+  {
+   "calls30d": 45,
+   "delta_s": 0.157,
+   "lastCalledAt": "2026-10-27T10:02:09.572Z",
+   "lastUpdated": "2026-10-27T10:02:09.729Z",
+   "payers30d": 44,
+   "resource": "https://api.oblique.markets/api/v1/paid/base-gas-price"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.156,
+   "lastCalledAt": "2026-10-08T12:11:56.997Z",
+   "lastUpdated": "2026-10-08T12:11:57.153Z",
+   "payers30d": 1,
+   "resource": "https://x402tap.com/api/wallet-balance"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.156,
+   "lastCalledAt": "2026-10-15T01:44:57.636Z",
+   "lastUpdated": "2026-10-15T01:44:57.792Z",
+   "payers30d": 2,
+   "resource": "https://agents.citiviewgroup.com/v1/token/report"
+  },
+  {
+   "calls30d": 148,
+   "delta_s": 0.153,
+   "lastCalledAt": "2026-10-27T18:44:39.82Z",
+   "lastUpdated": "2026-10-27T18:44:39.973Z",
+   "payers30d": 148,
+   "resource": "https://api.onesource.io/api/chain/call"
+  },
+  {
+   "calls30d": 7,
+   "delta_s": 0.15,
+   "lastCalledAt": "2026-10-27T01:05:19.556Z",
+   "lastUpdated": "2026-10-27T01:05:19.706Z",
+   "payers30d": 2,
+   "resource": "https://agent-data-tools.revmesh2074.workers.dev/price/token"
+  },
+  {
+   "calls30d": 215,
+   "delta_s": 0.146,
+   "lastCalledAt": "2026-10-27T21:36:45.079Z",
+   "lastUpdated": "2026-10-27T21:36:45.225Z",
+   "payers30d": 215,
+   "resource": "https://api.onesource.io/api/chain/tx/:hash"
+  },
+  {
+   "calls30d": 28,
+   "delta_s": 0.146,
+   "lastCalledAt": "2026-10-27T09:53:20.883Z",
+   "lastUpdated": "2026-10-27T09:53:21.029Z",
+   "payers30d": 23,
+   "resource": "https://vibesprings.net/api/price/btc-usd"
+  },
+  {
+   "calls30d": 337,
+   "delta_s": 0.145,
+   "lastCalledAt": "2026-10-27T21:31:24.282Z",
+   "lastUpdated": "2026-10-27T21:31:24.427Z",
+   "payers30d": 336,
+   "resource": "https://api.onesource.io/api/chain/live-balance"
+  },
+  {
+   "calls30d": 5,
+   "delta_s": 0.145,
+   "lastCalledAt": "2026-10-27T00:57:03.391Z",
+   "lastUpdated": "2026-10-27T00:57:03.536Z",
+   "payers30d": 2,
+   "resource": "https://agent-data-tools.revmesh2074.workers.dev/eth/balance"
+  },
+  {
+   "calls30d": 4,
+   "delta_s": 0.144,
+   "lastCalledAt": "2026-10-27T01:03:08.24Z",
+   "lastUpdated": "2026-10-27T01:03:08.384Z",
+   "payers30d": 2,
+   "resource": "https://agent-data-tools.revmesh2074.workers.dev/op/balance"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.144,
+   "lastCalledAt": "2026-10-18T17:02:56.242Z",
+   "lastUpdated": "2026-10-18T17:02:56.386Z",
+   "payers30d": 1,
+   "resource": "https://automaton-tx-explainer.vercel.app/v1/token-report"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.143,
+   "lastCalledAt": "2026-10-25T09:21:48.472Z",
+   "lastUpdated": "2026-10-25T09:21:48.615Z",
+   "payers30d": 2,
+   "resource": "https://agent-data-tools.revmesh2074.workers.dev/hyperliquid/funding-history"
+  },
+  {
+   "calls30d": 97,
+   "delta_s": 0.142,
+   "lastCalledAt": "2026-10-27T17:52:16.95Z",
+   "lastUpdated": "2026-10-27T17:52:17.092Z",
+   "payers30d": 25,
+   "resource": "https://websearch.use.x402atlas.com/search"
+  },
+  {
+   "calls30d": 151,
+   "delta_s": 0.14,
+   "lastCalledAt": "2026-10-28T02:14:17.042Z",
+   "lastUpdated": "2026-10-28T02:14:17.182Z",
+   "payers30d": 41,
+   "resource": "https://agi.apify.com/protocols/x402/prepaid-tokens"
+  },
+  {
+   "calls30d": 4,
+   "delta_s": 0.14,
+   "lastCalledAt": "2026-10-27T01:04:35.436Z",
+   "lastUpdated": "2026-10-27T01:04:35.576Z",
+   "payers30d": 2,
+   "resource": "https://agent-data-tools.revmesh2074.workers.dev/polygon/gas-history"
+  },
+  {
+   "calls30d": 5,
+   "delta_s": 0.14,
+   "lastCalledAt": "2026-10-25T13:06:46Z",
+   "lastUpdated": "2026-10-25T13:06:46.14Z",
+   "payers30d": 2,
+   "resource": "https://agent-data-tools.revmesh2074.workers.dev/token-report"
+  },
+  {
+   "calls30d": 548,
+   "delta_s": 0.139,
+   "lastCalledAt": "2026-10-27T18:12:37.515Z",
+   "lastUpdated": "2026-10-27T18:12:37.654Z",
+   "payers30d": 31,
+   "resource": "https://twitter.use.x402atlas.com/search"
+  },
+  {
+   "calls30d": 214,
+   "delta_s": 0.139,
+   "lastCalledAt": "2026-10-27T21:39:45.399Z",
+   "lastUpdated": "2026-10-27T21:39:45.538Z",
+   "payers30d": 214,
+   "resource": "https://api.onesource.io/deepstate/v1/markets"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.138,
+   "lastCalledAt": "2026-10-01T04:01:01.119Z",
+   "lastUpdated": "2026-10-01T04:01:01.257Z",
+   "payers30d": 1,
+   "resource": "https://hubvibe-io.com/work/image/generate"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.137,
+   "lastCalledAt": "2026-10-19T17:42:22.879Z",
+   "lastUpdated": "2026-10-19T17:42:23.016Z",
+   "payers30d": 1,
+   "resource": "https://agentx402pay.com/api/web-search"
+  },
+  {
+   "calls30d": 4,
+   "delta_s": 0.134,
+   "lastCalledAt": "2026-10-27T00:57:18.287Z",
+   "lastUpdated": "2026-10-27T00:57:18.421Z",
+   "payers30d": 2,
+   "resource": "https://agent-data-tools.revmesh2074.workers.dev/eth/gas-history"
+  },
+  {
+   "calls30d": 154,
+   "delta_s": 0.132,
+   "lastCalledAt": "2026-10-27T21:31:13.537Z",
+   "lastUpdated": "2026-10-27T21:31:13.669Z",
+   "payers30d": 154,
+   "resource": "https://api.onesource.io/api/chain/code/:address"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.13,
+   "lastCalledAt": "2026-10-01T04:19:32.205Z",
+   "lastUpdated": "2026-10-01T04:19:32.335Z",
+   "payers30d": 1,
+   "resource": "https://chain.intel.rallylive.ca/token/honeypot/arbitrum"
+  },
+  {
+   "calls30d": 255,
+   "delta_s": 0.128,
+   "lastCalledAt": "2026-10-27T21:37:01.389Z",
+   "lastUpdated": "2026-10-27T21:37:01.517Z",
+   "payers30d": 255,
+   "resource": "https://api.onesource.io/api/chain/nonce/:address"
+  },
+  {
+   "calls30d": 135,
+   "delta_s": 0.128,
+   "lastCalledAt": "2026-10-27T18:41:00.09Z",
+   "lastUpdated": "2026-10-27T18:41:00.218Z",
+   "payers30d": 135,
+   "resource": "https://api.onesource.io/deepstate/v1/analytics/cost-to-quote"
+  },
+  {
+   "calls30d": 3,
+   "delta_s": 0.127,
+   "lastCalledAt": "2026-10-25T16:42:15.33Z",
+   "lastUpdated": "2026-10-25T16:42:15.457Z",
+   "payers30d": 2,
+   "resource": "https://agent-data-tools.revmesh2074.workers.dev/wallet/balances"
+  },
+  {
+   "calls30d": 3,
+   "delta_s": 0.126,
+   "lastCalledAt": "2026-10-24T15:08:27.719Z",
+   "lastUpdated": "2026-10-24T15:08:27.845Z",
+   "payers30d": 2,
+   "resource": "https://derivs.duoleads.com/v1/funding-arbitrage"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.125,
+   "lastCalledAt": "2026-10-14T17:03:42.563Z",
+   "lastUpdated": "2026-10-14T17:03:42.688Z",
+   "payers30d": 1,
+   "resource": "https://agents.citiviewgroup.com/v1/image/pro"
+  },
+  {
+   "calls30d": 4,
+   "delta_s": 0.125,
+   "lastCalledAt": "2026-10-27T00:53:52.893Z",
+   "lastUpdated": "2026-10-27T00:53:53.018Z",
+   "payers30d": 2,
+   "resource": "https://agent-data-tools.revmesh2074.workers.dev/base/gas-history"
+  },
+  {
+   "calls30d": 388,
+   "delta_s": 0.124,
+   "lastCalledAt": "2026-10-27T21:39:50.806Z",
+   "lastUpdated": "2026-10-27T21:39:50.93Z",
+   "payers30d": 230,
+   "resource": "https://api.onesource.io/deepstate/v1/book/:book"
+  },
+  {
+   "calls30d": 76,
+   "delta_s": 0.124,
+   "lastCalledAt": "2026-10-28T02:57:34.649Z",
+   "lastUpdated": "2026-10-28T02:57:34.773Z",
+   "payers30d": 76,
+   "resource": "https://api.run402.com/tiers/v1/prototype"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.124,
+   "lastCalledAt": "2026-10-28T06:08:09.756Z",
+   "lastUpdated": "2026-10-28T06:08:09.88Z",
+   "payers30d": 1,
+   "resource": "https://wafermap.xyz/v1/market-brief"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.122,
+   "lastCalledAt": "2026-10-26T15:43:34.384Z",
+   "lastUpdated": "2026-10-26T15:43:34.506Z",
+   "payers30d": 1,
+   "resource": "https://grok-backtest-api.fly.dev/token-check"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.122,
+   "lastCalledAt": "2026-10-15T06:32:12.112Z",
+   "lastUpdated": "2026-10-15T06:32:12.234Z",
+   "payers30d": 1,
+   "resource": "https://perpsignals.use.x402atlas.com/funding-rates"
+  },
+  {
+   "calls30d": 293,
+   "delta_s": 0.121,
+   "lastCalledAt": "2026-10-27T21:37:14.688Z",
+   "lastUpdated": "2026-10-27T21:37:14.809Z",
+   "payers30d": 293,
+   "resource": "https://api.onesource.io/api/chain/contract/:address"
+  },
+  {
+   "calls30d": 356,
+   "delta_s": 0.12,
+   "lastCalledAt": "2026-10-27T21:40:02.611Z",
+   "lastUpdated": "2026-10-27T21:40:02.731Z",
+   "payers30d": 218,
+   "resource": "https://api.onesource.io/deepstate/v1/candles/:book"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.119,
+   "lastCalledAt": "2026-10-01T04:18:42.249Z",
+   "lastUpdated": "2026-10-01T04:18:42.368Z",
+   "payers30d": 1,
+   "resource": "https://chain.intel.rallylive.ca/token/security/ethereum"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.119,
+   "lastCalledAt": "2026-10-16T02:45:10.732Z",
+   "lastUpdated": "2026-10-16T02:45:10.851Z",
+   "payers30d": 1,
+   "resource": "https://marketpulse.theaslangroupllc.com/api/market/content-brief"
+  },
+  {
+   "calls30d": 305,
+   "delta_s": 0.118,
+   "lastCalledAt": "2026-10-27T21:34:23.663Z",
+   "lastUpdated": "2026-10-27T21:34:23.781Z",
+   "payers30d": 302,
+   "resource": "https://api.onesource.io/api/chain/erc20-transfers"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.118,
+   "lastCalledAt": "2026-10-01T04:20:40.338Z",
+   "lastUpdated": "2026-10-01T04:20:40.456Z",
+   "payers30d": 1,
+   "resource": "https://chain.intel.rallylive.ca/token/security/polygon"
+  },
+  {
+   "calls30d": 1,
+   "delta_s": 0.115,
+   "lastCalledAt": "2026-10-01T04:18:46.146Z",
+   "lastUpdated": "2026-10-01T04:18:46.261Z",
+   "payers30d": 1,
+   "resource": "https://chain.intel.rallylive.ca/token/honeypot/ethereum"
+  },
+  {
+   "calls30d": 4,
+   "delta_s": 0.113,
+   "lastCalledAt": "2026-10-27T01:03:21.48Z",
+   "lastUpdated": "2026-10-27T01:03:21.593Z",
+   "payers30d": 2,
+   "resource": "https://agent-data-tools.revmesh2074.workers.dev/op/gas-history"
+  },
+  {
+   "calls30d": 712,
+   "delta_s": 0.112,
+   "lastCalledAt": "2026-10-24T21:29:23.522Z",
+   "lastUpdated": "2026-10-24T21:29:23.634Z",
+   "payers30d": 11,
+   "resource": "https://google-trends.use.x402atlas.com/trend"
+  },
+  {
+   "calls30d": 59,
+   "delta_s": 0.112,
+   "lastCalledAt": "2026-10-27T09:54:15.918Z",
+   "lastUpdated": "2026-10-27T09:54:16.03Z",
+   "payers30d": 13,
+   "resource": "https://wiki.use.x402atlas.com/summary"
+  },
+  {
+   "calls30d": 5,
+   "delta_s": 0.112,
+   "lastCalledAt": "2026-10-27T09:49:58.002Z",
+   "lastUpdated": "2026-10-27T09:49:58.114Z",
+   "payers30d": 4,
+   "resource": "https://hyperliquid.use.x402atlas.com/funding"
+  },
+  {
+   "calls30d": 414,
+   "delta_s": 0.111,
+   "lastCalledAt": "2026-10-27T21:36:51.306Z",
+   "lastUpdated": "2026-10-27T21:36:51.417Z",
+   "payers30d": 408,
+   "resource": "https://api.onesource.io/api/chain/erc20-balance"
+  },
+  {
+   "calls30d": 6,
+   "delta_s": 0.11,
+   "lastCalledAt": "2026-10-27T00:57:15.362Z",
+   "lastUpdated": "2026-10-27T00:57:15.472Z",
+   "payers30d": 2,
+   "resource": "https://agent-data-tools.revmesh2074.workers.dev/eth/gas"
+  },
+  {
+   "calls30d": 237,
+   "delta_s": 0.103,
+   "lastCalledAt": "2026-10-27T16:08:54.623Z",
+   "lastUpdated": "2026-10-27T16:08:54.726Z",
+   "payers30d": 234,
+   "resource": "https://api.onesource.io/api/chain/block/:number"
+  },
+  {
+   "calls30d": 186,
+   "delta_s": 0.103,
+   "lastCalledAt": "2026-10-27T21:34:19.789Z",
+   "lastUpdated": "2026-10-27T21:34:19.892Z",
+   "payers30d": 173,
+   "resource": "https://api.onesource.io/api/chain/chain-id"
+  },
+  {
+   "calls30d": 153,
+   "delta_s": 0.102,
+   "lastCalledAt": "2026-10-27T21:36:57.544Z",
+   "lastUpdated": "2026-10-27T21:36:57.646Z",
+   "payers30d": 153,
+   "resource": "https://api.onesource.io/api/chain/estimate-gas"
+  },
+  {
+   "calls30d": 276,
+   "delta_s": 0.099,
+   "lastCalledAt": "2026-10-27T18:44:52.012Z",
+   "lastUpdated": "2026-10-27T18:44:52.111Z",
+   "payers30d": 276,
+   "resource": "https://api.onesource.io/api/chain/total-supply"
+  },
+  {
+   "calls30d": 366,
+   "delta_s": 0.099,
+   "lastCalledAt": "2026-10-27T21:39:56.819Z",
+   "lastUpdated": "2026-10-27T21:39:56.918Z",
+   "payers30d": 218,
+   "resource": "https://api.onesource.io/deepstate/v1/stats/:book"
+  },
+  {
+   "calls30d": 2,
+   "delta_s": 0.099,
+   "lastCalledAt": "2026-10-08T06:09:37.728Z",
+   "lastUpdated": "2026-10-08T06:09:37.827Z",
+   "payers30d": 2,
+   "resource": "https://x402.agentutility.ai/honeypot-check"
+  },
+  {
+   "calls30d": 160,
+   "delta_s": 0.098,
+   "lastCalledAt": "2026-10-27T18:40:22.176Z",
+   "lastUpdated": "2026-10-27T18:40:22.274Z",
+   "payers30d": 160,
+   "resource": "https://api.onesource.io/deepstate/v1/analytics/makers"
+  },
+  {
+   "calls30d": 149,
+   "delta_s": 0.096,
+   "lastCalledAt": "2026-10-27T18:40:41.961Z",
+   "lastUpdated": "2026-10-27T18:40:42.057Z",
+   "payers30d": 149,
+   "resource": "https://api.onesource.io/deepstate/v1/analytics/depth-history"
+  },
+  {
+   "calls30d": 202,
+   "delta_s": 0.095,
+   "lastCalledAt": "2026-10-27T18:48:00.868Z",
+   "lastUpdated": "2026-10-27T18:48:00.963Z",
+   "payers30d": 202,
+   "resource": "https://api.onesource.io/deepstate/v1/trades/:book"
+  },
+  {
+   "calls30d": 165,
+   "delta_s": 0.095,
+   "lastCalledAt": "2026-10-27T21:37:18.242Z",
+   "lastUpdated": "2026-10-27T21:37:18.337Z",
+   "payers30d": 165,
+   "resource": "https://api.onesource.io/api/chain/receipt/:hash"
+  },
+  {
+   "calls30d": 77,
+   "delta_s": -1.603,
+   "lastCalledAt": "2026-10-27T13:43:10.453Z",
+   "lastUpdated": "2026-10-27T13:43:08.85Z",
+   "payers30d": 2,
+   "resource": "https://oracle.cyberwarex.com/honeypot"
+  },
+  {
+   "calls30d": 232,
+   "delta_s": -2.566,
+   "lastCalledAt": "2026-10-25T20:27:43.537Z",
+   "lastUpdated": "2026-10-25T20:27:40.971Z",
+   "payers30d": 10,
+   "resource": "https://google-trends.use.x402atlas.com/related-queries"
+  },
+  {
+   "calls30d": 617,
+   "delta_s": -3.798,
+   "lastCalledAt": "2026-10-28T05:56:57.808Z",
+   "lastUpdated": "2026-10-28T05:56:54.01Z",
+   "payers30d": 38,
+   "resource": "https://glim.sh/api/v1/twitter/search"
+  },
+  {
+   "calls30d": 948,
+   "delta_s": -5.111,
+   "lastCalledAt": "2026-10-28T00:49:12.781Z",
+   "lastUpdated": "2026-10-28T00:49:07.67Z",
+   "payers30d": 50,
+   "resource": "https://stableenrich.dev/api/fullenrich/people-search"
+  },
+  {
+   "calls30d": 14,
+   "delta_s": -5.553,
+   "lastCalledAt": "2026-10-27T23:21:16.51Z",
+   "lastUpdated": "2026-10-27T23:21:10.957Z",
+   "payers30d": 7,
+   "resource": "https://agent402.tools/api/image-gen"
+  },
+  {
+   "calls30d": 8,
+   "delta_s": -32.097,
+   "lastCalledAt": "2026-10-26T13:42:59.999Z",
+   "lastUpdated": "2026-10-26T13:42:27.902Z",
+   "payers30d": 3,
+   "resource": "https://x402-gateway.blackwoodstate8.workers.dev/v1/wallet-balances"
+  },
+  {
+   "calls30d": 469,
+   "delta_s": -42.209,
+   "lastCalledAt": "2026-10-27T23:01:45.455Z",
+   "lastUpdated": "2026-10-27T23:01:03.246Z",
+   "payers30d": 11,
+   "resource": "https://x402.botsmith.dev/x/search"
+  },
+  {
+   "calls30d": 13,
+   "delta_s": -76389.147,
+   "lastCalledAt": "2026-10-26T15:48:31.739Z",
+   "lastUpdated": "2026-10-25T18:35:22.592Z",
+   "payers30d": 4,
+   "resource": "https://search.gedx402.com/v1/search"
+  },
+  {
+   "calls30d": 358,
+   "delta_s": -627120.728,
+   "lastCalledAt": "2026-10-26T08:00:26.58Z",
+   "lastUpdated": "2026-10-19T01:48:25.852Z",
+   "payers30d": 47,
+   "resource": "https://api.loyalspark.online/x402-gateway/recipient-api/offers"
+  },
+  {
+   "calls30d": 154485,
+   "delta_s": -845488.707,
+   "lastCalledAt": "2026-10-21T09:39:38.381Z",
+   "lastUpdated": "2026-10-11T14:48:09.674Z",
+   "payers30d": 1212,
+   "resource": "https://www.ax1.vc/api/dashboard/q-verdict/resource"
+  }
+ ],
+ "stats": {
+  "by_calls30d_bucket": {
+   "1-9": {
+    "median_s": 0.256,
+    "n": 104
+   },
+   "10-99": {
+    "median_s": 0.303,
+    "n": 74
+   },
+   "100-999": {
+    "median_s": 0.207,
+    "n": 57
+   },
+   "1000+": {
+    "median_s": 2218.927,
+    "n": 24
+   }
+  },
+  "counter_ahead_over_1h": 3,
+  "counter_lags_over_1h": 18,
+  "max_s": 845488.707,
+  "median_s": 0.269,
+  "n": 259,
+  "p75_s": 0.581,
+  "p90_s": 1962.63,
+  "p95_s": 5737.712,
+  "p99_s": 76389.147,
+  "pct_within_5s": 88.0,
+  "within_3600s": 241,
+  "within_5s": 228,
+  "within_60s": 232
+ }
+}

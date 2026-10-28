@@ -1,0 +1,3 @@
+scorecard full-registry run — interim state 2026-10-24T16:46:23Z
+commits pushed this cycle: fbe0eba (substance floor+test), 3e2896e (cron full-coverage default)
+bg gen pid still running; publishing to rezearcher/greyridge-x402-tools docs/ at end of walk

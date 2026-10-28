@@ -2,3 +2,12 @@ custom_domain_serves=True (HTTP 200) | consumers=4 targets=0 alert=False -> /hom
 custom_domain_serves=True (HTTP 200) | consumers=6 targets=0 alert=False -> /home/rez/.hermes/data/x402_consumers/stale_pins.json
 custom_domain_serves=True (HTTP 200) | consumers=7 targets=0 alert=False -> /home/rez/.hermes/data/x402_consumers/stale_pins.json
 custom_domain_serves=True (HTTP 200) | consumers=8 targets=0 alert=False -> /home/rez/.hermes/data/x402_consumers/stale_pins.json
+custom_domain_serves=True (HTTP 200) | consumers=11 targets=0 alert=False -> /home/rez/.hermes/data/x402_consumers/stale_pins.json
+custom_domain_serves=True (HTTP 200) | consumers=11 targets=0 alert=False -> /home/rez/.hermes/data/x402_consumers/stale_pins.json
+custom_domain_serves=True (HTTP 200) | consumers=12 targets=0 alert=False -> /home/rez/.hermes/data/x402_consumers/stale_pins.json
+custom_domain_serves=True (HTTP 200) | consumers=13 targets=0 alert=False -> /home/rez/.hermes/data/x402_consumers/stale_pins.json
+custom_domain_serves=True (HTTP 200) | consumers=14 targets=0 alert=False -> /home/rez/.hermes/data/x402_consumers/stale_pins.json
+custom_domain_serves=True (HTTP 200) | consumers=16 targets=0 alert=False -> /home/rez/.hermes/data/x402_consumers/stale_pins.json
+custom_domain_serves=True (HTTP 200) | consumers=16 targets=0 alert=False -> /home/rez/.hermes/data/x402_consumers/stale_pins.json
+custom_domain_serves=True (HTTP 200) | consumers=16 targets=0 alert=False -> /home/rez/.hermes/data/x402_consumers/stale_pins.json
+custom_domain_serves=True (HTTP 200) | consumers=0 targets=0 alert=False -> /home/rez/.hermes/data/x402_consumers/stale_pins.json

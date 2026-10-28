@@ -15,9 +15,15 @@ The settled call drives two legs on two different clocks:
   synchronous  lastUpdated + the stored description (re-crawled from the live 402
                at settlement second). Lands in <1s.
   asynchronous lastCalledAt / l30DaysTotalCalls / l30DaysUniquePayers. Lands on
-               CDP's own schedule -- measured on this route at ~75 minutes, vs
-               ~4 seconds for api.greyridgesignals.ai/chain/token-report. See
-               docs/division-memory/cdp-relisting-method.md section 3.
+               CDP's own rollup schedule, and that lag is UNBOUNDED, not ~75 min:
+               a 259-record census of the public catalog puts 89.6% of records
+               within 60 s of their lastUpdated, then p90 33 min, p95 1.6 h,
+               p99 21 h, max 9.8 days (logs/cdp-counter-census-2026-10-28.json).
+               Our seq 1 was 55-81 min; seq 7 was still frozen at T+95 min after a
+               settlement whose extension status was `success`. The vendor says
+               quality/ranking metrics are recomputed on a six-hour schedule.
+               See docs/findings/cdp-index-counter-lag.md, and treat the counter
+               as telemetry: docs/division-memory/cdp-relisting-method.md section 3.
 
 A verdict taken inside that lag window is a false negative, and the old FAIL
 remediation ("re-run settle_once.js") spent real money to "unstick" a leg that
@@ -53,9 +59,10 @@ API = "https://api.cdp.coinbase.com/platform/v2/x402/discovery"
 PAY_TO = "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10"
 SETTLED_ROUTE = "/chain/token-security"
 
-# Documented upper bound of the async quality-counter leg on THIS route.
-# Measured: seq 1 (06:02Z settlement) landed ~75 min later; the +55 min pass had
-# wrongly declared it dead. Anything under this is pending, not failed.
+# How long to wait before escalating a frozen counter. This is a DECISION window,
+# not a bound on the lag: seq 1 (06:02Z) landed ~75 min later, seq 7 (07:14Z) was
+# still frozen at +95 min and may never move. Under this window -> PENDING, and the
+# only action is "do not settle"; over it -> escalate a card, still never settle.
 DEFAULT_PENDING_WINDOW_MINUTES = 90
 
 
@@ -173,6 +180,8 @@ def main():
               f" T+{elapsed_min:.0f} min, past the {args.pending_window_minutes:.0f} min window ({deadline_iso}).")
         print("Next action: escalate a card against the index/discovery pipeline with this run as evidence.")
         print("Do NOT settle again: a settlement cannot repair a counter that is not being written.")
+        print("Delisting risk is NOT measured off this counter any more -- run")
+        print("  python3 scripts/monitor_delisting.py   (gates on lastUpdated, which is synchronous)")
     else:
         print("\nVERDICT: NOT RE-LISTED -- the catalog record or the buyer-facing outcome did not land.")
         print("Next action: fix the served 402 description (src/index.ts) and confirm it live BEFORE spending:")

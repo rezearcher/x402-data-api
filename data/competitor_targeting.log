@@ -152,3 +152,249 @@
 }
 
 [wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-24T05:58:01.390537+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 5.0,
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-24T11:58:01.353209+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 5.2,
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-24T17:58:01.709253+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 5.5,
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-24T23:58:01.115285+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 5.7,
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-25T05:58:01.597852+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 6.0,
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-25T11:58:01.371417+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 6.2,
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-25T17:58:01.360174+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 6.5,
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-25T23:58:01.642610+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 6.7,
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-26T05:58:01.267014+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 7.0,
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-26T11:58:01.400498+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 7.2,
+  "payto_stale_warning": "competitor_payto.json is 7.2d old and has no auto-refresh; new competitors won't be seen. Re-snapshot the facilitator catalogue.",
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-26T17:58:01.052444+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 7.5,
+  "payto_stale_warning": "competitor_payto.json is 7.5d old and has no auto-refresh; new competitors won't be seen. Re-snapshot the facilitator catalogue.",
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-26T23:58:01.681620+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 7.7,
+  "payto_stale_warning": "competitor_payto.json is 7.7d old and has no auto-refresh; new competitors won't be seen. Re-snapshot the facilitator catalogue.",
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-27T05:58:01.702768+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 8.0,
+  "payto_stale_warning": "competitor_payto.json is 8.0d old and has no auto-refresh; new competitors won't be seen. Re-snapshot the facilitator catalogue.",
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-27T11:58:01.742979+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 8.2,
+  "payto_stale_warning": "competitor_payto.json is 8.2d old and has no auto-refresh; new competitors won't be seen. Re-snapshot the facilitator catalogue.",
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-27T17:58:01.746428+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 8.5,
+  "payto_stale_warning": "competitor_payto.json is 8.5d old and has no auto-refresh; new competitors won't be seen. Re-snapshot the facilitator catalogue.",
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-27T23:58:02.020476+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 8.7,
+  "payto_stale_warning": "competitor_payto.json is 8.7d old and has no auto-refresh; new competitors won't be seen. Re-snapshot the facilitator catalogue.",
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-10-28T05:58:01.368282+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 9.0,
+  "payto_stale_warning": "competitor_payto.json is 9.0d old and has no auto-refresh; new competitors won't be seen. Re-snapshot the facilitator catalogue.",
+  "our_catalogue_routes": 62,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]

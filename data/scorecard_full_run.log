@@ -1,0 +1,484 @@
+run start 2026-10-24T16:41:22Z
+  discover SKIP api.inference.sh: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.snag.ac: HTTP Error 502: Bad Gateway
+  discover SKIP api.ugc.africa: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.lona.agency: HTTP Error 502: Bad Gateway
+  discover SKIP app.0si.ai: HTTP Error 502: Bad Gateway
+  discover SKIP agoclnqfyinwjxdmjnns.supabase.co: HTTP Error 502: Bad Gateway
+  discover SKIP www.1clickwebsite.ai: HTTP Error 502: Bad Gateway
+  discover SKIP 69ai.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.aard.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.aarna.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.abmeter.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.adadvisor.ai: HTTP Error 502: Bad Gateway
+  discover SKIP adako.ai: HTTP Error 502: Bad Gateway
+  discover SKIP adkix.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.adplane.ai: HTTP Error 502: Bad Gateway
+  discover SKIP adrails.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.adramp.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.adrio.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.adsap.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.adside.ai: HTTP Error 502: Bad Gateway
+  discover SKIP advisorsai.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.adweave.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.aetherya.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.agentdm.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api-v2.lifeclaw.agentese.ai: HTTP Error 502: Bad Gateway
+  discover SKIP agentgates.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.agentic-news.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.agenticaffiliate.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.agenticbooks.ai: HTTP Error 502: Bad Gateway
+  discover SKIP agenticfabricationnetwork.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.agenticshelf.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.agenticshelf.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.agenticshelf.ai: HTTP Error 502: Bad Gateway
+  discover SKIP agentmash.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.agentmesh.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.agentui.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.aginera.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp-chatgpt.agothe.ai: HTTP Error 502: Bad Gateway
+  discover SKIP app.ai-advisors.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.aidoo.ai: HTTP Error 502: Bad Gateway
+  discover SKIP aient.ai: HTTP Error 502: Bad Gateway
+  discover SKIP aistlabs.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.aitopia.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.akkrudata.ai: HTTP Error 502: Bad Gateway
+  discover SKIP test.alpic.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.alwen.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.ambix.ai: HTTP Error 502: Bad Gateway
+  discover SKIP app.amdahl.ai: HTTP Error 502: Bad Gateway
+  discover SKIP resolver.anha.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.anomalyarmor.ai: HTTP Error 502: Bad Gateway
+  discover SKIP switchboard.anywhereintelligence.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.anzenna.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.apatero.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api-v2.appdeploy.ai: HTTP Error 502: Bad Gateway
+  discover SKIP arcdeck.ai: HTTP Error 502: Bad Gateway
+  discover SKIP archome.ai: HTTP Error 502: Bad Gateway
+  discover SKIP www.arcreport.ai: HTTP Error 502: Bad Gateway
+  discover SKIP www.arcreport.ai: HTTP Error 502: Bad Gateway
+  discover SKIP argushq.ai: HTTP Error 502: Bad Gateway
+  discover SKIP jobs-api.arihaan.ai: HTTP Error 502: Bad Gateway
+  discover SKIP arketo.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.arpi.ai: HTTP Error 502: Bad Gateway
+  discover SKIP askatria.ai: HTTP Error 502: Bad Gateway
+  discover SKIP askgina.ai: HTTP Error 502: Bad Gateway
+  discover SKIP askgina.ai: HTTP Error 502: Bad Gateway
+  discover SKIP askgina.ai: HTTP Error 502: Bad Gateway
+  discover SKIP askgina.ai: HTTP Error 502: Bad Gateway
+  discover SKIP askline.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.assetlog.ai: HTTP Error 502: Bad Gateway
+  discover SKIP www.astrofabric.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.atako.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.atalay.ai: HTTP Error 502: Bad Gateway
+  discover SKIP suche.mcp.athaus.ai: HTTP Error 502: Bad Gateway
+  discover SKIP anbieter.mcp.athaus.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.athenahq.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.atlaso.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.atlasverified.ai: HTTP Error 502: Bad Gateway
+  discover SKIP atlier.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.atmark.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.attestari.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.audiomap.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.audiopod.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.audiopod.ai: HTTP Error 502: Bad Gateway
+  discover SKIP audo.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.augmentev.com: HTTP Error 502: Bad Gateway
+  discover SKIP api.augmentev.ai: HTTP Error 502: Bad Gateway
+  discover SKIP travel.augworlds.ai: HTTP Error 502: Bad Gateway
+  discover SKIP agentic.aunoo.ai: HTTP Error 502: Bad Gateway
+  discover SKIP authoryze.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.autonomad.ai: HTTP Error 502: Bad Gateway
+  discover SKIP app.autoposting.ai: HTTP Error 502: Bad Gateway
+  discover SKIP {api_host}: HTTP Error 502: Bad Gateway
+  discover SKIP agent.autron.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.auxen.ai: HTTP Error 502: Bad Gateway
+  discover SKIP avalonai--web-content-url-tools-mcp.apify.actor: HTTP Error 502: Bad Gateway
+  discover SKIP quant-mcp.avasis.ai: HTTP Error 502: Bad Gateway
+  discover SKIP awraiter.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.neuroautomata.axonagentic.ai: HTTP Error 502: Bad Gateway
+  discover SKIP data.azquo.ai: HTTP Error 502: Bad Gateway
+  discover SKIP ai-media-studio.b77.ai: HTTP Error 502: Bad Gateway
+  discover SKIP apple-search-ads.b77.ai: HTTP Error 502: Bad Gateway
+  discover SKIP chess-results.b77.ai: HTTP Error 502: Bad Gateway
+  discover SKIP feedback.b77.ai: HTTP Error 502: Bad Gateway
+  discover SKIP fibalo.b77.ai: HTTP Error 502: Bad Gateway
+  discover SKIP file-storage.b77.ai: HTTP Error 502: Bad Gateway
+  discover SKIP google-ads.b77.ai: HTTP Error 502: Bad Gateway
+  discover SKIP google-news.b77.ai: HTTP Error 502: Bad Gateway
+  discover SKIP google-search-console.b77.ai: HTTP Error 502: Bad Gateway
+  discover SKIP kinnovis-storage.b77.ai: HTTP Error 502: Bad Gateway
+  discover SKIP knowledge-base.b77.ai: HTTP Error 502: Bad Gateway
+  discover SKIP nightscout.b77.ai: HTTP Error 502: Bad Gateway
+  discover SKIP seo-content-factory.b77.ai: HTTP Error 502: Bad Gateway
+  discover SKIP teamwork.b77.ai: HTTP Error 502: Bad Gateway
+  discover SKIP time.b77.ai: HTTP Error 502: Bad Gateway
+  discover SKIP web-analytics.b77.ai: HTTP Error 502: Bad Gateway
+  discover SKIP backengine-prod.backengine.ai: HTTP Error 502: Bad Gateway
+  discover SKIP backrow.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.balancos.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.bamf.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.baselight.app: HTTP Error 502: Bad Gateway
+  discover SKIP api.baseray.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.basethread.ai: HTTP Error 502: Bad Gateway
+  discover SKIP beatbandit.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.beatra.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.beket.ai: HTTP Error 502: Bad Gateway
+  discover SKIP beliefstate.ai: HTTP Error 502: Bad Gateway
+OK DeepWiki: tools=3 verdict=clear blockers=6
+OK Wolfram Alpha: tools=3 verdict=clear blockers=0
+OK Hugging Face: tools=4 verdict=clear blockers=0
+OK Cloudflare Docs: tools=2 verdict=clear blockers=0
+OK Astro Docs: tools=1 verdict=clear blockers=2
+OK Hive Intelligence: tools=8 verdict=clear blockers=8
+OK Find A Domain: tools=2 verdict=clear blockers=4
+  discover OK tandem.ac (tandem.ac): tools=13 verdict=clear blockers=0
+  discover OK Apex AI Academy (apexai.academy): tools=30 verdict=clear blockers=31
+  discover OK Agentic Engineering Periodic System (ase.academy): tools=4 verdict=clear blockers=8
+  discover OK Getlead (mcp.getle.ad): tools=35 verdict=clear blockers=0
+  discover OK Inside Ads (app.inside.ad): tools=3 verdict=clear blockers=6
+  discover OK BeachClubs.ae (www.beachclubs.ae): tools=4 verdict=clear blockers=0
+  discover OK Brainy Prices — UAE Cost of Living (prices.brainy.ae): tools=26 verdict=clear blockers=26
+  discover OK mcp.datadubai.ae (mcp.datadubai.ae): tools=6 verdict=clear blockers=0
+  discover OK EasyVoice text to speech (easyvoice.ae): tools=7 verdict=clear blockers=7
+  discover OK GENOSYS UAE (genosys.ae): tools=11 verdict=clear blockers=11
+  discover OK groTAX by Grovisor (mcp.grovisor.ae): tools=8 verdict=clear blockers=8
+  discover OK Plant Guide: Dubai gardening research (plantguide.ae): tools=15 verdict=clear blockers=0
+  discover OK Projectory (mcp.projectory.ae): tools=5 verdict=clear blockers=5
+  discover OK Propick Integration MCP (propick.ae): tools=8 verdict=clear blockers=16
+  discover OK Fenlight (fenlight.waggle.ae): tools=8 verdict=clear blockers=8
+  discover OK Vera (vera.waggle.ae): tools=16 verdict=clear blockers=0
+  discover OK Events.Aero (events.aero): tools=5 verdict=clear blockers=0
+  discover OK hood. — .hood name service (www.hood.ag): tools=5 verdict=clear blockers=10
+  discover OK mcp.goji.agency (mcp.goji.agency): tools=9 verdict=clear blockers=16
+  discover OK JustIdea Agency (justidea.agency): tools=8 verdict=clear blockers=0
+  discover OK Business Contact Finder (business-contact-finder-mcp.ottobot2025.workers.dev): tools=1 verdict=clear blockers=2
+  discover OK Contractor Licence Changes (license-changes-mcp.ottobot2025.workers.dev): tools=2 verdict=clear blockers=4
+  discover OK Licensed House Painters (house-painters.ottobot.agency): tools=3 verdict=clear blockers=3
+  discover OK Bureau public reader (thebureauoflostcontext.agency): tools=5 verdict=clear blockers=5
+  discover OK zoll.agency (zoll.agency): tools=7 verdict=clear blockers=0
+  discover OK 1Court Directory (state.1court.ai): tools=6 verdict=clear blockers=0
+  discover OK Achromat MOM (mom.achromat.ai): tools=1 verdict=clear blockers=0
+  discover OK actwise.ai (actwise.ai): tools=2 verdict=clear blockers=2
+  discover OK mcp.adoraads.ai (mcp.adoraads.ai): tools=6 verdict=clear blockers=0
+  discover OK advisorsai.ai (advisorsai.ai): tools=1 verdict=clear blockers=1
+  discover OK AFG: agents hire agents (test money) (afg.ai): tools=18 verdict=clear blockers=18
+  discover OK AFMR Discovery (afmr.ai): tools=4 verdict=clear blockers=4
+  discover OK Agenlify AI Agent Directory (agenlify.ai): tools=3 verdict=clear blockers=3
+  discover OK agent-bev (mcp.bev-buyer.ai): tools=9 verdict=clear blockers=0
+  discover OK agentberg.ai (agentberg.ai): tools=11 verdict=clear blockers=22
+  discover OK Agentboard (www.agentboard.ai): tools=35 verdict=clear blockers=35
+  discover OK Agent Ready Report (scan.agenticplug.ai): tools=2 verdict=clear blockers=0
+  discover OK Agentic Terminal Directory (mcp.agenticterminal.ai): tools=6 verdict=clear blockers=12
+  discover OK CounterScript - Drug Price Benchmarks (rx.agentlookups.ai): tools=1 verdict=clear blockers=0
+  discover OK GreenLight - Plug-in Solar Law Registry (solar.agentlookups.ai): tools=2 verdict=clear blockers=0
+  discover OK GroundRules - US Law Text (law.agentlookups.ai): tools=4 verdict=clear blockers=0
+  discover OK GroundTruth - Environmental Records (env.agentlookups.ai): tools=4 verdict=clear blockers=0
+  discover OK overassessed.agentlookups.ai (overassessed.agentlookups.ai): tools=1 verdict=clear blockers=0
+  discover OK Plumbline - Contractor License Checks (contractors.agentlookups.ai): tools=1 verdict=clear blockers=0
+  discover OK Spoon Scout - Food Contaminant Lookup (food.agentlookups.ai): tools=6 verdict=clear blockers=0
+  discover OK api.agentrapay.ai (api.agentrapay.ai): tools=6 verdict=clear blockers=6
+  discover OK AgentRoam (agentroam.ai): tools=11 verdict=clear blockers=0
+  discover OK AgentsIndex (agentsindex.ai): tools=12 verdict=clear blockers=0
+  discover OK AIﾉアカリ☆ Agent Trust Receipt (ai-akari.ai): tools=2 verdict=clear blockers=2
+  discover OK AI-Portal Enterprise GenAI Briefing (www.ai-portal.ai): tools=4 verdict=clear blockers=8
+  discover OK AirShelf Catalog (mcp.airshelf.ai): tools=8 verdict=clear blockers=8
+  discover OK api.aislabs.ai (api.aislabs.ai): tools=4 verdict=clear blockers=8
+  discover OK AiVikings.ai (mcp.aivikings.ai): tools=34 verdict=clear blockers=34
+  discover OK mcp.aivonic.ai (mcp.aivonic.ai): tools=5 verdict=clear blockers=10
+  discover OK Alcock Arena (alcock.ai): tools=9 verdict=clear blockers=9
+  discover OK Alpha Bazaar Arena (api.alphabazaar.ai): tools=24 verdict=clear blockers=0
+  discover OK AlphaCreek SEC Filings MCP (mcp.alphacreek.ai): tools=5 verdict=clear blockers=0
+  discover OK agents.alphaquantlabs.ai (agents.alphaquantlabs.ai): tools=2 verdict=clear blockers=0
+  discover OK AlpiX (alpix.alpic.ai): tools=3 verdict=clear blockers=0
+  discover OK analyticslegends.ai (analyticslegends.ai): tools=22 verdict=clear blockers=0
+  discover OK Annsa (app.annsa.ai): tools=8 verdict=clear blockers=0
+  discover OK APIR Agent Verification (apir.ai): tools=3 verdict=clear blockers=6
+  discover OK AppGoat (api.appgoat.ai): tools=29 verdict=clear blockers=0
+  discover OK app.aqta.ai (app.aqta.ai): tools=10 verdict=clear blockers=0
+  discover OK Arabic Name Calligraphy (arabickeyboard.ai): tools=1 verdict=clear blockers=0
+  discover OK Arclan MCP Registry (arclan.ai): tools=4 verdict=clear blockers=8
+  discover OK artemisgtm.ai (artemisgtm.ai): tools=5 verdict=clear blockers=10
+  discover OK artidrop.ai (artidrop.ai): tools=4 verdict=clear blockers=8
+  discover OK ARVX (mcp.arvx.ai): tools=3 verdict=clear blockers=3
+  discover OK api.askmiles.ai (api.askmiles.ai): tools=5 verdict=clear blockers=10
+  discover OK AskWatch Google Search Console MCP (mcp.askwatch.ai): tools=11 verdict=clear blockers=0
+  discover OK ASRM (AI Search Rank Monitor) (asrm.ai): tools=4 verdict=clear blockers=4
+  discover OK supershopping-mcp.atdev.ai (supershopping-mcp.atdev.ai): tools=8 verdict=clear blockers=0
+  discover OK Atmy air quality (api.atmy.ai): tools=6 verdict=clear blockers=0
+  discover OK Augenix (app.augenix.ai): tools=3 verdict=clear blockers=3
+  discover OK Auralogs (mcp.auralogs.ai): tools=7 verdict=clear blockers=14
+  discover OK auteng.ai (auteng.ai): tools=6 verdict=clear blockers=12
+  discover OK Autoblogging.ai (autoblogging.ai): tools=6 verdict=clear blockers=6
+  discover OK AutoPoster AI (agent.autoposter.ai): tools=14 verdict=clear blockers=14
+  discover OK Aviado AI (aviado.ai): tools=11 verdict=clear blockers=0
+  discover OK AwardCast Federal Contracts (awardcast.ai): tools=8 verdict=clear blockers=16
+  discover OK Inferventis MCP Server (mcp-server-295985738387.europe-west1.run.app): tools=20 verdict=clear blockers=40
+  discover OK Bankrolled.ai Agent Hub (bankrolled.ai): tools=5 verdict=clear blockers=5
+  discover OK api.bareun.ai (api.bareun.ai): tools=6 verdict=clear blockers=0
+  discover OK mcp.bcited.ai (mcp.bcited.ai): tools=6 verdict=clear blockers=6
+  discover OK BeevR (beevr.ai): tools=8 verdict=clear blockers=8
+  discover OK BenchGecko (benchgecko.ai): tools=9 verdict=clear blockers=0
+  discover OK B4 Index (b4-index.vercel.app): tools=5 verdict=clear blockers=5
+  discover OK BetSlip Doctor (api.betslipdoctor.ai): tools=81 verdict=clear blockers=0
+  discover OK BetterPost (betterpost.ai): tools=23 verdict=clear blockers=23
+  discover OK app.bezal.ai (app.bezal.ai): tools=13 verdict=clear blockers=26
+  discover OK bidclub.ai (bidclub.ai): tools=6 verdict=clear blockers=12  discover SKIP mcp.biddeed.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.bindry.ai: HTTP Error 502: Bad Gateway
+  discover SKIP bittlebits.ai: HTTP Error 502: Bad Gateway
+  discover SKIP blipsmith.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.blitz-api.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.bloopo.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.blopus.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.bluenexus.ai: HTTP Error 502: Bad Gateway
+  discover SKIP my.bnbgenius.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.boardmark.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.bodenrichtwert.ai: HTTP Error 502: Bad Gateway
+  discover SKIP directory.boolsai.ai: HTTP Error 502: Bad Gateway
+  discover SKIP grep.boolsai.ai: HTTP Error 502: Bad Gateway
+  discover SKIP boolsai.ai: HTTP Error 502: Bad Gateway
+  discover SKIP signals.boolsai.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.boon.ai: HTTP Error 502: Bad Gateway
+  discover SKIP borealhost.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.boundaryai.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.boxcompute.ai: HTTP Error 502: Bad Gateway
+  discover SKIP app.brainattic.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.brainmemory.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.bridgeapp.ai: HTTP Error 502: Bad Gateway
+  discover SKIP app.bugtape.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.buildandship.ai: HTTP Error 502: Bad Gateway
+  discover SKIP bunzee.ai: HTTP Error 502: Bad Gateway
+  discover SKIP app.buron.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.butlerbrain.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.buyersense.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.buzzberg.ai: HTTP Error 502: Bad Gateway
+  discover SKIP buzzsearch.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.bynor.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.byteray.ai: HTTP Error 502: Bad Gateway
+  discover SKIP cabrini.ai: HTTP Error 502: Bad Gateway
+  discover SKIP app.caimera.ai: HTTP Error 502: Bad Gateway
+  discover SKIP calaf.ai: HTTP Error 502: Bad Gateway
+  discover SKIP calendarmcp.ai: HTTP Error 502: Bad Gateway
+  discover SKIP calfeed.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.calven.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.canvora.ai: HTTP Error 502: Bad Gateway
+  discover SKIP careercorner.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.catchmycall.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.caulo.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.caybl.ai: HTTP Error 502: Bad Gateway
+  discover SKIP cdbx.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.chatley.ai: HTTP Error 502: Bad Gateway
+  discover SKIP chatterlab.ai: HTTP Error 502: Bad Gateway
+  discover SKIP app.chatthing.ai: HTTP Error 502: Bad Gateway
+  discover SKIP build.chipp.ai: HTTP Error 502: Bad Gateway
+  discover SKIP build.chipp.ai: HTTP Error 502: Bad Gateway
+  discover SKIP chucho.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.cirra.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.clarid.ai: HTTP Error 502: Bad Gateway
+  discover SKIP api.clarid.ai: HTTP Error 502: Bad Gateway
+  discover SKIP www.claritytrack.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.clawterminal.ai: HTTP Error 502: Bad Gateway
+  discover SKIP clearvoyance.ai: HTTP Error 502: Bad Gateway
+  discover SKIP app.cleve.ai: HTTP Error 502: Bad Gateway
+  discover SKIP app.clevera.ai: HTTP Error 502: Bad Gateway
+  discover SKIP app.clevra.ai: HTTP Error 502: Bad Gateway
+  discover SKIP clipstudio.ai: HTTP Error 502: Bad Gateway
+  discover SKIP clonekit.ai: HTTP Error 502: Bad Gateway
+  discover SKIP cloudcrane.ai: HTTP Error 502: Bad Gateway
+  discover SKIP cloudxray.ai: HTTP Error 502: Bad Gateway
+  discover SKIP cluvi.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.cnaps.ai: HTTP Error 502: Bad Gateway
+  discover SKIP mcp.cnpj.ai: HTTP Error 502: Bad Gateway
+  discover SKIP cocuyo.ai: HTTP Error 502: Bad Gateway
+discovery: probed 338 registry endpoint(s), kept 136 live scorecard(s)
+
+  discover OK Biel.ai (mcp.biel.ai): tools=3 verdict=clear blockers=4
+  discover OK bitHuman (mcp.bithuman.ai): tools=3 verdict=clear blockers=0
+  discover OK bitHuman docs (docs.bithuman.ai): tools=2 verdict=clear blockers=0
+  discover OK app.bitroad.ai (app.bitroad.ai): tools=65 verdict=clear blockers=1
+  discover OK bizmoon.ai (bizmoon.ai): tools=5 verdict=clear blockers=5
+  discover OK blast-radius.ai (blast-radius.ai): tools=9 verdict=clear blockers=18
+  discover OK BliniBot Agent Lounge (blinibot.ai): tools=16 verdict=clear blockers=16
+  discover OK Booqer (booqer.ai): tools=8 verdict=clear blockers=0
+  discover OK Bordet AI (www.bordet.ai): tools=11 verdict=clear blockers=0
+  discover OK BotInfo — Advanced Robot Market Data (mcp.botinfo.ai): tools=4 verdict=clear blockers=0
+  discover OK Bowmark (api.bowmark.ai): tools=16 verdict=clear blockers=16
+  discover OK bounty.brevium.ai (bounty.brevium.ai): tools=13 verdict=clear blockers=26
+  discover OK Bring Your AI (bringyour.ai): tools=7 verdict=clear blockers=14
+  discover OK Builders in Fintech (buildersinfintech.ai): tools=23 verdict=clear blockers=23
+  discover OK Orbit (mcp.buildwithorbit.ai): tools=2 verdict=clear blockers=4
+  discover OK BumbleBox (api.bumblebox.ai): tools=17 verdict=clear blockers=0
+  discover OK BUMIT (bumit.ai): tools=1 verdict=clear blockers=1
+  discover OK mcp.byteask.ai (mcp.byteask.ai): tools=3 verdict=clear blockers=6
+  discover OK Calaf Seed Tools (calaf.ai): tools=2 verdict=clear blockers=2
+  discover OK www.canaryusers.ai (www.canaryusers.ai): tools=3 verdict=clear blockers=6
+  discover OK Can I Vibe? — AI coding provider status (canivibe.ai): tools=2 verdict=clear blockers=4
+  discover OK Capital Company (capitalcompany.ai): tools=14 verdict=clear blockers=0
+  discover OK Capxule (capxule.ai): tools=12 verdict=clear blockers=0
+  discover OK Catalyst evidence graph (catalystproject.ai): tools=7 verdict=clear blockers=0
+  discover OK CCAPI (api.ccapi.ai): tools=11 verdict=clear blockers=11
+  discover OK Celestio (celestio.ai): tools=7 verdict=clear blockers=7
+  discover OK Central City (centralcity.ai): tools=28 verdict=clear blockers=0
+  discover OK Cerebrium Docs (cerebrium.ai): tools=3 verdict=clear blockers=0
+  discover OK CertifiKit COI tools (certifikit.ai): tools=4 verdict=clear blockers=0
+  discover OK CertScore.ai MCP Light (mcp.certscore.ai): tools=4 verdict=clear blockers=0
+  discover OK ADHD in Children (childadhd.ai): tools=6 verdict=clear blockers=6
+  discover OK Anxiety in Children (childanxiety.ai): tools=6 verdict=clear blockers=6
+  discover OK Psychiatry for Children (childpsychiatry.ai): tools=6 verdict=clear blockers=6
+  discover OK ChinaAPI (api.chinaapi.ai): tools=4 verdict=clear blockers=0
+  discover OK China Marketing AI Intelligence MCP (api.chinamarketing.ai): tools=3 verdict=clear blockers=6
+  discover OK Chronary (api.chronary.ai): tools=54 verdict=clear blockers=108
+  discover OK AgentMart (agentmart.ciphyr.ai): tools=112 verdict=clear blockers=2
+  discover OK Circleback (circleback.ai): tools=21 verdict=clear blockers=21
+  discover OK citepath (citepath.ai): tools=3 verdict=clear blockers=6
+  discover OK Citybook (mcp.citybook.ai): tools=1 verdict=clear blockers=1
+  discover OK Clawfight (clawfight.ai): tools=23 verdict=clear blockers=0
+  discover OK CleanVector (cleanvector.ai): tools=11 verdict=clear blockers=22
+  discover OK Clear Tape (app.cleartape.ai): tools=11 verdict=clear blockers=0
+  discover OK Cloud World Model (www.cloudworldmodel.ai): tools=9 verdict=clear blockers=9
+PUT docs/mcp-deepwiki-mcp-security.md
+PUT docs/mcp-wolfram-alpha-mcp-security.md
+PUT docs/mcp-hugging-face-mcp-security.md
+PUT docs/mcp-cloudflare-docs-mcp-security.md
+PUT docs/mcp-astro-docs-mcp-security.md
+PUT docs/mcp-hive-intelligence-mcp-security.md
+PUT docs/mcp-find-a-domain-mcp-security.md
+PUT docs/mcp-tandem-ac-mcp-security.md
+PUT docs/mcp-apexai-academy-mcp-security.md
+PUT docs/mcp-ase-academy-mcp-security.md
+PUT docs/mcp-getle-ad-mcp-security.md
+PUT docs/mcp-inside-ad-mcp-security.md
+PUT docs/mcp-beachclubs-ae-mcp-security.md
+PUT docs/mcp-prices-brainy-ae-mcp-security.md
+PUT docs/mcp-datadubai-ae-mcp-security.md
+PUT docs/mcp-easyvoice-ae-mcp-security.md
+PUT docs/mcp-genosys-ae-mcp-security.md
+PUT docs/mcp-grovisor-ae-mcp-security.md
+PUT docs/mcp-plantguide-ae-mcp-security.md
+PUT docs/mcp-projectory-ae-mcp-security.md
+PUT docs/mcp-propick-ae-mcp-security.md
+PUT docs/mcp-fenlight-waggle-ae-mcp-security.md
+PUT docs/mcp-vera-waggle-ae-mcp-security.md
+PUT docs/mcp-events-aero-mcp-security.md
+PUT docs/mcp-hood-ag-mcp-security.md
+PUT docs/mcp-goji-agency-mcp-security.md
+PUT docs/mcp-justidea-agency-mcp-security.md
+PUT docs/mcp-business-contact-finder-mcp-ottobot2025-workers-dev-mcp-security.md
+PUT docs/mcp-license-changes-mcp-ottobot2025-workers-dev-mcp-security.md
+PUT docs/mcp-house-painters-ottobot-agency-mcp-security.md
+PUT docs/mcp-thebureauoflostcontext-agency-mcp-security.md
+PUT docs/mcp-zoll-agency-mcp-security.md
+PUT docs/mcp-state-1court-ai-mcp-security.md
+PUT docs/mcp-mom-achromat-ai-mcp-security.md
+PUT docs/mcp-actwise-ai-mcp-security.md
+PUT docs/mcp-adoraads-ai-mcp-security.md
+PUT docs/mcp-advisorsai-ai-mcp-security.md
+PUT docs/mcp-afg-ai-mcp-security.md
+PUT docs/mcp-afmr-ai-mcp-security.md
+PUT docs/mcp-agenlify-ai-mcp-security.md
+PUT docs/mcp-bev-buyer-ai-mcp-security.md
+PUT docs/mcp-agentberg-ai-mcp-security.md
+PUT docs/mcp-agentboard-ai-mcp-security.md
+PUT docs/mcp-scan-agenticplug-ai-mcp-security.md
+PUT docs/mcp-agenticterminal-ai-mcp-security.md
+PUT docs/mcp-rx-agentlookups-ai-mcp-security.md
+PUT docs/mcp-solar-agentlookups-ai-mcp-security.md
+PUT docs/mcp-law-agentlookups-ai-mcp-security.md
+PUT docs/mcp-env-agentlookups-ai-mcp-security.md
+PUT docs/mcp-overassessed-agentlookups-ai-mcp-security.md
+PUT docs/mcp-contractors-agentlookups-ai-mcp-security.md
+PUT docs/mcp-food-agentlookups-ai-mcp-security.md
+PUT docs/mcp-agentrapay-ai-mcp-security.md
+PUT docs/mcp-agentroam-ai-mcp-security.md
+PUT docs/mcp-agentsindex-ai-mcp-security.md
+PUT docs/mcp-ai-akari-ai-mcp-security.md
+PUT docs/mcp-ai-portal-ai-mcp-security.md
+PUT docs/mcp-airshelf-ai-mcp-security.md
+PUT docs/mcp-aislabs-ai-mcp-security.md
+PUT docs/mcp-aivikings-ai-mcp-security.md
+PUT docs/mcp-aivonic-ai-mcp-security.md
+PUT docs/mcp-alcock-ai-mcp-security.md
+PUT docs/mcp-alphabazaar-ai-mcp-security.md
+PUT docs/mcp-alphacreek-ai-mcp-security.md
+PUT docs/mcp-agents-alphaquantlabs-ai-mcp-security.md
+PUT docs/mcp-alpix-alpic-ai-mcp-security.md
+PUT docs/mcp-analyticslegends-ai-mcp-security.md
+PUT docs/mcp-annsa-ai-mcp-security.md
+PUT docs/mcp-apir-ai-mcp-security.md
+PUT docs/mcp-appgoat-ai-mcp-security.md
+PUT docs/mcp-aqta-ai-mcp-security.md
+PUT docs/mcp-arabickeyboard-ai-mcp-security.md
+PUT docs/mcp-arclan-ai-mcp-security.md
+PUT docs/mcp-artemisgtm-ai-mcp-security.md
+PUT docs/mcp-artidrop-ai-mcp-security.md
+PUT docs/mcp-arvx-ai-mcp-security.md
+PUT docs/mcp-askmiles-ai-mcp-security.md
+PUT docs/mcp-askwatch-ai-mcp-security.md
+PUT docs/mcp-asrm-ai-mcp-security.md
+PUT docs/mcp-supershopping-mcp-atdev-ai-mcp-security.md
+PUT docs/mcp-atmy-ai-mcp-security.md
+PUT docs/mcp-augenix-ai-mcp-security.md
+PUT docs/mcp-auralogs-ai-mcp-security.md
+PUT docs/mcp-auteng-ai-mcp-security.md
+PUT docs/mcp-autoblogging-ai-mcp-security.md
+PUT docs/mcp-agent-autoposter-ai-mcp-security.md
+PUT docs/mcp-aviado-ai-mcp-security.md
+PUT docs/mcp-awardcast-ai-mcp-security.md
+PUT docs/mcp-mcp-server-295985738387-europe-west1-run-app-mcp-security.md
+PUT docs/mcp-bankrolled-ai-mcp-security.md
+PUT docs/mcp-bareun-ai-mcp-security.md
+PUT docs/mcp-bcited-ai-mcp-security.md
+PUT docs/mcp-beevr-ai-mcp-security.md
+PUT docs/mcp-benchgecko-ai-mcp-security.md
+PUT docs/mcp-b4-index-vercel-app-mcp-security.md
+PUT docs/mcp-betslipdoctor-ai-mcp-security.md
+PUT docs/mcp-betterpost-ai-mcp-security.md
+PUT docs/mcp-bezal-ai-mcp-security.md
+PUT docs/mcp-bidclub-ai-mcp-security.md
+PUT docs/mcp-biel-ai-mcp-security.md
+PUT docs/mcp-bithuman-ai-mcp-security.md
+PUT docs/mcp-docs-bithuman-ai-mcp-security.md
+PUT docs/mcp-bitroad-ai-mcp-security.md
+PUT docs/mcp-bizmoon-ai-mcp-security.md
+PUT docs/mcp-blast-radius-ai-mcp-security.md
+PUT docs/mcp-blinibot-ai-mcp-security.md
+PUT docs/mcp-booqer-ai-mcp-security.md
+PUT docs/mcp-bordet-ai-mcp-security.md
+PUT docs/mcp-botinfo-ai-mcp-security.md
+PUT docs/mcp-bowmark-ai-mcp-security.md
+PUT docs/mcp-bounty-brevium-ai-mcp-security.md
+PUT docs/mcp-bringyour-ai-mcp-security.md
+PUT docs/mcp-buildersinfintech-ai-mcp-security.md
+PUT docs/mcp-buildwithorbit-ai-mcp-security.md
+PUT docs/mcp-bumblebox-ai-mcp-security.md
+PUT docs/mcp-bumit-ai-mcp-security.md
+PUT docs/mcp-byteask-ai-mcp-security.md
+PUT docs/mcp-calaf-ai-mcp-security.md
+PUT docs/mcp-canaryusers-ai-mcp-security.md
+PUT docs/mcp-canivibe-ai-mcp-security.md
+PUT docs/mcp-capitalcompany-ai-mcp-security.md
+PUT docs/mcp-capxule-ai-mcp-security.md
+PUT docs/mcp-catalystproject-ai-mcp-security.md
+PUT docs/mcp-ccapi-ai-mcp-security.md
+PUT docs/mcp-celestio-ai-mcp-security.md
+PUT docs/mcp-centralcity-ai-mcp-security.md
+PUT docs/mcp-cerebrium-ai-mcp-security.md
+PUT docs/mcp-certifikit-ai-mcp-security.md
+PUT docs/mcp-certscore-ai-mcp-security.md
+PUT docs/mcp-childadhd-ai-mcp-security.md
+PUT docs/mcp-childanxiety-ai-mcp-security.md
+PUT docs/mcp-childpsychiatry-ai-mcp-security.md
+PUT docs/mcp-chinaapi-ai-mcp-security.md
+PUT docs/mcp-chinamarketing-ai-mcp-security.md
+PUT docs/mcp-chronary-ai-mcp-security.md
+PUT docs/mcp-agentmart-ciphyr-ai-mcp-security.md
+PUT docs/mcp-circleback-ai-mcp-security.md
+PUT docs/mcp-citepath-ai-mcp-security.md
+PUT docs/mcp-citybook-ai-mcp-security.md
+PUT docs/mcp-clawfight-ai-mcp-security.md
+PUT docs/mcp-cleanvector-ai-mcp-security.md
+PUT docs/mcp-cleartape-ai-mcp-security.md
+PUT docs/mcp-cloudworldmodel-ai-mcp-security.md
+PUT docs/mcp-server-scorecards.md
+PUT docs/sitemap.xml (156 urls)
+IndexNow: submitted 156 URLs -> HTTP 200

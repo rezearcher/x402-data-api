@@ -1,0 +1,68 @@
+        WETH  HOLD   token-weth-420000-honeypot-check
+        USDC  GO     token-usdc-833589-honeypot-check
+       cbBTC  GO     token-cbbtc-cbb7c0-honeypot-check
+        AERO  GO     token-aero-940181-honeypot-check
+       DEGEN  GO     token-degen-4ed4e8-honeypot-check
+discovered 3 trending Base tokens from GeckoTerminal
+  scan failed 0x5be75e3b0aff5d1a042a5363ae36acb1d6d755ea: HTTP Error 429: Too Many Requests
+  scan failed 0x07b3d902783c3c12b077508c3b5c00113d1291d0: HTTP Error 429: Too Many Requests
+  scan failed 0xbf927b841994731c573bdf09ceb0c6b0aa887cdd: HTTP Error 429: Too Many Requests
+PUT docs/sitemap.xml (105 urls)
+IndexNow: submitted 6 URLs -> HTTP 200
+PUBLISHED 5 token scorecards + index
+        WETH  GO     token-weth-420000-honeypot-check
+        USDC  GO     token-usdc-833589-honeypot-check
+       cbBTC  GO     token-cbbtc-cbb7c0-honeypot-check
+        AERO  GO     token-aero-940181-honeypot-check
+       DEGEN  GO     token-degen-4ed4e8-honeypot-check
+discovered 3 trending Base tokens from GeckoTerminal
+         DRB  GO     token-drb-3ec215-honeypot-check
+         XDP  GO     token-xdp-07b3d9-honeypot-check
+        ELSA  GO     token-elsa-29cc30-honeypot-check
+PUT docs/sitemap.xml (177 urls)
+IndexNow: submitted 9 URLs -> HTTP 200
+PUBLISHED 8 token scorecards + index
+        WETH  GO     token-weth-420000-honeypot-check
+        USDC  GO     token-usdc-833589-honeypot-check
+       cbBTC  GO     token-cbbtc-cbb7c0-honeypot-check
+        AERO  GO     token-aero-940181-honeypot-check
+       DEGEN  GO     token-degen-4ed4e8-honeypot-check
+discovered 3 trending Base tokens from GeckoTerminal
+        AXIS  HOLD   token-axis-5be75e-honeypot-check
+         XDP  GO     token-xdp-07b3d9-honeypot-check
+         VVV  GO     token-vvv-acfe60-honeypot-check
+PUT docs/sitemap.xml (179 urls)
+IndexNow: submitted 9 URLs -> HTTP 200
+PUBLISHED 8 token scorecards + index
+        WETH  GO     token-weth-420000-honeypot-check
+        USDC  GO     token-usdc-833589-honeypot-check
+       cbBTC  GO     token-cbbtc-cbb7c0-honeypot-check
+        AERO  GO     token-aero-940181-honeypot-check
+       DEGEN  GO     token-degen-4ed4e8-honeypot-check
+Traceback (most recent call last):
+  File "/home/rez/projects/x402-data-api/scripts/gen_token_scorecards.py", line 516, in <module>
+    main()
+  File "/home/rez/projects/x402-data-api/scripts/gen_token_scorecards.py", line 485, in main
+    addrs = discover_tokens(args.cap)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/rez/projects/x402-data-api/scripts/gen_token_scorecards.py", line 55, in discover_tokens
+    with urllib.request.urlopen(req, timeout=30) as r:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+    return opener.open(url, data, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 521, in open
+    response = meth(req, response)
+               ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 630, in http_response
+    response = self.parent.error(
+               ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 559, in error
+    return self._call_chain(*args)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+    result = func(*args)
+             ^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 429: Too Many Requests
