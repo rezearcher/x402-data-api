@@ -122,7 +122,8 @@ conflict is recorded in [§13 Doc-drift corrections](#13-doc-drift-corrections).
     double bug (iterating dict keys as if a list, case-sensitive address matching) caused it to
     match zero transactions and report **0.005**. The sensor's live count: 388 external + 110 self
     from 504 total transfers in `scan_state.json`. Repointing is the sanctioned path; the
-    probe-check rewire remains a board-policy dead end (`t_fad358a7` archived, `t_b8b2e3ef` KILL).
+    probe-check rewire is a board-policy dead end (`t_fad358a7` archived 2026-09-02, kill
+    rationale + the `pre_launch_usdc=70.00 == 2×$35` finding on `t_b8b2e3ef`).
   - *fiat* ← live `GET /metrics` :: `fiat.total_gross_usd` (Stripe `checkout_paid` + `invoice_paid`).
     HTTP 200 only; every failure (timeout, non-200, bad JSON, missing/non-numeric key) yields `0` and
     exit `0`. Cache-busted by default (`?cb=<ns>`) because the edge pins a healthy body for 3600 s and
