@@ -9956,7 +9956,28 @@ app.get("/scan/mcp/preview", async (c) => {
     // in EVERY free scan now (count + ready only; itemized blockers stay paid).
     // The ?directory=true / mode=directory params are kept as back-compat no-ops.
     const dir = computeDirectoryReadiness(result.tools ?? [], result.findings);
-    return c.json(previewOf(result, dir, target));
+    const preview = previewOf(result, dir, target) as Record<string, unknown>;
+    // Discovery hook for the per-server rank badge: if this server is already on
+    // the public leaderboard, tell the author their rank + hand them the vanity
+    // badge to embed (every embed = a backlink + billboard). Degrade-open: any
+    // index-read failure just omits the block, the free scan is unchanged.
+    try {
+      const self = new URL(c.req.url);
+      const origin = `${self.protocol}//${self.host}`;
+      const cards = await fetchLeaderboardCards();
+      const found = findLbCard(cards, { url: target });
+      if (found) {
+        preview.leaderboard_rank = {
+          rank: found.rank,
+          total: cards.length,
+          grade: (found.card.grade || null),
+          badge_markdown: rankBadgeMarkdown(origin, { url: target }),
+          note:
+            `Your server ranks #${found.rank} of ${cards.length} on the public MCP Security Leaderboard. Embed this badge in your README — it shows your live rank and links back to the ranked hub. Keep it green across releases with monitoring at /pricing.`,
+        };
+      }
+    } catch { /* degrade-open: omit the rank block */ }
+    return c.json(preview);
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
@@ -10160,11 +10181,102 @@ app.get("/scan/leaderboard/embed", (c) => {
 <pre>${esc(jsSnippet)}</pre>
 <h2>Options</h2>
 <p class="muted"><code>?n=</code> rows (3–25, default 10) · <code>?theme=light|dark</code>. Example: <code>${svgUrl}?n=15&amp;theme=light</code></p>
+<h2>Rank badge for YOUR server (the one to embed)</h2>
+<p class="muted">Show off your own rank — e.g. <code>#3 of 144 · grade A</code> — as a shields badge wrapped in the backlink to the ranked hub. Pass your server's URL (host match), <code>slug</code>, or <code>name</code>:</p>
+<pre>${esc('[![MCP Security Rank](https://img.shields.io/endpoint?url=' + encodeURIComponent(origin + '/scan/leaderboard/rank-badge?url=https://your-mcp-server.example/mcp') + '&style=flat-square)](' + LEADERBOARD_HUB + ')')}</pre>
+<p class="muted">Not listed yet? <a href="${origin}/scan/mcp-scanner">Scan free</a> and you'll appear on the next leaderboard refresh.</p>
 <h2>Want your server ranked — or #1 for security?</h2>
 <p><a href="${origin}/scan/mcp-scanner">Scan your MCP server free</a> · <a href="${origin}/scan/verify">claim a verified badge</a> · <a href="${origin}/pricing">keep it monitored ($9.99/mo)</a></p>
 <p class="muted">Grey Ridge Signals · static LLM01/LLM08 scanning + continuous monitoring. See the full <a href="${LEADERBOARD_HUB}">ranked leaderboard</a>.</p>
 </body></html>`;
   return c.html(html, 200, { "Cache-Control": "public, max-age=3600" });
+});
+
+// ---------------------------------------------------------------------------
+// PER-SERVER RANK BADGE — the demand-creating half of the leaderboard engine.
+// The whole-leaderboard widget (above) SPREADS but doesn't pull: a random blog
+// has no reason to embed it. A grade-A author DOES want to show off "ranked #3
+// most-secure MCP server" — that is a marketing incentive (Line-B's core
+// thesis: the badge sells THEIR tool), and every embed is a dofollow backlink to
+// the ranked hub + a billboard funnelling scans. `GET /scan/leaderboard/rank-badge`
+// returns a shields.io endpoint object ( {schemaVersion,label,message,color} ),
+// matching /scan/mcp/badge + /scan/verify/badge so authors wrap it the same way.
+// Degrade-open: an unranked / unknown server gets a "scan free" grey card (a
+// recruitment CTA), and any index-read failure returns grey too — never a 500.
+// Match is host-first (card.url host == target host), then slug, then name, so
+// the author can pass whichever identifier they have.
+// ---------------------------------------------------------------------------
+function lbNormHost(u?: string | null): string {
+  if (!u) return "";
+  try {
+    return new URL(/^https?:\/\//i.test(u) ? u : "https://" + u).host.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+// Shields named colours keyed to the A–F grade (A best .. F worst); unknown -> grey.
+function lbGradeShield(g: string | null | undefined): string {
+  return ({ A: "brightgreen", B: "green", C: "yellow", D: "orange", F: "red" } as Record<string, string>)[
+    (g || "").trim().toUpperCase()
+  ] ?? "lightgrey";
+}
+// Find a card's 1-based rank in the ranked leaderboard by host / slug / name.
+export function findLbCard(
+  cards: LbCard[],
+  q: { url?: string; slug?: string; name?: string },
+): { card: LbCard; rank: number } | null {
+  const ranked = [...cards].sort(lbRankLess);
+  const slug = (q.slug || "").trim().toLowerCase();
+  const name = (q.name || "").trim().toLowerCase();
+  const host = lbNormHost(q.url);
+  for (let i = 0; i < ranked.length; i++) {
+    const c = ranked[i];
+    if (slug && (c.slug || "").trim().toLowerCase() === slug) return { card: c, rank: i + 1 };
+    if (name && (c.name || "").trim().toLowerCase() === name) return { card: c, rank: i + 1 };
+    if (host && lbNormHost(c.url) === host) return { card: c, rank: i + 1 };
+  }
+  return null;
+}
+// Build the shields.io endpoint object for a per-server rank badge. Pure +
+// deterministic so the contract is unit-tested without a network round-trip.
+export function rankBadge(
+  found: { card: LbCard; rank: number } | null,
+  total: number,
+): { schemaVersion: number; label: string; message: string; color: string; cacheSeconds: number } {
+  const base = { schemaVersion: 1, label: "MCP Security Rank", cacheSeconds: 3600 };
+  if (!found) return { ...base, message: "not ranked · scan free", color: "lightgrey" };
+  const g = (found.card.grade || "").toString().trim().toUpperCase() || "—";
+  const n = total > 0 ? total : found.rank;
+  return { ...base, message: `#${found.rank} of ${n} · grade ${g}`, color: lbGradeShield(g) };
+}
+// Markdown snippet an author drops in their README. The wrapping link is the
+// backlink to the ranked hub; the badge re-reads the live leaderboard each render.
+export function rankBadgeMarkdown(origin: string, q: { url?: string; slug?: string; name?: string }): string {
+  const qs = q.url
+    ? "url=" + encodeURIComponent(q.url)
+    : q.slug
+      ? "slug=" + encodeURIComponent(q.slug)
+      : "name=" + encodeURIComponent(q.name || "");
+  const ep = encodeURIComponent(origin + "/scan/leaderboard/rank-badge?" + qs);
+  return `[![MCP Security Rank](https://img.shields.io/endpoint?url=${ep}&style=flat-square)](${LEADERBOARD_HUB})`;
+}
+app.get("/scan/leaderboard/rank-badge", async (c) => {
+  const headers = { "Cache-Control": "public, max-age=3600" };
+  const q = {
+    url: c.req.query("url") || undefined,
+    slug: c.req.query("slug") || undefined,
+    name: c.req.query("name") || undefined,
+  };
+  if (!q.url && !q.slug && !q.name) {
+    return c.json({ schemaVersion: 1, label: "MCP Security Rank", message: "url/slug/name required", color: "lightgrey" }, 200, headers);
+  }
+  try {
+    const cards = await fetchLeaderboardCards();
+    return c.json(rankBadge(findLbCard(cards, q), cards.length), 200, headers);
+  } catch {
+    // Degrade-open — shields still renders a grey card, never a 500.
+    return c.json({ schemaVersion: 1, label: "MCP Security Rank", message: "scan free", color: "lightgrey" }, 200, headers);
+  }
 });
 
 // ---------------------------------------------------------------------------
