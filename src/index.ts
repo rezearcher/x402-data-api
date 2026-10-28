@@ -1998,6 +1998,7 @@ app.get("/sitemap.xml", (c) => {
     { path: "/for-agents/defi-yields", priority: "0.9", changefreq: "weekly" },
     { path: "/for-agents/crypto-prices", priority: "0.9", changefreq: "weekly" },
     { path: "/for-agents/base-rpc", priority: "0.9", changefreq: "weekly" },
+    { path: "/for-agents/token-safety", priority: "0.9", changefreq: "weekly" },
     { path: "/scan/mcp-scanner", priority: "0.9", changefreq: "weekly" },
     { path: "/scan/badge-gen", priority: "0.8", changefreq: "weekly" },
     { path: "/scan/verify", priority: "0.8", changefreq: "weekly" },
@@ -12705,11 +12706,12 @@ ${rowsHtml}
 <p class=muted>Prices are per successful call in USDC on Base (eip155:8453). Routes with a free preview return the same JSON shape without payment so an agent can evaluate before it pays.</p>
 
 <h2>Guides by data type</h2>
-<p>Deeper pages for the three sets agents reach for most:</p>
+<p>Deeper pages for the sets agents reach for most:</p>
 <ul>
 <li><a href="/for-agents/defi-yields">DeFi yields API</a> &mdash; lending &amp; LP yields with APY trend, IL risk and TVL</li>
 <li><a href="/for-agents/crypto-prices">Crypto price API</a> &mdash; spot prices, perp funding and market sentiment</li>
 <li><a href="/for-agents/base-rpc">Base RPC API</a> &mdash; blocks, gas, balances, receipts and Chainlink prices</li>
+<li><a href="/for-agents/token-safety">Token-safety API</a> &mdash; pre-trade honeypot, rug &amp; sellability verdict for Base ERC-20s</li>
 </ul>
 
 <h2>How an agent pays</h2>
@@ -12774,7 +12776,7 @@ agent = Agent(role="analyst", tools=crewai_tools())</pre>
 // human-written copy a crawler and a developer read. Unknown topic -> 404.
 const AGENT_TOPICS: Record<
   string,
-  { re: RegExp; lead: string; h1: string; sub: string; title: string; metaDesc: string; lead_p: string; ex_path: string; ex_comment: string; ex_var: string; intent_h2: string; intent_p: string }
+  { re?: RegExp; tagAny?: string[]; lead: string; h1: string; sub: string; title: string; metaDesc: string; lead_p: string; ex_path: string; ex_comment: string; ex_var: string; intent_h2: string; intent_p: string }
 > = {
   "defi-yields": {
     re: /^\/defi\//,
@@ -12827,6 +12829,28 @@ const AGENT_TOPICS: Record<
     intent_p:
       "These are live Base mainnet reads, not a cached mirror: gas and fee routes carry EIP-1559 base/priority split and a USD cost, <code>/chain/receipt</code> returns the L1 data-fee breakdown an ETH-only RPC cannot, and <code>/chain/proxy-info</code> resolves what code actually runs behind a proxy before an agent trusts it. One keyless rail, priced per read.",
   },
+  "token-safety": {
+    // Derived by the catalog tag, not a path list: the pre-trade safety cluster
+    // is exactly the rows carrying "token-security" (/gate/swap, /chain/token-report,
+    // /chain/token-security). Tagging a new safety route surfaces it here with no
+    // edit — a route rename never drops it (the broad "security" tag also covers
+    // RPC/DeFi-risk rows, so we match the narrower cluster tag).
+    tagAny: ["token-security"],
+    lead: "/chain/token-report",
+    h1: "Keyless token-safety API for AI agents — honeypot &amp; rug check per call",
+    sub: "Pre-trade honeypot, rug and sellability checks for Base ERC-20s — a SAFE / CAUTION / AVOID verdict in one call, settled in USDC on Base, no account or API key.",
+    title: "Keyless Token Safety API for Agents — honeypot, rug & sellability verdict per call",
+    metaDesc:
+      "A pay-per-call token-safety API built for autonomous trading agents on Base: one call returns a decision-grade SAFE / CAUTION / AVOID verdict with a 0-100 risk score and the reasons — a simulated buy/sell that proves the token is sellable (honeypot catch), measured transfer tax, owner-renounce plus mint/pause/blacklist/fee-setter/upgradeable-proxy checks, owner supply concentration, and the live Uniswap-v3 WETH-pool liquidity in USD. No signup, no API key — the agent settles each check inline in USDC on Base from $0.008 (the x402 standard).",
+    lead_p:
+      "A honeypot or a rug costs an agent the whole position, so the check has to run before the buy — and it has to be more than a bytecode grep. Every route below returns a verdict an agent can act on in one call: a live state-override simulation that actually attempts a sell (the only reliable honeypot catch), the buy/sell tax measured against the token's deepest Uniswap-v3 WETH pool, whether ownership is renounced and which admin levers (mint, pause, blacklist, fee-setter, upgradeable proxy) remain, how concentrated supply is in the owner's wallet, and the real pool liquidity in USD. Pass a Base token address and read all of it without an account, a dashboard or a key to rotate.",
+    ex_path: "/chain/token-report?token=0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+    ex_comment: "SAFE / CAUTION / AVOID verdict + risk score, paid inline",
+    ex_var: "report",
+    intent_h2: "Why agents check tokens here before they buy",
+    intent_p:
+      "The usual options make an agent carry a key and rate limits (GoPlus), sell crypto-wide data it does not need (1inch), or trust a static honeypot list that misses a token that only taxes the LP pair. These routes are Base-native and verdict-first: <code>/chain/token-report</code> returns SAFE / CAUTION / AVOID with the reasons in one call, <code>/chain/token-security</code> focuses the scam/rug flags, and <code>/gate/swap</code> adds your notional against pool liquidity so an agent sees whether its own trade is too big before it fires. One keyless, pay-per-call rail. Verdicts are informational, not financial advice — a \"SAFE\" means no known pattern matched these checks, not a guarantee.",
+  },
 };
 
 app.get("/for-agents/:topic", (c) => {
@@ -12836,7 +12860,13 @@ app.get("/for-agents/:topic", (c) => {
   const esc = (s: string) =>
     String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m] as string);
   const rows = ROUTE_CATALOG
-    .filter(([path]) => cfg.re.test(path))
+    .filter((row) => {
+      if (cfg.tagAny) {
+        const tags = (row[5] as string[] | undefined) ?? [];
+        return cfg.tagAny.some((t) => tags.includes(t));
+      }
+      return cfg.re ? cfg.re.test(row[0] as string) : false;
+    })
     .sort((a, b) => {
       if (a[0] === cfg.lead) return -1;
       if (b[0] === cfg.lead) return 1;

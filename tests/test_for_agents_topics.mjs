@@ -58,6 +58,38 @@ for (const [topic, t] of Object.entries(topics)) {
   ok(!/claude|anthropic|as an ai|language model/i.test(html), `${topic}: no AI/vendor tells`);
 }
 
+// Token-safety page: the pre-trade safety cluster, derived by the NARROW
+// "token-security" catalog tag (not the broad "security" tag), verdict-first.
+{
+  const res = await app.request("/for-agents/token-safety", {}, {});
+  ok(res.status === 200, "/for-agents/token-safety returns 200");
+  const html = await res.text();
+  ok(html.includes('<link rel=canonical href="https://api.greyridgesignals.ai/for-agents/token-safety">'), "token-safety: brand-host self-canonical");
+  ok(html.includes('"@type":"WebAPI"'), "token-safety: WebAPI JSON-LD");
+  // The three token-security-tagged routes are present; token-report leads.
+  for (const r of ["/chain/token-report", "/chain/token-security", "/gate/swap"]) {
+    ok(html.includes(`>GET ${r}<`), `token-safety: lists ${r}`);
+  }
+  const first = html.indexOf(">GET ");
+  ok(html.indexOf(">GET /chain/token-report<") === first, "token-safety: token-report is the first route row");
+  // Broad-"security"-tagged but NOT token-security routes must be absent — proves
+  // we matched the narrow cluster tag, not every security route.
+  for (const r of ["/scan/mcp", "/defi/protocol-risk", "/chain/proxy-info", "/defi/hacks-recent", "/enrich/tech-risk"]) {
+    ok(!html.includes(`>GET ${r}<`), `token-safety: excludes broad-security route ${r}`);
+  }
+  // A pure data route is absent too.
+  ok(!html.includes(">GET /defi/yields<"), "token-safety: excludes data route /defi/yields");
+  ok(/not financial advice|informational/.test(html), "token-safety: verdict disclaimer present");
+  ok(html.includes("no API key") || html.includes("no key") || html.includes("no account"), "token-safety: states keyless wedge");
+  ok(!/claude|anthropic|as an ai|language model/i.test(html), "token-safety: no AI/vendor tells");
+  // Hub links to it (internal crawl graph).
+  const hub = await (await app.request("/for-agents", {}, {})).text();
+  ok(hub.includes('href="/for-agents/token-safety"'), "hub links /for-agents/token-safety");
+  // Sitemap carries it.
+  const sm = await (await app.request("/sitemap.xml", {}, {})).text();
+  ok(sm.includes("/for-agents/token-safety"), "sitemap lists /for-agents/token-safety");
+}
+
 // Lead ordering: /defi/yields must be the first route row on its page.
 {
   const html = await (await app.request("/for-agents/defi-yields", {}, {})).text();
