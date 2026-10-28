@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "ai.greyridgesignals/tech-risk",
-  "description": "MCP security scanner: tool-poisoning & prompt-injection audit (OWASP LLM01/08) + Base data",
-  "version": "0.1.4",
+  "description": "Free MCP security scan: tool-poisoning & prompt-injection audit (OWASP LLM01/08) + trust badge",
+  "version": "0.1.5",
   "repository": {
     "url": "https://github.com/rezearcher/x402-data-api",
     "source": "github"
   },
-  "websiteUrl": "https://x402-data-api.sigrunner.workers.dev/scan/directory",
+  "websiteUrl": "https://api.greyridgesignals.ai/scan/directory",
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://x402-data-api.sigrunner.workers.dev/sse"
+      "url": "https://api.greyridgesignals.ai/mcp"
     }
   ]
 }
