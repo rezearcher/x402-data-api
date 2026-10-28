@@ -6,6 +6,7 @@ import {
   finiteOrNull, optionalFeeGwei,
 } from "./sibling_contracts";
 import { STATUS_SNAPSHOT } from "./status_snapshot.ts";
+import { DEMAND_SNAPSHOT } from "./demand_snapshot.ts";
 import { analyzeMcpTool, analyzeDirectoryReadiness, type ScanFinding } from "./mcp_scan.ts";
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { HTTPFacilitatorClient } from "@x402/core/server";
@@ -175,7 +176,7 @@ const PREVIEW_ROUTES = new Set<string>([
 // Single source of truth for paid routes: [path, method, price_usdc, atomic_units, description, tags].
     // Lane order derived from measured on-chain demand (onchain_demand_by_lane.json):
     // token-safety is the #1 live-demand lane — lead the machine-import surface with it.
-const ROUTE_CATALOG: Array<[string, string, string, string, string, string[]]> = [
+export const ROUTE_CATALOG: Array<[string, string, string, string, string, string[]]> = [
   ["/gate/swap", "GET", "0.008", "8000", "Is this Base token safe to swap right now? GO / HOLD / BLOCK pre-trade safety gate for autonomous trading agents: is it a honeypot, can you sell it, and is your trade too big for the pool? Honeypot/sellability + admin-control checks + Uniswap v3 liquidity vs. your notional — one decision + reason in one fast call.", ["security", "base", "onchain", "trading", "gate", "agents", "token", "honeypot", "token-security", "data", "sell simulation before swap Base", "pre-swap safety gate"]],
   ["/chain/token-report", "GET", "0.01", "10000", "Is this Base token safe to buy? One call returns a trade-safety verdict — SAFE | CAUTION | AVOID — with risk_score (0-100) and reasons: honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, measured transfer tax, symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade before an agent buys a Base ERC-20.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "verdict", "trading", "token-security", "data"]],
   ["/chain/token-security", "GET", "0.009", "9000", "Is this Base token a scam or rug pull? Honeypot detector for a Base ERC-20: EIP-1967 proxy + upgradeability check, bytecode scan for mint/pause/blacklist/fee-setter/ownership, owner() renouncement, and a live eth_call state-override sim proving a real wallet can transfer() it. Returns risk_score (0-100) + verdict (clear/review/block) + honeypot/scam/rug flags. Use before an agent buys, holds or approves a token.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "token-security", "data", "scam", "rug", "rug-detection", "scam-detection"]],
@@ -239,6 +240,34 @@ const ROUTE_CATALOG: Array<[string, string, string, string, string, string[]]> =
   ["/dns", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH. Pass ?domain=stripe.com.", ["dns", "domain", "data", "recon"]],
   ["/whois", "GET", "0.01", "10000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain. Pass ?domain=cloudflare.com.", ["whois", "rdap", "domain", "data", "recon"]],
 ];
+
+// Order a copy of ROUTE_CATALOG by observed EXTERNAL per-route demand (descending),
+// read from the sensor-regenerated DEMAND_SNAPSHOT (external payers only, self
+// excluded). Every live arrival channel — the Agent402 router and CDP Bazaar —
+// ingests /.well-known/x402 resources[] top-down, so leading with the routes real
+// buyers actually pay for (today /crypto/prices + /defi/yields, 5 external payers
+// each) instead of the zero-external-revenue routes is pure merchandising upside.
+//
+// Rules (per the no-hardcoded-list law): the order MUST come from the snapshot,
+// never a hand-written priority array (that goes stale the moment demand shifts).
+// Stable: ties and zero-demand routes keep their original catalog index, so the
+// sort is a deterministic permutation. Degrades OPEN: a missing/empty/garbage
+// snapshot falls back to the untouched catalog order — no route is ever dropped
+// and the manifest never 500s. BEAT competitors who hand-order statically: ours
+// re-merchandises automatically each time the revenue sensor refreshes the snapshot.
+export type RouteRow = [string, string, string, string, string, string[]];
+export function demandOrderedCatalog(
+  catalog: readonly RouteRow[] = ROUTE_CATALOG,
+  byRoute: Record<string, number> = (DEMAND_SNAPSHOT && DEMAND_SNAPSHOT.external_by_route) || {},
+): RouteRow[] {
+  byRoute = byRoute || {};
+  const indexed = catalog.map((row, i) => ({ row, i, d: Number(byRoute[row[0]]) || 0 }));
+  indexed.sort((a, b) => (b.d - a.d) || (a.i - b.i)); // demand desc, stable on original index
+  const ordered = indexed.map((x) => x.row);
+  // Degrade-open invariant: the result is always a same-length permutation of the
+  // input. If anything about the snapshot made that false, hand back the raw order.
+  return ordered.length === catalog.length ? ordered : catalog.slice();
+}
 
 /** GET /chain/block-number 200: handler always returns numeric block_number and chain "base". Preview may add `note`. */
 const BLOCK_NUMBER_SUCCESS_SCHEMA = {
@@ -1415,7 +1444,9 @@ app.get("/.well-known/x402", (c) => {
       note: "Drop-in framework tools that wrap these routes — install once, every call pays inline over x402 in USDC. No registry account or API key needed; the git URL resolves the package directly.",
       installable_tools: INSTALLABLE_TOOLS,
     },
-    resources: ROUTE_CATALOG.map((r) => mk(...r)),
+    // Ordered by observed external demand (sensor snapshot), not catalog
+    // declaration order — the arrival channels read this list top-down.
+    resources: demandOrderedCatalog().map((r) => mk(...r)),
   });
 });
 
@@ -1440,7 +1471,10 @@ app.get("/.well-known/agent-capabilities.json", (c) => {
     request_schema: `${BASE}/openapi.json`,
     tags,
   });
-  let rows = ROUTE_CATALOG.slice();
+  // Default (no query) leads with the demand-ordered catalog — same sensor signal as
+  // /.well-known/x402 resources[] — so an agent reading the top-N products first sees
+  // the routes real buyers pay for. A query overrides with relevance scoring.
+  let rows = demandOrderedCatalog();
   if (q) {
     const terms = q.split(/\s+/).filter(Boolean);
     const score = ([p, , , , desc, tags]: [string, string, string, string, string, string[]]) => {
@@ -12517,19 +12551,10 @@ app.get("/for-agents", (c) => {
     String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m] as string);
   // Structural filter: the data/market/chain product (not the /scan, /enrich, /dns security lane).
   const dataRe = /^\/(chain|crypto|defi|pm|gate|ai|brief)\b/;
-  // Measured demand order (external_payer_routes.py, 30d): lead with what real payers call most.
-  const demandRank: Record<string, number> = {
-    "/defi/yields": 0, "/crypto/prices": 1, "/crypto/funding": 2, "/gate/swap": 3,
-    "/chain/token-report": 4, "/chain/tx": 5, "/chain/receipt": 6, "/chain/gas-price": 7,
-    "/chain/balance": 8, "/chain/block-number": 9, "/ai/ask": 10,
-  };
-  const rows = ROUTE_CATALOG
-    .filter(([path]) => dataRe.test(path))
-    .sort((a, b) => {
-      const ra = demandRank[a[0]] ?? 99, rb = demandRank[b[0]] ?? 99;
-      if (ra !== rb) return ra - rb;
-      return a[0].localeCompare(b[0]);
-    });
+  // Measured demand order, sensor-derived (external_payer_routes.py snapshot): lead with what
+  // real external payers call most. Same signal that orders /.well-known/x402 resources[] — so
+  // the SEO hub and the machine manifest agree, and neither carries a hand-maintained rank list.
+  const rows = demandOrderedCatalog().filter(([path]) => dataRe.test(path));
   const rowsHtml = rows.map(([path, method, price, , desc]) => {
     const preview = PREVIEW_ROUTES.has(path) ? `<a href="${esc(path)}/preview">free preview</a>` : "<span class=muted>&mdash;</span>";
     return `<tr><td><code>${esc(method)} ${esc(path)}</code></td><td class=price>$${esc(price)}</td><td>${esc(desc)}</td><td>${preview}</td></tr>`;
