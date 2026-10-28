@@ -269,6 +269,83 @@ export function demandOrderedCatalog(
   return ordered.length === catalog.length ? ordered : catalog.slice();
 }
 
+// One in-protocol upsell block for the per-request 402 body. The 402
+// payment-required body is the ONE surface 100% of paying agents fetch before
+// they pay (the /for-agents SDK pointer has measured 0% reach), so surfacing
+// the 10x-value flagship safety verdict (/chain/token-report $0.01) + the top
+// external-demand sibling there — at the exact decision moment, right before a
+// buyer signs a swap — is the highest-reach cross-sell we own. Purely additive:
+// it rides the same precedent as the decimals enrichment (x402 clients parse
+// accepts[] and ignore unknown extension keys), so it can never break settlement.
+//
+// No-hardcoded-list law (CLAUDE.md): nothing is a path literal.
+//  • the flagship safety target is DERIVED as the catalog row tagged BOTH
+//    "security" AND "verdict" (today /chain/token-report) — rename-proof.
+//  • the sibling is ordered by the SAME DEMAND_SNAPSHOT signal that drives the
+//    discovery manifest (zzzdm), so the loop sensor→snapshot→manifest ALSO
+//    decides which sibling the 402 promotes — it shifts as real demand shifts.
+//  • unknown route (not in ROUTE_CATALOG) → inject nothing (fail-closed).
+//  • self is never upserted; a security caller never gets a safety→safety nudge.
+export type SeeAlsoEntry = { resource: string; price_usdc: string; description: string; preview?: string };
+export function buildSeeAlso(
+  curPath: string,
+  origin: string = CANONICAL_ORIGIN,
+  catalog: readonly RouteRow[] = ROUTE_CATALOG,
+  byRoute: Record<string, number> = (DEMAND_SNAPSHOT && DEMAND_SNAPSHOT.external_by_route) || {},
+): SeeAlsoEntry[] {
+  const curRow = catalog.find((r) => r[0] === curPath);
+  if (!curRow) return []; // fail-closed: never upsell from an unknown route
+  const curTags = curRow[5] || [];
+  const curIsSecurity = curTags.includes("security");
+  // A security buyer is already in the safety lane — cap at one cross-lane data
+  // sibling and never nudge safety→safety. A data buyer gets the flagship
+  // safety verdict (the 10x upsell) plus one top-demand data sibling.
+  const maxEntries = curIsSecurity ? 1 : 2;
+  const picked: RouteRow[] = [];
+
+  if (!curIsSecurity) {
+    const flagship = catalog.find((r) => {
+      const t = r[5] || [];
+      return t.includes("security") && t.includes("verdict") && r[0] !== curPath;
+    });
+    if (flagship) picked.push(flagship);
+  }
+
+  const flagshipPath = picked[0]?.[0];
+  for (const r of demandOrderedCatalog(catalog, byRoute)) {
+    if (picked.length >= maxEntries) break;
+    const t = r[5] || [];
+    if (r[0] === curPath) continue;          // never self
+    if (r[0] === flagshipPath) continue;     // already picked as the flagship
+    if (t.includes("security")) continue;    // the sibling must be a data route
+    if (!t.includes("data")) continue;
+    picked.push(r);
+  }
+
+  const seen = new Set<string>();
+  const out: SeeAlsoEntry[] = [];
+  for (const r of picked) {
+    if (r[0] === curPath || seen.has(r[0])) continue;
+    seen.add(r[0]);
+    const t = r[5] || [];
+    const desc = String(r[4] || "");
+    const cut = desc.indexOf(". ");
+    const e: SeeAlsoEntry = {
+      resource: origin + r[0],
+      price_usdc: r[2],
+      description: (cut > 0 && cut < 140 ? desc.slice(0, cut + 1) : desc.slice(0, 140)).trim(),
+    };
+    // Every security-verdict flagship route ships a free keyless /preview (a $0
+    // try surface) by product convention — point the buyer at it so it can
+    // sample the verdict before paying. Cosmetic only; a missing preview just
+    // 404s and the 402 body stays valid (degrade-open).
+    if (t.includes("security") && t.includes("verdict")) e.preview = origin + r[0] + "/preview";
+    out.push(e);
+    if (out.length >= maxEntries) break;
+  }
+  return out;
+}
+
 /** GET /chain/block-number 200: handler always returns numeric block_number and chain "base". Preview may add `note`. */
 const BLOCK_NUMBER_SUCCESS_SCHEMA = {
   type: "object",
@@ -4653,13 +4730,26 @@ app.use(async (c, next) => {
         // unaffected. Fail-open: any parse error falls through to raw `decoded`.
         let body = decoded;
         try {
-          const pr = JSON.parse(decoded) as { accepts?: Array<{ asset?: string; extra?: Record<string, unknown> }> };
+          const pr = JSON.parse(decoded) as {
+            accepts?: Array<{ asset?: string; extra?: Record<string, unknown> }>;
+            extensions?: Record<string, unknown>;
+          };
           if (Array.isArray(pr.accepts)) {
             for (const offer of pr.accepts) {
               if (String(offer.asset ?? "").toLowerCase() === USDC_BASE.toLowerCase()) {
                 offer.extra = { ...(offer.extra ?? {}), decimals: 6 };
               }
             }
+            // Additive in-protocol cross-sell (see buildSeeAlso). Own try so a
+            // snapshot/catalog hiccup can never turn a 402 into a 500 — it falls
+            // through to the decimals-only body. Never mutates accepts[] (the
+            // EIP-712 domain the client signs), only pr.extensions.
+            try {
+              const seeAlso = buildSeeAlso(c.req.path);
+              if (seeAlso.length > 0) {
+                pr.extensions = { ...(pr.extensions ?? {}), greyridge: { see_also: seeAlso } };
+              }
+            } catch { /* decimals-only body */ }
             body = JSON.stringify(pr);
           }
         } catch { /* keep raw decoded body */ }
