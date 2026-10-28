@@ -1,0 +1,56 @@
+{
+  "purpose": "Catalog position map for x402-data-api routes, before vs after the 2026-10-28T06:02:47Z settlement. Supports logs/cdp-rediscovery-proof.json.",
+  "endpoint": "https://api.cdp.coinbase.com/platform/v2/x402/discovery/resources",
+  "enumeration": {
+    "page_size": 20,
+    "catalog_total_at_scan": 90738,
+    "catalog_total_2026_10_20": 89579,
+    "pages_total": 4537,
+    "ordering_note": "Order is not a stable key: page 1 begins with the same record on 2026-10-20 and 2026-10-28, but measured desc-breaks on lastUpdated were 225 in the first 700 items and sibling routes with near-identical lastUpdated sit 6,500 positions apart (e.g. /chain/wallet 2026-10-25T13:18 at index 1515 vs /crypto/fear-greed 2026-10-25T14:46 at index 8004). Recency correlates directionally, it does not determine position.",
+    "consequence": "Absence from the first N items is not delisting and presence at index M is not a new listing. Only same-key before/after comparison is meaningful."
+  },
+  "before": {
+    "source": "data/bazaar_full_2026-10-20.json (crawled 2026-10-20, 19400 items)",
+    "settled_route": { "resource": "/chain/token-security", "index": 12780, "found": true },
+    "routes_present_in_first_19400": 45,
+    "observed_band": "13532-14060 for 43 of 45; 12780 (token-security) and one other outlier ahead of the band"
+  },
+  "after": {
+    "scan_date": "2026-10-28T06:20Z-06:57Z",
+    "coverage": [
+      "0-1560 full (20-item windows, no gaps)",
+      "1560-6000 full",
+      "6000-8100 full",
+      "1560-8100 step 100 (coarse, pre-refinement)",
+      "8100-14500 step 100 (coarse)"
+    ],
+    "settled_route": { "resource": "/chain/token-security", "index": null, "found": false, "note": "not present in 0-14500; prior index 12780 was re-checked in full at 12600-13100 and returned zero sigrunner records, so the old position is vacated" },
+    "routes_located": [
+      { "index": 390, "resource": "/defi/yields", "lastUpdated": "2026-10-28T04:06:46.594Z", "l30DaysTotalCalls": 11, "l30DaysUniquePayers": 7 },
+      { "index": 712, "resource": "/crypto/prices", "lastUpdated": "2026-10-27T10:16:12.415Z" },
+      { "index": 1515, "resource": "/chain/wallet", "lastUpdated": "2026-10-25T13:18:30.417Z" },
+      { "index": 5989, "resource": "/chain/nonce", "lastUpdated": "2026-10-27T18:19:37.116Z" },
+      { "index": 5995, "resource": "/chain/total-supply", "lastUpdated": "2026-10-27T18:09:40.344Z" },
+      { "index": 6739, "resource": "/defi/fees-top", "lastUpdated": "2026-10-27T04:32:16.839Z" },
+      { "index": 8004, "resource": "/crypto/fear-greed", "lastUpdated": "2026-10-25T14:46:38.628Z" },
+      { "index": 8012, "resource": "/chain/is-contract", "lastUpdated": "2026-10-25T14:41:41.160Z" },
+      { "index": 8024, "resource": "/chain/storage-at", "lastUpdated": "2026-10-25T14:36:30.809Z" },
+      { "index": 8039, "resource": "/chain/allowance", "lastUpdated": "2026-10-25T14:22:49.684Z" },
+      { "index": 8046, "resource": "/ai/ask", "lastUpdated": "2026-10-25T13:58:46.168Z" }
+    ],
+    "routes_located_count": 11,
+    "routes_at_or_ahead_of_prior_settled_index": 11
+  },
+  "verdict": {
+    "record_write": "CONFIRMED - lastUpdated advanced to the settlement second 2026-10-28T06:02:47.625Z",
+    "quality_counters": "UNCHANGED - l30DaysTotalCalls 8, l30DaysUniquePayers 2, lastCalledAt 2026-10-20T17:03:32.666Z",
+    "async_index": "NOT COMPLETED - bazaar extension returned status=processing at settlement and lastCalledAt never advanced, so the index-side half of the settlement never landed",
+    "crawl_position_gain": "NOT DEMONSTRABLE for the settled route - it is absent from 0-14500 having previously sat at 12780",
+    "conclusion": "NOT RE-LISTED. The catalog accepted a record update; the search/index benefit did not follow."
+  },
+  "reproduce": [
+    "node scripts/capture_rediscovery_proof.js",
+    "python3 scripts/locate_in_catalog.py --coarse --step 200 --offset-start 0 --offset-end 90400",
+    "python3 scripts/head_scan_catalog.py <offset_start> <offset_end>"
+  ]
+}
