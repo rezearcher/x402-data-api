@@ -99,6 +99,12 @@ const SECONDARY = [
   "/security-assessment",
   "/scan/census",
   "/learn/mcp-tool-poisoning",
+  // Pages that previously emitted NO canonical at all now carry a brand-host
+  // self-canonical so they are index-eligible on the single canonical host.
+  "/terms",
+  "/scan/verify",
+  "/scan/badge-gen",
+  "/partners",
 ];
 
 for (const path of SECONDARY) {

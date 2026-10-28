@@ -597,6 +597,7 @@ app.get("/terms", (c) =>
   c.html(`<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Terms of Use — Grey Ridge x402 Data &amp; Security API</title>
+<link rel=canonical href="${CANONICAL_ORIGIN}/terms">
 <style>body{max-width:46rem;margin:0 auto;padding:2.5rem 1.2rem;font:16px/1.65 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1c1c1c;background:#fff}h1{font-size:1.7rem;margin:0 0 .3rem}h2{font-size:1.05rem;margin:1.9rem 0 .4rem}.upd{color:#666;font-size:.9rem;margin:0 0 2rem}footer{margin-top:2.5rem;padding-top:1rem;border-top:1px solid #ddd;color:#666;font-size:.87rem}a{color:#0b5}@media(prefers-color-scheme:dark){body{background:#0d1117;color:#e6e6e6}footer{border-color:#2a2a2a;color:#999}.upd{color:#999}}</style>
 </head><body>
 <h1>Terms of Use</h1>
@@ -11413,6 +11414,7 @@ app.get("/scan/verify", async (c) => {
     String(s ?? "").replace(/[<>&"']/g, (ch) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;" }[ch] as string));
   const html = `<!doctype html><html lang=en><meta charset=utf-8>
 <title>Claim your MCP server — ownership verification · Grey Ridge Signals</title>
+<link rel=canonical href="${CANONICAL_ORIGIN}/scan/verify">
 <meta name=viewport content="width=device-width,initial-scale=1">
 <meta name=description content="Prove you control your MCP server's domain with a one-time DNS TXT record, then claim a verified-owner security badge and continuous monitoring. Fully automated — no email, no human.">
 <style>
@@ -11517,6 +11519,7 @@ if(chk)chk.onclick=async function(){
 app.get("/scan/badge-gen", (c) => {
   const html = `<!doctype html><html lang=en><meta charset=utf-8>
 <title>MCP server security badge — Grey Ridge Signals</title>
+<link rel=canonical href="${CANONICAL_ORIGIN}/scan/badge-gen">
 <meta name=viewport content="width=device-width,initial-scale=1">
 <meta name=description content="A live README badge showing your MCP server is free of prompt-injection and tool-poisoning. Scanned by Grey Ridge Signals.">
 <style>
@@ -12058,6 +12061,7 @@ if(sub)sub.onclick=async function(){sub.disabled=true;var o=sub.textContent;sub.
 app.get("/partners", (c) => {
   const html = `<!doctype html><html lang=en><meta charset=utf-8>
 <title>Partner program — resell Grey Ridge safety verdicts | Grey Ridge Signals</title>
+<link rel=canonical href="${CANONICAL_ORIGIN}/partners">
 <meta name=viewport content="width=device-width,initial-scale=1">
 <meta name=description content="Embed Grey Ridge's token-safety and MCP-security verdicts in your wallet, trading bot, agent or marketplace. You set the retail price and keep the margin; we meter the backend on-chain. Free to start.">
 <meta property="og:title" content="Resell Grey Ridge safety verdicts — partner program">
