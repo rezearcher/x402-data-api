@@ -862,6 +862,7 @@ ${provisionMeta}
     space are Ethereum-only. We pair that with crypto/DeFi/prediction-market data and MCP security audits
     (tool-poisoning / prompt-injection scanning), all reachable over plain HTTP or as MCP tools.
   </p>
+  <p>Building an agent? The <a href="/for-agents">keyless data API for agents</a> lists every on-chain and market route with prices and free previews.</p>
 
   <h2>Endpoint groups</h2>
   <table>
@@ -888,6 +889,7 @@ ${provisionMeta}
     <li><a href="/mcp">/mcp</a></li>
     <li><a href="/miniapp">Base Token Gate &mdash; free GO/HOLD/BLOCK honeypot check (Farcaster Mini App)</a></li>
     <li><a href="https://t.me/GreyRidgeGateBot">Telegram bot &mdash; paste a Base token, get GO/HOLD/BLOCK in-chat (@GreyRidgeGateBot)</a></li>
+    <li><a href="/for-agents">Data API for agents &mdash; keyless x402 Base RPC, DeFi yields & crypto prices</a></li>
     <li><a href="/partners">Partner program &mdash; resell our verdicts</a></li>
   </ul>
 
