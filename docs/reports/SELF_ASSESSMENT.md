@@ -23,7 +23,7 @@ Headline: no high-severity exposure. Priority action is the **`sigrunner.com` em
 ## 2. Scope & methodology
 
 - **In scope:** the five production hostnames above and the public MCP endpoint (`/mcp`). Non-intrusive only.
-- **Method:** external observation — HTTP response-header inspection, TLS/certificate inspection (OpenSSL), DNS/email-authentication records (SPF/DMARC/DKIM), static analysis of advertised MCP tools for prompt-injection / tool-poisoning signatures (OWASP **LLM01/LLM08**), and unauthenticated probing of paid routes for authorization and information exposure.
+- **Method:** external observation — HTTP response-header inspection, TLS/certificate inspection (OpenSSL), DNS/email-authentication records (SPF/DMARC/DKIM), static analysis of advertised MCP tools for prompt-injection / tool-poisoning signatures (OWASP **LLM01/LLM08**) — including, as of this cycle, **wallet-secret parameter harvesting** (a declared input parameter for a raw private key / seed phrase / mnemonic, the wallet-drainer pattern) — and unauthenticated probing of paid routes for authorization and information exposure.
 - **Explicit limitations (what this is NOT):** not a runtime/dynamic penetration test, not source-code review, not an authenticated or infrastructure/network assessment, not a compliance certification. A "clear"/"pass" means no *known* issue was detected by these lenses, not a guarantee of security. Findings outside OWASP LLM01/LLM08 and the header/TLS/email/authz lenses are out of scope for this pass.
 - **Standards referenced:** OWASP LLM Top 10 (LLM01 Prompt Injection, LLM08 Excessive Agency), OWASP Secure Headers, NIST SP 800-115 (methodology), RFC 7489 (DMARC).
 
@@ -51,6 +51,7 @@ Headline: no high-severity exposure. Priority action is the **`sigrunner.com` em
 
 ### GR-2026-004 — MCP tool-poisoning exposure (Informational, pass) 
 - **Lens:** static LLM01/LLM08 analysis of advertised MCP tools (`/scan/mcp`). No hidden-instruction/override/exfiltration/shadowing/dangerous-capability signatures surfaced on our own advertised toolset this pass. Re-run each cycle as tools change.
+- **Lens extended (2026-10-28):** added a **wallet-secret-harvesting** check (critical) — a declared input parameter for a raw wallet secret (private key / seed phrase / mnemonic / recovery phrase) is the wallet-drainer pattern, since a hosted tool never legitimately needs the user's private key (a non-custodial signer signs locally and returns only a signature). Our own advertised tools are **read-only market/chain data routes** (inputs are token addresses, chain names, pool ids) and declare **no** wallet-secret parameters, so this lens passes by construction. Precision-guarded: generic `api_key`/`password`/`token` inputs are not flagged (authenticated tools legitimately accept them). Live-verified on both production surfaces: a crafted `private_key` input → verdict `block` (grade F); a clean `api_key`/`password` input → verdict `clear` (grade A).
 
 ### GR-2026-005 — Paid-route authorization & secret exposure (Pass)
 - **Evidence:** unpaid request to a paid route (`/scan/mcp`) correctly returns **HTTP 402** with no data leak; `/status` body contains no secret/token material. No IDOR observed on the probed routes.
