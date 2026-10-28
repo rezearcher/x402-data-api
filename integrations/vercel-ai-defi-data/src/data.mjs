@@ -740,3 +740,227 @@ export async function runTokenReport(payFetch, args = {}, { hasKey = true, previ
     return { error: msg, token: resolved.token, verdict: null, risk_score: null, reasons: [], paid: false, summary: `ERROR: ${msg}` };
   }
 }
+
+// --------------------------------------------------------------------------
+// /defi/yield-entry-verdict ($0.01) — the per-pool go/no-go that rides the
+// #1-demand /defi/yields lane. runYields finds WHERE the APY is; this answers
+// "should I actually enter THIS pool?" with SUSTAINABLE | DECAYING | OUTLIER |
+// AVOID + a 0-100 risk score + field-cited reasons (APY 1d/7d/30d trend,
+// DefiLlama stability forecast, IL, volatility sigma, outlier flag, TVL). The
+// natural upsell for any agent that already called runYields. The free preview
+// returns a SAMPLE verdict (the current top-TVL pool) — the verdict for the
+// caller's specific poolId is the paid route, so keyless degrades OPEN to the
+// sample + an honest "this is a sample, not your pool" note (never a fabricated
+// verdict for a pool we did not price). Matches the due-diligence layer a yield
+// agent would otherwise hand-roll off raw DefiLlama fields.
+
+/** Build the paid /defi/yield-entry-verdict URL. `pool` is the DefiLlama poolId from /defi/yields; optional `token` (0x, Base) adds a honeypot-check pointer. */
+export function buildYieldEntryVerdictUrl({ pool, token, base = DATA_BASE } = {}) {
+  const p = String(pool || "").trim();
+  if (!p) throw new Error("pool required — the 'pool' field (DefiLlama poolId) from /defi/yields");
+  const qs = new URLSearchParams({ pool: p });
+  if (token && ADDR_RE.test(String(token))) qs.set("token", String(token));
+  return `${base}/defi/yield-entry-verdict?${qs.toString()}`;
+}
+/** Build the FREE /defi/yield-entry-verdict/preview URL (sample verdict for the current top-TVL pool; the pool arg is ignored upstream). */
+export function buildYieldEntryVerdictPreviewUrl({ base = DATA_BASE } = {}) {
+  return `${base}/defi/yield-entry-verdict/preview`;
+}
+
+/** One-line summary of a yield-entry verdict (verdict + risk + APY + top reason). */
+export function summarizeYieldEntryVerdict(out) {
+  if (!out || typeof out !== "object") return "no yield-entry verdict";
+  if (out.verdict == null) return out.note ? `yield-entry verdict unavailable — ${out.note}` : "no yield-entry verdict";
+  const label = out.symbol || out.project || "pool";
+  const bits = [`${label}: ${out.verdict}`];
+  if (typeof out.risk_score === "number") bits.push(`risk ${out.risk_score}/100`);
+  if (typeof out.apy === "number") bits.push(`APY ${out.apy.toFixed(2)}%`);
+  const reasons = Array.isArray(out.reasons)
+    ? out.reasons
+        .slice(0, 2)
+        .map((r) => (typeof r === "string" ? r : r && (r.detail || r.code)))
+        .filter(Boolean)
+    : [];
+  if (reasons.length) bits.push(reasons.join("; "));
+  if (out.is_sample) bits.push("(SAMPLE — pay for your pool)");
+  return bits.join(" · ");
+}
+
+/** Shape a yield-entry verdict body into a compact, model-ready object. */
+function shapeYieldEntryVerdict(out, { paid, isSample }) {
+  const v = out && typeof out === "object" ? out : {};
+  const result = {
+    pool: v.pool,
+    project: v.project,
+    chain: v.chain,
+    symbol: v.symbol,
+    verdict: v.verdict ?? null,
+    risk_score: typeof v.risk_score === "number" ? v.risk_score : null,
+    reasons: Array.isArray(v.reasons) ? v.reasons.slice(0, 5) : [],
+    apy: typeof v.apy === "number" ? v.apy : null,
+    apyPct7D: v.apyPct7D ?? null,
+    apyPct30D: v.apyPct30D ?? null,
+    predicted: v.predicted ?? null,
+    tvlUsd: v.tvlUsd ?? null,
+    token_safety_hint: v.token_safety_hint,
+    is_sample: !!isSample,
+    paid,
+  };
+  result.summary = summarizeYieldEntryVerdict(result);
+  return result;
+}
+
+/**
+ * Run /defi/yield-entry-verdict — the per-pool go/no-go. `pool` is required (the
+ * DefiLlama poolId from runYields). A keyless/unfunded install reads the free
+ * preview, which returns the current TOP-TVL pool's verdict as a SAMPLE (not the
+ * caller's pool); this degrades OPEN with `is_sample:true` + an honest note and
+ * the paid pointer rather than fabricating a verdict for an un-priced pool.
+ */
+export async function runYieldEntryVerdict(payFetch, args = {}, { hasKey = true, previewFetch } = {}) {
+  const pool = String(args.pool || "").trim();
+  if (!pool) {
+    const msg = "pool required — pass the 'pool' field (DefiLlama poolId) returned by runYields / GET /defi/yields.";
+    return { error: msg, pool: undefined, verdict: null, risk_score: null, reasons: [], apy: null, is_sample: false, paid: false, summary: `ERROR: ${msg}` };
+  }
+  let paidUrl;
+  try {
+    paidUrl = buildYieldEntryVerdictUrl({ ...args, pool });
+  } catch (err) {
+    const msg = `defi/yield-entry-verdict unavailable: ${err?.message || err}`;
+    return { error: msg, pool, verdict: null, risk_score: null, reasons: [], apy: null, is_sample: false, paid: false, summary: `ERROR: ${msg}` };
+  }
+  const previewUrl = buildYieldEntryVerdictPreviewUrl(args);
+  const takePreview = async (reason) => {
+    const out = await plainGet(previewFetch, previewUrl);
+    const sample = (out && out.preview) || {};
+    const shaped = shapeYieldEntryVerdict(sample, { paid: false, isSample: true });
+    shaped.note = `Free preview is the current top-TVL pool verdict — a SAMPLE, not pool ${pool}. The go/no-go for YOUR pool is the paid route ($0.01).`;
+    shaped.activation = activationBlock(reason, { paidUrl, priceUsdc: "0.01" });
+    shaped.guard_reasons = [fundOnrampHint()];
+    return shaped;
+  };
+  try {
+    if (hasKey) {
+      const res = await payFetch(paidUrl);
+      if (res.ok || res.status === 200) {
+        const out = await res.json();
+        return shapeYieldEntryVerdict(out, { paid: true, isSample: false });
+      }
+      const reason = res.status === 402 ? "wallet not funded (paid /defi/yield-entry-verdict returned 402)" : `paid /defi/yield-entry-verdict returned HTTP ${res.status}`;
+      return await takePreview(reason);
+    }
+    return await takePreview("no PRIVATE_KEY configured — free preview returns a SAMPLE verdict (top-TVL pool); the per-pool verdict is paid ($0.01)");
+  } catch (err) {
+    const msg = `defi/yield-entry-verdict unavailable: ${err?.message || err}`;
+    return { error: msg, pool, verdict: null, risk_score: null, reasons: [], apy: null, is_sample: false, paid: false, summary: `ERROR: ${msg}` };
+  }
+}
+
+// --------------------------------------------------------------------------
+// /chain/simulate ($0.005) — prospective-transaction dry-run via eth_simulateV1.
+// Answers "will THIS Base tx revert, how much gas, what tokens move" BEFORE the
+// agent spends gas sending it. The pre-trade check for any swap/approve/transfer
+// and the natural companion to checkToken (/chain/token-report). The free
+// preview is a benign demo dry-run (synthetic addresses) that shows the output
+// shape; the dry-run of the caller's actual tx is the paid route, so keyless
+// degrades OPEN to the demo sample + an honest "this is a demo, not your tx"
+// note rather than fabricating a verdict for a tx we did not simulate.
+
+/** Build the paid /chain/simulate URL. `from`+`to` are required 0x Base addresses; optional `data` (0x calldata) + `value` (wei, decimal or 0x). Throws on a malformed address so a bad call never silently costs a payment. */
+export function buildSimulateUrl({ from, to, data, value, base = DATA_BASE } = {}) {
+  const f = String(from || "").trim();
+  const t = String(to || "").trim();
+  if (!ADDR_RE.test(f) || !ADDR_RE.test(t)) throw new Error("from and to are required 0x Base addresses");
+  const qs = new URLSearchParams({ from: f, to: t });
+  const d = data ? String(data).trim() : "";
+  if (d) qs.set("data", d);
+  const v = value !== undefined && value !== null && String(value).trim() !== "" ? String(value).trim() : "";
+  if (v) qs.set("value", v);
+  return `${base}/chain/simulate?${qs.toString()}`;
+}
+/** Build the FREE /chain/simulate/preview URL (benign demo dry-run; caller args are ignored upstream). */
+export function buildSimulatePreviewUrl({ base = DATA_BASE } = {}) {
+  return `${base}/chain/simulate/preview`;
+}
+
+/** One-line summary of a simulation (revert verdict + gas + token-move count). */
+export function summarizeSimulation(out) {
+  if (!out || typeof out !== "object") return "no simulation";
+  if (out.will_revert == null) return out.note ? `simulation unavailable — ${out.note}` : "simulation unavailable";
+  const bits = [out.will_revert ? "WILL REVERT" : "will NOT revert"];
+  if (out.will_revert && out.revert_reason) bits.push(String(out.revert_reason));
+  if (out.gas_used != null) bits.push(`gas ${out.gas_used}`);
+  const moves = Array.isArray(out.asset_changes) ? out.asset_changes.length : 0;
+  if (moves) bits.push(`${moves} token move${moves === 1 ? "" : "s"}`);
+  if (out.is_sample) bits.push("(DEMO — pay for your tx)");
+  return bits.join(" · ");
+}
+
+/** Shape a /chain/simulate body into a compact, model-ready object. */
+function shapeSimulation(out, { paid, isSample }) {
+  const v = out && typeof out === "object" ? out : {};
+  const result = {
+    from: v.from,
+    to: v.to,
+    value: v.value,
+    will_revert: typeof v.will_revert === "boolean" ? v.will_revert : v.will_revert ?? null,
+    revert_reason: v.revert_reason ?? null,
+    gas_used: v.gas_used ?? null,
+    asset_changes: Array.isArray(v.asset_changes) ? v.asset_changes : [],
+    raw_status: v.raw_status ?? null,
+    is_sample: !!isSample,
+    paid,
+  };
+  result.summary = summarizeSimulation(result);
+  return result;
+}
+
+/**
+ * Run /chain/simulate — prospective-tx dry-run. `from`+`to` are required 0x Base
+ * addresses; optional `data` (0x calldata) and `value` (wei). A keyless/unfunded
+ * install reads the free preview, which is a benign DEMO dry-run (synthetic
+ * addresses, not the caller's tx); this degrades OPEN with `is_sample:true` + an
+ * honest note and the paid pointer rather than fabricating a verdict for a tx we
+ * did not simulate. Never throws into the agent runtime.
+ */
+export async function runSimulate(payFetch, args = {}, { hasKey = true, previewFetch } = {}) {
+  const from = String(args.from || "").trim();
+  const to = String(args.to || "").trim();
+  if (!ADDR_RE.test(from) || !ADDR_RE.test(to)) {
+    const msg = "from and to are required 0x Base addresses — pass the prospective tx's sender and target.";
+    return { error: msg, from: args.from, to: args.to, will_revert: null, gas_used: null, asset_changes: [], is_sample: false, paid: false, summary: `ERROR: ${msg}` };
+  }
+  let paidUrl;
+  try {
+    paidUrl = buildSimulateUrl({ ...args, from, to });
+  } catch (err) {
+    const msg = `chain/simulate unavailable: ${err?.message || err}`;
+    return { error: msg, from, to, will_revert: null, gas_used: null, asset_changes: [], is_sample: false, paid: false, summary: `ERROR: ${msg}` };
+  }
+  const previewUrl = buildSimulatePreviewUrl(args);
+  const takePreview = async (reason) => {
+    const out = await plainGet(previewFetch, previewUrl);
+    const sample = (out && out.preview) || {};
+    const shaped = shapeSimulation(sample, { paid: false, isSample: true });
+    shaped.note = "Free preview is a benign demo dry-run (synthetic addresses) — not your tx. The dry-run of YOUR tx is the paid route ($0.005).";
+    shaped.activation = activationBlock(reason, { paidUrl, priceUsdc: "0.005" });
+    shaped.guard_reasons = [fundOnrampHint()];
+    return shaped;
+  };
+  try {
+    if (hasKey) {
+      const res = await payFetch(paidUrl);
+      if (res.ok || res.status === 200) {
+        const out = await res.json();
+        return shapeSimulation(out, { paid: true, isSample: false });
+      }
+      const reason = res.status === 402 ? "wallet not funded (paid /chain/simulate returned 402)" : `paid /chain/simulate returned HTTP ${res.status}`;
+      return await takePreview(reason);
+    }
+    return await takePreview("no PRIVATE_KEY configured — free preview returns a demo dry-run; YOUR tx dry-run is paid ($0.005)");
+  } catch (err) {
+    const msg = `chain/simulate unavailable: ${err?.message || err}`;
+    return { error: msg, from, to, will_revert: null, gas_used: null, asset_changes: [], is_sample: false, paid: false, summary: `ERROR: ${msg}` };
+  }
+}

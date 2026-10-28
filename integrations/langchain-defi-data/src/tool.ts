@@ -13,6 +13,8 @@ import {
   runFunding,
   runMarketBrief,
   runTokenReport,
+  runYieldEntryVerdict,
+  runSimulate,
   BASE_USDC,
   DATA_BASE,
   type YieldsResult,
@@ -24,6 +26,8 @@ import {
   type FundingResult,
   type MarketBriefResult,
   type TokenReportResult,
+  type YieldEntryVerdictResult,
+  type SimulationResult,
 } from "./data.mjs";
 
 function envKey(): string | undefined {
@@ -323,6 +327,73 @@ export function createCheckToken(opts: DataToolOptions = {}) {
   );
 }
 
+/**
+ * LangChain tool: per-pool DeFi yield-entry go/no-go verdict via Grey Ridge
+ * `/defi/yield-entry-verdict` ($0.01 USDC/call, paid inline with x402 — no API
+ * key). After `defi_yields` finds a high-APY pool, pass that pool's DefiLlama
+ * `pool` id to get SUSTAINABLE | DECAYING | OUTLIER | AVOID + a 0-100 risk_score
+ * + field-cited reasons. The free preview returns a SAMPLE verdict (top-TVL
+ * pool), so a keyless install degrades OPEN with is_sample:true — never a
+ * fabricated verdict for the caller's own pool.
+ */
+export function createYieldEntryVerdict(opts: DataToolOptions = {}) {
+  const { base, payFetch, hasKey } = resolve(opts);
+  return tool(
+    async ({ pool, token }: { pool: string; token?: string }): Promise<[string, YieldEntryVerdictResult]> => {
+      const out = await runYieldEntryVerdict(payFetch, { pool, token, base }, { hasKey });
+      return [JSON.stringify(out), out];
+    },
+    {
+      name: "yield_entry_verdict",
+      description:
+        "Per-pool DeFi yield-entry go/no-go verdict via Grey Ridge /defi/yield-entry-verdict ($0.01 USDC/call, paid inline with x402 — no API key). Pass the DefiLlama pool id from defi_yields/GET /defi/yields to get SUSTAINABLE/DECAYING/OUTLIER/AVOID + a 0-100 risk_score + field-cited reasons from the pool's APY trend (1d/7d/30d), stability forecast, impermanent loss, volatility, outlier flag and TVL. Call after defi_yields finds a high-APY pool to decide whether to actually enter THAT pool before funding it.",
+      schema: z.object({
+        pool: z
+          .string()
+          .describe("DefiLlama poolId — the 'pool' field returned by defi_yields / GET /defi/yields."),
+        token: z
+          .string()
+          .optional()
+          .describe("Optional underlying token (0x, Base) — adds a honeypot-check pointer for the pool's asset."),
+      }),
+      responseFormat: "content_and_artifact",
+    }
+  );
+}
+
+/**
+ * LangChain tool: prospective-transaction dry-run via Grey Ridge
+ * `/chain/simulate` ($0.005 USDC/call, paid inline with x402 — no API key).
+ * Answers "will THIS Base tx revert, how much gas, what tokens move" BEFORE the
+ * agent spends gas sending it, via eth_simulateV1. The free preview is a benign
+ * demo dry-run, so a keyless install degrades OPEN with is_sample:true — never a
+ * fabricated result for the caller's own tx.
+ */
+export function createSimulateTx(opts: DataToolOptions = {}) {
+  const { base, payFetch, hasKey } = resolve(opts);
+  return tool(
+    async ({ from, to, data, value }: { from: string; to: string; data?: string; value?: string }): Promise<[string, SimulationResult]> => {
+      const out = await runSimulate(payFetch, { from, to, data, value, base }, { hasKey });
+      return [JSON.stringify(out), out];
+    },
+    {
+      name: "simulate_tx",
+      description:
+        "Prospective Base transaction dry-run via Grey Ridge /chain/simulate ($0.005 USDC/call, paid inline with x402 — no API key). Pass from, to and optional data (0x calldata) + value (wei) to get will_revert + revert_reason + gas_used + token asset_changes via eth_simulateV1 BEFORE the agent spends gas sending it. Tenderly/Alchemy-class output, keyless and Base-native. Call before any swap/approve/transfer, or alongside check_token, to avoid a reverting or malicious tx.",
+      schema: z.object({
+        from: z.string().describe("Sender 0x Base address (40 hex chars) — the wallet that would send the tx."),
+        to: z.string().describe("Target contract or address (0x, Base) the tx calls."),
+        data: z.string().optional().describe("Optional 0x-prefixed calldata (omit for a plain native transfer)."),
+        value: z
+          .string()
+          .optional()
+          .describe("Optional wei to send, as a decimal or 0x-hex string (omit or '0' for none)."),
+      }),
+      responseFormat: "content_and_artifact",
+    }
+  );
+}
+
 /** Zero-config tool instances: read `PRIVATE_KEY` (agent wallet) + optional `X402_DATA_BASE_URL` from env. */
 export const defiYields = createDefiYields({ privateKey: envKey(), base: envBase() });
 export const cryptoPrices = createCryptoPrices({ privateKey: envKey(), base: envBase() });
@@ -333,8 +404,10 @@ export const baseTokenBalance = createBaseTokenBalance({ privateKey: envKey(), b
 export const cryptoFunding = createCryptoFunding({ privateKey: envKey(), base: envBase() });
 export const marketBrief = createMarketBrief({ privateKey: envKey(), base: envBase() });
 export const checkToken = createCheckToken({ privateKey: envKey(), base: envBase() });
+export const yieldEntryVerdict = createYieldEntryVerdict({ privateKey: envKey(), base: envBase() });
+export const simulateTx = createSimulateTx({ privateKey: envKey(), base: envBase() });
 
-/** All nine data tools as a ready-to-spread array: `tools: [...defiDataTools]`. */
+/** All eleven data tools as a ready-to-spread array: `tools: [...defiDataTools]`. */
 export const defiDataTools = [
   defiYields,
   cryptoPrices,
@@ -345,4 +418,6 @@ export const defiDataTools = [
   cryptoFunding,
   marketBrief,
   checkToken,
+  yieldEntryVerdict,
+  simulateTx,
 ];

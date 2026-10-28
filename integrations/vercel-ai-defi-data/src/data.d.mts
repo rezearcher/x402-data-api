@@ -321,3 +321,87 @@ export declare function buildTokenReportUrl(args?: TokenReportArgs): string;
 export declare function buildTokenReportPreviewUrl(args?: TokenReportArgs): string;
 export declare function summarizeTokenReport(out: Record<string, unknown>): string;
 export declare function runTokenReport(payFetch: PayFetch, args?: TokenReportArgs, opts?: RunOpts): Promise<TokenReportResult>;
+
+// --- Per-pool yield-entry verdict ($0.01) — the go/no-go on the /defi/yields lane ---
+
+export interface YieldEntryVerdictArgs {
+  pool: string;
+  token?: string;
+  base?: string;
+}
+
+export interface VerdictReason {
+  code?: string;
+  detail?: string;
+  field?: string;
+}
+
+export interface YieldEntryVerdictResult {
+  pool?: string;
+  project?: string;
+  chain?: string;
+  symbol?: string;
+  verdict: "SUSTAINABLE" | "DECAYING" | "OUTLIER" | "AVOID" | null | string;
+  risk_score: number | null;
+  reasons: Array<VerdictReason | string>;
+  apy: number | null;
+  apyPct7D?: number | null;
+  apyPct30D?: number | null;
+  predicted?: { class?: string; probability?: number } | null;
+  tvlUsd?: number | null;
+  token_safety_hint?: { token: string; note: string; resource: string };
+  is_sample: boolean;
+  paid: boolean;
+  summary: string;
+  note?: string;
+  activation?: Activation;
+  guard_reasons?: string[];
+  error?: string;
+}
+
+export declare function buildYieldEntryVerdictUrl(args?: YieldEntryVerdictArgs): string;
+export declare function buildYieldEntryVerdictPreviewUrl(args?: { base?: string }): string;
+export declare function summarizeYieldEntryVerdict(out: Record<string, unknown>): string;
+export declare function runYieldEntryVerdict(payFetch: PayFetch, args?: YieldEntryVerdictArgs, opts?: RunOpts): Promise<YieldEntryVerdictResult>;
+
+// --- Prospective-tx dry-run ($0.005) — will this Base tx revert? ---
+
+export interface SimulateArgs {
+  from: string;
+  to: string;
+  data?: string;
+  value?: string | number;
+  base?: string;
+}
+
+export interface AssetChange {
+  token?: string;
+  symbol?: string;
+  from?: string;
+  to?: string;
+  value?: string;
+  [k: string]: unknown;
+}
+
+export interface SimulationResult {
+  from?: string;
+  to?: string;
+  value?: string;
+  will_revert: boolean | null;
+  revert_reason: string | null;
+  gas_used: number | string | null;
+  asset_changes: AssetChange[];
+  raw_status: string | null;
+  is_sample: boolean;
+  paid: boolean;
+  summary: string;
+  note?: string;
+  activation?: Activation;
+  guard_reasons?: string[];
+  error?: string;
+}
+
+export declare function buildSimulateUrl(args?: SimulateArgs): string;
+export declare function buildSimulatePreviewUrl(args?: { base?: string }): string;
+export declare function summarizeSimulation(out: Record<string, unknown>): string;
+export declare function runSimulate(payFetch: PayFetch, args?: SimulateArgs, opts?: RunOpts): Promise<SimulationResult>;

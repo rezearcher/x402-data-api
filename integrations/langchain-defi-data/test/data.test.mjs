@@ -40,6 +40,14 @@ import {
   buildTokenReportPreviewUrl,
   summarizeTokenReport,
   runTokenReport,
+  buildYieldEntryVerdictUrl,
+  buildYieldEntryVerdictPreviewUrl,
+  summarizeYieldEntryVerdict,
+  runYieldEntryVerdict,
+  buildSimulateUrl,
+  buildSimulatePreviewUrl,
+  summarizeSimulation,
+  runSimulate,
 } from "../src/data.mjs";
 
 const ADDR = "0x4200000000000000000000000000000000000006";
@@ -500,5 +508,119 @@ test("runTokenReport true outage returns {error}, never throws", async () => {
   const out = await runTokenReport(boom, { token: ADDR }, { hasKey: false, previewFetch: boom });
   assert.match(out.error, /rpc down/);
   assert.equal(out.verdict, null);
+  assert.match(out.summary, /^ERROR:/);
+});
+
+// ---- /defi/yield-entry-verdict ($0.01) — the per-pool go/no-go ----
+
+const PAID_VERDICT = {
+  pool: "747c1d2a-c668-4682-b9f9-296708a3dd90",
+  project: "aave-v3",
+  chain: "Base",
+  symbol: "USDC",
+  verdict: "SUSTAINABLE",
+  risk_score: 12,
+  reasons: [{ code: "stable_sustainable", detail: "APY trend intact", field: "predicted_class" }],
+  apy: 5.42,
+  apyPct7D: 0.01,
+  apyPct30D: -0.03,
+  predicted: { class: "Stable/Up", probability: 70 },
+  tvlUsd: 123456789,
+};
+const SAMPLE_VERDICT = { preview: { project: "lido", symbol: "STETH", verdict: "SUSTAINABLE", risk_score: 0, reasons: [], apy: 2.25 } };
+
+test("buildYieldEntryVerdictUrl requires pool + applies optional token", () => {
+  assert.throws(() => buildYieldEntryVerdictUrl({}), /pool required/);
+  assert.equal(buildYieldEntryVerdictUrl({ pool: "abc" }), `${DATA_BASE}/defi/yield-entry-verdict?pool=abc`);
+  assert.match(buildYieldEntryVerdictUrl({ pool: "abc", token: ADDR }), /token=0x4200/);
+});
+
+test("summarizeYieldEntryVerdict renders label + verdict + risk + APY", () => {
+  const s = summarizeYieldEntryVerdict(PAID_VERDICT);
+  assert.match(s, /USDC: SUSTAINABLE/);
+  assert.match(s, /risk 12\/100/);
+  assert.match(s, /APY 5\.42%/);
+});
+
+test("runYieldEntryVerdict paid returns full verdict, paid:true, not a sample", async () => {
+  const out = await runYieldEntryVerdict(payStub(jsonResponse(PAID_VERDICT)), { pool: "747c1d2a" }, { hasKey: true });
+  assert.equal(out.paid, true);
+  assert.equal(out.is_sample, false);
+  assert.equal(out.verdict, "SUSTAINABLE");
+  assert.equal(out.risk_score, 12);
+  assert.equal(out.apy, 5.42);
+});
+
+test("runYieldEntryVerdict keyless reads the preview as a SAMPLE (is_sample:true) + activation", async () => {
+  const previewFetch = async () => jsonResponse(SAMPLE_VERDICT);
+  const out = await runYieldEntryVerdict(payStub(jsonResponse(PAID_VERDICT)), { pool: "my-pool-id" }, { hasKey: false, previewFetch });
+  assert.equal(out.paid, false);
+  assert.equal(out.is_sample, true);
+  assert.equal(out.verdict, "SUSTAINABLE");
+  assert.match(out.note, /SAMPLE, not pool my-pool-id/);
+  assert.equal(out.activation.price_usdc, "0.01");
+  assert.match(out.summary, /SAMPLE/);
+});
+
+test("runYieldEntryVerdict degrades open on a 402 to the sample verdict", async () => {
+  const previewFetch = async () => jsonResponse(SAMPLE_VERDICT);
+  const out = await runYieldEntryVerdict(payStub(jsonResponse(null, 402)), { pool: "x" }, { hasKey: true, previewFetch });
+  assert.equal(out.paid, false);
+  assert.equal(out.is_sample, true);
+  assert.match(out.activation.reason, /402/);
+});
+
+test("runYieldEntryVerdict without pool surfaces {error}, never throws", async () => {
+  const out = await runYieldEntryVerdict(payStub(jsonResponse({})), {}, { hasKey: true });
+  assert.match(out.error, /pool required/);
+  assert.equal(out.verdict, null);
+  assert.match(out.summary, /^ERROR:/);
+});
+
+// ---- /chain/simulate ($0.005) — prospective-tx dry-run ----
+
+const PAID_SIM = { from: ADDR, to: HOLDER, value: "0", will_revert: false, revert_reason: null, gas_used: 48210, asset_changes: [{ token: "USDC", value: "1000000" }], raw_status: "0x1" };
+const SAMPLE_SIM = { preview: { from: "0x1111111111111111111111111111111111111111", to: "0x2222222222222222222222222222222222222222", value: "0", will_revert: false, gas_used: 21000, asset_changes: [], raw_status: "0x1" } };
+
+test("buildSimulateUrl requires from+to, applies data+value", () => {
+  assert.throws(() => buildSimulateUrl({ from: ADDR }), /from and to are required/);
+  const u = buildSimulateUrl({ from: ADDR, to: HOLDER, data: "0xabcd", value: "100" });
+  assert.match(u, /from=0x4200/);
+  assert.match(u, /to=0x5765/i);
+  assert.match(u, /data=0xabcd/);
+  assert.match(u, /value=100/);
+});
+
+test("summarizeSimulation renders revert verdict + gas + token-move count", () => {
+  assert.match(summarizeSimulation(PAID_SIM), /will NOT revert/);
+  assert.match(summarizeSimulation(PAID_SIM), /gas 48210/);
+  assert.match(summarizeSimulation(PAID_SIM), /1 token move/);
+  assert.match(summarizeSimulation({ will_revert: true, revert_reason: "ERC20: insufficient", gas_used: 30000, asset_changes: [] }), /WILL REVERT · ERC20/);
+});
+
+test("runSimulate paid returns the dry-run, paid:true, not a sample", async () => {
+  const out = await runSimulate(payStub(jsonResponse(PAID_SIM)), { from: ADDR, to: HOLDER }, { hasKey: true });
+  assert.equal(out.paid, true);
+  assert.equal(out.is_sample, false);
+  assert.equal(out.will_revert, false);
+  assert.equal(out.gas_used, 48210);
+  assert.equal(out.asset_changes.length, 1);
+});
+
+test("runSimulate keyless reads the preview as a DEMO sample (is_sample:true) + activation", async () => {
+  const previewFetch = async () => jsonResponse(SAMPLE_SIM);
+  const out = await runSimulate(payStub(jsonResponse(PAID_SIM)), { from: ADDR, to: HOLDER }, { hasKey: false, previewFetch });
+  assert.equal(out.paid, false);
+  assert.equal(out.is_sample, true);
+  assert.equal(out.will_revert, false);
+  assert.match(out.note, /demo dry-run/);
+  assert.equal(out.activation.price_usdc, "0.005");
+  assert.match(out.summary, /DEMO/);
+});
+
+test("runSimulate bad address surfaces {error}, never throws", async () => {
+  const out = await runSimulate(payStub(jsonResponse({})), { from: "0xnope", to: HOLDER }, { hasKey: true });
+  assert.match(out.error, /from and to are required/);
+  assert.equal(out.will_revert, null);
   assert.match(out.summary, /^ERROR:/);
 });
