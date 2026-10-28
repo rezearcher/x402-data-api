@@ -12908,14 +12908,35 @@ ${bodyInner}
   let host = target;
   try { host = new URL(target).host; } catch { /* keep raw */ }
   const badgeImg = `https://img.shields.io/endpoint?url=${encodeURIComponent(ORIGIN + "/scan/mcp/badge?url=" + encodeURIComponent(target))}&style=flat-square`;
+  const dirImg = `https://img.shields.io/endpoint?url=${encodeURIComponent(ORIGIN + "/scan/verify/badge?kind=directory&url=" + encodeURIComponent(target))}&style=flat-square`;
+  const rankImg = `https://img.shields.io/endpoint?url=${encodeURIComponent(ORIGIN + "/scan/leaderboard/rank-badge?url=" + encodeURIComponent(target))}&style=flat-square`;
   const reportUrl = `${ORIGIN}/scan/report?url=${encodeURIComponent(target)}`;
   const mdSnippet = `[![MCP security](${badgeImg})](${reportUrl})`;
-  const badgeBlock = `<h2>Embed this badge</h2>
+  const dirMd = `[![Claude Directory readiness](${dirImg})](${reportUrl})`;
+  const rankMd = `[![MCP Security Rank](${rankImg})](${LEADERBOARD_HUB})`;
+  // Three copyable trust badges — the same set the badge generator serves, mirrored
+  // onto the report so an author who lands here (from search / the directory) can grab
+  // all three without a second hop. Each embed is a dofollow backlink to this report /
+  // the ranked hub. Shields endpoints are already live; this is static markup rendered
+  // server-side (target is known here), so no client fetch and no backend risk.
+  const badgeBlock = `<h2>Embed your trust badges</h2>
 <div class=card>
+  <p class=muted style="margin:0 0 .5rem">Three badges your users can click through to this verified report. Each re-renders live. Paste any into your README.</p>
+  <h3 style="font-size:.95rem;margin:1rem 0 .3rem">Security verdict</h3>
   <div class=badge-row><img alt="MCP scan verdict" src="${esc(badgeImg)}"></div>
-  <p class=muted style="margin:.6rem 0 .3rem">Re-scans every six hours and links back to this report. Paste into your README:</p>
-  <pre id=md>${esc(mdSnippet)}</pre>
-  <button class=ghost id=copy style="margin-top:.6rem">Copy markdown</button>
+  <p class=muted style="margin:.3rem 0 .2rem">Prompt-injection &amp; tool-poisoning scan, re-checked every 6h. A <code>clear</code> result means no static red flags were found — not a guarantee of safety.</p>
+  <pre id=md_sec>${esc(mdSnippet)}</pre>
+  <button class=ghost data-copy=md_sec style="margin-top:.4rem">Copy</button>
+  <h3 style="font-size:.95rem;margin:1.4rem 0 .3rem">Claude Directory readiness</h3>
+  <div class=badge-row><img alt="Claude Directory readiness" src="${esc(dirImg)}"></div>
+  <p class=muted style="margin:.3rem 0 .2rem">Shows your server meets the connector-directory submission criteria.</p>
+  <pre id=md_dir>${esc(dirMd)}</pre>
+  <button class=ghost data-copy=md_dir style="margin-top:.4rem">Copy</button>
+  <h3 style="font-size:.95rem;margin:1.4rem 0 .3rem">MCP security rank</h3>
+  <div class=badge-row><img alt="MCP security rank" src="${esc(rankImg)}"></div>
+  <p class=muted style="margin:.3rem 0 .2rem">Your public rank among scanned MCP servers (once your report is published on the <a href="${esc(LEADERBOARD_HUB)}">leaderboard</a>).</p>
+  <pre id=md_rank>${esc(rankMd)}</pre>
+  <button class=ghost data-copy=md_rank style="margin-top:.4rem">Copy</button>
 </div>`;
   const ctaBlock = `<h2>Keep it verified on every change</h2>
 <div class=card>
@@ -12926,7 +12947,7 @@ ${bodyInner}
   </div>
 </div>`;
   const scriptBlock = `<script>
-var c=document.getElementById("copy");if(c)c.onclick=function(){var t=document.getElementById("md").textContent;navigator.clipboard&&navigator.clipboard.writeText(t);this.textContent="Copied";var b=this;setTimeout(function(){b.textContent="Copy markdown";},1400);};
+Array.prototype.forEach.call(document.querySelectorAll("button.ghost[data-copy]"),function(btn){btn.onclick=function(){var tgt=document.getElementById(btn.getAttribute("data-copy"));if(!tgt)return;navigator.clipboard&&navigator.clipboard.writeText(tgt.textContent);btn.textContent="Copied";setTimeout(function(){btn.textContent="Copy";},1400);};});
 var s=document.getElementById("sub");if(s)s.onclick=async function(){s.disabled=true;var o=s.textContent;s.textContent="Opening checkout…";try{var r=await fetch("/stripe/create-checkout-session",{method:"POST"});var j=await r.json();if(j.url){window.location.href=j.url;return;}alert("Could not start checkout: "+(j.error||"unknown"));}catch(e){alert("Could not start checkout: "+e);}s.disabled=false;s.textContent=o;};
 </script>`;
 
