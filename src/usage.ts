@@ -349,6 +349,91 @@ export async function getFunnelMetrics(
 }
 
 // ---------------------------------------------------------------------------
+// Line-B embeddable-badge impression counter — the distribution kill-check.
+//
+// The last several cycles shipped copyable trust badges (security verdict,
+// Directory readiness, leaderboard rank, the leaderboard widget) on the theory
+// that authors embed them and each embed is a dofollow backlink + a billboard
+// pointing at the paid report. That theory was UNMEASURED: we had no idea
+// whether a single badge was ever rendered in the wild. These counters close
+// that loop — every time shields.io (or a browser) fetches one of our badge
+// endpoints to render it, we bump a bounded per-kind counter. A non-zero count
+// is ground-truth that embeds exist and are live; a flat zero is the skeptic's
+// kill signal that the whole badge-backlink lane produces no distribution and
+// should be abandoned rather than compounded. Connected-intelligence: the badge
+// output becomes an input that tells the loop whether to keep investing in it.
+//
+// Same security contract as the funnel beacons: the kind string becomes a DO
+// storage key, so it is validated against a FIXED enum before any write (no
+// unbounded key-space / cost DoS); an unlisted kind degrades open to
+// "not counted". Fire-and-forget, never throws, never blocks badge render.
+// Shields caches our endpoint (cacheSeconds/max-age ~1-6h), so a count is a
+// cache-miss render ≈ distinct embed-page load per cache window, a conservative
+// (under-counting) proxy for raw impressions — a real floor, never inflated.
+// ---------------------------------------------------------------------------
+
+export const BADGE_KEY_PREFIX = "badge:";
+
+// One kind per embeddable surface authors can paste. Keep in sync with the
+// handlers in src/index.ts (/scan/mcp/badge, /scan/verify/badge?kind=…,
+// /scan/leaderboard/rank-badge, /scan/leaderboard.svg).
+export const BADGE_KINDS = [
+  "security",
+  "directory",
+  "monitored",
+  "ownership",
+  "rank",
+  "leaderboard",
+] as const;
+export type BadgeKind = (typeof BADGE_KINDS)[number];
+
+export function isBadgeKind(v: unknown): v is BadgeKind {
+  return typeof v === "string" && (BADGE_KINDS as readonly string[]).includes(v);
+}
+
+/**
+ * Record one badge impression (a shields/browser render of an embedded badge),
+ * fire-and-forget. Enum-validates the kind FIRST so no unchecked caller can
+ * ever write an arbitrary key. Never throws.
+ */
+export async function trackBadgeImpression(
+  kind: string,
+  counter: UsageCounterLike | undefined,
+): Promise<void> {
+  if (!isBadgeKind(kind)) return;
+  if (!counter) return;
+  try {
+    await counter.apply([{ kind: "increment", key: `${BADGE_KEY_PREFIX}${kind}` }]);
+  } catch (error) {
+    console.error("Error tracking badge impression:", error);
+  }
+}
+
+export type BadgeImpressionMetrics = Record<BadgeKind, number> & { total: number };
+
+/** Aggregate the per-kind badge-impression counters plus a grand total. */
+export async function getBadgeImpressionMetrics(
+  counter: UsageCounterLike | undefined,
+): Promise<BadgeImpressionMetrics> {
+  const out = Object.fromEntries(BADGE_KINDS.map((k) => [k, 0])) as BadgeImpressionMetrics;
+  out.total = 0;
+  if (!counter) return out;
+  try {
+    const snap = await counter.snapshot();
+    let total = 0;
+    for (const k of BADGE_KINDS) {
+      const n = toNumber(snap[`${BADGE_KEY_PREFIX}${k}`]);
+      out[k] = n;
+      total += n;
+    }
+    out.total = total;
+  } catch (error) {
+    console.error("Error fetching badge impression metrics:", error);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Line-B fiat (Stripe) settled-revenue oracle (Phase-0 instrument).
 //
 // Same discipline as the funnel beacons above: a bounded enum of event kinds

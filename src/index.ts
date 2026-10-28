@@ -46,6 +46,8 @@ import {
   getFunnelMetrics,
   isFunnelSurface,
   isFunnelEvent,
+  trackBadgeImpression,
+  getBadgeImpressionMetrics,
   recordFiatSettlement,
   getFiatMetrics,
   type Rail,
@@ -546,7 +548,13 @@ app.get("/metrics", async (c) => {
   // getFiatMetrics returns zeros, not an error. Shares the /metrics 1h TTL below
   // (acceptable: a revenue oracle polled by cron tolerates ≤1h staleness).
   const fiat = await getFiatMetrics(makeUsageCounter(c.env));
-  const res = c.json({ ...metrics, net_external_paid_calls, net_external, funnel, fiat });
+  // Line-B embeddable-badge impressions — the distribution kill-check. Non-zero
+  // = our trust badges are being rendered in the wild (embeds exist, backlinks
+  // live); a flat zero across cycles = the badge-backlink lane produces no
+  // distribution and should be abandoned, not compounded. Same degrade-open 1h
+  // discipline: a throw returns zeros, never an error.
+  const badge_impressions = await getBadgeImpressionMetrics(makeUsageCounter(c.env));
+  const res = c.json({ ...metrics, net_external_paid_calls, net_external, funnel, fiat, badge_impressions });
   // Degraded snapshot = the counter read threw (metrics.degraded) OR the
   // net-external read threw. Both produce bogus zeros / an unavailable block. A 1h
   // edge cache PINS that degraded body for the whole hour on a public endpoint
@@ -9997,6 +10005,9 @@ app.get("/scan/mcp/badge", async (c) => {
   const target = c.req.query("url");
   const base = { schemaVersion: 1, label: "mcp-scan", cacheSeconds: 21600 };
   if (!target || !/^https?:\/\//i.test(target)) return c.json({ ...base, message: "url required", color: "lightgrey" });
+  // A real-target render = a live embed being painted in the wild (the
+  // distribution kill-check). Fire-and-forget; never blocks the badge.
+  fireAndForget(c, trackBadgeImpression("security", makeUsageCounter(c.env)));
   try {
     const r = await scanMcpServer(target);
     const color = ({ clear: "brightgreen", review: "yellow", block: "red" } as Record<string, string>)[r.verdict] ?? "lightgrey";
@@ -10145,6 +10156,7 @@ function lbN(c: { req: { query: (k: string) => string | undefined } }): number {
 app.get("/scan/leaderboard.svg", async (c) => {
   const svgHeaders = { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=3600" };
   const theme = (c.req.query("theme") || "dark").toLowerCase();
+  fireAndForget(c, trackBadgeImpression("leaderboard", makeUsageCounter(c.env)));
   try {
     const cards = await fetchLeaderboardCards();
     return c.body(leaderboardSvg(cards, lbN(c), theme), 200, svgHeaders);
@@ -10278,6 +10290,7 @@ app.get("/scan/leaderboard/rank-badge", async (c) => {
   if (!q.url && !q.slug && !q.name) {
     return c.json({ schemaVersion: 1, label: "MCP Security Rank", message: "url/slug/name required", color: "lightgrey" }, 200, headers);
   }
+  fireAndForget(c, trackBadgeImpression("rank", makeUsageCounter(c.env)));
   try {
     const cards = await fetchLeaderboardCards();
     return c.json(rankBadge(findLbCard(cards, q), cards.length), 200, headers);
@@ -11084,6 +11097,13 @@ app.get("/scan/verify/status", async (c) => {
 app.get("/scan/verify/badge", async (c) => {
   const kind = (c.req.query("kind") || "").toLowerCase();
   const host = verifyHost(c.req.query("url") || c.req.query("domain") || "");
+  // Impression kill-check: a real-host render = a live embed in the wild. Map
+  // the sub-kind (directory/monitored, else the default ownership badge) onto
+  // the bounded badge-impression enum. Fire-and-forget; never blocks render.
+  if (host) {
+    const bk = kind === "directory" ? "directory" : kind === "monitored" ? "monitored" : "ownership";
+    fireAndForget(c, trackBadgeImpression(bk, makeUsageCounter(c.env)));
+  }
 
   // kind=monitored → the PAID trust badge: green only when ownership is verified
   // AND a monitoring subscription is active. This is the badge an author embeds
