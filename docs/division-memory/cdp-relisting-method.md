@@ -3,7 +3,8 @@
 **Status:** proven end-to-end 2026-10-28. **Cost of the whole lesson:** 0.068 USDC, all
 recirculated to our own payee, zero external revenue.
 **Ledger of record:** `ledger/cdp-settlement-2026-10-28.json` (INSERT-only, hash-chained).
-**Verifier:** `python3 scripts/check_rediscovery_verdict.py --since <settlement_ts>`
+**Verifier:** `python3 scripts/check_rediscovery_verdict.py --since <settlement_ts> [--write-verdict logs/cdp-rediscovery-verdict.jsonl]`
+(exit **0** = RE-LISTED, **2** = PENDING inside the async window, **1** = INDEX-BROKEN or NOT RE-LISTED)
 **Ledger tool:** `python3 scripts/cdp_settlement_ledger.py {audit,append,verify,show}`
 
 ---
@@ -85,6 +86,25 @@ day, same catalog:
 The QA pass at +55 min concluded "the async index never completed". It completed 20
 minutes later. **Treat < 90 min as pending, not failed**, and never settle again to
 "unstick" it — that is how the fraud line gets crossed.
+
+**T+30 is not a verdict, and it is now machine-enforced.** Two independent passes on
+2026-10-28 (t_6503d66f at +55 min, t_d5138bac at +31 min) both read the frozen counter and
+concluded "index broken / never completed" while the index was still in flight. The second
+one is the dangerous shape: the old verifier's FAIL remediation printed
+`node scripts/settle_once.js` — i.e. the tool's own error path told the operator to spend
+another 0.009 USDC to unstick a leg that was merely slow. The verifier now:
+
+- gates on the **business outcome** (415-char description published + a buyer-intent query
+  surfacing us at rank 10/13, 7/11, 15/18), which lands synchronously with the settlement;
+- reports `lastCalledAt`/`l30DaysTotalCalls` as a **lagging indicator**, not a gate;
+- returns exit **2 PENDING** inside `--pending-window-minutes` (default 90) and prints
+  "do NOT settle again";
+- only returns exit **1 INDEX-BROKEN** once the window has expired with the counter still
+  frozen — and even then the remediation is *escalate a card*, never *re-settle*.
+
+Corollary for orchestrators: do not create a fixed-delay re-check card ("verify at +30 min").
+Either poll `--write-verdict` until it exits 0 or 1, or re-check at +90 min. A card with a
+30-minute deadline will systematically produce a false INDEX-BROKEN.
 
 ## 4. The 30-day window and the monitoring that prevents a re-delisting
 
