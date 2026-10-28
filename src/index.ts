@@ -1219,6 +1219,67 @@ app.get("/.well-known/mcp-registry-auth", (c) =>
   c.text("v=MCPv1; k=ed25519; p=/fl+vN2K62tQL/mmihmc7e7ASuNrfc3SrSjOsji3fko="),
 );
 
+// Installable framework tools — the drop-in packages that wrap the EARNING
+// data routes so a trading-agent dev adopts the whole set with one install
+// line instead of hand-wiring x402 calls. A trading agent never "discovers an
+// API"; it runs a FRAMEWORK and installs tools — so the path from discovery to
+// a paid call is the install command for the caller's own framework, published
+// at the same surface where it discovers the routes. Each entry is a real,
+// git-installable public mirror (registry publish is not required — the git URL
+// resolves the dependency directly; verified resolving 2026-10-28). The three
+// JS/Python packages share the same keyless-core + x402-paid rail as the live
+// routes below, so a buyer reading this manifest can go from "found it" to
+// "installed and paying" without leaving the framework it already runs.
+const DATA_TOOL_ROUTES_8 = [
+  "/defi/yields", "/crypto/prices", "/crypto/funding", "/brief/market",
+  "/chain/balance", "/chain/gas-price", "/chain/block-number", "/chain/token-balance",
+];
+const DATA_TOOL_ROUTES_6 = [
+  "/defi/yields", "/crypto/prices",
+  "/chain/balance", "/chain/gas-price", "/chain/block-number", "/chain/token-balance",
+];
+const INSTALLABLE_TOOLS: Array<{
+  framework: string;
+  language: string;
+  package: string;
+  install: string;
+  repository: string;
+  tool_count: number;
+  wraps: string[];
+  note: string;
+}> = [
+  {
+    framework: "Vercel AI SDK",
+    language: "TypeScript",
+    package: "@grey-ridge/vercel-ai-defi-data",
+    install: "npm i github:rezearcher/vercel-ai-defi-data",
+    repository: "https://github.com/rezearcher/vercel-ai-defi-data",
+    tool_count: 8,
+    wraps: DATA_TOOL_ROUTES_8,
+    note: "Vercel AI SDK v5 tools (inputSchema); x402 paid inline, no API key; degrades to the free preview when unpaid; balance reads never fabricate a number.",
+  },
+  {
+    framework: "LangChain.js",
+    language: "TypeScript",
+    package: "@grey-ridge/langchain-defi-data",
+    install: "npm i github:rezearcher/langchain-defi-data",
+    repository: "https://github.com/rezearcher/langchain-defi-data",
+    tool_count: 8,
+    wraps: DATA_TOOL_ROUTES_8,
+    note: "LangChain.js tools (content_and_artifact responseFormat); x402 paid inline, no API key; degrades to the free preview when unpaid.",
+  },
+  {
+    framework: "CrewAI / plain Python",
+    language: "Python",
+    package: "grey-ridge-x402-data",
+    install: "pip install git+https://github.com/rezearcher/crewai-defi-data",
+    repository: "https://github.com/rezearcher/crewai-defi-data",
+    tool_count: 6,
+    wraps: DATA_TOOL_ROUTES_6,
+    note: "CrewAI BaseTool wrappers plus framework-agnostic plain functions; dep-free keyless stdlib core, x402 paid rail via the [pay] extra.",
+  },
+];
+
 // Self-describing x402 discovery manifest — the standard `.well-known/x402` catalog
 // that x402 crawlers/directories read to discover a provider's paid endpoints
 // (independent of any facilitator's Bazaar). Lists every paid resource we serve.
@@ -1347,6 +1408,14 @@ app.get("/.well-known/x402", (c) => {
     // paid route and is documented here so a buyer-agent can discover it.
     demo_token_aliases: DEMO_TOKEN_ALIASES,
     mcp_endpoint: `${BASE}/mcp`,
+    // Drop-in framework packages that wrap the earning data routes. A buyer-agent
+    // (or the dev reading this manifest) gets the one-line install for its own
+    // framework here, at the same place it discovers the routes — so discovery
+    // leads straight to an installed, inline-paying tool. See INSTALLABLE_TOOLS.
+    integrations: {
+      note: "Drop-in framework tools that wrap these routes — install once, every call pays inline over x402 in USDC. No registry account or API key needed; the git URL resolves the package directly.",
+      installable_tools: INSTALLABLE_TOOLS,
+    },
     resources: ROUTE_CATALOG.map((r) => mk(...r)),
   });
 });
@@ -1393,6 +1462,9 @@ app.get("/.well-known/agent-capabilities.json", (c) => {
     count: products.length,
     total_available: ROUTE_CATALOG.length,
     products,
+    // Same installable-tool index as /.well-known/x402 — both discovery surfaces
+    // agree so an agent that lands here finds the one-line install for its framework.
+    installable_tools: INSTALLABLE_TOOLS,
   });
 });
 
