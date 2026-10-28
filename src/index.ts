@@ -181,7 +181,7 @@ const ROUTE_CATALOG: Array<[string, string, string, string, string, string[]]> =
   ["/chain/token-security", "GET", "0.009", "9000", "Is this Base token a scam or rug pull? Honeypot detector for a Base ERC-20: EIP-1967 proxy + upgradeability check, bytecode scan for mint/pause/blacklist/fee-setter/ownership, owner() renouncement, and a live eth_call state-override sim proving a real wallet can transfer() it. Returns risk_score (0-100) + verdict (clear/review/block) + honeypot/scam/rug flags. Use before an agent buys, holds or approves a token.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "token-security", "data", "scam", "rug", "rug-detection", "scam-detection"]],
   ["/pm/markets", "GET", "0.005", "5000", "Live Polymarket prediction markets — question, outcomes, bestBid/bestAsk/spread, volume24hr/volume1wk, oneDayPriceChange, clobTokenIds, conditionId, category tags, liquidity, end date. Ranked by volume24hr; filter by keyword.", ["prediction-markets", "polymarket", "markets", "crypto", "data"]],
   ["/crypto/funding", "GET", "0.004", "4000", "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, premium/basis, annualized_hl/annualized_okx, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices, open interest.", ["crypto", "funding", "perps", "hyperliquid", "okx", "dydx", "arbitrage", "defi", "market-data", "data"]],
-  ["/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, pool id, APY breakdown + 1d/7d/30d APY trend, IL risk (incl. il7d), exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL. Filter by project (family name like aave/uniswap/curve resolves all versions, or an exact slug like aave-v3), chain, or stablecoin-only; sort by TVL or risk-adjusted APY.", ["defi", "yield", "lending", "apy", "tvl", "defi-yields", "data"]],
+  ["/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, pool id, APY breakdown + 1d/7d/30d APY trend, IL risk (incl. il7d), exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL. Filter by project (family name like aave/uniswap/curve resolves all versions, or an exact slug like aave-v3), chain (short names like eth/arb/op/avax/matic/sol/bnb resolve to the DefiLlama canonical name), or stablecoin-only; sort by TVL or risk-adjusted APY.", ["defi", "yield", "lending", "apy", "tvl", "defi-yields", "data"]],
   ["/crypto/prices", "GET", "0.001", "1000", "Spot token prices from DefiLlama — pass comma-separated ticker symbols or CoinGecko ids, get price/change_24h/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "market-data", "defi", "data"]],
   ["/scan/mcp", "GET", "0.05", "50000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score + verdict (clear/review/block).", ["security", "mcp", "audit", "prompt-injection"]],
   ["/enrich/tech-risk", "GET", "0.01", "10000", "Tech-stack fingerprint -> CVE (NVD) + EPSS + CISA-KEV attack-surface risk + verdict (clear/review/block) for a domain.", ["security", "cve", "risk"]],
@@ -226,8 +226,8 @@ const ROUTE_CATALOG: Array<[string, string, string, string, string, string[]]> =
   ["/defi/hacks-recent", "GET", "0.003", "3000", "Most recent DeFi/crypto hacks and exploits (DefiLlama): date, name, amount lost USD, chain, technique, bridge-hack flag; ?limit= up to 50. No required params. Use when an agent needs live security-incident risk signals.", ["defi", "security", "hacks", "exploits", "data"]],
   ["/crypto/derivatives-exchanges", "GET", "0.003", "3000", "Top crypto derivatives exchanges (CoinGecko): open interest BTC, 24h volume BTC, perpetual and futures pair counts, year established. No params. Use when an agent needs perp/futures venue liquidity data.", ["crypto", "derivatives", "futures", "open-interest", "data"]],
   ["/defi/protocol-risk", "GET", "0.01", "10000", "Protocol risk score from DefiLlama: joins TVL, 1d/7d TVL change, age, audits, chain count and matching hack history into one 0-100 score with flags; ?protocol= accepts a family name (aave, uniswap) that resolves to the highest-TVL version, or an exact slug (default aave-v3). Use when an agent needs a due-diligence check before routing funds to a DeFi protocol.", ["defi", "risk", "security", "due-diligence", "data"]],
-  ["/defi/safe-yields", "GET", "0.01", "10000", "Vetted stablecoin yields: top stablecoin pools (DefiLlama, TVL>$5M, APY 1-25%) joined with each protocol's age and hack history, safest-yield first; optional ?chain= & ?limit=. No required params. Use when an agent needs where to park stablecoins with due-diligence already applied.", ["defi", "yield", "stablecoin", "risk", "data"]],
-  ["/defi/yields-top", "GET", "0.003", "3000", "Top DeFi yield pools by TVL (DefiLlama): chain, project, symbol, APY, TVL USD; optional ?chain= & ?stable=true. Use when an agent needs where to earn yield.", ["defi", "yield", "apy", "data"]],
+  ["/defi/safe-yields", "GET", "0.01", "10000", "Vetted stablecoin yields: top stablecoin pools (DefiLlama, TVL>$5M, APY 1-25%) joined with each protocol's age and hack history, safest-yield first; optional ?chain= (short names like eth/arb/op/avax/matic/sol resolve to the canonical chain) & ?limit=. No required params. Use when an agent needs where to park stablecoins with due-diligence already applied.", ["defi", "yield", "stablecoin", "risk", "data"]],
+  ["/defi/yields-top", "GET", "0.003", "3000", "Top DeFi yield pools by TVL (DefiLlama): chain, project, symbol, APY, TVL USD; optional ?chain= (short names like eth/arb/op/avax/matic/sol resolve to the canonical chain) & ?stable=true. Use when an agent needs where to earn yield.", ["defi", "yield", "apy", "data"]],
   ["/ai/classify", "GET", "0.003", "3000", "Zero-shot text classification (Llama 3.2 3B): ?text=<up to 1000 chars>&labels=<comma-separated labels, 2-10> returns the single best label. Use when an agent needs to route or tag text (intent, sentiment, topic, spam) in one cheap call.", ["ai", "llm", "classification", "text", "data"]],
   ["/ai/summarize", "GET", "0.003", "3000", "Text summarization (Llama 3.2 3B): ?text=<up to 1500 chars> returns a 1-3 sentence summary. Use when an agent needs to compress a passage cheaply before reasoning over it.", ["ai", "llm", "summarization", "text", "data"]],
   ["/ai/translate", "GET", "0.003", "3000", "Text translation (Llama 3.2 3B): ?text=<up to 800 chars>&to=<target language, e.g. es, fr, de, ja> returns the translated text only. Use when an agent needs quick pay-per-call translation with no API key.", ["ai", "llm", "translation", "language", "data"]],
@@ -2183,8 +2183,8 @@ app.get("/openapi.json", (c) => {
       "/defi/hacks-recent": paid("Most recent DeFi hacks and exploits (DefiLlama).", "0.003", [{ name: "limit", desc: "optional, max 50", example: "10" }]),
       "/crypto/derivatives-exchanges": paid("Top crypto derivatives exchanges (CoinGecko).", "0.003", []),
       "/defi/protocol-risk": paid("DeFi protocol risk score (TVL, age, audits, hacks).", "0.01", [{ name: "protocol", desc: "protocol family name (aave, uniswap) resolves highest-TVL version, or exact slug; default aave-v3", example: "aave" }]),
-      "/defi/safe-yields": paid("Vetted stablecoin yields with protocol age and hack flags (DefiLlama).", "0.01", [{ name: "chain", desc: "optional chain filter", example: "Ethereum" }, { name: "limit", desc: "optional, max 30", example: "10" }]),
-      "/defi/yields-top": paid("Top DeFi yield pools by TVL (DefiLlama).", "0.003", [{ name: "chain", desc: "optional chain filter", example: "Ethereum" }, { name: "stable", desc: "true = stablecoin pools only", example: "true" }, { name: "limit", desc: "optional", example: "20" }]),
+      "/defi/safe-yields": paid("Vetted stablecoin yields with protocol age and hack flags (DefiLlama).", "0.01", [{ name: "chain", desc: "optional chain filter; short names (eth, arb, op, avax, matic, sol, bnb) resolve to the DefiLlama canonical chain", example: "eth" }, { name: "limit", desc: "optional, max 30", example: "10" }]),
+      "/defi/yields-top": paid("Top DeFi yield pools by TVL (DefiLlama).", "0.003", [{ name: "chain", desc: "optional chain filter; short names (eth, arb, op, avax, matic, sol, bnb) resolve to the DefiLlama canonical chain", example: "eth" }, { name: "stable", desc: "true = stablecoin pools only", example: "true" }, { name: "limit", desc: "optional", example: "20" }]),
       "/ai/classify": paid("Classify text into one of your labels.", "0.003", [{ name: "text", desc: "text, max 1000 chars", required: true, example: "My card was charged twice" }, { name: "labels", desc: "comma-separated labels, 2-10", required: true, example: "billing,bug,feature_request,other" }]),
       "/ai/summarize": paid("Summarize a passage into 1-3 sentences.", "0.003", [{ name: "text", desc: "passage, max 1500 chars", required: true, example: "x402 is an open HTTP 402 payment protocol letting clients pay per request in USDC on Base without accounts or API keys." }]),
       "/ai/translate": paid("Translate text into a target language.", "0.003", [{ name: "text", desc: "source text, max 800 chars", required: true, example: "Hello, how are you?" }, { name: "to", desc: "target language name or code", required: true, example: "es" }]),
@@ -2786,7 +2786,7 @@ export function makeRoutes(payTo: string) {
           properties: {
             limit: { type: "string", description: "Max pools to return (default 20, max 100)" },
             project: { type: "string", description: "Optional: filter to an exact project name (case-insensitive)" },
-            chain: { type: "string", description: "Optional: filter to an exact chain name (case-insensitive)" },
+            chain: { type: "string", description: "Optional: filter by chain (case-insensitive). Short names like eth, arb, op, avax, matic, sol, bnb resolve to the DefiLlama canonical chain name." },
             stable: { type: "string", description: "Optional: \"true\" to return only stablecoin pools" },
             sort: { type: "string", description: "Optional: \"tvl\" (default) or \"risk_adjusted\" (apy/sigma)" },
           },
@@ -3307,7 +3307,7 @@ export function makeRoutes(payTo: string) {
       extensions: declareDiscoveryExtension({
         method: "GET",
         input: { limit: "20" },
-        inputSchema: { type: "object", properties: { chain: { type: "string" }, stable: { type: "string" }, limit: { type: "string" } } },
+        inputSchema: { type: "object", properties: { chain: { type: "string", description: "optional; short names (eth, arb, op, avax, matic, sol, bnb) resolve to the DefiLlama canonical chain" }, stable: { type: "string" }, limit: { type: "string" } } },
         output: { example: { pools: [{ chain: "Ethereum", project: "lido", symbol: "STETH", apy: 2.22, tvl_usd: 23204781540 }] } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
@@ -3406,7 +3406,7 @@ export function makeRoutes(payTo: string) {
       extensions: declareDiscoveryExtension({
         method: "GET",
         input: { limit: "10" },
-        inputSchema: { type: "object", properties: { chain: { type: "string", description: "optional chain filter" }, limit: { type: "string", description: "optional, max 30" } } },
+        inputSchema: { type: "object", properties: { chain: { type: "string", description: "optional; short names (eth, arb, op, avax, matic, sol, bnb) resolve to the DefiLlama canonical chain" }, limit: { type: "string", description: "optional, max 30" } } },
         output: { example: { pools: [{ project: "aave-v3", chain: "Ethereum", symbol: "USDC", apy: 4.2, tvl_usd: 900000000, protocol_age_days: 1662, hacked_before: true }] } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
@@ -5807,6 +5807,57 @@ export function matchesProjectFamily(slug: string, query: string): boolean {
   return s === q || s.startsWith(`${q}-`);
 }
 
+// DefiLlama identifies chains by a canonical display name ("Ethereum", "OP
+// Mainnet", "Avalanche", "BSC", "Hyperliquid L1"), but a trading agent filtering
+// yields naturally passes the short ticker/abbreviation it uses everywhere else
+// (chain=eth, arb, op, avax, matic, sol, bnb). Those never equal the canonical
+// name, so the exact-match chain filter below returned an empty array on a PAID
+// route = silent count=0 success = a churned repeat buyer on our #1 earning
+// route. This maps the natural abbreviation to the canonical name (both sides
+// compared lowercased). Same footgun CLASS as the ticker-symbol (crypto/prices)
+// and protocol-family (defi/yields) resolvers already shipped.
+//
+// Degrade-open and precise: an exact canonical name an agent already passes
+// ("Ethereum", "op mainnet") is NOT in the table and falls through unchanged, so
+// results are byte-identical; a bogus chain still returns [] via the exact
+// filter. It is a normalization alias TABLE (config/data derived from upstream
+// naming), not a decision gate — unknown input passes through, nothing is
+// silently dropped (CLAUDE.md no-hardcoded-list-as-logic is satisfied).
+const CHAIN_ALIASES: Record<string, string> = {
+  eth: "ethereum", ether: "ethereum", "ethereum-mainnet": "ethereum", "eth-mainnet": "ethereum", mainnet: "ethereum",
+  arb: "arbitrum", "arbitrum-one": "arbitrum",
+  op: "op mainnet", optimism: "op mainnet", optimistic: "op mainnet", opmainnet: "op mainnet", "op-mainnet": "op mainnet",
+  avax: "avalanche", "avalanche-c": "avalanche",
+  matic: "polygon", poly: "polygon", "polygon-pos": "polygon",
+  sol: "solana",
+  bnb: "bsc", binance: "bsc", "binance-smart-chain": "bsc", "bnb-chain": "bsc", bnbchain: "bsc",
+  hl: "hyperliquid l1", hyperliquid: "hyperliquid l1", hyperliquidl1: "hyperliquid l1", "hyperliquid-l1": "hyperliquid l1",
+  osmo: "osmosis",
+  bera: "berachain",
+  ftm: "fantom",
+  xdai: "gnosis", gnosischain: "gnosis",
+  trx: "tron",
+  hbar: "hedera",
+  algo: "algorand",
+  plume: "plume mainnet",
+  dot: "polkadot",
+  cro: "cronos",
+  mnt: "mantle",
+  apt: "aptos",
+  ada: "cardano",
+  zksync: "zksync era", zks: "zksync era", "zksync-era": "zksync era", zksyncera: "zksync era", era: "zksync era",
+  strk: "starknet",
+};
+
+// Returns the lowercased canonical DefiLlama chain name for an agent-supplied
+// chain filter; empty/whitespace -> "" (no filter). All callers compare against
+// pool.chain.toLowerCase(), so the returned value is always lowercase.
+export function resolveChainAlias(query: string): string {
+  const q = (query ?? "").trim().toLowerCase();
+  if (!q) return "";
+  return CHAIN_ALIASES[q] ?? q;
+}
+
 async function fetchDefiYields(
   limit: number,
   project: string | undefined,
@@ -5848,9 +5899,10 @@ async function fetchDefiYields(
     volumeUsd1d: p.volumeUsd1d ?? null,
   }));
 
+  const wantChain = resolveChainAlias(chain ?? "");
   const filtered = normalized.filter((p) => {
     if (project && !matchesProjectFamily(p.project, project)) return false;
-    if (chain && p.chain.toLowerCase() !== chain.toLowerCase()) return false;
+    if (wantChain && p.chain.toLowerCase() !== wantChain) return false;
     if (stableOnly && !p.stablecoin) return false;
     return true;
   });
@@ -6997,7 +7049,7 @@ app.get("/crypto/global", async (c) => {
 
 app.get("/defi/yields-top", async (c) => {
   const limit = Math.min(Math.max(parseInt(c.req.query("limit") ?? "20", 10) || 20, 1), 100);
-  const chain = (c.req.query("chain") ?? "").toLowerCase();
+  const chain = resolveChainAlias(c.req.query("chain") ?? "");
   const stable = c.req.query("stable") === "true";
   try {
     const r = await fetch("https://yields.llama.fi/pools");
@@ -7198,7 +7250,7 @@ app.get("/defi/protocol-risk/preview", (c) => protocolRisk(c, false));
 async function safeYields(c: any, paid: boolean) {
   try {
     const limit = paid ? Math.min(30, Math.max(1, parseInt(c.req.query("limit") ?? "10", 10) || 10)) : 3;
-    const chain = paid ? (c.req.query("chain") ?? "").toLowerCase() : "";
+    const chain = paid ? resolveChainAlias(c.req.query("chain") ?? "") : "";
     const [yr, pr, hr] = await Promise.all([fetch("https://yields.llama.fi/pools"), fetch("https://api.llama.fi/protocols"), fetch("https://api.llama.fi/hacks")]);
     if (!yr.ok || !pr.ok) return c.json({ error: "upstream " + (yr.ok ? pr.status : yr.status) }, { status: 502 });
     const pools = ((await yr.json()) as { data: Array<{ chain: string; project: string; symbol: string; tvlUsd: number; apy: number | null; stablecoin: boolean; ilRisk?: string }> }).data;
