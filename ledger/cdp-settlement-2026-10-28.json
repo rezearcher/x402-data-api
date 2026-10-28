@@ -1,0 +1,313 @@
+{
+  "schema": "cdp-settlement-ledger/v1",
+  "insert_only": true,
+  "policy": "Append-only. Never edit or delete an entry. Each entry commits to the previous entry's sha256 (prev_entry_sha256 -> entry_sha256), so any retrospective edit is detectable by `verify`. One file per UTC day; a day's file is never rewritten after it is closed. Chain truth is re-derivable via `audit`.",
+  "payer": "0xC4852c26498d3187dEc2ce1b19e840710e302d1e",
+  "payee": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10",
+  "entries": [
+    {
+      "settled_at": "2026-10-28T06:02:47Z",
+      "block": 53189010,
+      "tx_hash": "0x51bcdd08defd9f3c32320e1ae7d6be4a2d8538d153945ee1d7dbcbe97420bd6d",
+      "amount_usdc": 0.009,
+      "amount_units": 9000,
+      "endpoint": {
+        "route": "/chain/token-security",
+        "url": "https://x402-data-api.sigrunner.workers.dev/chain/token-security",
+        "method": "GET",
+        "host": "x402-data-api.sigrunner.workers.dev"
+      },
+      "facilitator": "CDP /platform/v2/x402/settle (verify-then-settle), relay /internal/cdp-settle-raw",
+      "extension_status": "processing",
+      "purpose": "re-list a route whose lastCalledAt had gone stale (P0 card t_a6d2a394)",
+      "card": "t_6503d66f",
+      "evidence_source": "logs/cdp-settlement-tx.log (3 lines, since overwritten by seq 7; preserved verbatim at logs/cdp-settlement-tx.log.confirmed-t_6503d66f-20261028T0603Z and in git history)",
+      "evidence_tier": "on-chain receipt + facilitator relay response",
+      "balance_before_usdc": 1.23,
+      "balance_after_usdc": 1.221,
+      "re_listing": {
+        "verdict": "INDEX LANDED LATE (+~75 min); DESCRIPTION DID NOT UPDATE",
+        "measured_at": "2026-10-28T07:21Z",
+        "lastUpdated_after": "2026-10-28T06:02:47.625Z",
+        "lastCalledAt_after": "2026-10-28T06:02:46.377Z",
+        "calls_30d_after": 9,
+        "payers_30d_after": 2,
+        "description_after_chars": 493,
+        "description_mentions_scam": false,
+        "search_snapshot": {
+          "is this token a scam": "0 of 14 at +55 min",
+          "token security": "#7/11",
+          "honeypot detector": "#11/18"
+        },
+        "confirmation": "lastUpdated moved to the settlement second immediately, but lastCalledAt stayed at 2026-10-20T17:03:32.666Z when measured at +55 min (qa card t_cac01ee4 concluded 'never landed'). Re-measured at 07:21Z it HAD advanced to 2026-10-28T06:02:46.377Z and calls30d went 8 -> 9: the index signal was slow, not broken. The stored description was still the pre-deploy 493-char text, so this settlement republished a snapshot with zero buyer vocabulary."
+      },
+      "notes": [
+        "extension=bazaar:processing is NOT a failure of the money path: the USDC Transfer is on-chain and final.",
+        "This entry's on-disk log lines were destroyed by seq 7's run (see ledger policy) — the reason this ledger exists."
+      ],
+      "category": "capital_spend_self_settlement",
+      "revenue_recognized_usdc": 0.0,
+      "payer": "0xC4852c26498d3187dEc2ce1b19e840710e302d1e",
+      "payee": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10",
+      "network": "eip155:8453",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "revenue_note": "payer == our controlled buyer wallet and payee == our own PAY_TO: both are SELF_ADDRS in scripts/verify_revenue_ledger.py. Excluded from revenue by design; the relay writes no ledger row.",
+      "seq": 1,
+      "recorded_at": "2026-10-28T07:25:00Z",
+      "prev_entry_sha256": null,
+      "entry_sha256": "526b15b7cf4cbec06e4ba6664acf5e6b06464d10c2c1c68da8cacec2b01f724d"
+    },
+    {
+      "settled_at": "2026-10-28T06:46:05Z",
+      "block": 53190309,
+      "tx_hash": "0x82ba66b40469a95a71100cbb23a59f50fec71304d3ef8e5ec5af9862e4ad7704",
+      "amount_usdc": 0.01,
+      "amount_units": 10000,
+      "endpoint": {
+        "route": "/chain/token-report",
+        "url": "https://api.greyridgesignals.ai/chain/token-report",
+        "method": "GET",
+        "host": "api.greyridgesignals.ai"
+      },
+      "facilitator": "x402 gateway (EIP-3009 exact) — submitter 0x59b7ebc67a3d627fabaf06768c818638452ae704",
+      "extension_status": "not_reported",
+      "purpose": "paid verification of /chain/token-report simStatus=tested (card t_4147c280)",
+      "card": "t_4147c280",
+      "evidence_source": "CHAIN ONLY — absent from logs/cdp-settlement-tx.log and from every card/doc",
+      "evidence_tier": "on-chain receipt; route attribution inferred",
+      "attribution_basis": "amount 0.010 USDC == /chain/token-report price (10000 units); the catalog record for api.greyridgesignals.ai/chain/token-report reports l30DaysTotalCalls=5 with l30DaysUniquePayers=1, exactly matching the five 0.010 transfers from the buyer wallet in this window",
+      "re_listing": {
+        "verdict": "INDEX LANDED (~4 s)",
+        "measured_at": "2026-10-28T07:21Z",
+        "lastUpdated_after": "2026-10-28T06:58:44.587Z",
+        "lastCalledAt_after": "2026-10-28T06:58:48.769Z",
+        "calls_30d_after": 5,
+        "payers_30d_after": 1,
+        "confirmation": "route-level write observed: lastCalledAt 06:58:48.769Z follows the 06:58:45/06:58:49 transfers by ~4 s, and calls30d=5 equals the 5 chain transfers. This is the counter-example to seq 1: the same catalog indexed one host in seconds and took >1 h for the other."
+      },
+      "notes": [
+        "undocumented spend — never written to any settlement log",
+        "self-payer only: payers30d=1 is publicly visible in the catalog"
+      ],
+      "category": "capital_spend_self_settlement",
+      "revenue_recognized_usdc": 0.0,
+      "payer": "0xC4852c26498d3187dEc2ce1b19e840710e302d1e",
+      "payee": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10",
+      "network": "eip155:8453",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "revenue_note": "payer == our controlled buyer wallet and payee == our own PAY_TO: both are SELF_ADDRS in scripts/verify_revenue_ledger.py. Excluded from revenue by design; the relay writes no ledger row.",
+      "seq": 2,
+      "recorded_at": "2026-10-28T07:25:00Z",
+      "prev_entry_sha256": "526b15b7cf4cbec06e4ba6664acf5e6b06464d10c2c1c68da8cacec2b01f724d",
+      "entry_sha256": "7f566e8fe7d84e753b57c25d300f33aaec58c88f56e006e4f775ed7cf1306177"
+    },
+    {
+      "settled_at": "2026-10-28T06:46:13Z",
+      "block": 53190313,
+      "tx_hash": "0x55320676c6dff74c2d645ef852740d94692a15ccded602b08504791273584fc1",
+      "amount_usdc": 0.01,
+      "amount_units": 10000,
+      "endpoint": {
+        "route": "/chain/token-report",
+        "url": "https://api.greyridgesignals.ai/chain/token-report",
+        "method": "GET",
+        "host": "api.greyridgesignals.ai"
+      },
+      "facilitator": "x402 gateway (EIP-3009 exact) — submitter 0x14fda13953fc30428938e6bf950d036e77214e52",
+      "extension_status": "not_reported",
+      "purpose": "paid verification of /chain/token-report simStatus=tested (slot-51 cbETH sample, card t_4147c280)",
+      "card": "t_4147c280",
+      "evidence_source": "CHAIN ONLY — absent from logs/cdp-settlement-tx.log and from every card/doc",
+      "evidence_tier": "on-chain receipt; route attribution inferred",
+      "attribution_basis": "same 0.010 USDC / token-report price and the catalog's 5-call/1-payer count",
+      "re_listing": {
+        "verdict": "covered by the day's token-report index write",
+        "measured_at": "2026-10-28T07:21Z",
+        "notes": "per-call index events are not individually distinguishable; route-level state is recorded on seq 2"
+      },
+      "notes": [
+        "undocumented spend",
+        "self-payer only"
+      ],
+      "category": "capital_spend_self_settlement",
+      "revenue_recognized_usdc": 0.0,
+      "payer": "0xC4852c26498d3187dEc2ce1b19e840710e302d1e",
+      "payee": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10",
+      "network": "eip155:8453",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "revenue_note": "payer == our controlled buyer wallet and payee == our own PAY_TO: both are SELF_ADDRS in scripts/verify_revenue_ledger.py. Excluded from revenue by design; the relay writes no ledger row.",
+      "seq": 3,
+      "recorded_at": "2026-10-28T07:25:00Z",
+      "prev_entry_sha256": "7f566e8fe7d84e753b57c25d300f33aaec58c88f56e006e4f775ed7cf1306177",
+      "entry_sha256": "a95ee99c3f35a8790860e1cdd851e2aa329bb7f931ed1b057f81b3df48317eb6"
+    },
+    {
+      "settled_at": "2026-10-28T06:46:37Z",
+      "block": 53190325,
+      "tx_hash": "0x4b93949edde8241ca7c392476e63d9ee20d958be757ac11959e177b5797f07f2",
+      "amount_usdc": 0.01,
+      "amount_units": 10000,
+      "endpoint": {
+        "route": "/chain/token-report",
+        "url": "https://api.greyridgesignals.ai/chain/token-report",
+        "method": "GET",
+        "host": "api.greyridgesignals.ai"
+      },
+      "facilitator": "x402 gateway (EIP-3009 exact) — submitter 0x42dd53906b49c202e8e934b059dc019e04634b00",
+      "extension_status": "not_reported",
+      "purpose": "the ONE paid call that card t_4147c280 actually documented (USDC slot 9, simStatus=tested)",
+      "card": "t_4147c280",
+      "evidence_source": "docs/qa/token-report-deploy-verification.md + .scratch-x402/PROOF_SUMMARY.md + chain receipt",
+      "evidence_tier": "on-chain receipt + corroborating doc",
+      "re_listing": {
+        "verdict": "covered by the day's token-report index write",
+        "measured_at": "2026-10-28T07:21Z"
+      },
+      "notes": [
+        "Only 1 of the 5 token-report calls was written up. The QA doc states 'three settled x402 calls, 0.03 USDC total (balance 1.221 -> 1.191)'. Chain says five calls, 0.05 USDC, 1.221 -> 1.171: 2 calls and 0.02 USDC under-reported."
+      ],
+      "category": "capital_spend_self_settlement",
+      "revenue_recognized_usdc": 0.0,
+      "payer": "0xC4852c26498d3187dEc2ce1b19e840710e302d1e",
+      "payee": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10",
+      "network": "eip155:8453",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "revenue_note": "payer == our controlled buyer wallet and payee == our own PAY_TO: both are SELF_ADDRS in scripts/verify_revenue_ledger.py. Excluded from revenue by design; the relay writes no ledger row.",
+      "seq": 4,
+      "recorded_at": "2026-10-28T07:25:00Z",
+      "prev_entry_sha256": "a95ee99c3f35a8790860e1cdd851e2aa329bb7f931ed1b057f81b3df48317eb6",
+      "entry_sha256": "f2d1990f45036052dac8f1e1b4d2d88a8c7c1edb18db8d83adb95b4ad1231fc4"
+    },
+    {
+      "settled_at": "2026-10-28T06:58:45Z",
+      "block": 53190689,
+      "tx_hash": "0x08fb84d28cda3d1bc3b6b477d6462103d88b54522007dc946724c20dfdacf1df",
+      "amount_usdc": 0.01,
+      "amount_units": 10000,
+      "endpoint": {
+        "route": "/chain/token-report",
+        "url": "https://api.greyridgesignals.ai/chain/token-report",
+        "method": "GET",
+        "host": "api.greyridgesignals.ai"
+      },
+      "facilitator": "x402 gateway (EIP-3009 exact) — submitter 0xca5e87f82b3fa093800e6ad67d621a427d79c70d",
+      "extension_status": "not_reported",
+      "purpose": "post-deploy stability window probes (card t_4147c280, 06:55:20Z-06:58:11Z window)",
+      "card": "t_4147c280",
+      "evidence_source": "CHAIN ONLY — absent from logs/cdp-settlement-tx.log and from every card/doc",
+      "evidence_tier": "on-chain receipt; route attribution inferred",
+      "attribution_basis": "same 0.010 USDC / token-report price and the catalog's 5-call/1-payer count",
+      "re_listing": {
+        "verdict": "this is the call whose index write is visible (lastUpdated 06:58:44.587Z)",
+        "measured_at": "2026-10-28T07:21Z",
+        "lastCalledAt_after": "2026-10-28T06:58:48.769Z"
+      },
+      "notes": [
+        "undocumented spend",
+        "self-payer only"
+      ],
+      "category": "capital_spend_self_settlement",
+      "revenue_recognized_usdc": 0.0,
+      "payer": "0xC4852c26498d3187dEc2ce1b19e840710e302d1e",
+      "payee": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10",
+      "network": "eip155:8453",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "revenue_note": "payer == our controlled buyer wallet and payee == our own PAY_TO: both are SELF_ADDRS in scripts/verify_revenue_ledger.py. Excluded from revenue by design; the relay writes no ledger row.",
+      "seq": 5,
+      "recorded_at": "2026-10-28T07:25:00Z",
+      "prev_entry_sha256": "f2d1990f45036052dac8f1e1b4d2d88a8c7c1edb18db8d83adb95b4ad1231fc4",
+      "entry_sha256": "b5d5dadf29e3bc4bb3b13b848eeb23b9e03acf75dcbde8ab8b40d4501a629771"
+    },
+    {
+      "settled_at": "2026-10-28T06:58:49Z",
+      "block": 53190691,
+      "tx_hash": "0xe97e043e122c7fdaa1bec0d1fb4ac0119fe1a2ca9706d518bd3e0af18c650da5",
+      "amount_usdc": 0.01,
+      "amount_units": 10000,
+      "endpoint": {
+        "route": "/chain/token-report",
+        "url": "https://api.greyridgesignals.ai/chain/token-report",
+        "method": "GET",
+        "host": "api.greyridgesignals.ai"
+      },
+      "facilitator": "x402 gateway (EIP-3009 exact) — submitter 0x8cda367232d78c067116e3260da881d2da8ffa39",
+      "extension_status": "not_reported",
+      "purpose": "post-deploy stability window probes (card t_4147c280)",
+      "card": "t_4147c280",
+      "evidence_source": "CHAIN ONLY — absent from logs/cdp-settlement-tx.log and from every card/doc",
+      "evidence_tier": "on-chain receipt; route attribution inferred",
+      "re_listing": {
+        "verdict": "covered by the day's token-report index write",
+        "measured_at": "2026-10-28T07:21Z"
+      },
+      "notes": [
+        "undocumented spend",
+        "self-payer only",
+        "5 self-settlements on one route in 13 minutes is the 1-payer/1-call pattern third-party de-washers flag"
+      ],
+      "category": "capital_spend_self_settlement",
+      "revenue_recognized_usdc": 0.0,
+      "payer": "0xC4852c26498d3187dEc2ce1b19e840710e302d1e",
+      "payee": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10",
+      "network": "eip155:8453",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "revenue_note": "payer == our controlled buyer wallet and payee == our own PAY_TO: both are SELF_ADDRS in scripts/verify_revenue_ledger.py. Excluded from revenue by design; the relay writes no ledger row.",
+      "seq": 6,
+      "recorded_at": "2026-10-28T07:25:00Z",
+      "prev_entry_sha256": "b5d5dadf29e3bc4bb3b13b848eeb23b9e03acf75dcbde8ab8b40d4501a629771",
+      "entry_sha256": "3c66264281a55a0d767c8ab47fa22387ddbd3c1e1259a6fcedc7b6728eecc0c9"
+    },
+    {
+      "settled_at": "2026-10-28T07:14:11Z",
+      "block": 53191152,
+      "tx_hash": "0xc2e023e99e5d9865a977df8d0cbb77416c887eed0e7f9d9cae1d9fe0e960b8b0",
+      "amount_usdc": 0.009,
+      "amount_units": 9000,
+      "endpoint": {
+        "route": "/chain/token-security",
+        "url": "https://x402-data-api.sigrunner.workers.dev/chain/token-security",
+        "method": "GET",
+        "host": "x402-data-api.sigrunner.workers.dev"
+      },
+      "facilitator": "CDP /platform/v2/x402/settle — submitter 0x772003a2e9c2ccc8af956870a37a66f64f8cec38",
+      "extension_status": "success",
+      "purpose": "republish the catalog snapshot AFTER deploying the scam/rug-pull description (card t_800f9e79)",
+      "card": "t_800f9e79",
+      "evidence_source": "logs/cdp-settlement-tx.log (current 2 lines, written by this run)",
+      "evidence_tier": "on-chain receipt + facilitator relay response (extension success)",
+      "balance_before_usdc": 1.171,
+      "balance_after_usdc": 1.162,
+      "re_listing": {
+        "verdict": "RECORD + DESCRIPTION PUBLISHED, SEARCH IMPROVED, INDEX STILL PENDING at +7 min",
+        "measured_at": "2026-10-28T07:21Z",
+        "lastUpdated_after": "2026-10-28T07:14:09.743Z",
+        "lastCalledAt_after": "2026-10-28T06:02:46.377Z",
+        "calls_30d_after": 9,
+        "payers_30d_after": 2,
+        "description_after_chars": 415,
+        "description_mentions_scam": true,
+        "search_snapshot": {
+          "is this token a scam": "#10 of 13 (was 0 of 14)",
+          "token security": "#7/11",
+          "honeypot detector": "#15/18 (was #11/18)"
+        },
+        "confirmation": "This is the FIRST settlement that produced a real discovery benefit. Stored description switched to the 415-char scam/rug-pull text, and /discovery/search for 'is this token a scam' now returns us at rank 10 of 13 (0 of 14 before the deploy). lastUpdated matches the settlement second. The index counter (lastCalledAt) still showed seq 1's timestamp at +7 min, so seq 7's own call is expected to land by ~08:30Z given seq 1's 75-minute lag — scripts/check_rediscovery_verdict.py --since 2026-10-28T07:14:09Z is the gate and exits 1 until it does."
+      },
+      "notes": [
+        "extension=bazaar:success (the first success in the whole sequence) still does not mean the index advanced.",
+        "This run OVERWROTE seq 1's log lines: git diff showed 3 deletions / 2 insertions. Evidence preserved only by an ad-hoc .confirmed-* copy and by git."
+      ],
+      "category": "capital_spend_self_settlement",
+      "revenue_recognized_usdc": 0.0,
+      "payer": "0xC4852c26498d3187dEc2ce1b19e840710e302d1e",
+      "payee": "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10",
+      "network": "eip155:8453",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "revenue_note": "payer == our controlled buyer wallet and payee == our own PAY_TO: both are SELF_ADDRS in scripts/verify_revenue_ledger.py. Excluded from revenue by design; the relay writes no ledger row.",
+      "seq": 7,
+      "recorded_at": "2026-10-28T07:25:00Z",
+      "prev_entry_sha256": "3c66264281a55a0d767c8ab47fa22387ddbd3c1e1259a6fcedc7b6728eecc0c9",
+      "entry_sha256": "19f53b525c71d48bf55e1430bd896b28fcef74630cc0b1ea9ab88bda1b460043"
+    }
+  ]
+}
