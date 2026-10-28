@@ -162,5 +162,82 @@ class TestRunnersDegradeOpen(unittest.TestCase):
         self.assertEqual(out["yields"], [])
 
 
+class TestFundingAndBrief(unittest.TestCase):
+    def test_funding_url_and_preview(self):
+        u = d.build_funding_url(limit=500)
+        self.assertIn("/crypto/funding?", u)
+        self.assertIn("limit=100", u)  # clamped
+        self.assertTrue(d.build_funding_preview_url().endswith("/crypto/funding/preview"))
+        self.assertTrue(d.build_market_brief_url().endswith("/brief/market"))
+
+    def test_summarize_funding(self):
+        rows = [{"coin": "BTC", "funding_spread_bps": 1.25, "signal": "LONGS_PAY",
+                 "best_long_venue": "dydx", "best_short_venue": "okx"}]
+        s = d.summarize_funding(rows)
+        self.assertIn("BTC", s)
+        self.assertIn("1.25bps", s)
+        self.assertIn("LONGS_PAY", s)
+        self.assertIn("long@dydx/short@okx", s)
+        self.assertEqual(d.summarize_funding([]), "no funding data")
+
+    def test_summarize_market_brief(self):
+        out = {"fear_greed": {"value": 55, "classification": "Greed"},
+               "global": {"total_market_cap_usd": 3.4e12, "btc_dominance_pct": 58.2},
+               "trending": [{"symbol": "AERO"}]}
+        s = d.summarize_market_brief(out)
+        self.assertIn("F&G 55 (Greed)", s)
+        self.assertIn("mcap $3.40T", s)
+        self.assertIn("BTC dom 58.2%", s)
+        self.assertIn("trending AERO", s)
+        self.assertEqual(d.summarize_market_brief({}), "no market brief")
+
+    def test_funding_keyless_real_preview(self):
+        # keyless → real top-1 preview row, priced at the GATE ($0.004), not the stale note.
+        d.plain_get = lambda url, timeout=15.0: (200, {
+            "preview": [{"coin": "BTC", "funding_spread_bps": 1, "signal": "LONGS_PAY",
+                         "best_long_venue": "dydx", "best_short_venue": "okx"}],
+            "total_available": 20})
+        out = d.run_funding(lambda u: (0, None), has_key=False)
+        self.assertFalse(out["paid"])
+        self.assertEqual(out["count"], 1)
+        self.assertEqual(out["funding"][0]["coin"], "BTC")  # real value, not a stub
+        self.assertEqual(out["total_available"], 20)
+        self.assertEqual(out["activation"]["price_usdc"], "0.004")
+
+    def test_funding_paid(self):
+        out = d.run_funding(lambda u: (200, [{"coin": "ETH", "funding_spread_bps": 2}]),
+                            has_key=True)
+        self.assertTrue(out["paid"])
+        self.assertEqual(out["count"], 1)
+        self.assertIn("ETH", out["summary"])
+
+    def test_funding_402_degrades(self):
+        d.plain_get = lambda url, timeout=15.0: (200, {"preview": [{"coin": "BTC"}], "total_available": 20})
+        out = d.run_funding(lambda u: (402, None), has_key=True)
+        self.assertFalse(out["paid"])
+        self.assertIn("402", out["activation"]["reason"])
+
+    def test_market_brief_keyless_honest_stub(self):
+        out = d.run_market_brief(lambda u: (0, None), has_key=False)
+        self.assertFalse(out["paid"])
+        self.assertIn("activation", out)
+        self.assertEqual(out["activation"]["price_usdc"], "0.01")
+        # honest: no fabricated brief data
+        self.assertNotIn("fear_greed", out)
+        self.assertNotIn("global", out)
+
+    def test_market_brief_paid(self):
+        out = d.run_market_brief(lambda u: (200, {"fear_greed": {"value": 55}}), has_key=True)
+        self.assertTrue(out["paid"])
+        self.assertEqual(out["fear_greed"]["value"], 55)
+
+    def test_funding_never_raises_on_outage(self):
+        def boom(u):
+            raise RuntimeError("network down")
+        out = d.run_funding(boom, has_key=True)
+        self.assertIn("error", out)
+        self.assertEqual(out["funding"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -27,11 +27,13 @@ from .tools import (
     base_gas_price,
     base_token_balance,
     crewai_tools,
+    crypto_funding,
     crypto_prices,
     defi_yields,
+    market_brief,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "crewai_tools",
@@ -41,6 +43,8 @@ __all__ = [
     "base_gas_price",
     "base_block_number",
     "base_token_balance",
+    "crypto_funding",
+    "market_brief",
     "has_wallet",
     "make_pay_get",
     "DATA_BASE",

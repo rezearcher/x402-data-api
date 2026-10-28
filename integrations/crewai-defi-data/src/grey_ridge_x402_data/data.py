@@ -427,3 +427,131 @@ def run_token_balance(pay_get: PayGet, *, address: str, token: Optional[str] = N
     return _run_full_preview_read(
         pay_get, has_key=has_key, paid_url=paid_url, preview_url=preview_url,
         price_usdc="0.002", label="chain/token-balance")
+
+
+# ---------------------------------------------------------------------------
+# Market-intelligence routes — perp funding, one-call market brief
+# ---------------------------------------------------------------------------
+# Higher-value routes that lift $/payer above the $0.001-$0.002 base tier and
+# that external agents demonstrably bundle. /crypto/funding ($0.004) exposes a
+# free 1-row preview (a REAL top-coin sample) so a keyless install still returns
+# live data; /brief/market ($0.01) has NO preview, so keyless returns an
+# activation stub — never a fabricated brief.
+#
+# NOTE on price truth: the /crypto/funding/preview note text still reads
+# "$0.001", but the LIVE 402 gate charges 0.004 USDC (amount="4000", 6 dp).
+# We trust the gate, not the stale preview note.
+
+def build_funding_url(limit: int = 20, base: str = DATA_BASE) -> str:
+    return f"{base}/crypto/funding?{_qs({'limit': _clamp_limit(limit)})}"
+
+
+def build_funding_preview_url(base: str = DATA_BASE) -> str:
+    return f"{base}/crypto/funding/preview"
+
+
+def build_market_brief_url(base: str = DATA_BASE) -> str:
+    return f"{base}/brief/market"
+
+
+def summarize_funding(rows: Any) -> str:
+    if not isinstance(rows, list) or not rows:
+        return "no funding data"
+    t = rows[0] if isinstance(rows[0], dict) else {}
+    bits: List[str] = [str(t.get("coin") or "coin")]
+    if isinstance(t.get("funding_spread_bps"), (int, float)):
+        bits.append(f"arb spread {float(t['funding_spread_bps']):.2f}bps")
+    if t.get("signal"):
+        bits.append(str(t["signal"]))
+    if t.get("best_long_venue") and t.get("best_short_venue"):
+        bits.append(f"long@{t['best_long_venue']}/short@{t['best_short_venue']}")
+    return f"Top of {len(rows)}: {' · '.join(bits)}"
+
+
+def summarize_market_brief(out: Any) -> str:
+    if not isinstance(out, dict) or out.get("fear_greed") is None:
+        return "no market brief"
+    bits: List[str] = []
+    fg = out.get("fear_greed")
+    if isinstance(fg, dict) and fg.get("value") is not None:
+        cls = f" ({fg['classification']})" if fg.get("classification") else ""
+        bits.append(f"F&G {fg['value']}{cls}")
+    g = out.get("global") if isinstance(out.get("global"), dict) else {}
+    cap = usd(g.get("total_market_cap_usd"))
+    if cap:
+        bits.append(f"mcap {cap}")
+    if isinstance(g.get("btc_dominance_pct"), (int, float)):
+        bits.append(f"BTC dom {g['btc_dominance_pct']:.1f}%")
+    trend = out.get("trending")
+    if isinstance(trend, list) and trend and isinstance(trend[0], dict):
+        t0 = trend[0].get("symbol") or trend[0].get("name")
+        if t0:
+            bits.append(f"trending {t0}")
+    return " · ".join(bits) or "market brief"
+
+
+def run_funding(pay_get: PayGet, *, limit: int = 20, has_key: bool = True,
+                base: str = DATA_BASE) -> Dict[str, Any]:
+    """/crypto/funding ($0.004) — cross-venue perp funding + arb spread.
+
+    DEGRADES OPEN to the free top-1 preview (a real top coin) when the paid call
+    cannot be paid (no PRIVATE_KEY, or an unfunded wallet → 402). Only depth (up
+    to 100 ranked coins) is withheld. Never raises into the agent runtime.
+    """
+    paid_url = build_funding_url(limit=limit, base=base)
+
+    def take_preview(reason: str) -> Dict[str, Any]:
+        _, out = plain_get(build_funding_preview_url(base))
+        rows = out.get("preview") if isinstance(out, dict) else None
+        rows = rows if isinstance(rows, list) else []
+        res: Dict[str, Any] = {
+            "funding": rows, "count": len(rows), "summary": summarize_funding(rows),
+            "paid": False, "activation": _activation(reason, paid_url, "0.004"),
+            "guard_reasons": [fund_onramp_hint()],
+        }
+        if isinstance(out, dict) and out.get("total_available") is not None:
+            res["total_available"] = out["total_available"]
+        return res
+
+    try:
+        if not has_key:
+            return take_preview("no PRIVATE_KEY configured")
+        status, out = pay_get(paid_url)
+        if status == 200 and isinstance(out, list):
+            return {"funding": out, "count": len(out),
+                    "summary": summarize_funding(out), "paid": True}
+        reason = ("wallet not funded (paid /crypto/funding returned 402)"
+                  if status == 402 else f"paid /crypto/funding returned HTTP {status}")
+        return take_preview(reason)
+    except Exception as err:  # noqa: BLE001
+        msg = f"crypto/funding unavailable: {err}"
+        return {"error": msg, "funding": [], "count": 0,
+                "summary": f"ERROR: {msg}", "paid": False}
+
+
+def run_market_brief(pay_get: PayGet, *, has_key: bool = True,
+                     base: str = DATA_BASE) -> Dict[str, Any]:
+    """/brief/market ($0.01) — one-call sentiment + global cap + trending.
+
+    There is NO free preview for this composite route, so a keyless / unfunded
+    install gets an honest activation stub (no data) rather than a fabricated
+    brief. Never raises into the agent runtime.
+    """
+    paid_url = build_market_brief_url(base)
+    try:
+        if not has_key:
+            return {"paid": False,
+                    "summary": "market brief requires a funded wallet — running keyless",
+                    "activation": _activation("no PRIVATE_KEY configured", paid_url, "0.01"),
+                    "guard_reasons": [fund_onramp_hint()]}
+        status, out = pay_get(paid_url)
+        if status == 200 and isinstance(out, dict):
+            return {**out, "paid": True, "summary": summarize_market_brief(out)}
+        reason = ("wallet not funded (paid /brief/market returned 402)"
+                  if status == 402 else f"paid /brief/market returned HTTP {status}")
+        return {"paid": False, "summary": f"market brief unavailable — {reason}",
+                "activation": _activation(reason, paid_url, "0.01"),
+                "guard_reasons": [fund_onramp_hint()]}
+    except Exception as err:  # noqa: BLE001
+        msg = f"brief/market unavailable: {err}"
+        return {"error": msg, "paid": False, "summary": f"ERROR: {msg}"}

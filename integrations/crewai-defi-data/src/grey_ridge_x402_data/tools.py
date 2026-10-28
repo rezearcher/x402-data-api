@@ -1,10 +1,11 @@
 """Plain function API + CrewAI tool wrappers for the Grey Ridge data lane.
 
 The plain functions (``defi_yields``, ``crypto_prices``, ``base_balance``,
-``base_gas_price``, ``base_block_number``, ``base_token_balance``) depend only on
-the standard library + (optionally) the x402 SDK — any Python agent can import
-and call them. ``crewai_tools()`` lazily wraps them as ``crewai.tools.BaseTool``
-instances for a CrewAI crew.
+``base_gas_price``, ``base_block_number``, ``base_token_balance``,
+``crypto_funding``, ``market_brief``) depend only on the standard library +
+(optionally) the x402 SDK — any Python agent can import and call them.
+``crewai_tools()`` lazily wraps them as ``crewai.tools.BaseTool`` instances for
+a CrewAI crew.
 
 Every function returns a plain ``dict`` and NEVER raises into the agent loop; a
 true outage is reported as ``{"error": ...}`` and an unfunded wallet degrades
@@ -75,6 +76,20 @@ def base_token_balance(address: str, token: Optional[str] = None, *,
                                 has_key=c["has_key"], base=base)
 
 
+def crypto_funding(limit: int = 20, *, private_key: Optional[str] = None,
+                   base: str = _d.DATA_BASE) -> Dict[str, Any]:
+    """Cross-venue perp funding + arb spread (Hyperliquid+OKX+dYdX). $0.004 — degrades to a real 1-row preview keyless."""
+    c = _ctx(private_key)
+    return _d.run_funding(c["pay_get"], limit=limit, has_key=c["has_key"], base=base)
+
+
+def market_brief(*, private_key: Optional[str] = None,
+                 base: str = _d.DATA_BASE) -> Dict[str, Any]:
+    """One-call market snapshot: fear/greed + global cap + BTC dominance + trending. $0.01 (no free preview → honest stub keyless)."""
+    c = _ctx(private_key)
+    return _d.run_market_brief(c["pay_get"], has_key=c["has_key"], base=base)
+
+
 # ---------------------------------------------------------------------------
 # CrewAI tool wrappers (lazy import — crewai only required for crewai_tools())
 # ---------------------------------------------------------------------------
@@ -116,6 +131,9 @@ def crewai_tools(private_key: Optional[str] = None) -> List[Any]:
 
     class _NoArgs(BaseModel):
         pass
+
+    class _FundingArgs(BaseModel):
+        limit: int = Field(20, description="Max coins to rank by 24h notional volume (1–100).")
 
     def _emit(d: Dict[str, Any]) -> str:
         return json.dumps(d, default=str)
@@ -181,5 +199,28 @@ def crewai_tools(private_key: Optional[str] = None) -> List[Any]:
         def _run(self, address: str, token: Optional[str] = None) -> str:
             return _emit(base_token_balance(address, token, private_key=pk))
 
+    class CryptoFundingTool(BaseTool):
+        name: str = "crypto_funding"
+        description: str = ("Cross-venue perpetual funding rates + arbitrage spread for the top "
+                            "coins by volume (Hyperliquid + OKX + dYdX in one call, with best "
+                            "long/short venue and a LONGS_PAY/SHORTS_PAY signal). Paid $0.004/call "
+                            "via x402 USDC on Base; degrades open to a real top-1 preview.")
+        args_schema: type = _FundingArgs
+
+        def _run(self, limit: int = 20) -> str:
+            return _emit(crypto_funding(limit=limit, private_key=pk))
+
+    class MarketBriefTool(BaseTool):
+        name: str = "market_brief"
+        description: str = ("One-call market snapshot: fear/greed index, global market cap, BTC "
+                            "dominance and trending coins. Paid $0.01/call via x402 USDC on Base; "
+                            "no free preview, so keyless returns an honest activation stub "
+                            "(never a fabricated brief).")
+        args_schema: type = _NoArgs
+
+        def _run(self) -> str:
+            return _emit(market_brief(private_key=pk))
+
     return [DefiYieldsTool(), CryptoPricesTool(), BaseBalanceTool(),
-            BaseGasPriceTool(), BaseBlockNumberTool(), BaseTokenBalanceTool()]
+            BaseGasPriceTool(), BaseBlockNumberTool(), BaseTokenBalanceTool(),
+            CryptoFundingTool(), MarketBriefTool()]

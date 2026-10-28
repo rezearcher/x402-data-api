@@ -1,8 +1,9 @@
 # grey-ridge-x402-data
 
-DeFi yields, token prices and Base-chain reads for **CrewAI** and plain **Python**
-trading agents — paid inline per call with **x402 USDC on Base** (from
-**$0.001/call**), **no API key, no account, no subscription**.
+DeFi yields, token prices, perp funding, a one-call market brief and Base-chain
+reads for **CrewAI** and plain **Python** trading agents — paid inline per call
+with **x402 USDC on Base** (from **$0.001/call**), **no API key, no account, no
+subscription**.
 
 Drop-in tools wrapping Grey Ridge's live x402 data routes:
 
@@ -10,10 +11,16 @@ Drop-in tools wrapping Grey Ridge's live x402 data routes:
 |------|-------|-------|---------|
 | `defi_yields` | `/defi/yields` | $0.001 | Top lending/LP pools: project, chain, symbol, APY + trend, IL risk, TVL, risk-adjusted score |
 | `crypto_prices` | `/crypto/prices` | $0.001 | Spot price, 24h change, symbol (≤25 CoinGecko ids) |
+| `crypto_funding` | `/crypto/funding` | $0.004 | Cross-venue perp funding + arb spread (Hyperliquid+OKX+dYdX), best long/short venue, signal |
+| `market_brief` | `/brief/market` | $0.01 | One-call snapshot: fear/greed, global market cap, BTC dominance, trending coins |
 | `base_balance` | `/chain/balance` | $0.002 | Native ETH balance + `balance_usd` for a Base address |
 | `base_gas_price` | `/chain/gas-price` | $0.002 | Base EIP-1559 gas: base/priority fee (gwei), `gas_price_usd` |
 | `base_block_number` | `/chain/block-number` | $0.002 | Current Base mainnet block height |
 | `base_token_balance` | `/chain/token-balance` | $0.002 | ERC-20 balance of a Base address (`token` defaults to USDC) |
+
+`crypto_funding` degrades open to a **real top-1 preview** (live perp funding for
+the top coin) when run keyless; `market_brief` has no preview, so keyless returns
+an honest activation stub rather than a fabricated brief.
 
 Upstream data is DefiLlama + Base RPC, served from a sub-cent Cloudflare Worker.
 

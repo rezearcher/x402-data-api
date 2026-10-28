@@ -1234,10 +1234,6 @@ const DATA_TOOL_ROUTES_8 = [
   "/defi/yields", "/crypto/prices", "/crypto/funding", "/brief/market",
   "/chain/balance", "/chain/gas-price", "/chain/block-number", "/chain/token-balance",
 ];
-const DATA_TOOL_ROUTES_6 = [
-  "/defi/yields", "/crypto/prices",
-  "/chain/balance", "/chain/gas-price", "/chain/block-number", "/chain/token-balance",
-];
 const INSTALLABLE_TOOLS: Array<{
   framework: string;
   language: string;
@@ -1274,8 +1270,8 @@ const INSTALLABLE_TOOLS: Array<{
     package: "grey-ridge-x402-data",
     install: "pip install git+https://github.com/rezearcher/crewai-defi-data",
     repository: "https://github.com/rezearcher/crewai-defi-data",
-    tool_count: 6,
-    wraps: DATA_TOOL_ROUTES_6,
+    tool_count: 8,
+    wraps: DATA_TOOL_ROUTES_8,
     note: "CrewAI BaseTool wrappers plus framework-agnostic plain functions; dep-free keyless stdlib core, x402 paid rail via the [pay] extra.",
   },
 ];
@@ -12489,7 +12485,7 @@ from grey_ridge_x402_data import crewai_tools, crypto_prices
 print(crypto_prices("bitcoin,ethereum")["summary"])  # keyless: real live price
 # reads PRIVATE_KEY (your agent's Base wallet) from the env when set
 agent = Agent(role="analyst", tools=crewai_tools())</pre>
-<p class=muted style="margin:.7rem 0 0">Six tools &mdash; <code>defi_yields</code>, <code>crypto_prices</code>, <code>base_balance</code>, <code>base_gas_price</code>, <code>base_block_number</code>, <code>base_token_balance</code> &mdash; each returns a plain dict and never raises into the crew; the Base-RPC reads return the real live value even with no wallet, and the native-balance read returns an honest activation stub rather than a fabricated number. Source: <a href="https://github.com/rezearcher/crewai-defi-data">github.com/rezearcher/crewai-defi-data</a>.</p>
+<p class=muted style="margin:.7rem 0 0">Eight tools &mdash; <code>defi_yields</code>, <code>crypto_prices</code>, <code>crypto_funding</code>, <code>market_brief</code>, <code>base_balance</code>, <code>base_gas_price</code>, <code>base_block_number</code>, <code>base_token_balance</code> &mdash; each returns a plain dict and never raises into the crew; the Base-RPC reads return the real live value even with no wallet, <code>crypto_funding</code> ($0.004) degrades to a real top-1 perp-funding preview, and the native-balance read and <code>market_brief</code> ($0.01) return an honest activation stub rather than a fabricated number. Source: <a href="https://github.com/rezearcher/crewai-defi-data">github.com/rezearcher/crewai-defi-data</a>.</p>
 </div>
 
 <h2>Where the data comes from</h2>
