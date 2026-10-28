@@ -9044,11 +9044,39 @@ interface TokenSecurityResult {
   };
   ownership: OwnerInfo & { owner_percent_bps: number | null; owner_percent_note: string };
   honeypot_sim: HoneypotSim;
+  source_verified: boolean | null;
+  source_verified_note: string;
   risk_score: number;
   verdict: Verdict;
   flags: string[];
   risk_summary: string;
   analyzed_at: string;
+}
+
+// Contract source-verification signal — GoPlus `is_open_source` parity, done in the
+// honest direction. Sourcify v2 is a keyless, public verification registry: a 200
+// with a non-null match is a RELIABLE POSITIVE — the contract's source is published
+// and byte-matches the on-chain code. We deliberately treat ABSENCE as "unknown", NOT
+// "unverified": Sourcify's Base coverage is partial (many Base contracts are verified
+// only on Basescan/Etherscan, which needs a keyed API), so a 404 means "not confirmed
+// via Sourcify", never "has no source". Surfacing absence as a risk would false-alarm
+// on the majority of legitimate Base tokens — a precision>coverage violation that
+// erodes the scanner's credibility — so this is a positive-only trust signal
+// (true | null) and NEVER contributes to the risk score. Degrades open: any
+// error/timeout/non-200 -> null (never fabricate a verification claim).
+async function checkSourceVerified(address: string): Promise<boolean | null> {
+  try {
+    const res = await fetch(`https://sourcify.dev/server/v2/contract/8453/${address.toLowerCase()}`, {
+      headers: { "User-Agent": "greyridge-x402/1 (token-safety source-verification)", accept: "application/json" },
+      signal: AbortSignal.timeout(2500),
+    });
+    if (res.status !== 200) return null; // 404 = not in Sourcify; do NOT claim unverified
+    const d = (await res.json()) as { match?: string | null; runtimeMatch?: string | null; creationMatch?: string | null };
+    const m = d.match ?? d.runtimeMatch ?? d.creationMatch ?? null;
+    return m ? true : null;
+  } catch {
+    return null;
+  }
 }
 
 async function analyzeTokenSecurity(token: string): Promise<TokenSecurityResult> {
@@ -9072,12 +9100,20 @@ async function analyzeTokenSecurity(token: string): Promise<TokenSecurityResult>
   // instead when one was found; fall back to the queried address's own code.
   let scanAddress = token;
   let scanCode = code;
-  if (proxy.is_proxy && proxy.implementation_address) {
-    const implCode = (await baseRpc("eth_getCode", [proxy.implementation_address, "latest"]).catch(() => null)) as string | null;
-    if (implCode && implCode !== "0x") {
-      scanAddress = proxy.implementation_address;
-      scanCode = implCode;
-    }
+  // For a proxy, both the capability scan and the source-verification target are the
+  // IMPLEMENTATION (where the real logic lives), not the thin forwarder. Run the impl
+  // code fetch and the Sourcify source check in parallel so the source signal adds no
+  // serial latency to this paid route.
+  const verifyTarget = proxy.is_proxy && proxy.implementation_address ? proxy.implementation_address : token;
+  const [implCode, source_verified] = await Promise.all([
+    proxy.is_proxy && proxy.implementation_address
+      ? (baseRpc("eth_getCode", [proxy.implementation_address, "latest"]).catch(() => null) as Promise<string | null>)
+      : Promise.resolve<string | null>(null),
+    checkSourceVerified(verifyTarget),
+  ]);
+  if (implCode && implCode !== "0x") {
+    scanAddress = proxy.implementation_address!;
+    scanCode = implCode;
   }
   const { detected, categories } = scanBytecodeSelectors(scanCode);
   const decimals = meta?.decimals ?? 18;
@@ -9151,11 +9187,12 @@ async function analyzeTokenSecurity(token: string): Promise<TokenSecurityResult>
   score = Math.min(100, score);
   const verdict = verdictFromScore(score);
 
+  const srcNote = source_verified ? " Contract source is publicly verified (Sourcify)." : "";
   const risk_summary = !codeClass.is_contract
     ? "Target is not a contract — cannot be an ERC-20 token."
     : flags.length === 0
-      ? `No dangerous capabilities detected on static analysis${sim.sim_status === "tested" && sim.transferable ? " and the simulated transfer succeeded" : ""}. Risk ${score}/100.`
-      : `${flags.length} risk flag(s) detected. Risk ${score}/100.${sim.sim_status === "unavailable" ? " Honeypot simulation was unavailable for this token — see honeypot_sim.note." : ""}`;
+      ? `No dangerous capabilities detected on static analysis${sim.sim_status === "tested" && sim.transferable ? " and the simulated transfer succeeded" : ""}. Risk ${score}/100.${srcNote}`
+      : `${flags.length} risk flag(s) detected. Risk ${score}/100.${sim.sim_status === "unavailable" ? " Honeypot simulation was unavailable for this token — see honeypot_sim.note." : ""}${srcNote}`;
 
   return {
     token,
@@ -9179,6 +9216,11 @@ async function analyzeTokenSecurity(token: string): Promise<TokenSecurityResult>
         "owner_percent_bps = balanceOf(owner())/totalSupply in basis points (10000 = 100%). This is single-owner supply concentration (GoPlus owner_percent) — the share held by the privileged owner() address. null = ownership renounced/none, non-standard balanceOf, or totalSupply unavailable (never 0 by default). An EOA owner holding a large slice is weighted as dump risk; a contract owner (possible treasury/timelock/locker) is reported but weighted lower. Aggregate top-holder concentration and total holder_count across many addresses require an off-chain indexer and are NOT included.",
     },
     honeypot_sim: sim,
+    source_verified,
+    source_verified_note:
+      "source_verified = contract source is published and byte-matches the on-chain code, confirmed via Sourcify (chainId 8453)" +
+      (proxy.is_proxy ? ", checked against the implementation contract" : "") +
+      ". true = publicly verified (a positive transparency signal — auditable source). null = NOT confirmed via Sourcify; this is NOT a claim that the contract is unverified (Sourcify's Base coverage is partial — the token may be verified on Basescan/Etherscan). Because absence is ambiguous, this signal never raises the risk score; it only ever reports a confirmed positive.",
     risk_score: score,
     verdict,
     flags,
