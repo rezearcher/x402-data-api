@@ -87,6 +87,15 @@ The QA pass at +55 min concluded "the async index never completed". It completed
 minutes later. **Treat < 90 min as pending, not failed**, and never settle again to
 "unstick" it — that is how the fraud line gets crossed.
 
+**Those two numbers are samples, not a bound.** A 259-record census of the entire public
+catalog (`logs/cdp-counter-census-2026-10-28.json`, card t_3814c750) shows the lag is
+bimodal and unbounded: p50 **0.27 s**, 88 % within 5 s, then p90 **33 min**, p95 **1.6 h**,
+p99 **21 h**, max **9.8 days**; **18 of 259 records (6.9 %) lag by more than an hour**. The
+1000+ calls/30d bucket has a *37-minute median* — busy routes are coalesced into a periodic
+rollup, and CDP documents quality/ranking recompute on a **six-hour schedule**. Our route
+sits in the tail: it took 55–81 min for seq 1 and had not moved at all for seq 7 at T+98 min.
+Full analysis: `docs/findings/cdp-index-counter-lag.md`.
+
 **T+30 is not a verdict, and it is now machine-enforced.** Two independent passes on
 2026-10-28 (t_6503d66f at +55 min, t_d5138bac at +31 min) both read the frozen counter and
 concluded "index broken / never completed" while the index was still in flight. The second
@@ -129,13 +138,24 @@ Trajectory evidence: `logs/cdp-index-latency-probe.jsonl` (45 reads, 120s apart,
 ## 4. The 30-day window and the monitoring that prevents a re-delisting
 
 - A resource with **no settlement for 30 days** is dropped from catalog *and* search.
-  The 2026-10-20 cohort of our routes (last called 10-19..10-27) ages out on **2026-11-19**.
+  Measured by `lastUpdated`: the oldest record today is `/ai/extract` at
+  `2026-10-19T17:44:32Z`, so it crosses 25 d on **2026-11-13T17:44Z** and 30 d on
+  **2026-11-18T17:44Z** (the monitor run of 2026-10-28T08:58Z shows 48 routes, worst 8.63 d,
+  21.4 d of headroom, 0 at WARN).
 - Ranking is refreshed on a ~6-hourly cadence and weighted by **payer depth**, which is
   why one self-settlement can restore *presence and vocabulary match* but cannot buy rank.
-- **Monitoring (this is the part that keeps us listed):** assert
-  `min(lastCalledAt over all our catalogued routes) > now - 25 days`. Anything inside
-  5 days of the cliff gets one settlement, with the description already deployed.
-  Never batch, never loop, never settle twice in a row to climb rank.
+- **Monitoring (this is the part that keeps us listed):** run
+  `python3 scripts/monitor_delisting.py`. It gates on **`lastUpdated`** — the field the
+  settlement path writes synchronously (measured 125 ms–1.007 s) — NOT on
+  `quality.lastCalledAt`, which is CDP's rollup and can be days stale *while the record is
+  perfectly fresh* (that mismatch is the bug card t_3814c750 fixed: a monitor on the counter
+  fires falsely, and its remediation pressures the operator into paying 0.009 USDC to unstick
+  a counter).
+  Thresholds WARN ≥ 25 d / CRITICAL ≥ 28 d / DELISTED ≥ 30 d; exit 0/1/2/3, and 4 = no data
+  (an empty feed is an emergency, never a pass). Anything at WARN gets **one** settlement,
+  with the description already deployed. Never batch, never loop, never settle twice in a
+  row to climb rank, and never settle to move the counter — settle to refresh the record.
+  The counter is printed as ADVISORY (banded against the census p95) and never as a gate.
 - **One genuine external paid call is worth more than any self-settlement**: it moves
   `l30DaysUniquePayers` off 1 and is the only thing that raises rank.
 
@@ -212,7 +232,9 @@ no revenue row, and every ledger entry carries `revenue_recognized_usdc: 0.0`.
 cd ~/projects/x402-data-api
 # 0. description live?
 curl -s https://x402-data-api.sigrunner.workers.dev/chain/token-security | grep -qi scam
-# 1. is this route even allowed to settle? (exit 2 = already settled inside 25d)
+# 1a. does ANY route need spending at all? (exit 0 = nothing to do today)
+python3 scripts/monitor_delisting.py
+# 1b. is this route even allowed to settle? (exit 2 = already settled inside 25d)
 python3 scripts/cdp_settlement_ledger.py guard --route /chain/token-security
 # 2. gate
 node scripts/wallet_settlement_gate.js --route /chain/token-security

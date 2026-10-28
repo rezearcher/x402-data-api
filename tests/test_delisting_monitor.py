@@ -146,6 +146,19 @@ class TestClassify(unittest.TestCase):
         self.assertIsNone(v["counter_drift_s"])
         self.assertFalse(v["counter_flagged"])
 
+    def test_record_stale_vs_counter_is_flagged_and_stays_pessimistic(self):
+        """3/259 catalog records (ax1.vc: 154k calls/30d) have a counter DAYS ahead
+        of lastUpdated. Age then under-reads freshness -- early, never late."""
+        v = md.classify(record(updated_days_ago=10.0, called_days_ago=0.0), NOW)
+        self.assertEqual(v["status"], "OK")
+        self.assertTrue(v["record_stale_vs_counter"])
+        self.assertAlmostEqual(v["age_days"], 10.0, places=3)
+
+        just_under = md.classify(record(updated_days_ago=0.0, called=iso(NOW), updated=iso(NOW - timedelta(seconds=3599))), NOW)
+        self.assertFalse(just_under["record_stale_vs_counter"])
+        just_over = md.classify(record(updated=iso(NOW - timedelta(seconds=3601)), called=iso(NOW)), NOW)
+        self.assertTrue(just_over["record_stale_vs_counter"])
+
     def test_counter_bands(self):
         bands = {
             0.0: "normal (89.6% of catalog <=60s)",
@@ -182,6 +195,25 @@ class TestDecide(unittest.TestCase):
 
     def test_empty_feed_is_no_data_not_ok(self):
         self.assertEqual(md.decide([]), ("NO-DATA", 4))
+
+
+class TestDedupe(unittest.TestCase):
+    """Paging /merchant re-serves the tail of the previous page; a raw concat
+    printed /ai/extract twice and inflated the route count."""
+
+    def test_keeps_newest_lastUpdated_per_resource(self):
+        old = record(updated_days_ago=9.0)
+        new = record(updated_days_ago=1.0)
+        self.assertEqual(len(md.dedupe([old, new])), 1)
+        self.assertAlmostEqual(md.classify(md.dedupe([new, old])[0], NOW)["age_days"], 1.0, places=2)
+
+    def test_distinct_resources_both_survive(self):
+        a = record(resource="https://h/a")
+        b = record(resource="https://h/b")
+        self.assertEqual(len(md.dedupe([a, b])), 2)
+
+    def test_blank_resource_is_dropped(self):
+        self.assertEqual(md.dedupe([record(resource=""), record(resource=None)]), [])
 
 
 class TestRemediation(unittest.TestCase):

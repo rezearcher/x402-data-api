@@ -1,6 +1,6 @@
 {
  "api": "https://api.cdp.coinbase.com/platform/v2/x402/discovery",
- "generated_at": "2026-10-28T08:57:06Z",
+ "generated_at": "2026-10-28T08:57:33Z",
  "rows": [
   {
    "calls30d": 11,

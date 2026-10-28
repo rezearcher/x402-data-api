@@ -181,8 +181,34 @@ def classify(record, now, warn_days=DEFAULT_WARN_DAYS,
         "counter_in_tail": bool(drift is not None and drift >= COUNTER_TAIL_SECONDS),
         "counter_band": _counter_band(drift),
         "counter_ahead_of_record": bool(drift is not None and drift < -60),
+        # 3 of 259 catalog records carry a counter more than an hour AHEAD of
+        # lastUpdated (ax1.vc: 154k calls/30d, record 10 days older than the
+        # counter). For those the monitor's age is pessimistic, which is the safe
+        # direction for a delisting clock: it can fire early, never late. One
+        # settlement re-crawls the record (measured 125 ms), which is the correct
+        # fix here -- and note this is a RECORD refresh, not "fixing the counter".
+        "record_stale_vs_counter": bool(drift is not None and drift < -3600),
     })
     return out
+
+
+def dedupe(records):
+    """One row per resource. /merchant pagination OVERLAPS: page 2 re-serves the
+    tail of page 1, so a raw concat double-prints routes and double-counts them in
+    the summary. Keep the record carrying the newest lastUpdated."""
+    best = {}
+    for r in records:
+        key = (r.get("resource") or "").strip()
+        if not key:
+            continue
+        prev = best.get(key)
+        if prev is None:
+            best[key] = r
+            continue
+        if (ts(r.get("lastUpdated")) or datetime.min.replace(tzinfo=timezone.utc)) > \
+           (ts(prev.get("lastUpdated")) or datetime.min.replace(tzinfo=timezone.utc)):
+            best[key] = r
+    return list(best.values())
 
 
 def decide(verdicts):
@@ -316,10 +342,10 @@ def main():
         return 4
 
     if args.from_file:
-        records = load_from_file(args.from_file)
+        records = dedupe(load_from_file(args.from_file))
     else:
         try:
-            records = fetch_records(args.pay_to)
+            records = dedupe(fetch_records(args.pay_to))
         except Exception as e:
             print(f"NO DATA: merchant feed unreachable ({type(e).__name__}: {e})")
             return 4
@@ -353,8 +379,10 @@ def main():
             print(f"  counter {v['counter_drift_s']:8.0f}s behind record  {v['route']:<34} "
                   f"[{v.get('counter_band')}]")
         for v in ahead:
-            print(f"  counter ahead of record by {-v['counter_drift_s']:6.0f}s  {v['route']}  "
-                  f"(a call newer than the record refresh)")
+            note = ("RECORD IS OLDER THAN THE COUNTER -- age above reads pessimistic "
+                    "(early, never late)" if v.get("record_stale_vs_counter")
+                    else "a call landed a moment after the record snapshot")
+            print(f"  counter ahead of record by {-v['counter_drift_s']:6.0f}s  {v['route']}  ({note})")
         for v in odd:
             print(f"  {v['ledger_vs_catalog']:<26} {v['route']}  ledger={v.get('ledger_last_settlement')} "
                   f"catalog={v.get('last_updated')}")
