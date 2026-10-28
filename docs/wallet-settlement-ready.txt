@@ -1,0 +1,179 @@
+WALLET SETTLEMENT READINESS — x402-data-api buyer wallet
+=========================================================
+status:            READY — GATED FOR EXACTLY ONE SETTLEMENT, NOT EXECUTED
+generated:         2026-10-28T05:59:25Z
+base_block:        53188909 (Base mainnet)
+kanban_task:       t_66e90ab3 (seceng) — prepare and gate, do NOT settle
+gate_tool:         scripts/wallet_settlement_gate.js (committed with this file)
+gate_result:       17/17 checks PASS, settled=false, spent_usdc=0
+
+
+1. WALLET — CONTROLLED, SELF-CUSTODIED, NO THIRD-PARTY CUSTODIAN
+----------------------------------------------------------------
+address:           0xC4852c26498d3187dEc2ce1b19e840710e302d1e
+role:              buyer / test funder (the Payer for CDP facilitator settlement)
+chain:             Base mainnet (eip155:8453)
+custodian:         NONE. Locally held EOA private key. No exchange, broker, hosted
+                   wallet API or delegated signer sits in the signing path.
+
+key storage:       /home/rez/projects/x402-data-api/buyer-wallet.json
+                   mode 0600, owner rez
+                   gitignored (.gitignore:6 "buyer-wallet.json")
+                   never committed to git — verified against every revision
+                   private key material exists ONLY in that one file — whole working
+                   tree scanned, zero copies elsewhere (node_modules and .git excluded)
+
+proof of control:  the private key in that file derives to the address above
+                   (viem privateKeyToAccount). We hold the key for the funded address,
+                   and the funded address is the one the x402 client signs from.
+
+contamination:     this address is a registered self-payer in both code paths, so a
+                   settlement from it can never be counted as revenue:
+                     src/index.ts:3764        TrafficLog.SELF_PAYERS
+                     scripts/verify_revenue_ledger.py:47   SELF_ADDRS
+                   payee is our own receiving wallet:
+                     0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10 (PAY_TO, also self)
+
+
+2. BALANCE — LIVE CHAIN READ, NOT A CARRIED-FORWARD NUMBER
+----------------------------------------------------------
+balance_usdc:                1.23
+balance_usdc_required_min:    0.002
+balance_requirement_met:      YES  (615x the required floor)
+balance_usdc_units:           1230000 (6 decimals, contract 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913)
+balance_eth:                  0.0
+eth_is_a_blocker:             NO — the settlement uses the EIP-3009 "exact" scheme. The
+                              payer signs a transfer authorization; the CDP facilitator
+                              submits the transaction and pays the gas. Zero ETH is
+                              expected and correct for this path.
+
+headroom after the approved spend:
+  approved_amount_usdc:       0.009
+  balance_after_usdc:         1.221
+  still_above_floor_after:    YES
+
+
+3. SETTLEMENT COST — MEASURED FROM THE LIVE 402 CHALLENGE, NOT ASSUMED
+---------------------------------------------------------------------
+route:             /chain/token-security   (GET, read-only, no side effects)
+challenge:         HTTP 402 with a payment-required header (x402Version 2)
+scheme:            exact
+network:           eip155:8453 (Base mainnet)
+asset:             0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 (USDC)
+amount:            9000 units = 0.009 USDC
+payTo:             0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10  (our own receiving wallet)
+maxTimeoutSeconds: 300
+extensions:        bazaar (declared) — this is what re-publishes the catalog entry
+
+PRICE CORRECTION: the card's "~$0.001 settlement cost" premise is 9x low. The live quoted
+price for the recommended route is 0.009 USDC, not 0.001 USDC. The 0.002 floor in this
+card's acceptance check is therefore still satisfied, but it is NOT 2x a 0.001 cost —
+it is 0.22x of the real 0.009 quote. The balance (1.23) is what actually clears the gate.
+APPROVED SPEND CAP: 0.01 USDC per single call. Any route quoting above 0.01 USDC requires
+a fresh sign-off and a fresh gate run.
+
+net_cost_to_operator: ~0.00 USD. The payment recirculates buyer-wallet -> our own payTo.
+The CDP facilitator fee is 0 for the first 1,000 settlements/month. Gas is the facilitator's.
+
+
+4. GATE RUN — FULL OUTPUT (settled=false, spent_usdc=0)
+-------------------------------------------------------
+PASS  custody.file_present                   /home/rez/projects/x402-data-api/buyer-wallet.json
+PASS  custody.mode_0600                      mode=600
+PASS  custody.gitignored                     git check-ignore
+PASS  custody.not_tracked                    git ls-files
+PASS  identity.key_matches_address           file=0xC4852c26498d3187dEc2ce1b19e840710e302d1e derived=0xC4852c26498d3187dEc2ce1b19e840710e302d1e
+PASS  funding.usdc_balance                   balance=1.23 USDC required>=0.002
+PASS  funding.eth_is_not_required            eth=0 (EIP-3009 -> facilitator pays gas)
+PASS  quote.payment_required_header          http=402
+PASS  quote.asset_is_base_usdc               asset=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+PASS  quote.network_is_base                  network=eip155:8453
+PASS  quote.amount_within_cap                amount=0.009 cap<=0.01
+PASS  quote.payee_is_our_payto               payTo=0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10
+PASS  solvency.post_spend_balance            remaining=1.221 required>=0.002
+PASS  signer.payload_from_is_funded_wallet   payload.from=0xC4852c26498d3187dEc2ce1b19e840710e302d1e
+PASS  signer.eip3009_signature_present       signature_len=132
+PASS  signer.authorization_targets_payto     authorization.to=0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10 value=9000
+PASS  signer.validity_window_current         validAfter=0 now=<t> validBefore=<t+300>
+
+The last three checks are the ones that matter: the script built the real EIP-3009 payment
+payload with the real x402 client against the live challenge, and the signature recovers to
+the funded address with the authorization pointing at our own payTo for exactly 9000 units.
+Everything except the final settle POST has already been executed successfully. The dry run
+consumes nothing — an unused EIP-3009 authorization has no on-chain effect.
+
+
+5. SIGN-OFF FOR t_6503d66f (settlement execution)
+--------------------------------------------------
+APPROVED:
+  - wallet            0xC4852c26498d3187dEc2ce1b19e840710e302d1e  (key control proven)
+  - route             /chain/token-security
+  - amount            0.009 USDC (9000 units), hard cap 0.01 USDC for one call
+  - count             EXACTLY ONE settlement. One route, one call, sequential.
+
+NOT APPROVED — do not do these:
+  - a second settlement, or batching multiple routes
+  - --force to bypass the 20h cooldown
+  - any route quoting more than 0.01 USDC without a fresh gate + fresh sign-off
+  - spending from any wallet other than the one above
+
+PREFLIGHT (must exit 0 immediately before settling):
+  cd /home/rez/projects/x402-data-api
+  node scripts/wallet_settlement_gate.js --route /chain/token-security
+
+PREREQUISITE ALREADY VERIFIED — the auth path works, but .env is absent:
+  scripts/refresh_bazaar_catalog.js requires RAPIDAPI_PROXY_SECRET in process.env (it
+  fails fast with a clear FATAL otherwise). There is no .env in the repo. The secret is
+  in 1Password under the ref recorded in .op.env. Export it for the run — do not write it
+  into a tracked file:
+    export RAPIDAPI_PROXY_SECRET="$(op read "$(grep -E '^RAPIDAPI_PROXY_SECRET=' .op.env | cut -d= -f2- | tr -d '\"'\"'\"')")"
+    node scripts/refresh_bazaar_catalog.js --route /chain/token-security
+
+  Worker auth state, probed live and read-only (/internal/cdp-probe):
+    with the legacy header  -> 200, CDP JWT minted (len 472), CDP facilitator 200
+    with no header          -> 401 (fail-closed confirmed)
+    CDP_INTERNAL_SECRET is NOT yet configured, so the pre-migration fallback is active and
+    the script's X-RapidAPI-Proxy-Secret header is accepted. If someone adds
+    CDP_INTERNAL_SECRET to the Worker before this runs, the script's header stops working
+    and every settle returns 401 — re-probe before executing.
+
+  Module + package prereqs present: @x402/evm 2.28.0, @x402/core 2.28.0,
+  @x402/extensions 2.21.0, viem. All script entry points resolve.
+
+  Cooldown: .cdp_seed_cooldown.json last touched 2026-10-19; the 20h window for
+  /chain/token-security expired 2026-10-19T22:35Z. No --force needed.
+
+  Buyer-wallet balance must still read >= 0.002 at execution time. If it does not, STOP —
+  the balance was 1.23 at 2026-10-28T05:59Z and nothing else is authorised to spend it.
+
+
+6. MICRO-CAPITAL ATOM — FOR REZ
+--------------------------------
+This is the capital gate, and it is smaller than the card assumed in one direction and
+larger in another:
+
+  - Real spend is 0.009 USDC (~1 cent), not 0.001 USDC. Still a spend.
+  - Net cost to us is ~0.00 USD: the money moves from our buyer wallet to our own payTo
+    address, the facilitator charges nothing under 1,000 settlements/month, and the gas is
+    the facilitator's.
+  - It is one call. Not a subscription, not a recurring authority. The EIP-3009
+    authorization is single-use, scoped to 9000 units, and expires in 300 seconds.
+  - Everything is already funded and signing-verified. No top-up, no bridge, no swap, no
+    new account, no KYC step is required for this to go.
+  - Worst case if it fails: 0.009 USDC of our own money lands in our own wallet and the
+    catalog entry is not refreshed. There is no counterparty risk and no loss surface
+    beyond the facilitator doing nothing.
+
+Decision requested: authorise ONE 0.009 USDC settlement on /chain/token-security to
+re-publish the catalog entry. The full amount, route, wallet and signature path are
+pre-verified above. Withholding authorisation is the only thing still blocking it.
+
+
+7. REPRODUCE
+------------
+  cd /home/rez/projects/x402-data-api
+  node scripts/wallet_settlement_gate.js --route /chain/token-security          # human table
+  node scripts/wallet_settlement_gate.js --route /chain/token-security --json   # machine
+  node scripts/wallet_settlement_gate.js --route /chain/token-security --cap 0.005   # fail-closed demo
+
+The gate never POSTs to /internal/cdp-settle-raw and never signs anything that is submitted.
