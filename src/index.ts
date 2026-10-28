@@ -1738,6 +1738,9 @@ app.get("/sitemap.xml", (c) => {
     { path: "/security-assessment", priority: "1.0", changefreq: "weekly" },
     { path: "/pricing", priority: "0.9", changefreq: "weekly" },
     { path: "/for-agents", priority: "0.9", changefreq: "weekly" },
+    { path: "/for-agents/defi-yields", priority: "0.9", changefreq: "weekly" },
+    { path: "/for-agents/crypto-prices", priority: "0.9", changefreq: "weekly" },
+    { path: "/for-agents/base-rpc", priority: "0.9", changefreq: "weekly" },
     { path: "/scan/mcp-scanner", priority: "0.9", changefreq: "weekly" },
     { path: "/scan/badge-gen", priority: "0.8", changefreq: "weekly" },
     { path: "/scan/verify", priority: "0.8", changefreq: "weekly" },
@@ -12046,6 +12049,14 @@ ${rowsHtml}
 </tbody></table>
 <p class=muted>Prices are per successful call in USDC on Base (eip155:8453). Routes with a free preview return the same JSON shape without payment so an agent can evaluate before it pays.</p>
 
+<h2>Guides by data type</h2>
+<p>Deeper pages for the three sets agents reach for most:</p>
+<ul>
+<li><a href="/for-agents/defi-yields">DeFi yields API</a> &mdash; lending &amp; LP yields with APY trend, IL risk and TVL</li>
+<li><a href="/for-agents/crypto-prices">Crypto price API</a> &mdash; spot prices, perp funding and market sentiment</li>
+<li><a href="/for-agents/base-rpc">Base RPC API</a> &mdash; blocks, gas, balances, receipts and Chainlink prices</li>
+</ul>
+
 <h2>How an agent pays</h2>
 <div class=card>
 <p style="margin:.2rem 0 .7rem">Point any x402-aware client at a route. The first response carries the price and payment terms; the client pays and retries; the second response is the data. With the <code>x402-fetch</code> wrapper it is one line:</p>
@@ -12060,6 +12071,160 @@ const yields = await r.json(); // risk-adjusted stablecoin yields, paid inline</
 <p class=muted>On-chain reads are live Base mainnet RPC. DeFi yields, TVL, fees and protocol data are sourced from DefiLlama; spot prices from DefiLlama and CoinGecko; perp funding from Hyperliquid, OKX and dYdX; Chainlink routes read the on-chain aggregators directly. Each response carries its source and a timestamp. Market data is informational, not financial advice; the pre-trade token-safety gate is a static + simulation check, not a guarantee a token is safe.</p>
 
 <footer>Grey Ridge Signals Group LLC &middot; keyless x402 data for agents &middot; <a href="/openapi.json">OpenAPI</a> &middot; <a href="/.well-known/x402">x402 catalog</a> &middot; <a href="/pricing">Pricing</a> &middot; <a href="/">greyridgesignals.ai</a></footer>`;
+  return c.html(html);
+});
+
+// Per-topic agent landing pages — the demand-side SEO wedge. /for-agents is the hub;
+// these three target the exact search intent of the lane that ACTUALLY earns (route-level
+// payer trace, 30d: every external payer is on data routes — /defi/yields leads, then
+// /crypto/prices, then Base /chain/* RPC; zero on the security product). Each topic is
+// defined by a PREFIX REGEX only, so the route rows are DERIVED from ROUTE_CATALOG and can
+// never drift out of sync with the live catalog/pricing; the config holds nothing but the
+// human-written copy a crawler and a developer read. Unknown topic -> 404.
+const AGENT_TOPICS: Record<
+  string,
+  { re: RegExp; lead: string; h1: string; sub: string; title: string; metaDesc: string; lead_p: string; ex_path: string; ex_comment: string; ex_var: string; intent_h2: string; intent_p: string }
+> = {
+  "defi-yields": {
+    re: /^\/defi\//,
+    lead: "/defi/yields",
+    h1: "Keyless DeFi yields API for AI agents",
+    sub: "Lending and LP yields with APY trend, IL risk and TVL — paid per call in USDC on Base, no account or API key.",
+    title: "Keyless DeFi Yields API for Agents — APY, IL risk & TVL, pay-per-call",
+    metaDesc:
+      "A pay-per-call DeFi yields API built for autonomous agents: top lending and LP pools with APY breakdown, 1d/7d/30d trend, impermanent-loss risk, TVL and a DefiLlama stability forecast. Filter by chain, project or stablecoin-only; sort by risk-adjusted APY. No signup, no API key — the agent settles each call inline in USDC on Base from $0.001 (the x402 standard).",
+    lead_p:
+      "An agent deciding where to park capital needs more than a headline APY. Every route below returns the yield with the context that tells you whether it is real: the APY split into base and reward, how it moved over 1, 7 and 30 days, impermanent-loss exposure, the pool's TVL, and a stability forecast — so the agent can sort by risk-adjusted return, not just the biggest number. Filter to stablecoin-only pools or a single chain, and read it all without an account, a dashboard or a key to rotate.",
+    ex_path: "/defi/yields?stable=true&limit=20",
+    ex_comment: "risk-adjusted stablecoin yields, paid inline",
+    ex_var: "yields",
+    intent_h2: "Why agents read yields here instead of scraping",
+    intent_p:
+      "Pulling DefiLlama directly means an agent carries the rate limits, the pool-id bookkeeping and its own risk math. These routes do that work and return a ranked, risk-annotated set in one paid call — including a vetted <code>/defi/safe-yields</code> set that already joins protocol age and hack history, so the agent is not routing funds on APY alone. Yields are informational, not financial advice.",
+  },
+  "crypto-prices": {
+    re: /^\/crypto\//,
+    lead: "/crypto/prices",
+    h1: "Crypto price API for AI agents — keyless, pay-per-call",
+    sub: "Spot prices, funding, sentiment and market stats for autonomous agents — settled in USDC on Base, no API key.",
+    title: "Keyless Crypto Price API for Agents — spot, funding & market data per call",
+    metaDesc:
+      "A pay-per-call crypto market-data API for autonomous agents: spot token prices with 24h change and confidence, cross-venue perp funding rates and arb spread, Fear & Greed, trending coins, global market stats and sector rotation. No account, no API key — the agent pays each call inline in USDC on Base from $0.001 (the x402 standard).",
+    lead_p:
+      "Most price APIs gate the first quote behind a signup, a dashboard and a secret key the agent has to store and rotate. These routes do not. Pass CoinGecko ids to <code>/crypto/prices</code> and get price, 24h change, symbol and a confidence score back; or read cross-venue perp funding, market sentiment, trending coins and sector performance — each a single call the agent settles in USDC on Base for exactly what it reads.",
+    ex_path: "/crypto/prices?ids=ethereum,bitcoin,solana",
+    ex_comment: "spot prices with 24h change, paid inline",
+    ex_var: "prices",
+    intent_h2: "Spot, funding and sentiment in one keyless surface",
+    intent_p:
+      "An agent pricing a position wants the spot <em>and</em> the funding it will pay to hold it. Beyond spot, <code>/crypto/funding</code> returns per-venue Hyperliquid/OKX/dYdX funding with the arb spread in bps and a LONGS_PAY / SHORTS_PAY signal, and <code>/crypto/fear-greed</code> gives a 0-100 sentiment gauge — all on the same keyless, pay-per-call rail. Market data is informational, not financial advice.",
+  },
+  "base-rpc": {
+    re: /^\/chain\//,
+    lead: "/chain/block-number",
+    h1: "Keyless Base RPC for AI agents — pay-per-call, no key",
+    sub: "Base mainnet reads — blocks, gas, balances, transactions, Chainlink prices — settled in USDC on Base, no API key.",
+    title: "Keyless Base RPC API for Agents — blocks, gas, balances & receipts per call",
+    metaDesc:
+      "Pay-per-call Base mainnet RPC for autonomous agents: block number, EIP-1559 gas with a USD estimate, ETH and ERC-20 balances, transactions and receipts (with the L1 fee breakdown), contract/proxy inspection and on-chain Chainlink prices. No account, no API key, no node to run — the agent settles each read inline in USDC on Base from $0.001 (the x402 standard).",
+    lead_p:
+      "Running or renting a Base node means keys, quotas and a provider dashboard before an agent reads a single block. Every route below answers a plain HTTP request and returns the same shape a node would — block number, gas price (with a USD estimate ETH-only providers skip), balances, transactions, receipts with the full L1 fee breakdown, contract and EIP-1967 proxy inspection, and Chainlink spot prices read straight from the aggregators — paid per call in USDC on Base, no key to store.",
+    ex_path: "/chain/gas-price",
+    ex_comment: "Base gas price + USD estimate, paid inline",
+    ex_var: "gas",
+    intent_h2: "Node-grade reads without running a node",
+    intent_p:
+      "These are live Base mainnet reads, not a cached mirror: gas and fee routes carry EIP-1559 base/priority split and a USD cost, <code>/chain/receipt</code> returns the L1 data-fee breakdown an ETH-only RPC cannot, and <code>/chain/proxy-info</code> resolves what code actually runs behind a proxy before an agent trusts it. One keyless rail, priced per read.",
+  },
+};
+
+app.get("/for-agents/:topic", (c) => {
+  const topic = c.req.param("topic");
+  const cfg = AGENT_TOPICS[topic];
+  if (!cfg) return c.notFound();
+  const esc = (s: string) =>
+    String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m] as string);
+  const rows = ROUTE_CATALOG
+    .filter(([path]) => cfg.re.test(path))
+    .sort((a, b) => {
+      if (a[0] === cfg.lead) return -1;
+      if (b[0] === cfg.lead) return 1;
+      return a[0].localeCompare(b[0]);
+    });
+  const rowsHtml = rows.map(([path, method, price, , desc]) => {
+    const preview = PREVIEW_ROUTES.has(path) ? `<a href="${esc(path)}/preview">free preview</a>` : "<span class=muted>&mdash;</span>";
+    return `<tr><td><code>${esc(method)} ${esc(path)}</code></td><td class=price>$${esc(price)}</td><td>${esc(desc)}</td><td>${preview}</td></tr>`;
+  }).join("\n");
+  const canon = `${CANONICAL_ORIGIN}/for-agents/${topic}`;
+  const svcJsonLd = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "WebAPI",
+    name: `Grey Ridge x402 ${cfg.h1}`,
+    description: cfg.metaDesc,
+    url: canon,
+    documentation: `${CANONICAL_ORIGIN}/openapi.json`,
+    provider: { "@type": "Organization", name: "Grey Ridge Signals Group LLC" },
+    offers: { "@type": "Offer", price: "0.001", priceCurrency: "USD", availability: "https://schema.org/InStock" },
+    isPartOf: { "@type": "WebAPI", name: "Grey Ridge x402 Data API", url: `${CANONICAL_ORIGIN}/for-agents` },
+  });
+  const html = `<!doctype html><html lang=en><meta charset=utf-8>
+<title>${esc(cfg.title)} — Grey Ridge Signals</title>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=description content="${esc(cfg.metaDesc)}">
+<meta property="og:title" content="${esc(cfg.h1)} — Grey Ridge Signals">
+<meta property="og:description" content="${esc(cfg.metaDesc)}">
+<meta property="og:type" content="website">
+<link rel=canonical href="${canon}">
+<script type="application/ld+json">${svcJsonLd}</script>
+<style>
+:root{--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#0f766e;--bg:#fafafa}
+*{box-sizing:border-box}
+body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.55;max-width:860px;margin:0 auto;padding:2.5rem 1.25rem}
+h1{font-size:1.8rem;margin:0 0 .35rem;line-height:1.2}
+.sub{color:var(--muted);margin:0 0 1.6rem;font-size:1.02rem}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem}
+p{margin:.65rem 0}
+.lead{font-size:1.04rem;margin:0 0 1.2rem}
+code{background:#eef2f7;padding:.1rem .35rem;border-radius:4px;font-size:.86em;word-break:break-all}
+table{width:100%;border-collapse:collapse;margin:.6rem 0 0;font-size:.88rem;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+th,td{text-align:left;padding:.6rem .7rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);background:#f8fafc}
+tr:last-child td{border-bottom:0}
+.price{font-weight:700;white-space:nowrap}
+.muted{color:var(--muted);font-size:.9rem}
+a{color:var(--accent)}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:1.1rem 1.3rem;margin:1.2rem 0}
+pre{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:1rem 1.1rem;overflow:auto;font-size:.82rem;line-height:1.5}
+nav.crumb{font-size:.82rem;color:var(--muted);margin:0 0 1.4rem}
+footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);color:var(--muted);font-size:.82rem}
+</style>
+<body>
+<nav class=crumb><a href="/for-agents">Data API for agents</a> &rsaquo; ${esc(cfg.h1)}</nav>
+<h1>${esc(cfg.h1)}</h1>
+<p class=sub>${cfg.sub}</p>
+<p class=lead>${cfg.lead_p} Discover and wire the whole set from one file: the <a href="/.well-known/x402">x402 catalog</a>, the <a href="/openapi.json">OpenAPI spec</a>, or the <a href="/llms.txt">plain-text catalog</a>.</p>
+
+<h2>Routes</h2>
+<table><thead><tr><th>Route</th><th>Price</th><th>What it returns</th><th>Try free</th></tr></thead>
+<tbody>
+${rowsHtml}
+</tbody></table>
+<p class=muted>Prices are per successful call in USDC on Base (eip155:8453). Routes with a free preview return the same JSON shape without payment so an agent can evaluate before it pays.</p>
+
+<h2>How an agent pays</h2>
+<div class=card>
+<p style="margin:.2rem 0 .7rem">Point any x402-aware client at a route. The first response carries the price and payment terms; the client pays and retries; the second response is the data. With the <code>x402-fetch</code> wrapper it is one line:</p>
+<pre>import { wrapFetch } from "x402-fetch";
+const fetchPaid = wrapFetch(fetch, { account }); // your agent's Base wallet
+const r = await fetchPaid("${CANONICAL_ORIGIN}${cfg.ex_path}");
+const ${cfg.ex_var} = await r.json(); // ${cfg.ex_comment}</pre>
+<p class=muted style="margin:.7rem 0 0">No API key is sent or stored. Settlement is a standard USDC transfer on Base the route verifies on-chain before returning data.</p>
+</div>
+
+<h2>${esc(cfg.intent_h2)}</h2>
+<p class=muted>${cfg.intent_p}</p>
+
+<footer>Grey Ridge Signals Group LLC &middot; <a href="/for-agents">all data routes for agents</a> &middot; <a href="/openapi.json">OpenAPI</a> &middot; <a href="/.well-known/x402">x402 catalog</a> &middot; <a href="/pricing">Pricing</a> &middot; <a href="/">greyridgesignals.ai</a></footer>`;
   return c.html(html);
 });
 
