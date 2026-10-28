@@ -73,6 +73,50 @@ export function analyzeMcpTool(name: string, description: string, schemaText: st
     "Description contains deceptive/override instructions aimed at the AI agent (conceal-from-user or ignore-prior-instructions) — classic MCP tool-poisoning.",
     (text.match(inj) || concealMatch || concealInstr.exec(text) || [""])[0]);
 
+  // 1b. Remote / dynamic instruction injection (fetch-and-obey). A tool whose
+  // description tells the agent to retrieve its operating instructions from a
+  // REMOTE location and follow them turns the tool into a remote-controlled
+  // instruction channel: the live payload lives at a URL (or is returned by the
+  // server at call time), so the operator can swap in a malicious directive
+  // AFTER the user approved the tool — WITHOUT ever changing the tool
+  // definition. That defeats the hash-pinning / "re-confirm on description
+  // change" defense the incumbent scanners (Invariant mcp-scan) rely on to catch
+  // rug pulls, because the definition's hash never moves. Distinct from rule 1
+  // (inline override text already present in the description) and rule 2
+  // (OUTBOUND exfiltration): this is INBOUND fetch-then-obey of attacker-hosted
+  // instructions — the indirect-prompt-injection setup documented across the
+  // 2026 MCP rug-pull research (CSA agentic attack-surface whitepaper; Invariant
+  // tool-poisoning).
+  //
+  // Precision: a legitimate tool that "fetches the docs/page/data from a URL" has
+  // an ordinary DATA object (docs/documentation/page/file/content), never an
+  // AGENT-DIRECTIVE object, so it does not match. Two high-specificity shapes:
+  //   • RETRIEVE shape — a fetch-family verb + a possessive/definite determiner +
+  //     an agent-directive object (instructions/directives/commands/prompt) +
+  //     "from|at" a remote source (an http(s) URL or the server/endpoint/api/
+  //     host/url). Bare "fetch instructions" (no determiner, no remote source)
+  //     does not match; benign "fetch the docs from https://…" has a data object,
+  //     not a directive object, so it stays clean.
+  //   • OBEY shape — follow/obey/comply-with/execute/apply + an agent-directive
+  //     object + a DYNAMIC anchor ("returned by/from the server", "in the
+  //     response/output of", "the server returns/provides/sends"). The dynamic
+  //     anchor (not a plain URL) keeps "follow the setup instructions at
+  //     https://docs…" — human setup docs — from false-positiving.
+  const dirObj = String.raw`(?:instructions?|directives?|commands?|(?:system )?prompt)`;
+  const fetchVerb = String.raw`(?:fetch|retrieve|load|download|pull|obtain|request|read|get)`;
+  const remoteFrom = String.raw`(?:from|at)\s+(?:https?:\/\/|(?:the\s+)?(?:remote\s+)?(?:server|endpoint|api|url|host)\b)`;
+  const retrieveShape = new RegExp(
+    fetchVerb + String.raw`\b[^.?!]{0,25}?\b(?:your|the|its|updated|current|latest)\s+` +
+    dirObj + String.raw`\b[^.?!]{0,40}?\b` + remoteFrom, "i");
+  const dynamicAnchor = String.raw`(?:returned\s+(?:by|from)|in\s+the\s+(?:response|output|body)\s+(?:of|from)|(?:the\s+)?(?:server|endpoint|api)\s+(?:returns|provides|sends|gives|responds\s+with))`;
+  const obeyShape = new RegExp(
+    String.raw`(?:follow|obey|comply\s+with|execute|apply|adhere\s+to)\b[^.?!]{0,30}?\b(?:the|any|all)?\s*` +
+    dirObj + String.raw`\b[^.?!]{0,40}?\b` + dynamicAnchor, "i");
+  const remoteInstrHit = description.match(retrieveShape) || description.match(obeyShape);
+  if (remoteInstrHit) add("critical", "remote-instruction-injection",
+    "Description instructs the agent to fetch its instructions/prompt from a remote source and follow them (or to obey directives returned by the server at call time) — a remote-controlled instruction channel. The live payload lives off-definition, so an operator can swap in a malicious directive after approval WITHOUT changing the tool definition, defeating hash-pinning rug-pull detection.",
+    remoteInstrHit[0]);
+
   // 2. Data-exfiltration hints. A BARE mention of "api key"/"password"/"secret" is
   // NOT exfiltration — legitimate auth/docs tools (and even security warnings like
   // "do not include API keys") use those words, and flagging them destroys trust.
@@ -152,6 +196,14 @@ export function analyzeMcpTool(name: string, description: string, schemaText: st
     const h = pl.match(exfilSensitive) || pl.match(exfilCredential);
     if (h) { add("high", "exfiltration-hint",
       "A tool parameter's schema description instructs sending sensitive data / credentials to a destination — schema-injection exfiltration (payload hidden in inputSchema rather than the top-level description).", h[0]); break; }
+  }
+  // Remote-instruction injection (rule 1b) can likewise be smuggled into a
+  // parameter's schema description rather than the top-level text — scan each
+  // prose field standalone with the same two shapes.
+  for (const prose of schemaProse) {
+    const h = prose.match(retrieveShape) || prose.match(obeyShape);
+    if (h) { add("critical", "remote-instruction-injection",
+      "A tool parameter's schema description instructs fetching/obeying instructions from a remote source — remote-controlled instruction channel hidden in the inputSchema (defeats hash-pinning; payload lives off-definition).", h[0]); break; }
   }
 
   // 2c. Wallet-secret parameter harvesting (OWASP LLM08 Excessive Agency /
