@@ -1455,6 +1455,153 @@ const INSTALLABLE_TOOLS: Array<{
   },
 ];
 
+// ─── Machine-readable call contracts for the discovery manifest ──────────────
+// An x402 Smart Order Router (e.g. Agent402's) can only DISPATCH (and pay) a route
+// it knows how to CONSTRUCT. It needs the input parameters, which ones are required,
+// and a ready-to-run example. Our /.well-known/x402 historically published only
+// description + tags, so an automated router had no input contract for e.g.
+// /chain/token-report (needs ?token=0x…) and left our rows uncallable even though
+// they already qualify for the Base unproven tier by price (measured 2026-10-28:
+// routerDispatchByChain.base.unprovenTier=true, unprovenMaxUsd=0.01, EIP-712 domain
+// clean, payTo un-shared — the only gap is a constructible call). A clean short
+// `name` also controls the term the router's find index scores us on, instead of it
+// truncating our long description into a run-on name. These fields are additive:
+// routers that honor them can build the call; routers that don't ignore them
+// (degrade-open — no route/price/behavior change). Param names are the real query
+// keys the handlers read (verified against src), so there is no vaporware.
+type ManifestParam = { name: string; required?: boolean; example?: string; enum?: string[]; desc: string };
+type ManifestIO = { name?: string; category?: string; params?: ManifestParam[] };
+// Example tokens use demo aliases the paid handlers resolve (DEMO_TOKEN_ALIASES),
+// so a router that runs the example hits a real, non-erroring call. Example
+// addresses are a real Base address (our own payTo) so address-shaped routes have a
+// valid sample. Only routes where a contract genuinely unblocks dispatch are listed;
+// everything else degrades to a derived name + category below.
+const MANIFEST_IO: Record<string, ManifestIO> = {
+  "/gate/swap": { name: "Pre-trade token safety gate (honeypot + liquidity): GO / HOLD / BLOCK for a Base swap", category: "crypto", params: [
+    { name: "token", required: true, example: "aero", desc: "Base ERC-20 contract address (0x…) to gate. Demo aliases accepted: usdc|weth|cbbtc|aero|degen." },
+    { name: "side", enum: ["buy", "sell"], desc: "Trade side (default buy)." },
+    { name: "notional_usd", example: "250", desc: "Trade size in USD; sizes the verdict against pool liquidity." },
+  ] },
+  "/chain/token-report": { name: "Base token honeypot & rug-pull safety report: SAFE / CAUTION / AVOID verdict + risk score", category: "crypto", params: [
+    { name: "token", required: true, example: "aero", desc: "Base ERC-20 contract address (0x…). Demo aliases: usdc|weth|cbbtc|aero|degen." },
+  ] },
+  "/chain/token-security": { name: "Base token honeypot & scam/rug detector (proxy, mint, pause, sellability sim)", category: "crypto", params: [
+    { name: "token", required: true, example: "aero", desc: "Base ERC-20 contract address (0x…)." },
+  ] },
+  "/defi/yields": { name: "DeFi lending & LP yields with APY trend, IL risk and TVL (DefiLlama)", category: "defi", params: [
+    { name: "project", desc: "Filter by protocol family (aave, uniswap, curve) or an exact slug (aave-v3)." },
+    { name: "chain", desc: "Filter by chain; short names (eth/arb/op/avax/matic/sol/bnb) resolve to the canonical name." },
+    { name: "stablecoin", enum: ["true", "false"], desc: "Stablecoin pools only." },
+  ] },
+  "/defi/yields-top": { name: "Top DeFi yield pools by TVL (DefiLlama)", category: "defi", params: [
+    { name: "chain", desc: "Short chain name (eth/arb/op/avax/matic/sol) or canonical." },
+    { name: "stable", enum: ["true", "false"], desc: "Stablecoin pools only." },
+  ] },
+  "/defi/safe-yields": { name: "Vetted stablecoin yields with protocol age & hack-history due diligence", category: "defi", params: [
+    { name: "chain", desc: "Short chain name or canonical (optional)." },
+    { name: "limit", example: "10", desc: "Max rows (optional)." },
+  ] },
+  "/defi/protocol-risk": { name: "DeFi protocol due-diligence risk score (TVL, age, audits, hack history)", category: "defi", params: [
+    { name: "protocol", example: "aave", desc: "Protocol family (aave, uniswap) or exact slug (default aave-v3)." },
+  ] },
+  "/crypto/prices": { name: "Spot crypto token prices and 24h change by symbol or id", category: "crypto", params: [
+    { name: "coins", example: "bitcoin,ethereum,solana", desc: "Comma-separated CoinGecko ids (or use symbols)." },
+    { name: "symbols", example: "BTC,ETH,SOL", desc: "Comma-separated ticker symbols; resolved to ids." },
+  ] },
+  "/crypto/funding": { name: "Cross-venue perp funding rates and arbitrage spread (Hyperliquid, OKX, dYdX)", category: "crypto", params: [] },
+  "/pm/markets": { name: "Live Polymarket prediction markets: odds, spread, volume", category: "prediction-markets", params: [
+    { name: "q", desc: "Keyword filter (optional)." },
+  ] },
+  "/chain/gas-price": { name: "Base gas price now: wei/gwei, EIP-1559 base & priority fee, USD", category: "blockchain", params: [] },
+  "/chain/block-number": { name: "Current Base mainnet block number", category: "blockchain", params: [] },
+  "/chain/balance": { name: "ETH balance of a Base address, with USD value", category: "blockchain", params: [
+    { name: "address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10", desc: "Base mainnet address (0x…)." },
+  ] },
+  "/chain/token-balance": { name: "ERC-20 token balance of a Base address (symbol, decimals, formatted)", category: "blockchain", params: [
+    { name: "address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10", desc: "Base mainnet holder address (0x…)." },
+    { name: "token", required: true, example: "usdc", desc: "ERC-20 contract (0x…) or demo alias." },
+  ] },
+  "/chain/erc20-meta": { name: "ERC-20 metadata on Base: name, symbol, decimals, total supply", category: "blockchain", params: [
+    { name: "token", required: true, example: "usdc", desc: "ERC-20 contract (0x…) or demo alias." },
+  ] },
+  "/chain/proxy-info": { name: "EIP-1967 proxy resolver on Base: implementation, admin, beacon", category: "blockchain", params: [
+    { name: "address", required: true, example: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", desc: "Base contract address (0x…)." },
+  ] },
+  "/chain/tx": { name: "Base transaction details by hash", category: "blockchain", params: [
+    { name: "hash", required: true, desc: "Base mainnet transaction hash (0x… 66 chars)." },
+  ] },
+  "/chain/receipt": { name: "Base transaction receipt by hash (status, gas, logs, L1 fee)", category: "blockchain", params: [
+    { name: "hash", required: true, desc: "Base mainnet transaction hash (0x… 66 chars)." },
+  ] },
+  "/dns": { name: "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain", category: "infrastructure", params: [
+    { name: "domain", required: true, example: "stripe.com", desc: "Domain to resolve." },
+  ] },
+  "/whois": { name: "WHOIS / RDAP lookup: registrar, created, expiry, registrant", category: "infrastructure", params: [
+    { name: "domain", required: true, example: "cloudflare.com", desc: "Domain to look up." },
+  ] },
+  "/enrich/tech-risk": { name: "Domain tech-stack CVE / EPSS / CISA-KEV attack-surface risk", category: "security", params: [
+    { name: "domain", required: true, example: "example.com", desc: "Domain to fingerprint and score." },
+  ] },
+  "/enrich/domain": { name: "Domain firmographic + tech-stack + subdomain enumeration", category: "data", params: [
+    { name: "domain", required: true, example: "example.com", desc: "Domain to enrich." },
+  ] },
+  "/scan/mcp": { name: "MCP server security scan: prompt-injection / tool-poisoning / exfiltration (LLM01/LLM08)", category: "security", params: [
+    { name: "url", required: true, example: "https://example.com/mcp", desc: "Target MCP server URL to audit." },
+  ] },
+};
+// First meaningful tag → a short category label, when the route is not in MANIFEST_IO.
+// Derived from the catalog's own tags (degrade-open; never a decision gate).
+const categoryFromTags = (tags: string[]): string => {
+  const t = tags.map((x) => x.toLowerCase());
+  if (t.includes("security")) return "security";
+  if (t.includes("prediction-markets")) return "prediction-markets";
+  if (t.includes("defi") || t.includes("yield")) return "defi";
+  if (t.includes("ai") || t.includes("llm")) return "ai";
+  if (t.includes("rpc") || t.includes("onchain")) return "blockchain";
+  if (t.includes("dns") || t.includes("whois") || t.includes("domain")) return "infrastructure";
+  if (t.includes("crypto") || t.includes("funding") || t.includes("prices")) return "crypto";
+  return t[0] || "data";
+};
+// A clean short name derived from the description's first clause, when the route is
+// not in MANIFEST_IO — keeps the manifest-ingesting find index from truncating the
+// long description into a mid-word run-on name. Capped so it stays a name, not a doc.
+const deriveShortName = (desc: string): string => {
+  const first = desc.split(/(?<=\?)\s|—| - |\.\s|:\s/)[0].trim();
+  const n = first.length > 90 ? first.slice(0, 88).replace(/\s+\S*$/, "") + "…" : first;
+  return n || desc.slice(0, 80);
+};
+// True when the catalog description itself states the route takes no input — a
+// reliable textual signal already in the data. Publishing an empty inputSchema for
+// these explicitly tells a router "callable with no args" (the easiest to dispatch).
+const descSaysNoParams = (desc: string): boolean => /\bno (required )?params\b/i.test(desc);
+// Build the additive {name, category, inputSchema, required, example} for a route.
+// Never throws; a route with nothing known still yields a derived name + category.
+export const manifestCallContract = (
+  path: string,
+  desc: string,
+  tags: string[],
+): { name: string; category: string; inputSchema?: Record<string, unknown>; required?: string[]; example?: Record<string, string> } => {
+  const io = MANIFEST_IO[path];
+  const name = (io && io.name) || deriveShortName(desc);
+  const category = (io && io.category) || categoryFromTags(tags);
+  const out: { name: string; category: string; inputSchema?: Record<string, unknown>; required?: string[]; example?: Record<string, string> } = { name, category };
+  const params = io ? io.params : (descSaysNoParams(desc) ? [] : undefined);
+  if (params !== undefined) {
+    const properties: Record<string, unknown> = {};
+    const required: string[] = [];
+    const example: Record<string, string> = {};
+    for (const p of params) {
+      properties[p.name] = { type: "string", description: p.desc, ...(p.enum ? { enum: p.enum } : {}) };
+      if (p.required) required.push(p.name);
+      if (p.example !== undefined) example[p.name] = p.example;
+    }
+    out.inputSchema = { type: "object", properties, ...(required.length ? { required } : {}) };
+    if (required.length) out.required = required;
+    if (Object.keys(example).length) out.example = example;
+  }
+  return out;
+};
+
 // Self-describing x402 discovery manifest — the standard `.well-known/x402` catalog
 // that x402 crawlers/directories read to discover a provider's paid endpoints
 // (independent of any facilitator's Bazaar). Lists every paid resource we serve.
@@ -1481,18 +1628,31 @@ app.get("/.well-known/x402", (c) => {
     }
     return compact;
   };
-  const mk = (p: string, method: string, price: string, units: string, desc: string, tags: string[]) => ({
+  const mk = (p: string, method: string, price: string, units: string, desc: string, tags: string[]) => {
+  const cc = manifestCallContract(p, desc, tags);
+  return {
     x402Version: 2,
     type: "http",
     resource: `${BASE}${p}`,
     methods: [method],
     method,
+    // Short, dense, machine-ingestible name — controls the term an x402 find index
+    // scores us on instead of truncating the description below into a run-on name.
+    name: cc.name,
     description: desc,
+    // Primary category label so a catalog that shelves sellers by category resolves us.
+    category: cc.category,
     mimeType: "application/json",
     network: NETWORK,
     scheme: "exact",
     payTo,
     price_usdc: price,
+    // Machine-readable input contract so a Smart Order Router can CONSTRUCT the paid
+    // call (JSON Schema of the query params, which are required, and a runnable
+    // example). Present only where known; absent fields degrade open.
+    ...(cc.inputSchema !== undefined ? { inputSchema: cc.inputSchema } : {}),
+    ...(cc.required !== undefined ? { required: cc.required } : {}),
+    ...(cc.example !== undefined ? { example: cc.example } : {}),
     // Free try-before-pay path for auto-wirers that honor it (same shape as paid).
     ...(PREVIEW_ROUTES.has(p) ? { preview_url: `${BASE}${p}/preview` } : {}),
     ...(sampleOf(p) !== undefined ? { outputExample: sampleOf(p) } : {}),
@@ -1505,7 +1665,8 @@ app.get("/.well-known/x402", (c) => {
       tags,
       extra: { name: "USD Coin", version: "2", decimals: 6, serviceName: bazaarServiceNameFor(p), tags },
     }],
-  });
+  };
+  };
   return c.json({
     service_overview: {
       name: "Grey Ridge Signals — x402 Data & Security",
