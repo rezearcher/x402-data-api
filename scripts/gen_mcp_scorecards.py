@@ -1097,6 +1097,19 @@ themselves. Keeping that badge green as your tools change — six-hourly re-scan
 full OWASP LLM01/LLM08 report — is the [`$9.99/mo` monitoring subscription]({BASE}/pricing). A green
 badge means no injection patterns were found on the dates shown: a measured signal, not a warranty.
 
+## Embed this leaderboard
+
+Run an MCP blog, directory or aggregator — or rank near the top and want to show it?
+Drop this live, auto-updating leaderboard into your site or README (zero-dependency SVG,
+always loads):
+
+```markdown
+[![MCP Security Leaderboard by Grey Ridge Signals]({BASE}/scan/leaderboard.svg)]({SITE}/mcp-server-scorecards.html)
+```
+
+Grab the HTML / JavaScript variants and options (`?n=`, `?theme=light|dark`) from the
+[embed page]({BASE}/scan/leaderboard/embed).
+
 Method and the rest of the catalogue: [vet an MCP server before your agent trusts it](index.html).
 Independent scans by [Grey Ridge Signals](https://github.com/rezearcher/greyridge-x402-tools).
 """
