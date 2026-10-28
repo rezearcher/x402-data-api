@@ -2258,6 +2258,7 @@ app.get("/sitemap.xml", (c) => {
     { path: "/for-agents/crypto-prices", priority: "0.9", changefreq: "weekly" },
     { path: "/for-agents/base-rpc", priority: "0.9", changefreq: "weekly" },
     { path: "/for-agents/token-safety", priority: "0.9", changefreq: "weekly" },
+    { path: "/for-agents/vercel-ai-swap-gate", priority: "0.8", changefreq: "weekly" },
     { path: "/scan/mcp-scanner", priority: "0.9", changefreq: "weekly" },
     { path: "/scan/badge-gen", priority: "0.8", changefreq: "weekly" },
     { path: "/scan/verify", priority: "0.8", changefreq: "weekly" },
@@ -13542,6 +13543,121 @@ const AGENT_TOPICS: Record<
       "The usual options make an agent carry a key and rate limits (GoPlus), sell crypto-wide data it does not need (1inch), or trust a static honeypot list that misses a token that only taxes the LP pair. These routes are Base-native and verdict-first: <code>/chain/token-report</code> returns SAFE / CAUTION / AVOID with the reasons in one call, <code>/chain/token-security</code> focuses the scam/rug flags, and <code>/gate/swap</code> adds your notional against pool liquidity so an agent sees whether its own trade is too big before it fires. One keyless, pay-per-call rail. Verdicts are informational, not financial advice — a \"SAFE\" means no known pattern matched these checks, not a guarantee.",
   },
 };
+
+// Dedicated AI-SDK integration doc for the installable Vercel AI SDK pre-trade
+// safety tool (@grey-ridge/vercel-ai-swap-gate). The official Vercel AI SDK
+// Tools Registry (ai-sdk.dev/resources/tools) requires a docsUrl that explains
+// the tool WITH the AI SDK — not a generic homepage — so this is that page.
+// Registered BEFORE /for-agents/:topic so the specific slug wins the match.
+// The install command, package name and codeExample below are the SAME values
+// submitted to the registry entry, kept in one place so the listing and the
+// docs can never drift. codeExample verified to build a valid AI SDK tool
+// against the published @grey-ridge/vercel-ai-swap-gate@0.1.0.
+app.get("/for-agents/vercel-ai-swap-gate", (c) => {
+  const esc = (s: string) =>
+    String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m] as string);
+  const canon = `${CANONICAL_ORIGIN}/for-agents/vercel-ai-swap-gate`;
+  const h1 = "Pre-trade token-safety tool for the Vercel AI SDK";
+  const sub =
+    "Drop one tool into generateText and your agent gates every Base swap on a honeypot, sellability, admin-control and liquidity-vs-size check before it fires — paid inline in USDC on Base, no API key.";
+  const metaDesc =
+    "Grey Ridge Swap Gate is a Vercel AI SDK tool that vets a Base ERC-20 before your agent swaps it: honeypot + sellability simulation, owner-renounce/mint/pause/blacklist checks, measured transfer tax and liquidity-vs-trade-size — a GO / HOLD / BLOCK verdict in one call. Paid inline per call in USDC on Base ($0.008, the x402 standard), no account and no API key; fails closed if the gate is unreachable. Install @grey-ridge/vercel-ai-swap-gate and add createSwapGuard() to your tools.";
+  const codeExample =
+`import { generateText, isStepCount } from 'ai';
+import { createSwapGuard } from '@grey-ridge/vercel-ai-swap-gate';
+
+const { text } = await generateText({
+  model: 'openai/gpt-5.1-codex',
+  prompt:
+    'I want to buy $50 of 0x4200000000000000000000000000000000000006 on Base. Is it safe to trade?',
+  tools: {
+    // Gates the swap on honeypot, sellability, admin-control and liquidity-vs-size.
+    // Pass the agent's Base wallet key to pay the $0.008 USDC per call via x402;
+    // omit it to use the free preview. Fails CLOSED (proceed:false) on any error.
+    swapGuard: createSwapGuard({ privateKey: process.env.PRIVATE_KEY }),
+  },
+  stopWhen: isStepCount(3),
+});
+
+console.log(text);`;
+  const svcJsonLd = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: "Grey Ridge Swap Gate (Vercel AI SDK tool)",
+    description: metaDesc,
+    applicationCategory: "DeveloperApplication",
+    operatingSystem: "Node.js",
+    url: canon,
+    softwareVersion: "0.1.0",
+    downloadUrl: "https://www.npmjs.com/package/@grey-ridge/vercel-ai-swap-gate",
+    offers: { "@type": "Offer", price: "0.008", priceCurrency: "USD", availability: "https://schema.org/InStock" },
+    provider: { "@type": "Organization", name: "Grey Ridge Signals Group LLC" },
+    isPartOf: { "@type": "WebAPI", name: "Grey Ridge x402 Data API", url: `${CANONICAL_ORIGIN}/for-agents` },
+  });
+  const html = `<!doctype html><html lang=en><meta charset=utf-8>
+<title>${esc(h1)} — Grey Ridge Signals</title>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=description content="${esc(metaDesc)}">
+<meta property="og:title" content="${esc(h1)} — Grey Ridge Signals">
+<meta property="og:description" content="${esc(metaDesc)}">
+<meta property="og:type" content="website">
+<link rel=canonical href="${canon}">
+<script type="application/ld+json">${svcJsonLd}</script>
+<style>
+:root{--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#0f766e;--bg:#fafafa}
+*{box-sizing:border-box}
+body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.55;max-width:860px;margin:0 auto;padding:2.5rem 1.25rem}
+h1{font-size:1.8rem;margin:0 0 .35rem;line-height:1.2}
+.sub{color:var(--muted);margin:0 0 1.6rem;font-size:1.02rem}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem}
+p{margin:.65rem 0}
+.lead{font-size:1.04rem;margin:0 0 1.2rem}
+code{background:#eef2f7;padding:.1rem .35rem;border-radius:4px;font-size:.86em;word-break:break-all}
+ul{margin:.5rem 0;padding-left:1.2rem}
+li{margin:.3rem 0}
+.price{font-weight:700;white-space:nowrap}
+.muted{color:var(--muted);font-size:.9rem}
+a{color:var(--accent)}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:1.1rem 1.3rem;margin:1.2rem 0}
+pre{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:1rem 1.1rem;overflow:auto;font-size:.82rem;line-height:1.5}
+nav.crumb{font-size:.82rem;color:var(--muted);margin:0 0 1.4rem}
+footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);color:var(--muted);font-size:.82rem}
+</style>
+<body>
+<nav class=crumb><a href="/for-agents">Data API for agents</a> &rsaquo; Vercel AI SDK swap-gate tool</nav>
+<h1>${esc(h1)}</h1>
+<p class=sub>${esc(sub)}</p>
+<p class=lead>A honeypot or a rug costs a trading agent the whole position, so the safety check has to run <em>before</em> the buy and inside the loop the agent already uses. <code>@grey-ridge/vercel-ai-swap-gate</code> is a first-class <a href="https://ai-sdk.dev/docs/foundations/tools">Vercel AI SDK tool</a>: add <code>createSwapGuard()</code> to your <code>tools</code> and the model calls it before any swap, gets a GO / HOLD / BLOCK verdict with the reasons, and branches on a sizing-aware <code>proceed</code> boolean. It wraps the Grey Ridge <code>/gate/swap</code> route, paid inline per call in USDC on Base ($0.008) via the x402 standard — no account, no API key to store or rotate.</p>
+
+<h2>Install</h2>
+<div class=card>
+<pre>npm install @grey-ridge/vercel-ai-swap-gate
+# pnpm add / yarn add / bun add also work</pre>
+<p class=muted style="margin:.7rem 0 0">Peer deps: <code>ai</code> and <code>zod</code> (the SDK you already have). The x402 payment client (viem + @x402/*) ships inside the package.</p>
+</div>
+
+<h2>Use it with the AI SDK</h2>
+<div class=card>
+<pre>${esc(codeExample)}</pre>
+<p class=muted style="margin:.7rem 0 0">The tool returns the full <code>/gate/swap</code> verdict plus a <code>proceed</code> boolean, <code>guard_reasons</code> and a one-line <code>summary</code>. Give the agent the wallet key only if you want it to pay; with no key it reads the free preview (same verdict shape) and tells the model how to fund.</p>
+</div>
+
+<h2>What one call checks</h2>
+<ul>
+<li><strong>Honeypot &amp; sellability</strong> — a live state-override simulation that actually attempts a sell (the only reliable honeypot catch), not a static bytecode list.</li>
+<li><strong>Measured transfer tax</strong> — the real buy/sell tax against the token's deepest Uniswap-v3 WETH pool.</li>
+<li><strong>Admin control</strong> — whether ownership is renounced and which levers (mint, pause, blacklist, fee-setter, upgradeable proxy) still exist, plus owner supply concentration.</li>
+<li><strong>Liquidity vs. your size</strong> — your notional measured against pool liquidity, so the agent sees when its own trade is too big to exit — a check a pure token-scanner cannot make.</li>
+</ul>
+
+<h2>Why this over a generic scanner</h2>
+<p class=muted>GoPlus-class scanners make the agent carry an API key and rate limits and price per lookup up to ~$0.25; honeypot lists miss a token that only taxes the LP pair. Grey Ridge Swap Gate is Base-native and verdict-first: honeypot + sellability + admin-control + liquidity-vs-size in one <code>$0.008</code> call (~1/25th of a GoPlus-class lookup), keyless, and installable straight into the AI SDK loop. It <strong>fails closed</strong> — any outage or unpaid call returns <code>{ decision: "block", proceed: false }</code>, so a gate failure can never green-light a swap. Verdicts are informational, not financial advice: a cleared trade means no known unsafe pattern matched these checks, not a guarantee.</p>
+
+<p style="margin-top:1.4rem">Companion tool in the same package: <code>createTokenReport()</code> wraps <code>/chain/token-report</code> ($0.01) for watchlist screening — a SAFE / CAUTION / AVOID report with a 0-100 risk score. See the <a href="/for-agents/token-safety">token-safety routes</a>, the <a href="/.well-known/x402">x402 catalog</a> and the <a href="/openapi.json">OpenAPI spec</a>.</p>
+
+<footer>Grey Ridge Signals Group LLC &middot; <a href="/for-agents">all data routes for agents</a> &middot; <a href="https://www.npmjs.com/package/@grey-ridge/vercel-ai-swap-gate">npm</a> &middot; <a href="/openapi.json">OpenAPI</a> &middot; <a href="/.well-known/x402">x402 catalog</a> &middot; <a href="/pricing">Pricing</a> &middot; <a href="/">greyridgesignals.ai</a></footer>`;
+  return c.html(html);
+});
 
 app.get("/for-agents/:topic", (c) => {
   const topic = c.req.param("topic");
