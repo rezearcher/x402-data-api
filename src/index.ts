@@ -11621,7 +11621,7 @@ const assessmentPage = (ORIGIN: string) => {
     provider: { "@type": "Organization", name: "Grey Ridge Signals Group LLC", url: "https://greyridgesignals.ai", email: "contact@greyridgesignals.ai" },
     areaServed: "Worldwide",
     description: metaDesc,
-    url: `${ORIGIN}/security-assessment`,
+    url: `${CANONICAL_ORIGIN}/security-assessment`,
     offers: [
       { "@type": "Offer", name: "Fixed-scope security assessment", price: "7500", priceCurrency: "USD", priceSpecification: { "@type": "PriceSpecification", minPrice: "7500", maxPrice: "15000", priceCurrency: "USD" } },
       { "@type": "Offer", name: "Continuous monitoring retainer", priceCurrency: "USD", priceSpecification: { "@type": "UnitPriceSpecification", price: "3000", priceCurrency: "USD", unitText: "MONTH" } },
@@ -11634,7 +11634,7 @@ const assessmentPage = (ORIGIN: string) => {
 <meta property="og:title" content="MCP & AI-agent security assessments — Grey Ridge Signals">
 <meta property="og:description" content="${metaDesc}">
 <meta property="og:type" content="website">
-<link rel=canonical href="${ORIGIN}/security-assessment">
+<link rel=canonical href="${CANONICAL_ORIGIN}/security-assessment">
 <script type="application/ld+json">${svcJsonLd}</script>
 <style>
 :root{--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--accent:#0f766e;--accent2:#134e4a;--bg:#f8fafc;--card:#fff;--warn:#b45309}
@@ -11804,14 +11804,14 @@ app.get("/pricing", (c) => {
     "@type": "Product",
     name: "Grey Ridge MCP Security — Pro",
     description: metaDesc,
-    url: `${ORIGIN}/pricing`,
+    url: `${CANONICAL_ORIGIN}/pricing`,
     brand: { "@type": "Brand", name: "Grey Ridge Signals" },
     offers: {
       "@type": "Offer",
       price: "9.99",
       priceCurrency: "USD",
       availability: "https://schema.org/InStock",
-      url: `${ORIGIN}/pricing`,
+      url: `${CANONICAL_ORIGIN}/pricing`,
     },
   });
   const html = `<!doctype html><html lang=en><meta charset=utf-8>
@@ -11821,7 +11821,7 @@ app.get("/pricing", (c) => {
 <meta property="og:title" content="Grey Ridge — Pricing">
 <meta property="og:description" content="${metaDesc}">
 <meta property="og:type" content="website">
-<link rel=canonical href="${ORIGIN}/pricing">
+<link rel=canonical href="${CANONICAL_ORIGIN}/pricing">
 <script type="application/ld+json">${offerJsonLd}</script>
 <style>
 :root{--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#0f766e;--bg:#fafafa;--ok:#16a34a}
@@ -11925,7 +11925,7 @@ app.get("/scan/mcp-scanner", (c) => {
     operatingSystem: "Any (web)",
     offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
     description: metaDesc,
-    url: `${ORIGIN}/scan/mcp-scanner`,
+    url: `${CANONICAL_ORIGIN}/scan/mcp-scanner`,
   });
   const html = `<!doctype html><html lang=en><meta charset=utf-8>
 <title>${title} — Grey Ridge Signals</title>
@@ -11934,7 +11934,7 @@ app.get("/scan/mcp-scanner", (c) => {
 <meta property="og:title" content="Free MCP Security Scanner">
 <meta property="og:description" content="${metaDesc}">
 <meta property="og:type" content="website">
-<link rel=canonical href="${ORIGIN}/scan/mcp-scanner">
+<link rel=canonical href="${CANONICAL_ORIGIN}/scan/mcp-scanner">
 <script type="application/ld+json">${appJsonLd}</script>
 <style>
 :root{--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#0f766e;--bg:#fafafa;--ok:#16a34a;--warn:#ca8a04;--bad:#dc2626}
@@ -12305,7 +12305,7 @@ ${rows.map((r) => `<tr><td><strong>${esc(r.label)}</strong><br><span class=muted
 <meta property="og:title" content="MCP Server Security Directory — Grey Ridge Signals">
 <meta property="og:description" content="${esc(metaDesc)}">
 <meta property="og:type" content="website">
-<link rel=canonical href="${esc(ORIGIN)}/scan/directory">
+<link rel=canonical href="${CANONICAL_ORIGIN}/scan/directory">
 <style>
 :root{--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#0f766e;--bg:#fafafa}
 *{box-sizing:border-box}
@@ -12398,7 +12398,7 @@ app.get("/scan/census", async (c) => {
 <meta property="og:title" content="The State of MCP Server Security — ${esc(x.scanned_on)}">
 <meta property="og:description" content="${esc(metaDesc)}">
 <meta property="og:type" content="article">
-<link rel=canonical href="${esc(ORIGIN)}/scan/census">
+<link rel=canonical href="${CANONICAL_ORIGIN}/scan/census">
 <style>
 :root{--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#0f766e;--bg:#fafafa}
 *{box-sizing:border-box}
@@ -12482,7 +12482,7 @@ app.get("/research/:slug", async (c) => {
 <meta property="og:title" content="${esc(p.title)}">
 <meta property="og:description" content="${esc(desc)}">
 <meta property="og:type" content="article">
-<link rel=canonical href="${esc(ORIGIN)}/research/${esc(slug)}">
+<link rel=canonical href="${CANONICAL_ORIGIN}/research/${esc(slug)}">
 <style>
 body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827;background:#fafafa;line-height:1.6;max-width:760px;margin:0 auto;padding:2.5rem 1.25rem}
 h1{font-size:1.75rem;margin:0 0 .3rem;line-height:1.2}h2{font-size:1.2rem;margin:2rem 0 .5rem}
@@ -12568,7 +12568,7 @@ app.get("/learn/mcp-tool-poisoning", async (c) => {
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(metaDesc)}">
 <meta property="og:type" content="article">
-<link rel=canonical href="${esc(ORIGIN)}/learn/mcp-tool-poisoning">
+<link rel=canonical href="${CANONICAL_ORIGIN}/learn/mcp-tool-poisoning">
 <script type="application/ld+json">${faqJsonLd}</script>
 <style>
 :root{--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#0f766e;--danger:#b91c1c;--bg:#fafafa}

@@ -85,4 +85,32 @@ await check("miniapp manifest page is deliberately LEFT on its signed domain-bou
   assert.ok(!html.includes(`og:url" content="${CANON}/miniapp"`), "miniapp og:url wrongly rewritten to brand host");
 });
 
+// Secondary crawlable pages: these previously built their self-canonical from
+// the request origin (${ORIGIN} / ${esc(ORIGIN)}), so served from workers.dev
+// they self-canonicalized to workers.dev — the SAME cross-host split that keeps
+// a page out of the brand-host index. Each must now declare the brand host.
+// Only the pages that render deterministically offline are asserted here; the
+// two data-backed pages that need live KV/corpus — /scan/directory and
+// /research/<slug> — carry the identical CANONICAL_ORIGIN edit (grep-verified
+// in src) and are checked by the live curl loop in the target's verify_live.
+const SECONDARY = [
+  "/pricing",
+  "/scan/mcp-scanner",
+  "/security-assessment",
+  "/scan/census",
+  "/learn/mcp-tool-poisoning",
+];
+
+for (const path of SECONDARY) {
+  await check(`${path} canonical is the brand host (served from workers.dev)`, async () => {
+    const html = await (await req(path)).text();
+    const m = html.match(/rel=["']?canonical["']?\s+href=["']([^"']+)["']/i);
+    assert.ok(m, `${path} emits no rel=canonical`);
+    assert.strictEqual(m[1], `${CANON}${path}`, `${path} canonical is ${m[1]}, expected ${CANON}${path}`);
+    // No canonical/og:url anywhere on the page may point back at workers.dev.
+    assert.ok(!/rel=["']?canonical["']?\s+href=["']https:\/\/[^"']*workers\.dev/i.test(html), `${path} canonical still references workers.dev`);
+    assert.ok(!/og:url["']?\s+content=["']https:\/\/[^"']*workers\.dev/i.test(html), `${path} og:url still references workers.dev`);
+  });
+}
+
 console.log(`\n${pass} checks passed`);
