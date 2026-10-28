@@ -16,7 +16,7 @@ import { register } from "node:module";
 
 register(new URL("./cfw-hooks.mjs", import.meta.url));
 
-const { applyWtpPriceFloor, ROUTE_CATALOG, ROUTE_CATALOG_BASE } = await import("../src/index.ts");
+const { applyWtpPriceFloor, ROUTE_CATALOG, ROUTE_CATALOG_BASE, makeRoutes } = await import("../src/index.ts");
 const { DEMAND_SNAPSHOT } = await import("../src/demand_snapshot.ts");
 
 let pass = 0;
@@ -101,6 +101,29 @@ check("live ROUTE_CATALOG honors every floor invariant vs base", () => {
   }
   assert.ok(raised >= 1, "at least one cold route was actually raised");
   console.log(`   (${raised} cold long-tail routes lifted to ${FLOOR} micros; paid/magnet routes protected)`);
+});
+
+// 7. The 402 GATE price (makeRoutes) matches the floored ROUTE_CATALOG for every
+//    route in both — advertised (manifest/for-agents read ROUTE_CATALOG) == charged
+//    (the gate). This is the fix that makes the floor actually move revenue, not
+//    just the discovery manifest. A gate-only route (path-param variant) is skipped.
+check("402 gate price == floored catalog price (advertise == charge)", () => {
+  const routes = makeRoutes("0xPAYTO");
+  const gate = new Map();
+  for (const [k, v] of Object.entries(routes)) if (v?.accepts?.price) gate.set(k, v.accepts.price);
+  let compared = 0, raisedSeen = 0;
+  for (const r of ROUTE_CATALOG) {
+    const key = `${r[1]} ${r[0]}`;
+    if (!gate.has(key)) continue; // gate-only / not gated here
+    assert.strictEqual(gate.get(key), `$${r[2]}`, `${key} gate price == catalog`);
+    compared++;
+    if (r[3] === "4000" && r[0] !== "/crypto/funding") raisedSeen++; // floored long-tail
+  }
+  assert.ok(compared >= 50, "most catalog routes are reconciled at the gate");
+  assert.ok(raisedSeen >= 1, "at least one floored route is reflected at the gate");
+  // concrete: a known cold 2000-base route now charges the 4000 floor at the gate
+  const erc20 = gate.get("GET /chain/erc20-meta");
+  if (erc20 !== undefined) assert.strictEqual(erc20, "$0.004", "cold route charges the floor at the gate");
 });
 
 console.log(`\n${pass} checks passed`);

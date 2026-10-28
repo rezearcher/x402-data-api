@@ -4141,6 +4141,25 @@ export function makeRoutes(payTo: string) {
       if (rc.iconUrl === undefined) rc.iconUrl = ICON_URL;
     }
   }
+  // Price reconciliation — ROUTE_CATALOG is the single source of truth for price
+  // (its comment says so, and it carries the WTP floor). The gate table above is
+  // hand-authored for its bespoke discovery extensions, so stamp each route's
+  // CHARGED price from the floored catalog here. This guarantees advertised
+  // (manifest / /for-agents, which read ROUTE_CATALOG) == charged (this 402 gate),
+  // and makes the WTP floor actually take effect on revenue. Only applied where the
+  // gate already exposes the route (never invents one); a gate-only route (e.g. the
+  // :domain path-param variants) keeps its hand-set price. Catalog + gate were
+  // verified in exact sync before this (0 divergences), so the only deltas are the
+  // floored long-tail routes — no surprise re-pricing.
+  const catalogPriceUsd = new Map<string, string>();
+  for (const [p, method, usd] of ROUTE_CATALOG) catalogPriceUsd.set(`${method} ${p}`, usd);
+  for (const key of Object.keys(routes)) {
+    const rc = routes[key];
+    const usd = catalogPriceUsd.get(key);
+    if (usd && rc && typeof rc === "object" && rc.accepts && typeof rc.accepts === "object") {
+      rc.accepts.price = `$${usd}`;
+    }
+  }
   return routes;
 }
 
