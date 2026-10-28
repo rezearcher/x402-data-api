@@ -22,7 +22,12 @@ import urllib.request
 import urllib.error
 import xml.etree.ElementTree as ET
 
-HOST = "x402-data-api.sigrunner.workers.dev"
+# The promoted brand host is the canonical SEO origin (src/index.ts
+# CANONICAL_ORIGIN): sitemap <loc>, <link rel=canonical> and og:url all resolve
+# here, so IndexNow must submit this host — submitting workers.dev URLs now would
+# mismatch the sitemap and the keyLocation host. The IndexNow key file is served
+# by the Worker on both hosts, so submission from the brand host is authorised.
+HOST = "api.greyridgesignals.ai"
 SITEMAP = f"https://{HOST}/sitemap.xml"
 INDEXNOW_ENDPOINT = "https://api.indexnow.org/IndexNow"
 
