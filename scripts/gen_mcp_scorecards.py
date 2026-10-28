@@ -1125,6 +1125,21 @@ Independent scans by [Grey Ridge Signals](https://github.com/rezearcher/greyridg
            json.dumps({"updated": today, "cards": merged}, sort_keys=True, indent=0),
            f"scorecards: leaderboard index state — {len(merged)} servers ({today})")
     print(f"PUT {LEADER_STATE} ({len(merged)} cards)")
+    # Compact, pre-ranked Top-25 the Worker's embeddable leaderboard widget
+    # (/scan/leaderboard.svg) fetches — a small, cache-cheap payload so the billboard
+    # SVG renders fast on every third-party embed without parsing the full index.
+    # The Worker degrades open to scorecard-index.json if this is ever absent.
+    top = [{
+        "name": c.get("name"), "slug": c.get("slug"), "url": c.get("url"),
+        "grade": c.get("grade"), "verdict": c.get("verdict"),
+        "risk_score": c.get("risk_score"), "blocker_count": c.get("blocker_count"),
+        "ready": bool(c.get("ready")), "scanned": c.get("scanned"),
+    } for c in ranked[:25]]
+    gh_put(f"{DOCS}/leaderboard.json",
+           json.dumps({"updated": today, "hub": "mcp-server-scorecards.html",
+                       "count": len(merged), "leaderboard": top}, indent=0),
+           f"scorecards: compact Top-25 leaderboard.json for the embed widget ({today})")
+    print(f"PUT {DOCS}/leaderboard.json (top {len(top)} of {len(merged)})")
     # emit slugs for sitemap update
     open("/tmp/scorecard_slugs.txt", "w").write(
         "\n".join([f"mcp-{s}-mcp-security" for _, s, *_ in results] + ["mcp-server-scorecards"]))

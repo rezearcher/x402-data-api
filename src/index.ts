@@ -9979,6 +9979,195 @@ app.get("/scan/mcp/badge", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// EMBEDDABLE MCP SECURITY LEADERBOARD WIDGET — the Line-B backlink engine.
+// A zero-dep inline SVG ranking public MCP servers by our A–F static injection /
+// tool-poisoning grade (OWASP LLM01/LLM08) — the exact per-server verdict the big
+// MCP directories (Glama, Smithery) do NOT render. Any MCP blog / aggregator /
+// grade-A author drops in the <a href=HUB><img src=/scan/leaderboard.svg></a>
+// snippet; the wrapping <a> is a dofollow backlink to our crawled github.io
+// scorecard corpus (the only Google-indexed surface) and the SVG is a live
+// billboard funnelling scans -> badge-claim -> $9.99/mo monitoring sub.
+// PURELY ADDITIVE: no existing /scan/* read or paid handler is touched; the SVG
+// ALWAYS returns 200 (degrade-open to a static scan-CTA card if the index read
+// fails), never a 500. Data reuses the ranked leaderboard the scorecard generator
+// already publishes (scorecard-index.json / leaderboard.json on github.io).
+// ---------------------------------------------------------------------------
+const SCORECARD_SITE = "https://rezearcher.github.io/greyridge-x402-tools";
+const LEADERBOARD_HUB = `${SCORECARD_SITE}/mcp-server-scorecards.html`;
+const LB_GRADE_RANK: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, F: 4 };
+type LbCard = {
+  name: string; slug?: string; url?: string; grade?: string | null;
+  verdict?: string | null; risk_score?: number | null;
+  blocker_count?: number | null; ready?: boolean;
+};
+export function lbRankKey(c: LbCard): [number, number, number, number] {
+  const g = (c.grade || "").trim().toUpperCase();
+  const rs = typeof c.risk_score === "number" ? c.risk_score : 1e9;
+  const bc = typeof c.blocker_count === "number" ? c.blocker_count : 1e9;
+  return [LB_GRADE_RANK[g] ?? 99, c.ready ? 0 : 1, rs, bc];
+}
+export function lbRankLess(a: LbCard, b: LbCard): number {
+  const ka = lbRankKey(a), kb = lbRankKey(b);
+  for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] - kb[i];
+  return (a.name || "").localeCompare(b.name || "");
+}
+// Fetch the ranked leaderboard cards published by gen_mcp_scorecards.py. Prefers the
+// compact pre-ranked leaderboard.json; falls back to the full carry-forward
+// scorecard-index.json (already live). Degrade-open: [] on any failure -> static card.
+async function fetchLeaderboardCards(): Promise<LbCard[]> {
+  for (const path of ["leaderboard.json", "scorecard-index.json"]) {
+    try {
+      const r = await fetch(`${SCORECARD_SITE}/${path}`, {
+        cf: { cacheTtl: 3600, cacheEverything: true },
+      } as RequestInit);
+      if (!r.ok) continue;
+      const j = (await r.json()) as unknown;
+      let cards: LbCard[] = [];
+      if (Array.isArray(j)) cards = j as LbCard[];
+      else if (j && typeof j === "object") {
+        const o = j as Record<string, unknown>;
+        if (Array.isArray(o.leaderboard)) cards = o.leaderboard as LbCard[];
+        else if (o.cards && typeof o.cards === "object") cards = Object.values(o.cards as Record<string, LbCard>);
+      }
+      cards = cards.filter((c) => c && typeof c.name === "string" && c.name);
+      if (cards.length) return cards;
+    } catch { /* try next source */ }
+  }
+  return [];
+}
+function lbGradeColor(g: string | null | undefined, muted: string): string {
+  return ({ A: "#3fb950", B: "#3fb950", C: "#d29922", D: "#db6d28", F: "#f85149" } as Record<string, string>)[
+    (g || "").trim().toUpperCase()
+  ] ?? muted;
+}
+// Static degrade-open card: shown when the published index can't be read. Never 500.
+export function leaderboardStaticSvg(theme: string): string {
+  const dark = theme !== "light";
+  const bg = dark ? "#0d1117" : "#ffffff";
+  const fg = dark ? "#e6e6e6" : "#1a1a1a";
+  const muted = dark ? "#8b949e" : "#57606a";
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="150" viewBox="0 0 600 150" role="img" aria-label="MCP Security Leaderboard by Grey Ridge">
+<rect width="600" height="150" rx="10" fill="${bg}" stroke="${dark ? "#30363d" : "#d0d7de"}"/>
+<rect x="0" y="0" width="600" height="6" rx="3" fill="#3fb950"/>
+<text x="24" y="52" fill="${fg}" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="26" font-weight="800">MCP Security Leaderboard</text>
+<text x="24" y="86" fill="${muted}" font-family="system-ui,sans-serif" font-size="16">Static injection / tool-poisoning grade (OWASP LLM01/LLM08)</text>
+<text x="24" y="124" fill="#3fb950" font-family="system-ui,sans-serif" font-size="17" font-weight="700">Scan your MCP server free → greyridgesignals.ai</text>
+</svg>`;
+}
+// Render the Top-N leaderboard as a self-contained inline SVG (no external refs).
+export function leaderboardSvg(cards: LbCard[], n: number, theme: string): string {
+  if (!cards.length) return leaderboardStaticSvg(theme);
+  const dark = theme !== "light";
+  const bg = dark ? "#0d1117" : "#ffffff";
+  const fg = dark ? "#e6e6e6" : "#1a1a1a";
+  const muted = dark ? "#8b949e" : "#57606a";
+  const rowAlt = dark ? "#161b22" : "#f6f8fa";
+  const border = dark ? "#30363d" : "#d0d7de";
+  const ranked = [...cards].sort(lbRankLess);
+  const rows = ranked.slice(0, n);
+  // Injection base-rate across the WHOLE ranked set (headline stat Glama lacks).
+  const graded = cards.filter((c) => c.verdict);
+  const flagged = graded.filter((c) => (c.verdict || "").toLowerCase() !== "clear").length;
+  const baseRate = graded.length ? Math.round((flagged / graded.length) * 100) : null;
+  const W = 600;
+  const headH = 92;
+  const rowH = 38;
+  const footH = 46;
+  const H = headH + rows.length * rowH + footH;
+  // Headline: when any server is flagged, lead with the base-rate (the signal Glama
+  // lacks); when none are (most public servers show no static pattern), lead with the
+  // graded count instead of a 0% that undersells — both honest, "clear" ≠ "safe".
+  const sub = baseRate
+    ? `Static injection grade (OWASP LLM01/LLM08) · ${flagged}/${graded.length} flagged (${baseRate}%)`
+    : graded.length
+      ? `${graded.length} public servers graded · static injection grade (OWASP LLM01/LLM08)`
+      : `Static injection / tool-poisoning grade (OWASP LLM01/LLM08)`;
+  let body = "";
+  rows.forEach((c, i) => {
+    const y = headH + i * rowH;
+    if (i % 2 === 1) body += `<rect x="0" y="${y}" width="${W}" height="${rowH}" fill="${rowAlt}"/>`;
+    const ty = y + rowH / 2 + 5;
+    const name = svgEsc(c.name).slice(0, 34);
+    const grade = (c.grade || "—").toString().trim() || "—";
+    const gc = lbGradeColor(c.grade, muted);
+    const rs = typeof c.risk_score === "number" ? String(Math.round(c.risk_score)) : "—";
+    body += `<text x="24" y="${ty}" fill="${muted}" font-family="system-ui,sans-serif" font-size="16" font-weight="700">${i + 1}</text>`;
+    body += `<text x="58" y="${ty}" fill="${fg}" font-family="system-ui,sans-serif" font-size="16" font-weight="600">${name}</text>`;
+    body += `<rect x="${W - 150}" y="${y + 7}" width="34" height="24" rx="6" fill="${gc}"/><text x="${W - 133}" y="${y + 24}" fill="#0d1117" font-family="system-ui,sans-serif" font-size="15" font-weight="800" text-anchor="middle">${svgEsc(grade)}</text>`;
+    body += `<text x="${W - 24}" y="${ty}" fill="${muted}" font-family="system-ui,sans-serif" font-size="15" text-anchor="end">risk ${svgEsc(rs)}</text>`;
+  });
+  const fy = headH + rows.length * rowH;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="MCP Security Leaderboard by Grey Ridge Signals">
+<rect width="${W}" height="${H}" rx="10" fill="${bg}" stroke="${border}"/>
+<rect x="0" y="0" width="${W}" height="6" rx="3" fill="#3fb950"/>
+<text x="24" y="44" fill="${fg}" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="24" font-weight="800">MCP Security Leaderboard</text>
+<text x="24" y="72" fill="${muted}" font-family="system-ui,sans-serif" font-size="14">${svgEsc(sub)}</text>
+<line x1="0" y1="${headH - 4}" x2="${W}" y2="${headH - 4}" stroke="${border}"/>
+${body}
+<line x1="0" y1="${fy + 2}" x2="${W}" y2="${fy + 2}" stroke="${border}"/>
+<text x="24" y="${fy + 30}" fill="#3fb950" font-family="system-ui,sans-serif" font-size="15" font-weight="700">Grey Ridge MCP Security — scan yours free at greyridgesignals.ai</text>
+</svg>`;
+}
+function lbN(c: { req: { query: (k: string) => string | undefined } }): number {
+  const raw = parseInt(c.req.query("n") || "10", 10);
+  if (!Number.isFinite(raw)) return 10;
+  return Math.max(3, Math.min(25, raw));
+}
+app.get("/scan/leaderboard.svg", async (c) => {
+  const svgHeaders = { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=3600" };
+  const theme = (c.req.query("theme") || "dark").toLowerCase();
+  try {
+    const cards = await fetchLeaderboardCards();
+    return c.body(leaderboardSvg(cards, lbN(c), theme), 200, svgHeaders);
+  } catch {
+    // Degrade-open — always an image, never a 500.
+    return c.body(leaderboardStaticSvg(theme), 200, svgHeaders);
+  }
+});
+// Optional async JS embed: injects the SVG into <div id="grey-ridge-mcp-leaderboard">.
+app.get("/scan/leaderboard.js", (c) => {
+  const n = lbN(c);
+  const theme = (c.req.query("theme") || "dark").toLowerCase();
+  const self = new URL(c.req.url);
+  const origin = `${self.protocol}//${self.host}`;
+  const svgUrl = `${origin}/scan/leaderboard.svg?n=${n}&theme=${encodeURIComponent(theme)}`;
+  const js = `(function(){try{var id="grey-ridge-mcp-leaderboard";var d=document.getElementById(id)||document.currentScript&&document.currentScript.parentNode;if(!d)return;var a=document.createElement("a");a.href=${JSON.stringify(LEADERBOARD_HUB)};a.target="_blank";a.rel="noopener";a.setAttribute("aria-label","MCP Security Leaderboard by Grey Ridge Signals");var img=document.createElement("img");img.src=${JSON.stringify(svgUrl)};img.alt="MCP Security Leaderboard by Grey Ridge Signals";img.style.maxWidth="100%";a.appendChild(img);d.appendChild(a);}catch(e){}})();`;
+  return c.body(js, 200, { "Content-Type": "application/javascript; charset=utf-8", "Cache-Control": "public, max-age=3600" });
+});
+// Author-facing embed page: copy-paste snippets. The <a href=HUB> is the backlink.
+app.get("/scan/leaderboard/embed", (c) => {
+  const self = new URL(c.req.url);
+  const origin = `${self.protocol}//${self.host}`;
+  const svgUrl = `${origin}/scan/leaderboard.svg`;
+  const imgSnippet = `<a href="${LEADERBOARD_HUB}" target="_blank" rel="noopener">\n  <img src="${svgUrl}" alt="MCP Security Leaderboard by Grey Ridge Signals" width="600">\n</a>`;
+  const mdSnippet = `[![MCP Security Leaderboard by Grey Ridge Signals](${svgUrl})](${LEADERBOARD_HUB})`;
+  const jsSnippet = `<div id="grey-ridge-mcp-leaderboard"></div>\n<script async src="${origin}/scan/leaderboard.js"></script>`;
+  const esc = (s: string) => s.replace(/[<>&]/g, (m) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[m] as string));
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Embed the MCP Security Leaderboard — Grey Ridge Signals</title>
+<meta name="description" content="Drop a live, ranked MCP server security leaderboard (A–F static injection / tool-poisoning grade) into your site, blog or README. Free, zero-dependency SVG.">
+<style>body{background:#0d1117;color:#e6e6e6;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:760px;margin:0 auto;padding:40px 20px;line-height:1.5}h1{font-size:28px}h2{font-size:18px;margin-top:34px;color:#c9d1d9}a{color:#3fb950}pre{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px;overflow:auto;font-size:13px}.muted{color:#8b949e;font-size:14px}.preview{border:1px solid #30363d;border-radius:10px;padding:16px;background:#0d1117;margin:16px 0}</style></head>
+<body>
+<h1>Embed the MCP Security Leaderboard</h1>
+<p class="muted">A live, ranked read of public MCP servers by static prompt-injection / tool-poisoning grade (OWASP LLM01/LLM08) — the per-server verdict the big directories don't show. Free to host; the image always loads. "Clear" means no static injection pattern was found, not "safe".</p>
+<div class="preview"><img src="${svgUrl}?n=10" alt="MCP Security Leaderboard by Grey Ridge Signals" width="600" style="max-width:100%"></div>
+<h2>1 · HTML / README image (the backlink)</h2>
+<p class="muted">The wrapping link points at the ranked hub — that's the backlink your embed earns.</p>
+<pre>${esc(imgSnippet)}</pre>
+<h2>2 · Markdown</h2>
+<pre>${esc(mdSnippet)}</pre>
+<h2>3 · Async JavaScript</h2>
+<pre>${esc(jsSnippet)}</pre>
+<h2>Options</h2>
+<p class="muted"><code>?n=</code> rows (3–25, default 10) · <code>?theme=light|dark</code>. Example: <code>${svgUrl}?n=15&amp;theme=light</code></p>
+<h2>Want your server ranked — or #1 for security?</h2>
+<p><a href="${origin}/scan/mcp-scanner">Scan your MCP server free</a> · <a href="${origin}/scan/verify">claim a verified badge</a> · <a href="${origin}/pricing">keep it monitored ($9.99/mo)</a></p>
+<p class="muted">Grey Ridge Signals · static LLM01/LLM08 scanning + continuous monitoring. See the full <a href="${LEADERBOARD_HUB}">ranked leaderboard</a>.</p>
+</body></html>`;
+  return c.html(html, 200, { "Cache-Control": "public, max-age=3600" });
+});
+
+// ---------------------------------------------------------------------------
 // Ownership verification — Authorization Standard, Tier 1 (docs/AUTHORIZATION_STANDARD.md).
 // Fully automated DNS-01-style domain-control challenge + click-through legal
 // authorization. No email, no human, no support ticket (the ACME DNS-01 /
