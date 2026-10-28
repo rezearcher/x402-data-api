@@ -14817,6 +14817,24 @@ export function renderPostureTimeline(opts: {
   const vcls = (x: string) => (({ clear: "clear", review: "review", block: "block" } as Record<string, string>)[x] || "unknown");
   const fmt = (iso: string) => String(iso || "").slice(0, 16).replace("T", " ");
   const changes = hist.filter((e) => e.kind === "changed").length;
+  // Letter grade per snapshot, recomputed from the stored risk_score + critical
+  // count (mcpGrade is the single source of truth, reused across every scan
+  // surface). No migration: every history entry already carries risk_score +
+  // by_severity, so even pre-grade rows render a correct letter. null when the
+  // risk score is missing/non-finite — rendered "?", never a fabricated grade.
+  const gradeOf = (e: any): "A" | "B" | "C" | "D" | "F" | null => {
+    const raw = e?.risk_score;
+    if (raw === null || raw === undefined || raw === "") return null; // Number(null)===0 would fabricate an "A"
+    const rs = Number(raw);
+    if (!Number.isFinite(rs)) return null;
+    return mcpGrade(rs, Number(e?.by_severity?.critical) > 0);
+  };
+  // Current grade: prefer the persisted snap.grade (written since the grade
+  // field landed) when it is a valid letter, else recompute from the snapshot.
+  const curGrade: "A" | "B" | "C" | "D" | "F" | null = (() => {
+    const g = snap && typeof snap.grade === "string" && /^[A-F]$/.test(snap.grade) ? (snap.grade as any) : null;
+    return g || (snap ? gradeOf(snap) : null);
+  })();
   if (monitored) {
     const sevLine = (bs: any) => {
       if (!bs || typeof bs !== "object") return "no issues";
@@ -14885,7 +14903,7 @@ export function renderPostureTimeline(opts: {
       const added = appeared.length ? `<div style="margin:.15rem 0"><strong style="color:#b91c1c">+ ${appeared.length} new reject(s)</strong>: ${appeared.slice(0, 6).map(dirLabel).join(", ")}</div>` : "";
       const gone = resolved.length ? `<div style="margin:.15rem 0"><strong style="color:#15803d">− ${resolved.length} fixed</strong>: ${resolved.slice(0, 6).map(dirLabel).join(", ")}</div>` : "";
       const head = arrow ? `<div style="margin:.15rem 0">${arrow}</div>` : "";
-      return `<tr><td></td><td colspan=4 style="padding-top:0;border-bottom:1px solid var(--line)"><span class=muted style="font-size:.72rem">Claude Directory</span>${head}${added}${gone}</td></tr>`;
+      return `<tr><td></td><td colspan=5 style="padding-top:0;border-bottom:1px solid var(--line)"><span class=muted style="font-size:.72rem">Claude Directory</span>${head}${added}${gone}</td></tr>`;
     };
     const diffDetail = (idx: number): string => {
       const d = diffFor(idx);
@@ -14894,7 +14912,7 @@ export function renderPostureTimeline(opts: {
           ? `<div style="margin:.15rem 0"><strong style="color:${color}">${sign} ${items.length} ${verb}</strong>: ${items.slice(0, 8).map(clsLabel).join(", ")}${items.length > 8 ? ` <span class=muted>+${items.length - 8} more</span>` : ""}</div>`
           : "";
       const secBody = d ? line(d.added, "new finding(s)", "#b91c1c", "+") + line(d.removed, "resolved", "#15803d", "−") : "";
-      const secRow = secBody ? `<tr><td></td><td colspan=4 style="padding-top:0;border-bottom:1px solid var(--line)">${secBody}</td></tr>` : "";
+      const secRow = secBody ? `<tr><td></td><td colspan=5 style="padding-top:0;border-bottom:1px solid var(--line)">${secBody}</td></tr>` : "";
       return secRow + dirDetailFor(idx);
     };
     const rows = hist
@@ -14904,12 +14922,14 @@ export function renderPostureTimeline(opts: {
       .map(({ e, i }) => {
         const ev = e.kind === "baseline" ? "baseline" : e.kind === "changed" ? "changed" : esc(String(e.kind || ""));
         const evCls = e.kind === "changed" ? "review" : "unknown";
-        const mainRow = `<tr><td class=muted style="white-space:nowrap">${esc(fmt(e.at))} UTC</td><td><span class="pill ${evCls}" style="font-size:.7rem">${ev}</span></td><td><span class="pill ${vcls(String(e.verdict))}" style="font-size:.7rem">${esc(String(e.verdict))}</span></td><td>${Number.isFinite(Number(e.risk_score)) ? Number(e.risk_score) + "/100" : "?"}</td><td class=muted>${esc(sevLine(e.by_severity))}</td></tr>`;
+        const g = gradeOf(e);
+        const gCell = g ? `<td style="font-weight:700">${g}</td>` : `<td class=muted>?</td>`;
+        const mainRow = `<tr><td class=muted style="white-space:nowrap">${esc(fmt(e.at))} UTC</td><td><span class="pill ${evCls}" style="font-size:.7rem">${ev}</span></td><td><span class="pill ${vcls(String(e.verdict))}" style="font-size:.7rem">${esc(String(e.verdict))}</span></td>${gCell}<td>${Number.isFinite(Number(e.risk_score)) ? Number(e.risk_score) + "/100" : "?"}</td><td class=muted>${esc(sevLine(e.by_severity))}</td></tr>`;
         return mainRow + diffDetail(i);
       })
       .join("");
     const lastSeen = snap?.checked_at
-      ? `<p class=muted style="margin:.7rem 0 0">Last re-checked ${esc(fmt(snap.checked_at))} UTC — currently <strong>${esc(String(snap.verdict))}</strong> at risk ${Number(snap.risk_score)}/100.</p>`
+      ? `<p class=muted style="margin:.7rem 0 0">Last re-checked ${esc(fmt(snap.checked_at))} UTC — currently grade <strong>${curGrade || "?"}</strong> · <strong>${esc(String(snap.verdict))}</strong> at risk ${Number(snap.risk_score)}/100.</p>`
       : "";
     // Visual risk-score trend (the at-a-glance posture graph Detectify/Probely show
     // above their history list). Chronological left→right over the same last-12 window
@@ -14941,19 +14961,41 @@ export function renderPostureTimeline(opts: {
     <div class=muted style="font-size:.72rem;margin-top:.1rem">Risk score (0–100) over the last ${n} recorded scans — lower is better; posture ${trend} to <strong>${last}/100</strong>.</div>
   </div>`;
     })();
+    // Grade-trend line: the letter-grade move (A best → F worst) across the same
+    // last-12 window, computed from the per-snapshot grades via mcpGradeDelta — the
+    // human-legible version of the drift signal the monitoring webhook pushes, now
+    // crawlable on the public report. A regression is shown in red, an improvement
+    // green. Degrades to "" under 2 graded datapoints (nothing to compare).
+    const gradeTrend = (() => {
+      const gs = hist
+        .slice(-12)
+        .map((e) => gradeOf(e))
+        .filter((g): g is "A" | "B" | "C" | "D" | "F" => g !== null);
+      if (gs.length < 2) return "";
+      const first = gs[0], lastG = gs[gs.length - 1];
+      const gd = mcpGradeDelta(first, lastG);
+      if (gd.direction === "unknown") return "";
+      const word = gd.direction === "worsened" ? "regressed" : gd.direction === "improved" ? "improved" : "held";
+      const color = gd.direction === "worsened" ? "#b91c1c" : gd.direction === "improved" ? "#15803d" : "#6b7280";
+      const bands = gd.letters === 1 ? "1 band" : `${gd.letters} bands`;
+      const tail = gd.direction === "same" ? "no change" : `${word} ${bands}`;
+      return `<p class=summary style="margin:.5rem 0 0">Grade trend: <strong style="color:${color}">${first} → ${lastG}</strong> over the last ${gs.length} recorded scans · <span style="color:${color};font-weight:600">${tail}</span>.</p>`;
+    })();
     return `<h2>Security posture over time</h2>
 <div class=card>
   <p class=summary><span class="pill clear">monitored</span> &nbsp;${hist.length} recorded transition(s), ${changes} verdict/risk change(s) since baseline. Each row is a point where the advertised manifest's posture actually moved — expanded with the exact findings that <strong>appeared</strong> or <strong>resolved</strong> at that change. Unchanged re-scans aren't logged.</p>
+  ${gradeTrend}
   ${riskSpark}
-  <table><thead><tr><th>When</th><th>Event</th><th>Verdict</th><th>Risk</th><th>Severity mix</th></tr></thead><tbody>
+  <table><thead><tr><th>When</th><th>Event</th><th>Verdict</th><th>Grade</th><th>Risk</th><th>Severity mix</th></tr></thead><tbody>
   ${rows}
   </tbody></table>${lastSeen}
 </div>`;
   }
   const latestV = snap?.verdict ? String(snap.verdict) : (hist[hist.length - 1]?.verdict ? String(hist[hist.length - 1].verdict) : "unknown");
+  const latestGrade = curGrade || gradeOf(hist[hist.length - 1]);
   return `<h2>Security posture over time</h2>
 <div class=card>
-  <p class=summary><span class="pill unknown">timeline locked</span> &nbsp;Grey Ridge has recorded <strong>${hist.length}</strong> posture transition(s) for <code>${esc(ownerHost)}</code> (${changes} verdict/risk change(s)); current verdict <span class="pill ${vcls(latestV)}" style="font-size:.7rem">${esc(latestV)}</span>. The dated monitoring timeline — every change, when it happened, the severity mix, and the exact findings that appeared or resolved at each change — is part of continuous monitoring.</p>
+  <p class=summary><span class="pill unknown">timeline locked</span> &nbsp;Grey Ridge has recorded <strong>${hist.length}</strong> posture transition(s) for <code>${esc(ownerHost)}</code> (${changes} verdict/risk change(s)); current grade <strong>${latestGrade || "?"}</strong> · verdict <span class="pill ${vcls(latestV)}" style="font-size:.7rem">${esc(latestV)}</span>. The dated monitoring timeline — every change, when it happened, the severity mix, and the exact findings that appeared or resolved at each change — is part of continuous monitoring.</p>
   <p class=muted style="margin:.6rem 0 0"><a href="/scan/verify?domain=${encodeURIComponent(ownerHost)}">Turn on monitoring — $9.99/mo</a> to unlock the full dated posture history with drift alerts.</p>
 </div>`;
 }

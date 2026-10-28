@@ -139,4 +139,63 @@ check("baseline-only (single datapoint) renders no sparkline", () => {
   assert.ok(!html.includes("<svg"), "no sparkline with <2 datapoints");
 });
 
+// 10. Letter-grade column: the monitored timeline renders a per-transition grade
+// recomputed from each row's risk_score + critical count (mcpGrade), so the
+// human-legible A-F signal is on the public report, not only the webhook/status.
+// HIST: baseline risk 0/crit 0 -> A, change risk 28 -> B, change risk 72/crit 1 -> F.
+check("monitored renders a per-transition letter grade column", () => {
+  const html = renderPostureTimeline({ ownerRec: REC, monitored: true, ownerHost: "mcp.example.com" });
+  assert.ok(html.includes("<th>Grade</th>"), "grade column header present");
+  // the F row (risk 72, 1 critical) renders a bold F cell
+  assert.ok(html.includes('<td style="font-weight:700">F</td>'), "F grade cell rendered for the block row");
+  assert.ok(html.includes('<td style="font-weight:700">A</td>'), "A grade cell rendered for the clean baseline row");
+  assert.ok(html.includes('<td style="font-weight:700">B</td>'), "B grade cell rendered for the mid row");
+});
+
+// 11. Grade trend: first->last letter move across the window via mcpGradeDelta,
+// shown as "A -> F ... regressed N bands" (the crawlable version of the drift
+// signal the monitoring webhook pushes). HIST A->F = regressed 4 bands.
+check("monitored renders a grade-trend line (A -> F, regressed)", () => {
+  const html = renderPostureTimeline({ ownerRec: REC, monitored: true, ownerHost: "mcp.example.com" });
+  assert.ok(html.includes("Grade trend:"), "grade-trend line present");
+  assert.ok(html.includes("A → F"), "first->last grade move rendered");
+  assert.ok(html.includes("regressed 4 bands"), "regression magnitude rendered");
+});
+
+// 12. Grade-trend degrades to nothing with a single graded datapoint (nothing to compare).
+check("baseline-only renders no grade-trend line", () => {
+  const rec = { posture_history: [HIST[0]], posture: { verdict: "clear", risk_score: 0, checked_at: "2026-10-01T08:05:00.000Z" } };
+  const html = renderPostureTimeline({ ownerRec: rec, monitored: true, ownerHost: "mcp.example.com" });
+  assert.ok(!html.includes("Grade trend:"), "no grade-trend with <2 graded points");
+});
+
+// 13. Current grade leads the latest-snapshot line and the free locked teaser so the
+// grade (unlike the dated history) is a crawlable signal on both the paid and free view.
+check("current grade appears in monitored last-seen line and free teaser", () => {
+  const paid = renderPostureTimeline({ ownerRec: REC, monitored: true, ownerHost: "mcp.example.com" });
+  assert.ok(paid.includes("currently grade <strong>F</strong>"), "monitored last-seen leads with grade");
+  const free = renderPostureTimeline({ ownerRec: REC, monitored: false, ownerHost: "mcp.example.com" });
+  assert.ok(free.includes("current grade <strong>F</strong>"), "free teaser leads with grade");
+  // free teaser still withholds the dated rows
+  assert.ok(!free.includes("<th>Grade</th>"), "free teaser has no timeline table");
+});
+
+// 14. An improvement renders green + "improved"; a non-finite risk row grades "?" not a fake letter.
+check("improving history renders an improved grade-trend; missing risk grades '?'", () => {
+  const UP = [
+    { at: "2026-10-01T08:00:00.000Z", kind: "baseline", verdict: "block", risk_score: 72, tools_scanned: 4, by_severity: { critical: 1 } },
+    { at: "2026-10-10T08:00:00.000Z", kind: "changed", verdict: "review", risk_score: 28, tools_scanned: 4, by_severity: { medium: 2 } },
+    { at: "2026-10-20T08:00:00.000Z", kind: "changed", verdict: "clear", risk_score: 0, tools_scanned: 4, by_severity: {} },
+  ];
+  const html = renderPostureTimeline({ ownerRec: { posture_history: UP, posture: { verdict: "clear", risk_score: 0, checked_at: "2026-10-21T08:00:00.000Z" } }, monitored: true, ownerHost: "mcp.example.com" });
+  assert.ok(html.includes("F → A"), "improving first->last move rendered");
+  assert.ok(html.includes("improved 4 bands"), "improvement magnitude rendered");
+  const NR = [
+    { at: "2026-10-01T08:00:00.000Z", kind: "baseline", verdict: "clear", risk_score: 0, by_severity: {} },
+    { at: "2026-10-10T08:00:00.000Z", kind: "changed", verdict: "unknown", risk_score: null, by_severity: {} },
+  ];
+  const h2 = renderPostureTimeline({ ownerRec: { posture_history: NR, posture: { verdict: "clear", risk_score: 0, checked_at: "2026-10-11T08:00:00.000Z" } }, monitored: true, ownerHost: "mcp.example.com" });
+  assert.ok(h2.includes("<td class=muted>?</td>"), "non-finite risk row grades '?', not a fabricated letter");
+});
+
 console.log(`\n${pass} checks passed`);
