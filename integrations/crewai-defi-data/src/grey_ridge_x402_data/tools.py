@@ -97,6 +97,24 @@ def check_token(token: Optional[str] = None, *, private_key: Optional[str] = Non
     return _d.run_token_report(c["pay_get"], token=token, has_key=c["has_key"], base=base)
 
 
+def yield_entry_verdict(pool: str, token: Optional[str] = None, *,
+                        private_key: Optional[str] = None,
+                        base: str = _d.DATA_BASE) -> Dict[str, Any]:
+    """Per-pool DeFi yield-entry go/no-go: SUSTAINABLE/DECAYING/OUTLIER/AVOID + 0-100 risk_score + field-cited reasons for the DefiLlama poolId from defi_yields. $0.01 — free preview returns a SAMPLE verdict (top-TVL pool), so keyless carries is_sample:true (never a fabricated per-pool verdict)."""
+    c = _ctx(private_key)
+    return _d.run_yield_entry_verdict(c["pay_get"], pool=pool, token=token,
+                                      has_key=c["has_key"], base=base)
+
+
+def simulate_tx(from_addr: str, to_addr: str, data: Optional[str] = None,
+                value: Optional[Any] = None, *, private_key: Optional[str] = None,
+                base: str = _d.DATA_BASE) -> Dict[str, Any]:
+    """Prospective Base tx dry-run via eth_simulateV1: will_revert + revert_reason + gas_used + token asset_changes BEFORE sending it. $0.005 — free preview is a benign demo dry-run, so keyless carries is_sample:true (never a fabricated result for your tx)."""
+    c = _ctx(private_key)
+    return _d.run_simulate(c["pay_get"], from_addr=from_addr, to_addr=to_addr,
+                           data=data, value=value, has_key=c["has_key"], base=base)
+
+
 # ---------------------------------------------------------------------------
 # CrewAI tool wrappers (lazy import — crewai only required for crewai_tools())
 # ---------------------------------------------------------------------------
@@ -144,6 +162,18 @@ def crewai_tools(private_key: Optional[str] = None) -> List[Any]:
 
     class _CheckTokenArgs(BaseModel):
         token: Optional[str] = Field(None, description="A 0x… Base ERC-20 contract to vet before trading (defaults to a demo token).")
+
+    class _YieldEntryArgs(BaseModel):
+        pool: str = Field(..., description="DefiLlama poolId — the 'pool' field from defi_yields / GET /defi/yields.")
+        token: Optional[str] = Field(None, description="Optional underlying token (0x, Base) — adds a honeypot-check pointer for the pool's asset.")
+
+    class _SimulateArgs(BaseModel):
+        from_addr: str = Field(..., alias="from", description="Sender 0x Base address — the wallet that would send the tx.")
+        to_addr: str = Field(..., alias="to", description="Target contract or address (0x, Base) the tx calls.")
+        data: Optional[str] = Field(None, description="Optional 0x-prefixed calldata (omit for a plain native transfer).")
+        value: Optional[str] = Field(None, description="Optional wei to send, decimal or 0x-hex (omit or '0' for none).")
+
+        model_config = {"populate_by_name": True}
 
     def _emit(d: Dict[str, Any]) -> str:
         return json.dumps(d, default=str)
@@ -245,6 +275,37 @@ def crewai_tools(private_key: Optional[str] = None) -> List[Any]:
         def _run(self, token: Optional[str] = None) -> str:
             return _emit(check_token(token, private_key=pk))
 
+    class YieldEntryVerdictTool(BaseTool):
+        name: str = "yield_entry_verdict"
+        description: str = ("Per-pool DeFi yield-entry go/no-go: a SUSTAINABLE / DECAYING / OUTLIER / "
+                            "AVOID verdict with a 0-100 risk score and field-cited reasons (APY "
+                            "1d/7d/30d trend, DefiLlama stability forecast, impermanent loss, "
+                            "volatility, outlier flag, TVL) for the DefiLlama poolId from defi_yields. "
+                            "Paid $0.01/call via x402 USDC on Base; the free preview returns a SAMPLE "
+                            "verdict (top-TVL pool), so a keyless call carries is_sample:true — never a "
+                            "fabricated per-pool verdict. Call after defi_yields to decide whether to "
+                            "actually enter THAT pool.")
+        args_schema: type = _YieldEntryArgs
+
+        def _run(self, pool: str, token: Optional[str] = None) -> str:
+            return _emit(yield_entry_verdict(pool, token, private_key=pk))
+
+    class SimulateTxTool(BaseTool):
+        name: str = "simulate_tx"
+        description: str = ("Prospective Base transaction dry-run via eth_simulateV1: will_revert + "
+                            "revert_reason + gas_used + token asset_changes BEFORE the agent spends gas "
+                            "sending it. Pass from, to and optional data (0x calldata) + value (wei). "
+                            "Tenderly/Alchemy-class output, keyless and Base-native. Paid $0.005/call via "
+                            "x402 USDC on Base; the free preview is a benign demo dry-run, so a keyless "
+                            "call carries is_sample:true — never a fabricated result for your tx. Call "
+                            "before any swap/approve/transfer, or alongside check_token.")
+        args_schema: type = _SimulateArgs
+
+        def _run(self, from_addr: str, to_addr: str, data: Optional[str] = None,
+                 value: Optional[str] = None) -> str:
+            return _emit(simulate_tx(from_addr, to_addr, data, value, private_key=pk))
+
     return [DefiYieldsTool(), CryptoPricesTool(), BaseBalanceTool(),
             BaseGasPriceTool(), BaseBlockNumberTool(), BaseTokenBalanceTool(),
-            CryptoFundingTool(), MarketBriefTool(), CheckTokenTool()]
+            CryptoFundingTool(), MarketBriefTool(), CheckTokenTool(),
+            YieldEntryVerdictTool(), SimulateTxTool()]

@@ -32,9 +32,11 @@ from .tools import (
     crypto_prices,
     defi_yields,
     market_brief,
+    simulate_tx,
+    yield_entry_verdict,
 )
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 __all__ = [
     "crewai_tools",
@@ -47,6 +49,8 @@ __all__ = [
     "crypto_funding",
     "market_brief",
     "check_token",
+    "yield_entry_verdict",
+    "simulate_tx",
     "has_wallet",
     "make_pay_get",
     "DATA_BASE",

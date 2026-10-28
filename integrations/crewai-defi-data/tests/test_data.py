@@ -328,5 +328,94 @@ class TestTokenReport(unittest.TestCase):
         self.assertIsNone(out["verdict"])
 
 
+class TestYieldEntryVerdict(unittest.TestCase):
+    def setUp(self):
+        self._orig = d.plain_get
+
+    def tearDown(self):
+        d.plain_get = self._orig
+
+    def test_build_url_requires_pool_and_applies_token(self):
+        with self.assertRaises(ValueError):
+            d.build_yield_entry_verdict_url("")
+        self.assertIn("pool=abc", d.build_yield_entry_verdict_url("abc"))
+        self.assertIn("token=0x4200", d.build_yield_entry_verdict_url("abc", "0x4200000000000000000000000000000000000006"))
+
+    def test_summary_renders_label_verdict_risk_apy(self):
+        s = d.summarize_yield_entry_verdict(
+            {"symbol": "USDC", "verdict": "SUSTAINABLE", "risk_score": 12, "apy": 5.42, "reasons": []})
+        self.assertIn("USDC: SUSTAINABLE", s)
+        self.assertIn("risk 12/100", s)
+        self.assertIn("APY 5.42%", s)
+
+    def test_paid_returns_full_verdict_not_sample(self):
+        out = d.run_yield_entry_verdict(
+            lambda u: (200, {"pool": "p", "verdict": "SUSTAINABLE", "risk_score": 12, "apy": 5.42, "reasons": []}),
+            pool="p", has_key=True)
+        self.assertTrue(out["paid"])
+        self.assertFalse(out["is_sample"])
+        self.assertEqual(out["verdict"], "SUSTAINABLE")
+
+    def test_keyless_reads_preview_as_sample(self):
+        d.plain_get = lambda url, timeout=15.0: (200, {"preview": {"symbol": "STETH", "verdict": "SUSTAINABLE", "risk_score": 0, "apy": 2.25, "reasons": []}})
+        out = d.run_yield_entry_verdict(lambda u: (0, None), pool="my-pool", has_key=False)
+        self.assertFalse(out["paid"])
+        self.assertTrue(out["is_sample"])
+        self.assertIn("SAMPLE, not pool my-pool", out["note"])
+        self.assertEqual(out["activation"]["price_usdc"], "0.01")
+
+    def test_missing_pool_degrades_not_raise(self):
+        out = d.run_yield_entry_verdict(lambda u: (200, {}), pool="", has_key=True)
+        self.assertIn("error", out)
+        self.assertIsNone(out["verdict"])
+
+
+class TestSimulate(unittest.TestCase):
+    ADDR = "0x4200000000000000000000000000000000000006"
+    TO = "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10"
+
+    def setUp(self):
+        self._orig = d.plain_get
+
+    def tearDown(self):
+        d.plain_get = self._orig
+
+    def test_build_url_requires_addrs_applies_data_value(self):
+        with self.assertRaises(ValueError):
+            d.build_simulate_url("0xnope", self.TO)
+        u = d.build_simulate_url(self.ADDR, self.TO, "0xabcd", "100")
+        self.assertIn("data=0xabcd", u)
+        self.assertIn("value=100", u)
+
+    def test_summary_renders_revert_gas_moves(self):
+        s = d.summarize_simulation({"will_revert": False, "gas_used": 48210, "asset_changes": [{"t": 1}]})
+        self.assertIn("will NOT revert", s)
+        self.assertIn("gas 48210", s)
+        self.assertIn("1 token move", s)
+        self.assertIn("WILL REVERT · ERC20",
+                      d.summarize_simulation({"will_revert": True, "revert_reason": "ERC20: x", "asset_changes": []}))
+
+    def test_paid_returns_dry_run_not_sample(self):
+        out = d.run_simulate(
+            lambda u: (200, {"from": self.ADDR, "to": self.TO, "will_revert": False, "gas_used": 48210, "asset_changes": []}),
+            from_addr=self.ADDR, to_addr=self.TO, has_key=True)
+        self.assertTrue(out["paid"])
+        self.assertFalse(out["is_sample"])
+        self.assertFalse(out["will_revert"])
+
+    def test_keyless_reads_preview_as_demo(self):
+        d.plain_get = lambda url, timeout=15.0: (200, {"preview": {"will_revert": False, "gas_used": 21000, "asset_changes": []}})
+        out = d.run_simulate(lambda u: (0, None), from_addr=self.ADDR, to_addr=self.TO, has_key=False)
+        self.assertFalse(out["paid"])
+        self.assertTrue(out["is_sample"])
+        self.assertIn("demo dry-run", out["note"])
+        self.assertEqual(out["activation"]["price_usdc"], "0.005")
+
+    def test_bad_addr_degrades_not_raise(self):
+        out = d.run_simulate(lambda u: (200, {}), from_addr="0xnope", to_addr=self.TO, has_key=True)
+        self.assertIn("error", out)
+        self.assertIsNone(out["will_revert"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -712,3 +712,263 @@ def run_token_report(pay_get: PayGet, *, token: Optional[str] = None,
         return {"error": msg, "token": resolved_token, "verdict": None,
                 "risk_score": None, "reasons": [], "paid": False,
                 "summary": f"ERROR: {msg}"}
+
+
+# ---------------------------------------------------------------------------
+# /defi/yield-entry-verdict ($0.01) — the per-pool go/no-go that rides the
+# #1-demand /defi/yields lane. run_yields finds WHERE the APY is; this answers
+# "should I actually enter THIS pool?" with SUSTAINABLE | DECAYING | OUTLIER |
+# AVOID + a 0-100 risk score + field-cited reasons (APY 1d/7d/30d trend,
+# DefiLlama stability forecast, IL, volatility sigma, outlier flag, TVL). The
+# free preview returns a SAMPLE verdict (the current top-TVL pool) — the verdict
+# for the caller's own poolId is the paid route, so a keyless install degrades
+# OPEN to the sample + an honest "this is a sample, not your pool" note rather
+# than fabricating a verdict for an un-priced pool.
+# ---------------------------------------------------------------------------
+
+
+def build_yield_entry_verdict_url(pool: str, token: Optional[str] = None,
+                                  base: str = DATA_BASE) -> str:
+    """Paid /defi/yield-entry-verdict URL. ``pool`` is the DefiLlama poolId from
+    /defi/yields; optional ``token`` (0x, Base) adds a honeypot-check pointer.
+    Raises on a missing pool so a bad call never silently costs a payment."""
+    p = str(pool or "").strip()
+    if not p:
+        raise ValueError("pool required — the 'pool' field (DefiLlama poolId) from /defi/yields")
+    params: Dict[str, Any] = {"pool": p}
+    if token:
+        try:
+            params["token"] = _validate_addr(token)
+        except ValueError:
+            pass
+    return f"{base}/defi/yield-entry-verdict?{_qs(params)}"
+
+
+def build_yield_entry_verdict_preview_url(base: str = DATA_BASE) -> str:
+    """FREE /defi/yield-entry-verdict/preview URL (sample verdict for the current
+    top-TVL pool; the pool arg is ignored upstream)."""
+    return f"{base}/defi/yield-entry-verdict/preview"
+
+
+def summarize_yield_entry_verdict(out: Any) -> str:
+    if not isinstance(out, dict):
+        return "no yield-entry verdict"
+    if out.get("verdict") is None:
+        note = out.get("note")
+        return f"yield-entry verdict unavailable — {note}" if note else "no yield-entry verdict"
+    label = out.get("symbol") or out.get("project") or "pool"
+    bits: List[str] = [f"{label}: {out['verdict']}"]
+    if isinstance(out.get("risk_score"), (int, float)):
+        bits.append(f"risk {out['risk_score']}/100")
+    if isinstance(out.get("apy"), (int, float)):
+        bits.append(f"APY {out['apy']:.2f}%")
+    reasons = out.get("reasons")
+    if isinstance(reasons, list) and reasons:
+        parts = []
+        for r in reasons[:2]:
+            if isinstance(r, dict):
+                parts.append(r.get("detail") or r.get("code") or "")
+            else:
+                parts.append(str(r))
+        parts = [p for p in parts if p]
+        if parts:
+            bits.append("; ".join(parts))
+    if out.get("is_sample"):
+        bits.append("(SAMPLE — pay for your pool)")
+    return " · ".join(bits)
+
+
+def _shape_yield_entry_verdict(out: Any, *, paid: bool, is_sample: bool) -> Dict[str, Any]:
+    v = out if isinstance(out, dict) else {}
+    result: Dict[str, Any] = {
+        "pool": v.get("pool"),
+        "project": v.get("project"),
+        "chain": v.get("chain"),
+        "symbol": v.get("symbol"),
+        "verdict": v.get("verdict"),
+        "risk_score": v.get("risk_score") if isinstance(v.get("risk_score"), (int, float)) else None,
+        "reasons": v.get("reasons") if isinstance(v.get("reasons"), list) else [],
+        "apy": v.get("apy") if isinstance(v.get("apy"), (int, float)) else None,
+        "apyPct7D": v.get("apyPct7D"),
+        "apyPct30D": v.get("apyPct30D"),
+        "predicted": v.get("predicted"),
+        "tvlUsd": v.get("tvlUsd"),
+        "token_safety_hint": v.get("token_safety_hint"),
+        "is_sample": is_sample,
+        "paid": paid,
+    }
+    result["summary"] = summarize_yield_entry_verdict(result)
+    return result
+
+
+def run_yield_entry_verdict(pay_get: PayGet, *, pool: str, token: Optional[str] = None,
+                            has_key: bool = True, base: str = DATA_BASE) -> Dict[str, Any]:
+    """/defi/yield-entry-verdict ($0.01) — the per-pool go/no-go. ``pool`` is
+    required (the DefiLlama poolId from run_yields). A keyless / unfunded install
+    reads the free preview, which returns the current TOP-TVL pool's verdict as a
+    SAMPLE (not the caller's pool); this degrades OPEN with ``is_sample: True`` +
+    an honest note and the paid pointer rather than fabricating a verdict."""
+    p = str(pool or "").strip()
+    if not p:
+        msg = "pool required — pass the 'pool' field (DefiLlama poolId) returned by run_yields / GET /defi/yields."
+        return {"error": msg, "pool": None, "verdict": None, "risk_score": None,
+                "reasons": [], "apy": None, "is_sample": False, "paid": False,
+                "summary": f"ERROR: {msg}"}
+    try:
+        paid_url = build_yield_entry_verdict_url(p, token, base)
+    except ValueError as err:
+        msg = f"defi/yield-entry-verdict bad input: {err}"
+        return {"error": msg, "pool": p, "verdict": None, "risk_score": None,
+                "reasons": [], "apy": None, "is_sample": False, "paid": False,
+                "summary": f"ERROR: {msg}"}
+    preview_url = build_yield_entry_verdict_preview_url(base)
+
+    def take_preview(reason: str) -> Dict[str, Any]:
+        status, out = plain_get(preview_url)
+        if status != 200 or not isinstance(out, dict):
+            msg = f"defi/yield-entry-verdict preview unavailable (HTTP {status})"
+            return {"error": msg, "pool": p, "verdict": None, "risk_score": None,
+                    "reasons": [], "apy": None, "is_sample": False, "paid": False,
+                    "summary": f"ERROR: {msg}"}
+        sample = out.get("preview") if isinstance(out.get("preview"), dict) else {}
+        shaped = _shape_yield_entry_verdict(sample, paid=False, is_sample=True)
+        shaped["note"] = (f"Free preview is the current top-TVL pool verdict — a SAMPLE, not pool {p}. "
+                          "The go/no-go for YOUR pool is the paid route ($0.01).")
+        shaped["activation"] = _activation(reason, paid_url, "0.01")
+        shaped["guard_reasons"] = [fund_onramp_hint()]
+        return shaped
+
+    try:
+        if not has_key:
+            return take_preview("no PRIVATE_KEY configured — free preview returns a SAMPLE verdict (top-TVL pool); the per-pool verdict is paid ($0.01)")
+        status, out = pay_get(paid_url)
+        if status == 200 and isinstance(out, dict):
+            return _shape_yield_entry_verdict(out, paid=True, is_sample=False)
+        reason = ("wallet not funded (paid /defi/yield-entry-verdict returned 402)"
+                  if status == 402 else f"paid /defi/yield-entry-verdict returned HTTP {status}")
+        return take_preview(reason)
+    except Exception as err:  # noqa: BLE001
+        msg = f"defi/yield-entry-verdict unavailable: {err}"
+        return {"error": msg, "pool": p, "verdict": None, "risk_score": None,
+                "reasons": [], "apy": None, "is_sample": False, "paid": False,
+                "summary": f"ERROR: {msg}"}
+
+
+# ---------------------------------------------------------------------------
+# /chain/simulate ($0.005) — prospective-transaction dry-run via eth_simulateV1.
+# Answers "will THIS Base tx revert, how much gas, what tokens move" BEFORE the
+# agent spends gas sending it. The pre-trade check for any swap/approve/transfer
+# and the natural companion to run_token_report. The free preview is a benign
+# demo dry-run (synthetic addresses); the dry-run of the caller's own tx is the
+# paid route, so a keyless install degrades OPEN to the demo sample + an honest
+# "this is a demo, not your tx" note rather than fabricating a verdict.
+# ---------------------------------------------------------------------------
+
+
+def build_simulate_url(from_addr: str, to_addr: str, data: Optional[str] = None,
+                       value: Optional[Any] = None, base: str = DATA_BASE) -> str:
+    """Paid /chain/simulate URL. ``from_addr``+``to_addr`` are required 0x Base
+    addresses; optional ``data`` (0x calldata) + ``value`` (wei). Raises on a
+    malformed address so a bad call never silently costs a payment."""
+    f = _validate_addr(from_addr)
+    t = _validate_addr(to_addr)
+    params: Dict[str, Any] = {"from": f, "to": t}
+    d = str(data).strip() if data else ""
+    if d:
+        params["data"] = d
+    if value is not None and str(value).strip() != "":
+        params["value"] = str(value).strip()
+    return f"{base}/chain/simulate?{_qs(params)}"
+
+
+def build_simulate_preview_url(base: str = DATA_BASE) -> str:
+    """FREE /chain/simulate/preview URL (benign demo dry-run; caller args are
+    ignored upstream)."""
+    return f"{base}/chain/simulate/preview"
+
+
+def summarize_simulation(out: Any) -> str:
+    if not isinstance(out, dict):
+        return "no simulation"
+    if out.get("will_revert") is None:
+        note = out.get("note")
+        return f"simulation unavailable — {note}" if note else "simulation unavailable"
+    bits: List[str] = ["WILL REVERT" if out.get("will_revert") else "will NOT revert"]
+    if out.get("will_revert") and out.get("revert_reason"):
+        bits.append(str(out["revert_reason"]))
+    if out.get("gas_used") is not None:
+        bits.append(f"gas {out['gas_used']}")
+    changes = out.get("asset_changes")
+    moves = len(changes) if isinstance(changes, list) else 0
+    if moves:
+        bits.append(f"{moves} token move{'' if moves == 1 else 's'}")
+    if out.get("is_sample"):
+        bits.append("(DEMO — pay for your tx)")
+    return " · ".join(bits)
+
+
+def _shape_simulation(out: Any, *, paid: bool, is_sample: bool) -> Dict[str, Any]:
+    v = out if isinstance(out, dict) else {}
+    result: Dict[str, Any] = {
+        "from": v.get("from"),
+        "to": v.get("to"),
+        "value": v.get("value"),
+        "will_revert": v.get("will_revert") if isinstance(v.get("will_revert"), bool) else v.get("will_revert"),
+        "revert_reason": v.get("revert_reason"),
+        "gas_used": v.get("gas_used"),
+        "asset_changes": v.get("asset_changes") if isinstance(v.get("asset_changes"), list) else [],
+        "raw_status": v.get("raw_status"),
+        "is_sample": is_sample,
+        "paid": paid,
+    }
+    result["summary"] = summarize_simulation(result)
+    return result
+
+
+def run_simulate(pay_get: PayGet, *, from_addr: str, to_addr: str,
+                 data: Optional[str] = None, value: Optional[Any] = None,
+                 has_key: bool = True, base: str = DATA_BASE) -> Dict[str, Any]:
+    """/chain/simulate ($0.005) — prospective-tx dry-run. ``from_addr``+
+    ``to_addr`` are required 0x Base addresses; optional ``data`` (0x calldata)
+    and ``value`` (wei). A keyless / unfunded install reads the free preview,
+    which is a benign DEMO dry-run (synthetic addresses, not the caller's tx);
+    this degrades OPEN with ``is_sample: True`` + an honest note and the paid
+    pointer rather than fabricating a verdict for a tx we did not simulate."""
+    try:
+        paid_url = build_simulate_url(from_addr, to_addr, data, value, base)
+    except ValueError as err:
+        msg = f"chain/simulate bad input: {err}"
+        return {"error": msg, "from": from_addr, "to": to_addr, "will_revert": None,
+                "gas_used": None, "asset_changes": [], "is_sample": False,
+                "paid": False, "summary": f"ERROR: {msg}"}
+    preview_url = build_simulate_preview_url(base)
+
+    def take_preview(reason: str) -> Dict[str, Any]:
+        status, out = plain_get(preview_url)
+        if status != 200 or not isinstance(out, dict):
+            msg = f"chain/simulate preview unavailable (HTTP {status})"
+            return {"error": msg, "from": from_addr, "to": to_addr, "will_revert": None,
+                    "gas_used": None, "asset_changes": [], "is_sample": False,
+                    "paid": False, "summary": f"ERROR: {msg}"}
+        sample = out.get("preview") if isinstance(out.get("preview"), dict) else {}
+        shaped = _shape_simulation(sample, paid=False, is_sample=True)
+        shaped["note"] = ("Free preview is a benign demo dry-run (synthetic addresses) — not your tx. "
+                          "The dry-run of YOUR tx is the paid route ($0.005).")
+        shaped["activation"] = _activation(reason, paid_url, "0.005")
+        shaped["guard_reasons"] = [fund_onramp_hint()]
+        return shaped
+
+    try:
+        if not has_key:
+            return take_preview("no PRIVATE_KEY configured — free preview returns a demo dry-run; YOUR tx dry-run is paid ($0.005)")
+        status, out = pay_get(paid_url)
+        if status == 200 and isinstance(out, dict):
+            return _shape_simulation(out, paid=True, is_sample=False)
+        reason = ("wallet not funded (paid /chain/simulate returned 402)"
+                  if status == 402 else f"paid /chain/simulate returned HTTP {status}")
+        return take_preview(reason)
+    except Exception as err:  # noqa: BLE001
+        msg = f"chain/simulate unavailable: {err}"
+        return {"error": msg, "from": from_addr, "to": to_addr, "will_revert": None,
+                "gas_used": None, "asset_changes": [], "is_sample": False,
+                "paid": False, "summary": f"ERROR: {msg}"}
