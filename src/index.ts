@@ -1397,6 +1397,14 @@ app.get("/.well-known/mcp-registry-auth", (c) =>
   c.text("v=MCPv1; k=ed25519; p=/fl+vN2K62tQL/mmihmc7e7ASuNrfc3SrSjOsji3fko="),
 );
 
+// agent-tools.cloud domain-ownership proof — serving this token under our own
+// domain claims the api.greyridgesignals.ai host on the agent-tools.cloud
+// directory, which lets an agent-tooling index list + rank our paid x402 routes
+// as a verified seller (a discovery/distribution surface, not a payment route).
+app.get("/.well-known/agent-tools-verify.txt", (c) =>
+  c.text("atc_t_f4tvFe_XZtW8_rm2laZiN9CRlsvwSu"),
+);
+
 // Installable framework tools — the drop-in packages that wrap the EARNING
 // data routes so a trading-agent dev adopts the whole set with one install
 // line instead of hand-wiring x402 calls. A trading agent never "discovers an
