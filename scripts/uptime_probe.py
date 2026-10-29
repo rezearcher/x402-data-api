@@ -8,7 +8,7 @@ BASE = "https://api.greyridgesignals.ai"
 # a silent break (deploy regression, DO-limit incident) alerts instead of killing leads quietly.
 EPS = [("/gate/swap/preview?token=degen", None), ("/chain/token-report/preview?token=aero", None),
        ("/chain/token-security/preview", None), ("/chain/gas-price/preview", None),
-       ("/crypto/prices/preview", None),
+       ("/crypto/prices/preview", None), ("/defi/yields/preview", None), ("/crypto/funding/preview", None),
        ("/scan/mcp/preview", {"tools": [{"name": "healthcheck", "description": "uptime probe, no-op"}]})]
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG = os.path.join(root, "data", "uptime_samples.jsonl"); os.makedirs(os.path.dirname(LOG), exist_ok=True)
@@ -184,8 +184,38 @@ try:
             degraded.append(f"/tg/status BOT CHANNEL DOWN: webhook={w.get('url')} last_error={w.get('last_error')} ok={w.get('ok')} (Telegram cannot deliver — free verdict funnel dead)")
 except Exception:
     tg_bot_ok = None  # inconclusive — do not raise a false alarm
+# Line-A A0 (DATA routes — the demand-proven earners): a correctness canary on the TWO data routes
+# that actually take external x402 payments. The external-payer sensor shows /defi/yields as the #1
+# paid route; /crypto/funding is a 5-venue superset we just shipped. HTTP-200 availability is NOT
+# correctness for DATA: the live footgun class here is SILENT DEGRADATION — an upstream geo-block/UA
+# regression (CoinGecko 403) or a filter-resolver bug returns an empty list / null fields with a 200,
+# so a paying agent gets a hollow answer and churns, and an availability probe never sees it. These
+# controls assert the paid route still returns REAL, numeric, in-band data. Degrade OPEN: any probe
+# error => inconclusive (None), never a false alarm; bands are wide enough that live market drift
+# cannot flap them, tight enough to catch null / empty / a decimals bug.
+def _get(path):
+    return json.loads(urllib.request.urlopen(urllib.request.Request(BASE + path, headers=ghdr), timeout=20).read())
+# Pure predicates live in canary_predicates.py (unit-tested with negative controls so the canary is
+# proven to TRIP on the exact silent-degradation it guards — not just pass on a healthy day).
+from canary_predicates import yields_ok, funding_ok  # noqa: E402
+# (1) /defi/yields — the #1 external-payer route; (2) /crypto/funding — the 5-venue superset whose
+# Binance+Bybit legs geo-block to null. Degrade OPEN: a probe error is inconclusive (None).
+yields_detection_ok = None
+try:
+    yields_detection_ok, _yr = yields_ok(_get("/defi/yields/preview"))
+    if yields_detection_ok is False:
+        degraded.append("/defi/yields DATA REGRESSION: " + _yr)
+except Exception:
+    yields_detection_ok = None  # inconclusive — degrade open
+funding_detection_ok = None
+try:
+    funding_detection_ok, _fr = funding_ok(_get("/crypto/funding/preview"))
+    if funding_detection_ok is False:
+        degraded.append("/crypto/funding VENUE REGRESSION: " + _fr)
+except Exception:
+    funding_detection_ok = None  # inconclusive — degrade open
 d = os.path.expanduser("~/.hermes/data/x402-data-api-uptime"); os.makedirs(d, exist_ok=True)
 alert = bool(degraded)
 summary = f"{len(S)} eps, n={sum(o['n'] for o in out.values())}" + (f" | ALERT degraded: {'; '.join(degraded)}" if degraded else "")
-json.dump({"fetched_at": now, "status": "ok", "summary": summary, "alert": alert, "degraded": degraded, "scan_detection_ok": detection_ok, "gate_detection_ok": gate_detection_ok, "report_detection_ok": report_detection_ok, "security_detection_ok": security_detection_ok, "tg_bot_ok": tg_bot_ok, "endpoints": out}, open(d + "/latest.json", "w"), indent=1)
+json.dump({"fetched_at": now, "status": "ok", "summary": summary, "alert": alert, "degraded": degraded, "scan_detection_ok": detection_ok, "gate_detection_ok": gate_detection_ok, "report_detection_ok": report_detection_ok, "security_detection_ok": security_detection_ok, "yields_detection_ok": yields_detection_ok, "funding_detection_ok": funding_detection_ok, "tg_bot_ok": tg_bot_ok, "endpoints": out}, open(d + "/latest.json", "w"), indent=1)
 print(json.dumps(out, indent=1))

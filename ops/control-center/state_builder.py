@@ -276,12 +276,15 @@ def health(rt: dict, rev: dict, hist: dict) -> dict:
     scan_ok = u.get("scan_detection_ok")
     report_ok = u.get("report_detection_ok")  # 2nd Line-A paid surface (/chain/token-report)
     security_ok = u.get("security_detection_ok")  # 3rd Line-A paid surface (/chain/token-security)
+    yields_ok = u.get("yields_detection_ok")  # #1 external-payer DATA route (/defi/yields)
+    funding_ok = u.get("funding_detection_ok")  # 5-venue superset (/crypto/funding) — venue-null guard
     degraded = u.get("degraded") or []
-    gate_degraded = [d for d in degraded if "/gate/swap" in d or "/scan/mcp" in d or "/chain/token-report" in d or "/chain/token-security" in d]
-    corr_regressed = gate_ok is False or scan_ok is False or report_ok is False or security_ok is False or bool(gate_degraded)
+    gate_degraded = [d for d in degraded if "/gate/swap" in d or "/scan/mcp" in d or "/chain/token-report" in d or "/chain/token-security" in d or "/defi/yields" in d or "/crypto/funding" in d]
+    corr_regressed = gate_ok is False or scan_ok is False or report_ok is False or security_ok is False or yields_ok is False or funding_ok is False or bool(gate_degraded)
     gate_health_ok = not corr_regressed       # inconclusive/missing => ok (degrade open)
+    _all_pass = gate_ok and scan_ok and report_ok and security_ok and yields_ok and funding_ok
     gate_why = ("; ".join(gate_degraded) if gate_degraded
-                else "money-gate + token-report + token-security + scanner canaries PASS" if gate_ok and scan_ok and report_ok and security_ok
+                else "money-gate + token-report + token-security + yields + funding + scanner canaries PASS" if _all_pass
                 else "correctness inconclusive (probe not run yet / unreachable) — not alarming")
     return {
         "green": {"ok": green_ok, "why": f"engine {'alive' if green_ok else 'DOWN'} (pid {rt.get('pid')})"},
