@@ -77,11 +77,13 @@ def resolve_active() -> dict:
     oracle = Path(manifest["oracle_file"]) if manifest.get("oracle_file") else None
     agents = [a.get("name") for a in manifest.get("agents", []) if a.get("name")] or DEFAULT_AGENTS
     is_x402 = cwd == DEFAULT_REPO  # the money loop: preserve its rich revenue + canary panels
+    pass_cooldown = manifest.get("pass_cooldown", 600)  # seconds between passes (ever_green derives from this)
     return {
         "name": name,
         "repo": cwd,
         "agents": agents,
         "oracle": oracle,
+        "pass_cooldown": pass_cooldown,
         "routine_log": CHAIN / f"{name}.routine.log",
         # x402 money loop reads its dedicated rich revenue dir; others read their oracle_file.
         "revdir": (HOME / ".hermes" / "data" / "x402-revenue") if is_x402 else (oracle.parent if oracle else None),
@@ -330,13 +332,25 @@ def health(rt: dict, rev: dict, hist: dict, cfg: dict) -> dict:
     # SUPER-GREEN: recent builder work shipped+deployed (a commit verified) and no bare ATOM gaming
     builder_hist = hist.get("builder", [])
     shipped = any(re.search(r"\bcommit\b|deployed|SUCCESS|shipped", (e.get("did") or ""), re.I) for e in builder_hist[:3])
-    atom_clean = all("none" in (e.get("atom") or "none").lower() for e in builder_hist[:3]) if builder_hist else True
+    # An atom is "clean" when empty/none OR a legitimate ONE-TIME account/key/credential gate — that
+    # is NOT work parked on a human (a vague non-account atom still fails = gaming signal). Fixes the
+    # false-negative where a real one-time account gate (e.g. the Apify token) read as "unclean".
+    def _atom_clean(a: str) -> bool:
+        a = (a or "none").strip().lower()
+        if a in ("", "none"):
+            return True
+        return bool(re.search(r"one-time|account|api[\s_-]?key|api[\s_-]?token|\btoken\b|credential|oauth|sign[\s_-]?up|register|passkey|2fa", a))
+    atom_clean = all(_atom_clean(e.get("atom")) for e in builder_hist[:3]) if builder_hist else True
     super_ok = shipped and atom_clean
-    # EVER-GREEN: rhythm on tempo
+    # EVER-GREEN: is the loop looping CONSISTENTLY? Derived from the chain's OWN configured
+    # pass_cooldown (not an x402-specific minute band): a pass has completed, the rest between passes
+    # is ~the configured cooldown (so it's genuinely re-looping, not dead), and no pass is hung.
     runs, rests = rt.get("runs", []), rt.get("rests", [])
-    run_ok = bool(runs) and EXPECT_RUN[0] <= runs[-1] <= EXPECT_RUN[1] if runs else False
-    rest_ok = bool(rests) and rests[-1] <= EXPECT_REST[1] if rests else True
-    ever_ok = run_ok and rest_ok
+    cooldown_min = (cfg.get("pass_cooldown", 600) or 600) / 60.0
+    have_passes = bool(runs)
+    not_hung = (runs[-1] <= 60) if runs else True          # a pass grossly over ~1h signals a hang
+    looping = (rests[-1] <= cooldown_min + 10) if rests else True  # rest ≈ cooldown ⇒ re-looping
+    ever_ok = have_passes and not_hung and looping
     # GATE: x402 money-route correctness canary (uptime_probe.py). Only applies to the x402 money
     # loop; other chains have no such sensor → degrade OPEN (gate ok, "n/a for this chain").
     u = _safe(lambda: json.loads(_read(cfg["uptime_sensor"])), {})
@@ -345,10 +359,10 @@ def health(rt: dict, rev: dict, hist: dict, cfg: dict) -> dict:
                     if not cfg["is_x402"] else "correctness inconclusive (probe not run yet / unreachable) — not alarming")
         return {
             "green": {"ok": green_ok, "why": f"engine {'alive' if green_ok else 'DOWN'} (pid {rt.get('pid')})"},
-            "super_green": {"ok": super_ok, "why": ("builder shipped+verified, ATOM clean" if super_ok
-                            else "no recently-verified shipped work / or an open ATOM — ran, not competitor-grade-proven")},
-            "ever_green": {"ok": ever_ok, "why": (f"on tempo (run {runs[-1] if runs else '?'}m, rest {rests[-1] if rests else '?'}m)"
-                            if ever_ok else "off-tempo (run/rest outside expected band)")},
+            "super_green": {"ok": super_ok, "why": ("builder shipped+verified; atom clear or a one-time account gate" if super_ok
+                            else ("no recently-verified shipped commit" if not shipped else "work parked on a non-account human atom"))},
+            "ever_green": {"ok": ever_ok, "why": (f"looping on tempo (last run {runs[-1] if runs else '?'}m, rest {rests[-1] if rests else '?'}m ≈ {cooldown_min:.0f}m cooldown)"
+                            if ever_ok else ("no completed pass yet" if not have_passes else f"off-tempo (last run {runs[-1] if runs else '?'}m / rest {rests[-1] if rests else '?'}m vs {cooldown_min:.0f}m cooldown)"))},
             "gate": {"ok": True, "why": gate_why},
         }
     gate_ok = u.get("gate_detection_ok")      # True pass / False regression / None inconclusive
@@ -367,10 +381,10 @@ def health(rt: dict, rev: dict, hist: dict, cfg: dict) -> dict:
                 else "correctness inconclusive (probe not run yet / unreachable) — not alarming")
     return {
         "green": {"ok": green_ok, "why": f"engine {'alive' if green_ok else 'DOWN'} (pid {rt.get('pid')})"},
-        "super_green": {"ok": super_ok, "why": ("builder shipped+verified, ATOM clean" if super_ok
-                        else "no recently-verified shipped work / or an open ATOM — ran, not competitor-grade-proven")},
-        "ever_green": {"ok": ever_ok, "why": (f"on tempo (run {runs[-1] if runs else '?'}m, rest {rests[-1] if rests else '?'}m)"
-                        if ever_ok else "off-tempo (run/rest outside expected band)")},
+        "super_green": {"ok": super_ok, "why": ("builder shipped+verified; atom clear or a one-time account gate" if super_ok
+                        else ("no recently-verified shipped commit" if not shipped else "work parked on a non-account human atom"))},
+        "ever_green": {"ok": ever_ok, "why": (f"looping on tempo (last run {runs[-1] if runs else '?'}m, rest {rests[-1] if rests else '?'}m ≈ {cooldown_min:.0f}m cooldown)"
+                        if ever_ok else ("no completed pass yet" if not have_passes else f"off-tempo (last run {runs[-1] if runs else '?'}m / rest {rests[-1] if rests else '?'}m vs {cooldown_min:.0f}m cooldown)"))},
         "gate": {"ok": gate_health_ok, "why": gate_why},
     }
 
