@@ -17,12 +17,19 @@ register(new URL("./cfw-hooks.mjs", import.meta.url));
 
 const { screenWalletAddress, makeRoutes, ROUTE_CATALOG } = await import("../src/index.ts");
 const { OFAC_SANCTIONED_ADDRESSES, OFAC_SNAPSHOT_DATE } = await import("../src/data/ofac_sanctioned.ts");
+const { MALICIOUS_ADDRESSES, MALICIOUS_SNAPSHOT_DATE } = await import("../src/data/malicious_addresses.ts");
 
 let pass = 0;
 function check(name, fn) { fn(); pass++; console.log(`ok - ${name}`); }
 
-const SANCTIONED = OFAC_SANCTIONED_ADDRESSES[0];       // a real current SDN entry
-const CLEAN = "0x5765ae06a52dc7a0bb71c36a11db512c7ea9ed10"; // our own PAY_TO (not sanctioned)
+const _malSet = new Set(MALICIOUS_ADDRESSES);
+// A real current SDN entry that is NOT also on the scam list (keeps the
+// sanctioned-only assertions below unambiguous).
+const SANCTIONED = OFAC_SANCTIONED_ADDRESSES.find((a) => !_malSet.has(a)) ?? OFAC_SANCTIONED_ADDRESSES[0];
+const _ofacSet = new Set(OFAC_SANCTIONED_ADDRESSES);
+// A real current scam/drainer entry that is NOT also sanctioned.
+const MALICIOUS = MALICIOUS_ADDRESSES.find((a) => !_ofacSet.has(a)) ?? MALICIOUS_ADDRESSES[0];
+const CLEAN = "0x5765ae06a52dc7a0bb71c36a11db512c7ea9ed10"; // our own PAY_TO (not sanctioned, not malicious)
 
 // 1. The snapshot is non-empty and lowercased (match correctness depends on it).
 check("snapshot is non-empty and all-lowercase", () => {
@@ -53,11 +60,38 @@ check("sanctioned match is case-insensitive", () => {
 check("non-sanctioned address is clear and never asserted safe", () => {
   const r = screenWalletAddress(CLEAN);
   assert.strictEqual(r.sanctioned, false);
+  assert.strictEqual(r.malicious, false);
   assert.strictEqual(r.verdict, "clear");
   assert.deepStrictEqual(r.lists, []);
   assert.deepStrictEqual(r.flags, []);
   assert.ok(/not a guarantee|not a safety|not safety|absence of a match is not safety/i.test(r.disclaimer),
     `disclaimer denies safety guarantee: ${r.disclaimer}`);
+});
+
+// 4b. A known scam/phishing/drainer address -> blocked via the malicious flag
+//     (NOT the sanctioned flag) — closes the "sanctioned OR scammer" demand gap.
+check("malicious (scam/drainer) address is blocked via the malicious flag", () => {
+  assert.ok(MALICIOUS_ADDRESSES.length > 1000, "scam snapshot is non-trivial");
+  const r = screenWalletAddress(MALICIOUS);
+  assert.strictEqual(r.malicious, true, "flagged malicious");
+  assert.strictEqual(r.sanctioned, false, "this fixture is scam-only, not OFAC");
+  assert.strictEqual(r.verdict, "blocked");
+  assert.ok(r.lists.includes("scam-phishing-drainer"), `lists: ${r.lists}`);
+  assert.ok(r.flags.includes("malicious-address"), `flags: ${r.flags}`);
+  assert.ok(/scam|phishing|drainer/i.test(r.reason), `reason names the threat: ${r.reason}`);
+});
+
+// 4c. Both snapshots appear in `sources` on every result (auditor-grade provenance),
+//     and `source` stays the OFAC primary for back-compat.
+check("result enumerates both OFAC + scam sources", () => {
+  const r = screenWalletAddress(CLEAN);
+  assert.ok(Array.isArray(r.sources) && r.sources.length === 2, "two sources");
+  assert.ok(r.sources.some((s) => /OFAC/.test(s.name)), "OFAC source present");
+  assert.ok(r.sources.some((s) => /scam|phishing|drainer/i.test(s.name)), "scam source present");
+  const mal = r.sources.find((s) => /scam|phishing|drainer/i.test(s.name));
+  assert.strictEqual(mal.snapshot_date, MALICIOUS_SNAPSHOT_DATE);
+  assert.strictEqual(mal.entries, MALICIOUS_ADDRESSES.length);
+  assert.ok(/OFAC/.test(r.source.name), "back-compat: source stays OFAC primary");
 });
 
 // 5. Provenance is present on every result (auditor-grade / Claims Law).
