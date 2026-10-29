@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 """Loop Control Center — state builder.
 
-Pure reader: turns the money-loop's existing artifacts (per-agent ledgers +
+Pure reader: turns the ACTIVE agent-chain's existing artifacts (per-agent ledgers +
 transcripts, chain/routine logs, revenue sensors, publish ledger, git, crew_stage)
-into one /api/state JSON, and emits the `loop-money` shared sensor so the Daily
+into one /api/state JSON, and emits a `loop-<name>` shared sensor so the Daily
 Brief / self-heal see loop health too (one spine, two consumers).
+
+Chain-agnostic: the active chain is DERIVED each build from the ground-truth signal
+(the armed `~/.claude/agent-chains/*.enabled` marker + its `<name>.chain.json`), not
+hardcoded — so whichever chain is armed (money, assetfactory, …) is what the page
+shows. All paths/names/agents come from that manifest. The x402 money loop's rich
+revenue + correctness-canary panels are preserved when it is the active chain.
 
 Degrade-open: every source is wrapped; a missing/broken source yields empty, never
 a crash. Run standalone: `python3 state_builder.py | jq`.
@@ -20,15 +26,13 @@ from pathlib import Path
 HOME = Path.home()
 GL = HOME / ".claude" / "goal-loop-logs"
 CHAIN = HOME / ".claude" / "agent-chain-logs"
-REVDIR = HOME / ".hermes" / "data" / "x402-revenue"
-REPO = Path("/home/rez/projects/x402-data-api")
-MONITOR_FLAG = HOME / ".claude" / "agent-chains" / "monitor.flag"
+CHAIN_DIR = HOME / ".claude" / "agent-chains"
+MONITOR_FLAG = CHAIN_DIR / "monitor.flag"
 MONITOR_FEED = CHAIN / "monitor.feed.jsonl"
-SENSOR = HOME / ".hermes" / "data" / "loop-money" / "latest.json"
-UPTIME_SENSOR = HOME / ".hermes" / "data" / "x402-data-api-uptime" / "latest.json"  # uptime_probe.py correctness canaries
-ATOMS = HOME / ".claude" / "agent-chains" / "atoms.json"
-ATOMS_LEDGER = HOME / ".claude" / "agent-chains" / "atoms_ledger.jsonl"  # append-only completion history
-AGENTS = ["research", "builder", "marketing"]
+ATOMS = CHAIN_DIR / "atoms.json"
+ATOMS_LEDGER = CHAIN_DIR / "atoms_ledger.jsonl"  # append-only completion history
+DEFAULT_AGENTS = ["research", "builder", "marketing"]
+DEFAULT_REPO = Path("/home/rez/projects/x402-data-api")
 EXPECT_RUN = (12, 32)   # expected pass run minutes
 EXPECT_REST = (8, 20)   # expected rest minutes (target ~10)
 
@@ -41,18 +45,61 @@ def _safe(fn, default):
 
 
 def _read(p: Path, limit=200_000) -> str:
-    return p.read_text(errors="replace")[-limit:] if p.exists() else ""
+    return p.read_text(errors="replace")[-limit:] if p and p.exists() else ""
 
 
-def latest_transcript(agent: str) -> Path | None:
-    d = GL / f"chain-money-{agent}" / "history"
+def resolve_active() -> dict:
+    """DERIVE the active chain from ground truth: the oldest-armed `.enabled` marker with a
+    manifest and no `.done` (mirrors agent_chain_routine.sh's pick). Fall back to a running
+    chain's --chain arg, then to 'money'. Everything downstream is built from the manifest."""
+    name = None
+    enabled = sorted(CHAIN_DIR.glob("*.enabled"), key=lambda p: p.stat().st_mtime)
+    for ef in enabled:
+        n = ef.stem
+        if (CHAIN_DIR / f"{n}.chain.json").exists() and not (CHAIN_DIR / f"{n}.done").exists():
+            name = n
+            break
+    if not name:
+        # fall back to a currently-running engine's --chain argument
+        try:
+            ps = subprocess.run(["pgrep", "-af", r"agent_chain\.sh --chain"],
+                                capture_output=True, text=True, timeout=5).stdout
+            m = re.search(r"agent-chains/([A-Za-z0-9_-]+)\.chain\.json", ps)
+            if m:
+                name = m.group(1)
+        except Exception:
+            pass
+    if not name:
+        name = "money"  # last-resort default (keeps the page working if nothing is armed)
+
+    manifest = _safe(lambda: json.loads(_read(CHAIN_DIR / f"{name}.chain.json")), {}) or {}
+    cwd = Path(manifest.get("cwd") or DEFAULT_REPO)
+    oracle = Path(manifest["oracle_file"]) if manifest.get("oracle_file") else None
+    agents = [a.get("name") for a in manifest.get("agents", []) if a.get("name")] or DEFAULT_AGENTS
+    is_x402 = cwd == DEFAULT_REPO  # the money loop: preserve its rich revenue + canary panels
+    return {
+        "name": name,
+        "repo": cwd,
+        "agents": agents,
+        "oracle": oracle,
+        "routine_log": CHAIN / f"{name}.routine.log",
+        # x402 money loop reads its dedicated rich revenue dir; others read their oracle_file.
+        "revdir": (HOME / ".hermes" / "data" / "x402-revenue") if is_x402 else (oracle.parent if oracle else None),
+        "uptime_sensor": HOME / ".hermes" / "data" / f"{cwd.name}-uptime" / "latest.json",
+        "sensor": HOME / ".hermes" / "data" / f"loop-{name}" / "latest.json",
+        "is_x402": is_x402,
+    }
+
+
+def latest_transcript(agent: str, cfg: dict) -> Path | None:
+    d = GL / f"chain-{cfg['name']}-{agent}" / "history"
     js = sorted(d.glob("*.jsonl"), key=lambda x: x.stat().st_mtime) if d.exists() else []
     return js[-1] if js else None
 
 
-def agent_now(agent: str) -> dict:
+def agent_now(agent: str, cfg: dict) -> dict:
     """Latest assistant narration = 'what it's talking about now' + liveness."""
-    t = latest_transcript(agent)
+    t = latest_transcript(agent, cfg)
     if not t:
         return {"now": "", "live": False, "age_s": None}
     age = int(time.time() - t.stat().st_mtime)
@@ -72,9 +119,9 @@ def agent_now(agent: str) -> dict:
     return {"now": text[:400], "live": age < 180, "age_s": age}
 
 
-def agent_history(agent: str, n=8) -> list:
+def agent_history(agent: str, cfg: dict, n=8) -> list:
     """Parse the progress ledger into cycle entries (newest first)."""
-    led = GL / f"chain-money-{agent}" / "progress.ledger.md"
+    led = GL / f"chain-{cfg['name']}-{agent}" / "progress.ledger.md"
     txt = _read(led)
     entries = []
     for m in re.finditer(r"### cycle .*?—\s*([0-9T:\-Z]+).*?(?=\n### cycle |\Z)", txt, re.S):
@@ -87,29 +134,30 @@ def agent_history(agent: str, n=8) -> list:
     return list(reversed(entries))[:n]
 
 
-def parse_routine() -> dict:
+def parse_routine(cfg: dict) -> dict:
     """Engine liveness, current stage, pass number, and rhythm timings."""
-    txt = _read(CHAIN / "money.routine.log")
+    txt = _read(cfg["routine_log"])
     rows = []
     for line in txt.splitlines():
         m = re.match(r"\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})Z\]\s+agent-chain\[\d+\]:\s+(.*)", line)
         if m:
             rows.append((datetime.strptime(m.group(1), "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc), m.group(2)))
 
-    # alive?
+    # alive? (match this chain's engine specifically)
     alive, pid = False, None
     try:
-        out = subprocess.run(["pgrep", "-f", r"agent_chain\.sh --chain"], capture_output=True, text=True, timeout=5).stdout.split()
+        out = subprocess.run(["pgrep", "-f", rf"agent_chain\.sh --chain.*{re.escape(cfg['name'])}\.chain\.json"],
+                             capture_output=True, text=True, timeout=5).stdout.split()
         alive = bool(out)
         pid = int(out[0]) if out else None
     except Exception:
         pass
-    # current stage (which chain-money-* claude is running)
+    # current stage (which chain-<name>-* claude is running)
     stage = "rest"
     try:
-        ps = subprocess.run(["pgrep", "-af", "name chain-money"], capture_output=True, text=True, timeout=5).stdout
-        for a in AGENTS:
-            if f"chain-money-{a}" in ps:
+        ps = subprocess.run(["pgrep", "-af", f"name chain-{cfg['name']}"], capture_output=True, text=True, timeout=5).stdout
+        for a in cfg["agents"]:
+            if f"chain-{cfg['name']}-{a}" in ps:
                 stage = a
     except Exception:
         pass
@@ -120,7 +168,7 @@ def parse_routine() -> dict:
     last_pass_end = None
     cur_pass = None
     for t, msg in rows:
-        if "agent 1/3: research" in msg:
+        if "agent 1/" in msg and "research" in msg:
             seg = {"start": t}
             if last_pass_end:
                 rests.append((t - last_pass_end).total_seconds() / 60.0)
@@ -137,25 +185,42 @@ def parse_routine() -> dict:
             "runs": [round(x, 1) for x in runs[-12:]], "rests": [round(x, 1) for x in rests[-12:]]}
 
 
-def revenue() -> dict:
-    a = _safe(lambda: json.loads(_read(REVDIR / "latest.json")), {})
-    b = _safe(lambda: json.loads(_read(REVDIR / "fiat_latest.json")), {})
-    bfiat = b.get("total_gross_usd")
-    if bfiat is None:
-        bfiat = (b.get("fiat") or {}).get("total_gross_usd", 0.0)
+def revenue(cfg: dict) -> dict:
+    """x402 money loop: its rich dual-file (Line A usdc + Line B fiat). Other chains: read the
+    manifest oracle_file and surface its headline balance generically."""
+    revdir = cfg["revdir"]
+    if cfg["is_x402"]:
+        a = _safe(lambda: json.loads(_read(revdir / "latest.json")), {})
+        b = _safe(lambda: json.loads(_read(revdir / "fiat_latest.json")), {})
+        bfiat = b.get("total_gross_usd")
+        if bfiat is None:
+            bfiat = (b.get("fiat") or {}).get("total_gross_usd", 0.0)
+        return {
+            "line_a_balance_usdc": a.get("balance_usdc"),
+            "line_a_external_usdc": a.get("total_external_usdc"),
+            "line_a_external_count": a.get("external_count"),
+            "line_a_delta": a.get("balance_delta_since_last"),
+            "line_a_first_dollar": a.get("first_dollar_seen"),
+            "line_b_fiat_usd": bfiat,
+        }
+    # generic chain: read its oracle_file
+    o = _safe(lambda: json.loads(_read(cfg["oracle"])), {}) if cfg["oracle"] else {}
+    bal = o.get("balance_usd", o.get("balance_usdc", 0))
     return {
-        "line_a_balance_usdc": a.get("balance_usdc"),
-        "line_a_external_usdc": a.get("total_external_usdc"),
-        "line_a_external_count": a.get("external_count"),
-        "line_a_delta": a.get("balance_delta_since_last"),
-        "line_a_first_dollar": a.get("first_dollar_seen"),
-        "line_b_fiat_usd": bfiat,
+        "balance_usd": bal,
+        "metered_invocations": o.get("metered_invocations"),
+        "assets_published": o.get("assets_published"),
+        "external_payers": o.get("external_payers"),
+        "oracle_note": o.get("note", ""),
+        # keep the keys the UI expects so it renders cleanly (no x402 revenue for this chain yet)
+        "line_a_external_usdc": None, "line_b_fiat_usd": None,
     }
 
 
-def links(n=12) -> list:
+def links(cfg: dict, n=12) -> list:
     out = []
-    led = REPO / "outreach" / "channel_post_ledger.jsonl"
+    repo = cfg["repo"]
+    led = repo / "outreach" / "channel_post_ledger.jsonl"
     for line in reversed(_read(led).splitlines()):
         try:
             d = json.loads(line)
@@ -168,7 +233,7 @@ def links(n=12) -> list:
             break
     # recent commits
     try:
-        g = subprocess.run(["git", "-C", str(REPO), "log", "--oneline", "-8"], capture_output=True, text=True, timeout=5).stdout
+        g = subprocess.run(["git", "-C", str(repo), "log", "--oneline", "-8"], capture_output=True, text=True, timeout=5).stdout
         for ln in g.splitlines():
             sha, _, msg = ln.partition(" ")
             out.append({"type": "commit", "url": None, "label": f"{sha} {msg[:64]}", "verified": True, "ts": ""})
@@ -177,10 +242,14 @@ def links(n=12) -> list:
     return out[:n + 8]
 
 
-def crew() -> dict:
+def crew(cfg: dict) -> dict:
+    repo = cfg["repo"]
+    script = repo / "scripts" / "crew_stage.py"
+    if not script.exists():
+        return {}
     try:
-        s = subprocess.run(["python3", str(REPO / "scripts" / "crew_stage.py"), "status"],
-                           capture_output=True, text=True, timeout=15, cwd=str(REPO)).stdout
+        s = subprocess.run(["python3", str(script), "status"],
+                           capture_output=True, text=True, timeout=15, cwd=str(repo)).stdout
         cand = (re.search(r"candidate:\s*([^\(\n]+)", s) or [None, ""])[1].strip()
         stage = (re.search(r"stage:\s*(\S+)", s) or [None, ""])[1].strip()
         return {"candidate": cand[:80], "stage": stage}
@@ -255,7 +324,7 @@ def mark_atom(aid: str, done: bool = True) -> bool:
     return hit is not None
 
 
-def health(rt: dict, rev: dict, hist: dict) -> dict:
+def health(rt: dict, rev: dict, hist: dict, cfg: dict) -> dict:
     # GREEN: engine alive + a pass completed recently
     green_ok = bool(rt.get("alive"))
     # SUPER-GREEN: recent builder work shipped+deployed (a commit verified) and no bare ATOM gaming
@@ -268,10 +337,20 @@ def health(rt: dict, rev: dict, hist: dict) -> dict:
     run_ok = bool(runs) and EXPECT_RUN[0] <= runs[-1] <= EXPECT_RUN[1] if runs else False
     rest_ok = bool(rests) and rests[-1] <= EXPECT_REST[1] if rests else True
     ever_ok = run_ok and rest_ok
-    # GATE: money-route correctness canary (uptime_probe.py). A false-SAFE on /gate/swap churns a
-    # paying agent — the one failure that silently kills Line-A revenue. Degrade OPEN: only an
-    # EXPLICIT regression trips it; missing/inconclusive (None) never fabricates an alarm.
-    u = _safe(lambda: json.loads(_read(UPTIME_SENSOR)), {})
+    # GATE: x402 money-route correctness canary (uptime_probe.py). Only applies to the x402 money
+    # loop; other chains have no such sensor → degrade OPEN (gate ok, "n/a for this chain").
+    u = _safe(lambda: json.loads(_read(cfg["uptime_sensor"])), {})
+    if not u:
+        gate_why = ("money-route canaries only apply to the x402 loop — n/a for this chain"
+                    if not cfg["is_x402"] else "correctness inconclusive (probe not run yet / unreachable) — not alarming")
+        return {
+            "green": {"ok": green_ok, "why": f"engine {'alive' if green_ok else 'DOWN'} (pid {rt.get('pid')})"},
+            "super_green": {"ok": super_ok, "why": ("builder shipped+verified, ATOM clean" if super_ok
+                            else "no recently-verified shipped work / or an open ATOM — ran, not competitor-grade-proven")},
+            "ever_green": {"ok": ever_ok, "why": (f"on tempo (run {runs[-1] if runs else '?'}m, rest {rests[-1] if rests else '?'}m)"
+                            if ever_ok else "off-tempo (run/rest outside expected band)")},
+            "gate": {"ok": True, "why": gate_why},
+        }
     gate_ok = u.get("gate_detection_ok")      # True pass / False regression / None inconclusive
     scan_ok = u.get("scan_detection_ok")
     report_ok = u.get("report_detection_ok")  # 2nd Line-A paid surface (/chain/token-report)
@@ -297,45 +376,57 @@ def health(rt: dict, rev: dict, hist: dict) -> dict:
 
 
 def build() -> dict:
-    rt = _safe(parse_routine, {})
-    hist = {a: _safe(lambda a=a: agent_history(a), []) for a in AGENTS}
-    now = {a: _safe(lambda a=a: agent_now(a), {}) for a in AGENTS}
-    rev = _safe(revenue, {})
+    cfg = resolve_active()
+    agents = cfg["agents"]
+    rt = _safe(lambda: parse_routine(cfg), {})
+    hist = {a: _safe(lambda a=a: agent_history(a, cfg), []) for a in agents}
+    now = {a: _safe(lambda a=a: agent_now(a, cfg), {}) for a in agents}
+    rev = _safe(lambda: revenue(cfg), {})
     state = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "loop": cfg["name"],
+        "project": str(cfg["repo"]),
         "engine": {"alive": rt.get("alive"), "pid": rt.get("pid"), "stage": rt.get("stage"), "pass": rt.get("pass")},
-        "chain": [{"stage": a, "state": ("active" if rt.get("stage") == a else "idle")} for a in AGENTS],
+        "chain": [{"stage": a, "state": ("active" if rt.get("stage") == a else "idle")} for a in agents],
         "rhythm": {"runs": rt.get("runs", []), "rests": rt.get("rests", []),
                    "last_run": (rt.get("runs") or [None])[-1], "last_rest": (rt.get("rests") or [None])[-1]},
-        "agents": {a: {**now.get(a, {}), "history": hist.get(a, [])} for a in AGENTS},
+        "agents": {a: {**now.get(a, {}), "history": hist.get(a, [])} for a in agents},
         "revenue": rev,
-        "links": _safe(links, []),
-        "crew": _safe(crew, {}),
+        "links": _safe(lambda: links(cfg), []),
+        "crew": _safe(lambda: crew(cfg), {}),
         "atoms": _safe(harvest_atoms, {"open": [], "done": [], "open_count": 0}),
         "monitor": _safe(monitor_state, {"on": False, "feed": []}),
     }
-    state["health"] = _safe(lambda: health(rt, rev, hist), {})
+    state["health"] = _safe(lambda: health(rt, rev, hist, cfg), {})
+    state["_sensor_path"] = str(cfg["sensor"])
+    state["_is_x402"] = cfg["is_x402"]
     return state
 
 
 def emit_sensor(state: dict):
-    """Write the loop-money shared sensor so Daily Brief / self-heal see loop health."""
+    """Write the loop-<name> shared sensor so Daily Brief / self-heal see loop health.
+    Also mirrors to loop-money when the x402 money loop is active (backward-compat consumers)."""
     h = state.get("health", {})
     alerts = [k for k, v in h.items() if not v.get("ok")]
-    try:
-        SENSOR.parent.mkdir(parents=True, exist_ok=True)
-        SENSOR.write_text(json.dumps({
-            "fetched_at": state["generated_at"],
-            "status": "ok" if not alerts else "alert",
-            "alert": bool(alerts),
-            "summary": f"loop green={h.get('green',{}).get('ok')} super={h.get('super_green',{}).get('ok')} "
-                       f"ever={h.get('ever_green',{}).get('ok')} gate={h.get('gate',{}).get('ok')} | pass {state['engine'].get('pass')} "
-                       f"stage {state['engine'].get('stage')} | A_ext=${state['revenue'].get('line_a_external_usdc')} "
-                       f"B=${state['revenue'].get('line_b_fiat_usd')}",
-            "health": h, "revenue": state["revenue"], "engine": state["engine"],
-        }, indent=0))
-    except Exception:
-        pass
+    payload = {
+        "fetched_at": state["generated_at"],
+        "loop": state.get("loop"),
+        "status": "ok" if not alerts else "alert",
+        "alert": bool(alerts),
+        "summary": f"loop={state.get('loop')} green={h.get('green',{}).get('ok')} super={h.get('super_green',{}).get('ok')} "
+                   f"ever={h.get('ever_green',{}).get('ok')} gate={h.get('gate',{}).get('ok')} | pass {state['engine'].get('pass')} "
+                   f"stage {state['engine'].get('stage')} | rev={json.dumps(state.get('revenue', {}))[:120]}",
+        "health": h, "revenue": state["revenue"], "engine": state["engine"],
+    }
+    targets = [Path(state["_sensor_path"])]
+    if state.get("_is_x402"):
+        targets.append(HOME / ".hermes" / "data" / "loop-money" / "latest.json")
+    for t in targets:
+        try:
+            t.parent.mkdir(parents=True, exist_ok=True)
+            t.write_text(json.dumps(payload, indent=0))
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
