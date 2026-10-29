@@ -982,7 +982,7 @@ having that authorisation.</p>
 
 <h2>3. Data sources and accuracy</h2>
 <p>Responses are assembled from public blockchain RPC nodes and third-party sources
-including DefiLlama, Polymarket, Hyperliquid, OKX, dYdX, Binance and Bybit (via CoinGecko), Cloudflare DNS, RDAP/WHOIS
+including DefiLlama, Polymarket, Hyperliquid, OKX, dYdX, Binance and Bybit, Cloudflare DNS, RDAP/WHOIS
 registries, the NVD/CVE catalogue, EPSS and the CISA KEV catalogue. Those sources are
 independent of us and may be incomplete, delayed or wrong. Data is provided for
 informational purposes only.</p>
@@ -2803,25 +2803,6 @@ app.get("/crypto/prices/preview", async (c) => {
 });
 app.get("/crypto/funding/preview", async (c) => {
   try {
-    if (c.req.query("debug") === "cex") {
-      const probes: [string, string][] = [
-        ["binance_direct", "https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT"],
-        ["binance_www", "https://www.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT"],
-        ["bybit_direct", "https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT"],
-        ["bybit_bytick", "https://api.bytick.com/v5/market/tickers?category=linear&symbol=BTCUSDT"],
-      ];
-      const out: Record<string, unknown> = {};
-      await Promise.all(probes.map(async ([name, url]) => {
-        try {
-          const r = await fetch(url, { headers: { "User-Agent": "grey-ridge-x402-data/1.0" } });
-          const txt = await r.text();
-          out[name] = { status: r.status, body_len: txt.length, snippet: txt.slice(0, 220) };
-        } catch (e) {
-          out[name] = { error: (e as Error).message };
-        }
-      }));
-      return c.json({ direct_debug: out });
-    }
     const all = await fetchFundingRates(20);
     return c.json({
       preview: all.slice(0, 1),
@@ -6339,16 +6320,6 @@ function fundingSignal(hlFunding: number): "LONGS_PAY" | "SHORTS_PAY" | "NEUTRAL
   return hlFunding > 0 ? "LONGS_PAY" : "SHORTS_PAY";
 }
 
-// Binance + Bybit perp APIs (fapi.binance.com, api.bybit.com) GEO-BLOCK
-// Cloudflare/datacenter egress directly (451 / country-block — confirmed live),
-// so a naive direct fetch degrades CLOSED. CoinGecko's keyless
-// /derivatives/exchanges/{id} endpoint is the non-geoblocked bridge that carries
-// both venues' live perp funding. One call per venue (~0.5MB, edge-cached 60s) is
-// fetched once per request and indexed by base ticker (BTC, ETH, ...), which maps
-// 1:1 onto Hyperliquid coin names for the liquid majors. funding_rate is quoted by
-// CoinGecko as a PERCENT, so we divide by 100 to match the fraction convention of
-// the other venues. Best-effort + degrade-open: any failure yields an empty map
-// and those venues resolve null, never failing the request.
 // CoinGecko's public API 403s any request without a descriptive User-Agent
 // (Cloudflare Workers send none by default), so every api.coingecko.com fetch
 // must carry this header or it silently fails.
@@ -6357,51 +6328,70 @@ const CG_HEADERS = {
   accept: "application/json",
 };
 
-interface CexFundingMaps {
-  binance: Map<string, number>;
-  bybit: Map<string, number>;
+// Binance + Bybit perp APIs (fapi.binance.com, api.bybit.com, www.binance.com,
+// api.bytick.com) ALL geo-block Cloudflare/datacenter egress (403 CloudFront
+// country-block — confirmed live from the edge), and CoinGecko's derivatives
+// endpoint 429-rate-limits the shared Worker IP. The clean bridge is
+// Hyperliquid's own `predictedFundings` endpoint: it publishes, per coin, the
+// current predicted funding on BinPerp (Binance), BybitPerp (Bybit) and HlPerp
+// alongside each venue's funding interval, as native fractions. It's keyless,
+// NOT geo-blocked, NOT rate-limited (the same host we already hit for the HL
+// universe), ~64KB in one POST, and shares Hyperliquid's coin namespace so it
+// maps 1:1 onto our universe. Best-effort + degrade-open: any failure yields an
+// empty map and those venues resolve null, never failing the request.
+interface VenuePredicted {
+  binance: number | null;
+  bybit: number | null;
+  binanceIntervalH: number | null;
+  bybitIntervalH: number | null;
 }
-export interface CexDerivTicker {
-  base?: string;
-  target?: string;
-  contract_type?: string;
-  funding_rate?: number | string | null;
-}
-// Pure: reduce a CoinGecko /derivatives/exchanges/{id} tickers array to a
-// base-ticker -> funding-fraction map. USDT-quoted perpetuals only; funding_rate
-// is a PERCENT upstream so we divide by 100; first row per base wins (CoinGecko
-// orders by liquidity). Exported for unit tests.
-export function cexTickersToFundingMap(tickers: CexDerivTicker[] | undefined): Map<string, number> {
-  const m = new Map<string, number>();
-  for (const t of tickers ?? []) {
-    if (t.contract_type !== "perpetual") continue;
-    if ((t.target || "").toUpperCase() !== "USDT") continue;
-    const base = (t.base || "").toUpperCase();
-    if (!base || m.has(base)) continue;
-    const pct = typeof t.funding_rate === "number" ? t.funding_rate : parseFloat(String(t.funding_rate));
-    if (!Number.isFinite(pct)) continue;
-    m.set(base, pct / 100);
+// Pure: reduce Hyperliquid's predictedFundings payload — an array of
+// [coin, [[venueName, {fundingRate, fundingIntervalHours}], ...]] — to a
+// coin -> {binance, bybit, intervals} map. Exported for unit tests.
+export function parsePredictedFundings(raw: unknown): Map<string, VenuePredicted> {
+  const m = new Map<string, VenuePredicted>();
+  if (!Array.isArray(raw)) return m;
+  for (const row of raw) {
+    if (!Array.isArray(row) || row.length < 2) continue;
+    const coin = typeof row[0] === "string" ? row[0] : null;
+    const venues = row[1];
+    if (!coin || !Array.isArray(venues)) continue;
+    const entry: VenuePredicted = { binance: null, bybit: null, binanceIntervalH: null, bybitIntervalH: null };
+    for (const v of venues) {
+      if (!Array.isArray(v) || v.length < 2) continue;
+      const name = v[0];
+      const info = v[1] as { fundingRate?: unknown; fundingIntervalHours?: unknown } | null;
+      if (!info || typeof info !== "object") continue;
+      const rate = parseFloat(String(info.fundingRate));
+      if (!Number.isFinite(rate)) continue;
+      const ivRaw = Number(info.fundingIntervalHours);
+      const iv = Number.isFinite(ivRaw) && ivRaw > 0 ? ivRaw : null;
+      if (name === "BinPerp") { entry.binance = rate; entry.binanceIntervalH = iv; }
+      else if (name === "BybitPerp") { entry.bybit = rate; entry.bybitIntervalH = iv; }
+    }
+    m.set(coin, entry);
   }
   return m;
 }
-async function fetchCexFundingMaps(): Promise<CexFundingMaps> {
-  const out: CexFundingMaps = { binance: new Map(), bybit: new Map() };
-  const sources: [keyof CexFundingMaps, string][] = [
-    ["binance", "binance_futures"],
-    ["bybit", "bybit"],
-  ];
-  await Promise.allSettled(
-    sources.map(async ([venue, id]) => {
-      const res = await fetch(
-        `https://api.coingecko.com/api/v3/derivatives/exchanges/${id}?include_tickers=unexpired`,
-        { headers: CG_HEADERS, cf: { cacheTtl: 60, cacheEverything: true } } as RequestInit,
-      );
-      if (!res.ok) return;
-      const j = (await res.json()) as { tickers?: CexDerivTicker[] };
-      out[venue] = cexTickersToFundingMap(j.tickers);
-    }),
-  );
-  return out;
+async function fetchPredictedFundings(): Promise<Map<string, VenuePredicted>> {
+  try {
+    const res = await fetch("https://api.hyperliquid.xyz/info", {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({ type: "predictedFundings" }),
+    });
+    if (!res.ok) return new Map();
+    return parsePredictedFundings(await res.json());
+  } catch {
+    return new Map();
+  }
+}
+// Annualize a per-period funding rate using its native funding interval
+// (periods/day = 24/intervalHours), falling back to an 8h CEX interval.
+function annualizeFunding(rate: number | null, intervalH: number | null): number | null {
+  if (rate === null) return null;
+  const iv = intervalH && intervalH > 0 ? intervalH : 8;
+  return rate * (24 / iv) * 365;
 }
 
 // dYdX v4 (indexer, keyless, no CF block) — its coin tickers (`{coin}-USD`) map
@@ -6457,10 +6447,9 @@ async function fetchFundingRates(limit: number): Promise<FundingRate[]> {
   hlRates.sort((a, b) => b.dayNtlVlm - a.dayNtlVlm);
   const top = hlRates.slice(0, limit);
 
-  // The two top CEX perp venues (Binance, Bybit) come from a single CoinGecko
-  // call each, fetched once up front and indexed by coin — far cheaper than a
-  // per-coin call and the only non-geoblocked path to those venues.
-  const cex = await fetchCexFundingMaps();
+  // The two top CEX perp venues (Binance, Bybit) come from Hyperliquid's
+  // predictedFundings endpoint — one keyless, non-geoblocked POST, indexed by coin.
+  const cex = await fetchPredictedFundings();
 
   // Cross-venue enrichment: Hyperliquid is always present (it's the coin
   // universe). OKX/dYdX/Binance/Bybit are best-effort — each lookup is wrapped so an
@@ -6472,12 +6461,13 @@ async function fetchFundingRates(limit: number): Promise<FundingRate[]> {
         fetchDydxFunding(r.coin),
       ]);
       const okx: OkxFundingResult = okxRes.status === "fulfilled" ? okxRes.value : { rate: null, nextFundingTs: null };
+      const cx = cex.get(r.coin);
       const funding: VenueFunding = {
         hyperliquid: r.hlFunding,
         okx: okx.rate,
         dydx: dydxRes.status === "fulfilled" ? dydxRes.value : null,
-        binance: cex.binance.get(r.coin) ?? null,
-        bybit: cex.bybit.get(r.coin) ?? null,
+        binance: cx?.binance ?? null,
+        bybit: cx?.bybit ?? null,
       };
 
       const available = (Object.entries(funding) as [string, number | null][]).filter(
@@ -6503,8 +6493,8 @@ async function fetchFundingRates(limit: number): Promise<FundingRate[]> {
         premium: r.premium,
         annualized_hl: funding.hyperliquid !== null ? funding.hyperliquid * 24 * 365 : null,
         annualized_okx: funding.okx !== null ? funding.okx * 3 * 365 : null,
-        annualized_binance: funding.binance !== null ? funding.binance * 3 * 365 : null,
-        annualized_bybit: funding.bybit !== null ? funding.bybit * 3 * 365 : null,
+        annualized_binance: annualizeFunding(funding.binance, cx?.binanceIntervalH ?? null),
+        annualized_bybit: annualizeFunding(funding.bybit, cx?.bybitIntervalH ?? null),
         signal: fundingSignal(r.hlFunding),
         next_funding_ts: okx.nextFundingTs,
         markPx: r.markPx,
