@@ -9,6 +9,7 @@ console reads the store and lets Rez check it off. No prose scraping = no fragme
 """
 import hashlib
 import json
+import os
 import re
 import sys
 from datetime import datetime, timezone
@@ -16,6 +17,25 @@ from pathlib import Path
 
 ATOMS = Path.home() / ".claude" / "agent-chains" / "atoms.json"
 ATOMS_LEDGER = Path.home() / ".claude" / "agent-chains" / "atoms_ledger.jsonl"  # append-only clear/reopen history
+CHAIN_DIR = Path.home() / ".claude" / "agent-chains"
+
+
+def _active_loop() -> str:
+    """Which loop owns a new atom = the currently-armed chain (ground truth), so atoms stay with
+    their loop and never get mixed. Order: explicit $GREYRIDGE_LOOP → oldest-armed *.enabled chain
+    → 'money' (legacy default). Mirrors agent_chain_routine.sh / the dashboard's resolve."""
+    env = os.environ.get("GREYRIDGE_LOOP", "").strip()
+    if env:
+        return env
+    try:
+        enabled = sorted(CHAIN_DIR.glob("*.enabled"), key=lambda p: p.stat().st_mtime)
+        for ef in enabled:
+            n = ef.stem
+            if (CHAIN_DIR / f"{n}.chain.json").exists() and not (CHAIN_DIR / f"{n}.done").exists():
+                return n
+    except Exception:
+        pass
+    return "money"
 
 
 def add(text: str, agent: str = "agent", steps: list[str] | None = None) -> str | None:
@@ -25,14 +45,21 @@ def add(text: str, agent: str = "agent", steps: list[str] | None = None) -> str 
     steps = [s.strip() for s in (steps or []) if s.strip()]
     aid = hashlib.sha1(text.lower().encode()).hexdigest()[:10]
     store = json.loads(ATOMS.read_text()) if ATOMS.exists() else {"atoms": []}
+    loop = _active_loop()  # stamp the owning loop so atoms stay with their loop
     for a in store["atoms"]:
         if a["id"] == aid:
-            # already tracked — enrich with steps if it had none and we now have them
+            # already tracked — enrich with steps / loop if missing
+            changed = False
             if steps and not a.get("steps"):
                 a["steps"] = steps
+                changed = True
+            if not a.get("loop"):
+                a["loop"] = loop
+                changed = True
+            if changed:
                 ATOMS.write_text(json.dumps(store, indent=0))
             return aid
-    store["atoms"].append({"id": aid, "text": text[:260], "agent": agent, "steps": steps,
+    store["atoms"].append({"id": aid, "text": text[:260], "agent": agent, "steps": steps, "loop": loop,
                            "first_seen": datetime.now(timezone.utc).isoformat(), "done": False, "done_at": None})
     ATOMS.parent.mkdir(parents=True, exist_ok=True)
     ATOMS.write_text(json.dumps(store, indent=0))
@@ -118,10 +145,16 @@ if __name__ == "__main__":
         for ev in sorted(_ledger_cleared(), key=lambda e: e.get("ts", "")):
             print(f"[CLEARED {ev.get('ts','')[:19]}] {ev.get('text','')}")
     elif cmd == "open":
+        # optional loop filter: `note_atom.py open assetfactory` shows only that loop's atoms
+        want = sys.argv[2] if len(sys.argv) > 2 else None
         for a in _load().get("atoms", []):
-            if not a.get("done"):
-                tag = " (+steps)" if a.get("steps") else ""
-                print(f"[OPEN] {a['text']}{tag}")
+            if a.get("done"):
+                continue
+            lp = a.get("loop", "?")
+            if want and lp != want:
+                continue
+            tag = " (+steps)" if a.get("steps") else ""
+            print(f"[OPEN·{lp}] {a['text']}{tag}")
     elif cmd == "resolve":
         # an AGENT checks off a blocker it completed — attributed + evidence-gated
         if len(sys.argv) < 5:

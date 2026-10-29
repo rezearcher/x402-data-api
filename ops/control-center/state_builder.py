@@ -293,13 +293,17 @@ def _ledger_cleared() -> list:
     return [ev for ev in latest.values() if ev.get("event") == "done"]
 
 
-def harvest_atoms() -> dict:
-    """Read the clean, STRUCTURED atom store (populated by note_atom.py). Panel shows OPEN
-    only; cleared atoms live in the append-only ledger (the complete record the loop reads)."""
+def harvest_atoms(active_loop: str = "money") -> dict:
+    """Read the clean, STRUCTURED atom store (populated by note_atom.py). Panel shows OPEN atoms
+    FOR THE ACTIVE LOOP only (atoms stay with their loop); legacy untagged atoms default to 'money'.
+    Cleared atoms live in the append-only ledger (the complete record the loop reads)."""
     store = _safe(lambda: json.loads(_read(ATOMS)), {}) or {"atoms": []}
-    opens = [a for a in store.get("atoms", []) if not a.get("done")]
+    allopen = [a for a in store.get("atoms", []) if not a.get("done")]
+    opens = [a for a in allopen if (a.get("loop") or "money") == active_loop]
+    other = len(allopen) - len(opens)
     cleared = sorted(_safe(_ledger_cleared, []), key=lambda e: e.get("ts", ""))
-    return {"open": opens, "open_count": len(opens),
+    return {"open": opens, "open_count": len(opens), "loop": active_loop,
+            "other_loop_open_count": other,
             "cleared": cleared[-20:], "cleared_count": len(cleared)}
 
 
@@ -408,7 +412,7 @@ def build() -> dict:
         "revenue": rev,
         "links": _safe(lambda: links(cfg), []),
         "crew": _safe(lambda: crew(cfg), {}),
-        "atoms": _safe(harvest_atoms, {"open": [], "done": [], "open_count": 0}),
+        "atoms": _safe(lambda: harvest_atoms(cfg["name"]), {"open": [], "done": [], "open_count": 0}),
         "monitor": _safe(monitor_state, {"on": False, "feed": []}),
     }
     state["health"] = _safe(lambda: health(rt, rev, hist, cfg), {})
