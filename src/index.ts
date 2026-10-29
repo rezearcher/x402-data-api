@@ -2803,6 +2803,25 @@ app.get("/crypto/prices/preview", async (c) => {
 });
 app.get("/crypto/funding/preview", async (c) => {
   try {
+    if (c.req.query("debug") === "cex") {
+      const out: Record<string, unknown> = {};
+      for (const [venue, id] of [["binance", "binance_futures"], ["bybit", "bybit"]] as [string, string][]) {
+        try {
+          const r = await fetch(`https://api.coingecko.com/api/v3/derivatives/exchanges/${id}?include_tickers=unexpired`);
+          const txt = await r.text();
+          let tn = -1, sample: unknown = null;
+          try {
+            const j = JSON.parse(txt) as { tickers?: unknown[] };
+            tn = Array.isArray(j.tickers) ? j.tickers.length : -1;
+            sample = Array.isArray(j.tickers) ? j.tickers[0] : j;
+          } catch { /* keep raw */ }
+          out[venue] = { status: r.status, ticker_count: tn, body_len: txt.length, snippet: txt.slice(0, 200), sample };
+        } catch (e) {
+          out[venue] = { error: (e as Error).message };
+        }
+      }
+      return c.json({ cex_debug: out });
+    }
     const all = await fetchFundingRates(20);
     return c.json({
       preview: all.slice(0, 1),
