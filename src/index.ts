@@ -219,7 +219,7 @@ export const ROUTE_CATALOG_BASE: Array<[string, string, string, string, string, 
   ["/chain/token-report", "GET", "0.01", "10000", "Is this Base token safe to buy? One call returns a trade-safety verdict — SAFE | CAUTION | AVOID — with risk_score (0-100) and reasons: honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, measured transfer tax, symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade before an agent buys a Base ERC-20.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "verdict", "trading", "token-security", "data"]],
   ["/chain/token-security", "GET", "0.009", "9000", "Is this Base token a scam or rug pull? Honeypot detector for a Base ERC-20: EIP-1967 proxy + upgradeability check, bytecode scan for mint/pause/blacklist/fee-setter/ownership, owner() renouncement, contract source-verification (Sourcify), and a live eth_call state-override sim proving a real wallet can transfer() it. Returns risk_score (0-100) + verdict (clear/review/block) + honeypot/scam/rug flags. Use before an agent buys, holds or approves a token.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "token-security", "data", "scam", "rug", "rug-detection", "scam-detection"]],
   ["/pm/markets", "GET", "0.005", "5000", "Live Polymarket prediction markets — question, outcomes, bestBid/bestAsk/spread, volume24hr/volume1wk, oneDayPriceChange, clobTokenIds, conditionId, category tags, liquidity, end date. Ranked by volume24hr; filter by keyword.", ["prediction-markets", "polymarket", "markets", "crypto", "data"]],
-  ["/crypto/funding", "GET", "0.004", "4000", "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, premium/basis, annualized_hl/annualized_okx, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices, open interest.", ["crypto", "funding", "perps", "hyperliquid", "okx", "dydx", "arbitrage", "defi", "market-data", "data"]],
+  ["/crypto/funding", "GET", "0.004", "4000", "5-venue perp funding rates — Binance+Bybit+OKX+Hyperliquid+dYdX — top coins by 24h notional volume, per-venue funding + CEX↔DEX arb spread (bps) + cheapest-long/richest-short venue, premium/basis, annualized_hl/okx/binance/bybit, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices, open interest.", ["crypto", "funding", "perps", "binance", "bybit", "hyperliquid", "okx", "dydx", "arbitrage", "defi", "market-data", "data"]],
   ["/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, pool id, APY breakdown + 1d/7d/30d APY trend, IL risk (incl. il7d), exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL. Filter by project (family name like aave/uniswap/curve resolves all versions, or an exact slug like aave-v3), chain (short names like eth/arb/op/avax/matic/sol/bnb resolve to the DefiLlama canonical name), or stablecoin-only; sort by TVL or risk-adjusted APY.", ["defi", "yield", "lending", "apy", "tvl", "defi-yields", "data"]],
   ["/crypto/prices", "GET", "0.001", "1000", "Spot token prices from DefiLlama — pass comma-separated ticker symbols or CoinGecko ids, get price/change_24h/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "market-data", "defi", "data"]],
   ["/scan/mcp", "GET", "0.05", "50000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score + verdict (clear/review/block).", ["security", "mcp", "audit", "prompt-injection"]],
@@ -982,7 +982,7 @@ having that authorisation.</p>
 
 <h2>3. Data sources and accuracy</h2>
 <p>Responses are assembled from public blockchain RPC nodes and third-party sources
-including DefiLlama, Polymarket, Hyperliquid, OKX, dYdX, Cloudflare DNS, RDAP/WHOIS
+including DefiLlama, Polymarket, Hyperliquid, OKX, dYdX, Binance and Bybit (via CoinGecko), Cloudflare DNS, RDAP/WHOIS
 registries, the NVD/CVE catalogue, EPSS and the CISA KEV catalogue. Those sources are
 independent of us and may be incomplete, delayed or wrong. Data is provided for
 informational purposes only.</p>
@@ -1636,7 +1636,7 @@ const MANIFEST_IO: Record<string, ManifestIO> = {
     { name: "coins", example: "bitcoin,ethereum,solana", desc: "Comma-separated CoinGecko ids (or use symbols)." },
     { name: "symbols", example: "BTC,ETH,SOL", desc: "Comma-separated ticker symbols; resolved to ids." },
   ] },
-  "/crypto/funding": { name: "Cross-venue perp funding rates and arbitrage spread (Hyperliquid, OKX, dYdX)", category: "crypto", params: [] },
+  "/crypto/funding": { name: "5-venue perp funding rates and CEX↔DEX arbitrage spread (Binance, Bybit, OKX, Hyperliquid, dYdX)", category: "crypto", params: [] },
   "/pm/markets": { name: "Live Polymarket prediction markets: odds, spread, volume", category: "prediction-markets", params: [
     { name: "q", desc: "Keyword filter (optional)." },
   ] },
@@ -1806,7 +1806,7 @@ app.get("/.well-known/x402", (c) => {
       name: "Grey Ridge Signals — x402 Data & Security",
       tagline: "Pay-per-call pre-trade token-safety for Base trading agents over x402 — GO/HOLD/BLOCK swap gate and honeypot/due-diligence verdicts, plus live DeFi yields, funding rates, prices, Polymarket and RPC data.",
       description:
-        "Pay-per-call x402 for Base agents, led by the pre-trade safety gate: /gate/swap (GO/HOLD/BLOCK sized to your trade, $0.008), /chain/token-report (SAFE/CAUTION/AVOID with measured transfer tax, $0.01) and /chain/token-security (live honeypot/sellability sim, $0.009) — a honeypot check for a fraction of what rival Base token-safety APIs charge (up to $0.25/call). Plus market & on-chain data: /defi/yields (lending/LP yields + IL risk), /crypto/funding (cross-venue Hyperliquid+OKX+dYdX funding + arb spread), /crypto/prices, /pm/markets (Polymarket) and 20+ Base RPC/chain routes. Free /preview paths on the flagship routes. No account, no key — agents pay inline in USDC from $0.001/call.",
+        "Pay-per-call x402 for Base agents, led by the pre-trade safety gate: /gate/swap (GO/HOLD/BLOCK sized to your trade, $0.008), /chain/token-report (SAFE/CAUTION/AVOID with measured transfer tax, $0.01) and /chain/token-security (live honeypot/sellability sim, $0.009) — a honeypot check for a fraction of what rival Base token-safety APIs charge (up to $0.25/call). Plus market & on-chain data: /defi/yields (lending/LP yields + IL risk), /crypto/funding (5-venue Binance+Bybit+OKX+Hyperliquid+dYdX funding + CEX↔DEX arb spread), /crypto/prices, /pm/markets (Polymarket) and 20+ Base RPC/chain routes. Free /preview paths on the flagship routes. No account, no key — agents pay inline in USDC from $0.001/call.",
       website: BASE,
       categories: ["prediction-markets", "crypto", "data", "security", "mcp", "funding", "yield", "token-price", "rpc", "base", "onchain", "blockchain"],
       // Primary category in the x402 agent-catalog taxonomy used by the Circle Agent
@@ -2135,14 +2135,14 @@ app.get("/.well-known/agent-card.json", (c) => {
       },
       {
         id: "funding-rates",
-        name: "Cross-Venue Perp Funding Rates",
+        name: "Multi-Venue Perp Funding Rates (Binance+Bybit+OKX+Hyperliquid+dYdX)",
         description:
-          "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h volume, per-venue funding + arb spread (bps), " +
+          "5-venue perp funding rates — Binance+Bybit+OKX+Hyperliquid+dYdX — top coins by 24h volume, per-venue funding + CEX↔DEX arb spread (bps), " +
           "best long/short venue, premium/annualized signal, next_funding_ts, mark/oracle prices, open interest. " +
           "Route: GET /crypto/funding. Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. " +
           "Price: $0.004. Free preview at GET /crypto/funding/preview. " +
           "Machine-readable payment manifest: /.well-known/x402. MCP tool interface: /mcp (tool: crypto_funding).",
-        tags: ["crypto", "funding", "perps", "hyperliquid", "arbitrage", "data"],
+        tags: ["crypto", "funding", "perps", "binance", "bybit", "hyperliquid", "okx", "dydx", "arbitrage", "data"],
         examples: [
           "GET /crypto/funding?limit=20",
         ],
@@ -2343,7 +2343,7 @@ Proof pack for integrators (a real settled Base-mainnet x402 tx + decoded receip
 ## Endpoints
 - Human/agent try-it page: ${BASE}/check?token=<0x… Base ERC-20> — free verdict card (3/day/IP).
 - GET ${BASE}/crypto/prices?coins=bitcoin,ethereum,solana — $0.001 — spot token prices + change_24h + unix timestamp (DefiLlama), keyless. Agentic buyer example with budget + freshness gates (reads the 402 quote before paying, rejects stale data): https://github.com/rezearcher/x402-data-api/blob/main/examples/market-data-decision-buyer.mjs
-- GET ${BASE}/crypto/funding?limit=20 — $0.004 — cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread (bps) + best long/short venue + premium/annualized/signal/next_funding_ts.
+- GET ${BASE}/crypto/funding?limit=20 — $0.004 — 5-venue Binance+Bybit+OKX+Hyperliquid+dYdX funding rates + CEX↔DEX arb spread (bps) + best long/short venue + premium/annualized/signal/next_funding_ts.
 - GET ${BASE}/defi/yields?limit=20&project=&chain=&stable=&sort=tvl|risk_adjusted — $0.001 — top DeFi lending/LP yields, APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast + TVL (DefiLlama).
 - GET ${BASE}/pm/markets?query=&limit=20 — $0.005 — live Polymarket prediction markets, ranked by volume24hr (bestBid/bestAsk/spread, clobTokenIds, category tags, liquidity).
 - GET ${BASE}/scan/mcp?url=<mcp-server> — $0.05 — security audit of an MCP server (tool-poisoning / prompt-injection, OWASP LLM01/LLM08); findings + risk score + verdict (clear/review/block).
@@ -2718,7 +2718,7 @@ app.get("/openapi.json", (c) => {
         },
       },
       "/crypto/prices": paid("Spot token prices + change_24h (DefiLlama).", "0.001", [{ name: "coins", desc: "comma-separated ticker symbols or coingecko ids (max 25)", example: "ETH,BTC" }]),
-      "/crypto/funding": paid("Cross-venue Hyperliquid+OKX+dYdX funding rates + arb spread + premium/annualized/signal/next_funding_ts.", "0.004", [{ name: "limit", desc: "max coins (default 20, max 100)", example: "10" }]),
+      "/crypto/funding": paid("5-venue Binance+Bybit+OKX+Hyperliquid+dYdX funding rates + CEX↔DEX arb spread + premium/annualized/signal/next_funding_ts.", "0.004", [{ name: "limit", desc: "max coins (default 20, max 100)", example: "10" }]),
       "/defi/yields": paid("Top DeFi lending/LP yields — APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast (DefiLlama).", "0.001", [{ name: "limit", desc: "max pools", example: "10" }, { name: "project", desc: "protocol filter — family name (aave, uniswap, curve) resolves all versions, or exact slug", example: "aave" }, { name: "chain", desc: "chain filter", example: "Base" }, { name: "stable", desc: "'true' = stablecoin only", example: "true" }, { name: "sort", desc: "'tvl' (default) or 'risk_adjusted' (apy/sigma)", example: "tvl" }]),
       "/pm/markets": paid("Live Polymarket prediction markets, ranked by volume24hr, with bestBid/bestAsk/spread and category tags.", "0.005", [{ name: "query", desc: "keyword filter", example: "election" }, { name: "limit", desc: "max markets", example: "10" }]),
       "/scan/mcp": paid("Security audit of an MCP server (tool-poisoning / prompt-injection). Findings + risk score + verdict (clear/review/block).", "0.05", [{ name: "url", desc: "target MCP server URL", required: true, example: "https://x402-data-api.sigrunner.workers.dev/mcp" }]),
@@ -2807,7 +2807,7 @@ app.get("/crypto/funding/preview", async (c) => {
     return c.json({
       preview: all.slice(0, 1),
       total_available: all.length,
-      note: "Free top-1 sample. Full: GET /crypto/funding?limit=20 ($0.001) — ranked cross-venue Hyperliquid+OKX+dYdX funding + arb spread, keyless x402 on Base.",
+      note: "Free top-1 sample. Full: GET /crypto/funding?limit=20 ($0.004) — ranked 5-venue Binance+Bybit+OKX+Hyperliquid+dYdX funding + CEX↔DEX arb spread, keyless x402 on Base.",
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -3322,7 +3322,7 @@ export function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, premium/basis, annualized_hl, annualized_okx, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices, open interest.",
+        "5-venue perp funding rates — Binance+Bybit+OKX+Hyperliquid+dYdX — top coins by 24h notional volume, per-venue funding + CEX↔DEX arb spread (bps) + cheapest-long/richest-short venue, premium/basis, annualized_hl, annualized_okx, annualized_binance, annualized_bybit, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices, open interest.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -3336,13 +3336,15 @@ export function makeRoutes(payTo: string) {
         output: {
           example: {
             coin: "BTC",
-            funding: { hyperliquid: 0.0000125, okx: 0.0000492, dydx: -0.00000875 },
-            funding_spread_bps: 0.37,
-            best_long_venue: "hyperliquid",
-            best_short_venue: "okx",
+            funding: { hyperliquid: 0.0000125, okx: 0.0000492, dydx: -0.00000875, binance: 0.00003034, bybit: 0.00004855 },
+            funding_spread_bps: 0.57,
+            best_long_venue: "dydx",
+            best_short_venue: "bybit",
             premium: 0.00012,
             annualized_hl: 0.1095,
             annualized_okx: 0.05387,
+            annualized_binance: 0.03322,
+            annualized_bybit: 0.05316,
             signal: "LONGS_PAY",
             next_funding_ts: 1784304000000,
             markPx: 63730,
@@ -6261,6 +6263,8 @@ interface VenueFunding {
   hyperliquid: number | null;
   okx: number | null;
   dydx: number | null;
+  binance: number | null;
+  bybit: number | null;
 }
 
 interface FundingRate {
@@ -6275,6 +6279,8 @@ interface FundingRate {
   premium: number | null;
   annualized_hl: number | null;
   annualized_okx: number | null;
+  annualized_binance: number | null;
+  annualized_bybit: number | null;
   signal: "LONGS_PAY" | "SHORTS_PAY" | "NEUTRAL";
   next_funding_ts: number | null;
   markPx: number;
@@ -6314,10 +6320,65 @@ function fundingSignal(hlFunding: number): "LONGS_PAY" | "SHORTS_PAY" | "NEUTRAL
   return hlFunding > 0 ? "LONGS_PAY" : "SHORTS_PAY";
 }
 
-// Bybit + Binance are geo-blocked from Cloudflare Workers edges (403 / 451 —
-// confirmed live) and always resolved null, so we don't advertise dead
-// venues. dYdX v4 (indexer, keyless, no CF block) fills the third slot —
-// its coin tickers (`{coin}-USD`) map 1:1 onto Hyperliquid's `coin` names.
+// Binance + Bybit perp APIs (fapi.binance.com, api.bybit.com) GEO-BLOCK
+// Cloudflare/datacenter egress directly (451 / country-block — confirmed live),
+// so a naive direct fetch degrades CLOSED. CoinGecko's keyless
+// /derivatives/exchanges/{id} endpoint is the non-geoblocked bridge that carries
+// both venues' live perp funding. One call per venue (~0.5MB, edge-cached 60s) is
+// fetched once per request and indexed by base ticker (BTC, ETH, ...), which maps
+// 1:1 onto Hyperliquid coin names for the liquid majors. funding_rate is quoted by
+// CoinGecko as a PERCENT, so we divide by 100 to match the fraction convention of
+// the other venues. Best-effort + degrade-open: any failure yields an empty map
+// and those venues resolve null, never failing the request.
+interface CexFundingMaps {
+  binance: Map<string, number>;
+  bybit: Map<string, number>;
+}
+export interface CexDerivTicker {
+  base?: string;
+  target?: string;
+  contract_type?: string;
+  funding_rate?: number | string | null;
+}
+// Pure: reduce a CoinGecko /derivatives/exchanges/{id} tickers array to a
+// base-ticker -> funding-fraction map. USDT-quoted perpetuals only; funding_rate
+// is a PERCENT upstream so we divide by 100; first row per base wins (CoinGecko
+// orders by liquidity). Exported for unit tests.
+export function cexTickersToFundingMap(tickers: CexDerivTicker[] | undefined): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const t of tickers ?? []) {
+    if (t.contract_type !== "perpetual") continue;
+    if ((t.target || "").toUpperCase() !== "USDT") continue;
+    const base = (t.base || "").toUpperCase();
+    if (!base || m.has(base)) continue;
+    const pct = typeof t.funding_rate === "number" ? t.funding_rate : parseFloat(String(t.funding_rate));
+    if (!Number.isFinite(pct)) continue;
+    m.set(base, pct / 100);
+  }
+  return m;
+}
+async function fetchCexFundingMaps(): Promise<CexFundingMaps> {
+  const out: CexFundingMaps = { binance: new Map(), bybit: new Map() };
+  const sources: [keyof CexFundingMaps, string][] = [
+    ["binance", "binance_futures"],
+    ["bybit", "bybit"],
+  ];
+  await Promise.allSettled(
+    sources.map(async ([venue, id]) => {
+      const res = await fetch(
+        `https://api.coingecko.com/api/v3/derivatives/exchanges/${id}?include_tickers=unexpired`,
+        { cf: { cacheTtl: 60, cacheEverything: true } } as RequestInit,
+      );
+      if (!res.ok) return;
+      const j = (await res.json()) as { tickers?: CexDerivTicker[] };
+      out[venue] = cexTickersToFundingMap(j.tickers);
+    }),
+  );
+  return out;
+}
+
+// dYdX v4 (indexer, keyless, no CF block) — its coin tickers (`{coin}-USD`) map
+// 1:1 onto Hyperliquid's `coin` names.
 async function fetchDydxFunding(coin: string): Promise<number | null> {
   try {
     const res = await fetch(`https://indexer.dydx.trade/v4/historicalFunding/${coin}-USD?limit=1`);
@@ -6369,9 +6430,14 @@ async function fetchFundingRates(limit: number): Promise<FundingRate[]> {
   hlRates.sort((a, b) => b.dayNtlVlm - a.dayNtlVlm);
   const top = hlRates.slice(0, limit);
 
+  // The two top CEX perp venues (Binance, Bybit) come from a single CoinGecko
+  // call each, fetched once up front and indexed by coin — far cheaper than a
+  // per-coin call and the only non-geoblocked path to those venues.
+  const cex = await fetchCexFundingMaps();
+
   // Cross-venue enrichment: Hyperliquid is always present (it's the coin
-  // universe). OKX/dYdX are best-effort — each call is wrapped so an
-  // upstream error or an unlisted coin on either venue never fails the request.
+  // universe). OKX/dYdX/Binance/Bybit are best-effort — each lookup is wrapped so an
+  // upstream error or an unlisted coin on any venue never fails the request.
   const rates: FundingRate[] = await Promise.all(
     top.map(async (r) => {
       const [okxRes, dydxRes] = await Promise.allSettled([
@@ -6383,6 +6449,8 @@ async function fetchFundingRates(limit: number): Promise<FundingRate[]> {
         hyperliquid: r.hlFunding,
         okx: okx.rate,
         dydx: dydxRes.status === "fulfilled" ? dydxRes.value : null,
+        binance: cex.binance.get(r.coin) ?? null,
+        bybit: cex.bybit.get(r.coin) ?? null,
       };
 
       const available = (Object.entries(funding) as [string, number | null][]).filter(
@@ -6408,6 +6476,8 @@ async function fetchFundingRates(limit: number): Promise<FundingRate[]> {
         premium: r.premium,
         annualized_hl: funding.hyperliquid !== null ? funding.hyperliquid * 24 * 365 : null,
         annualized_okx: funding.okx !== null ? funding.okx * 3 * 365 : null,
+        annualized_binance: funding.binance !== null ? funding.binance * 3 * 365 : null,
+        annualized_bybit: funding.bybit !== null ? funding.bybit * 3 * 365 : null,
         signal: fundingSignal(r.hlFunding),
         next_funding_ts: okx.nextFundingTs,
         markPx: r.markPx,
@@ -15688,7 +15758,7 @@ const mcpHandler = createMcpHandler(() => {
     "crypto_funding",
     {
       description:
-        "Live cross-venue perpetual-futures funding rates from Hyperliquid+OKX+dYdX (per-venue rate, arb spread in bps, cheapest-long/richest-short venue, premium/basis, annualized_hl, annualized_okx, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle price, open interest, day volume), ranked by volume. Venues that are unreachable or don't list a given coin are omitted per-coin — Hyperliquid is always present. Cost: $0.005 USDC per call via x402.",
+        "Live 5-venue perpetual-futures funding rates from Binance+Bybit+OKX+Hyperliquid+dYdX (per-venue rate, CEX↔DEX arb spread in bps, cheapest-long/richest-short venue, premium/basis, annualized_hl, annualized_okx, annualized_binance, annualized_bybit, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle price, open interest, day volume), ranked by volume. Venues that are unreachable or don't list a given coin are omitted per-coin — Hyperliquid is always present. Cost: $0.004 USDC per call via x402.",
       inputSchema: {
         limit: z.number().optional().describe("Number of results, default 20, max 100"),
       },
