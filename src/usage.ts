@@ -93,6 +93,7 @@ export type Route =
   | "GET /defi/chains-tvl"
   | "GET /crypto/stablecoins"
   | "GET /chain/wallet"
+  | "GET /chain/wallet-screen"
   | "POST /mcp";
 
 export type Rail = "x402-paid" | "rapidapi-bypass" | "api-key" | "x402-browser-unlock";
@@ -224,6 +225,7 @@ const ALL_ROUTES: Route[] = [
   "GET /defi/chains-tvl",
   "GET /crypto/stablecoins",
   "GET /chain/wallet",
+  "GET /chain/wallet-screen",
   "POST /mcp",
 ];
 const ALL_RAILS: Rail[] = ["x402-paid", "rapidapi-bypass", "api-key", "x402-browser-unlock"];

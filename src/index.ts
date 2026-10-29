@@ -7,6 +7,7 @@ import {
 } from "./sibling_contracts";
 import { STATUS_SNAPSHOT } from "./status_snapshot.ts";
 import { DEMAND_SNAPSHOT } from "./demand_snapshot.ts";
+import { OFAC_SANCTIONED_ADDRESSES, OFAC_SNAPSHOT_DATE, OFAC_SOURCE_URL } from "./data/ofac_sanctioned.ts";
 import { analyzeMcpTool, analyzeDirectoryReadiness, type ScanFinding } from "./mcp_scan.ts";
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { HTTPFacilitatorClient } from "@x402/core/server";
@@ -276,6 +277,7 @@ export const ROUTE_CATALOG_BASE: Array<[string, string, string, string, string, 
   ["/ai/ask", "GET", "0.002", "2000", "Cheap LLM answer (Llama 3.2 3B on Workers AI): ?q=<prompt up to 500 chars>, returns concise text. Pay-per-call, no API key.", ["ai", "llm", "inference", "chat", "data"]],
   ["/chain/block", "GET", "0.002", "2000", "Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.", ["rpc", "base", "onchain", "blockchain", "data"]],
   ["/chain/wallet", "GET", "0.003", "3000", "Wallet screening bundle (balance, activity, contract vs EOA check): ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]],
+  ["/chain/wallet-screen", "GET", "0.004", "4000", "Is this wallet sanctioned? Pre-trade OFAC sanctions screen for a counterparty / recipient / token-spender address before an agent sends, swaps or approves: exact match against the U.S. Treasury OFAC SDN crypto-address list (authoritative, frozen snapshot). Returns sanctioned (bool) + verdict (blocked/clear) + lists + the list source and snapshot date. 'clear' means not on the SDN list, not a safety guarantee. Use alongside /gate/swap and /chain/token-security to avoid sanctioned-counterparty liability.", ["security", "sanctions", "ofac", "compliance", "wallet", "base", "onchain", "screening", "data"]],
   ["/dns", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH. Pass ?domain=stripe.com.", ["dns", "domain", "data", "recon"]],
   ["/whois", "GET", "0.01", "10000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain. Pass ?domain=cloudflare.com.", ["whois", "rdap", "domain", "data", "recon"]],
 ];
@@ -575,6 +577,69 @@ function rpcMarkBad(url: string, ms = 30000): void {
 
 const ADDR_RE = /^0x[a-fA-F0-9]{40}$/;
 const HASH_RE = /^0x[a-fA-F0-9]{64}$/;
+
+// ---------------------------------------------------------------------------
+// OFAC SANCTIONS SCREEN — pre-trade counterparty check. An autonomous trading
+// agent that sends, swaps, or approves against a sanctioned address exposes its
+// operator to U.S. sanctions liability; this answers "is this wallet on the
+// OFAC SDN crypto list?" before the transaction. Backed by a FROZEN, vendored,
+// authoritative data snapshot (U.S. Treasury SDN crypto-address list), not a
+// heuristic — exact lowercased match. Claims Law: a non-match is reported as
+// "not listed", never asserted as "safe" (absence of a match ≠ safe). Degrades
+// open: no runtime third-party dependency; refresh via scripts/refresh_ofac_list.py.
+// ---------------------------------------------------------------------------
+const OFAC_SET: ReadonlySet<string> = new Set(OFAC_SANCTIONED_ADDRESSES);
+
+export type WalletScreenResult = {
+  address: string;
+  sanctioned: boolean;
+  verdict: "blocked" | "clear";
+  lists: string[];
+  flags: string[];
+  reason: string;
+  source: { name: string; authority: string; url: string; snapshot_date: string; entries: number };
+  disclaimer: string;
+  chain: string;
+  screened_at: string;
+};
+
+export function screenWalletAddress(addressRaw: string): WalletScreenResult {
+  const address = addressRaw.toLowerCase();
+  const sanctioned = OFAC_SET.has(address);
+  const source = {
+    name: "OFAC SDN — crypto addresses",
+    authority: "U.S. Department of the Treasury, Office of Foreign Assets Control",
+    url: OFAC_SOURCE_URL,
+    snapshot_date: OFAC_SNAPSHOT_DATE,
+    entries: OFAC_SANCTIONED_ADDRESSES.length,
+  };
+  if (sanctioned) {
+    return {
+      address,
+      sanctioned: true,
+      verdict: "blocked",
+      lists: ["OFAC-SDN"],
+      flags: ["ofac-sdn-sanctioned"],
+      reason: `Address is on the OFAC Specially Designated Nationals (SDN) crypto-address list (snapshot ${OFAC_SNAPSHOT_DATE}). Transacting with it may violate U.S. sanctions — do not send, swap, or approve.`,
+      source,
+      disclaimer: "Sanctions status reflects the vendored OFAC SDN snapshot; confirm against the live SDN list for compliance-critical decisions.",
+      chain: "base",
+      screened_at: new Date().toISOString(),
+    };
+  }
+  return {
+    address,
+    sanctioned: false,
+    verdict: "clear",
+    lists: [],
+    flags: [],
+    reason: `Not present on the OFAC SDN crypto-address snapshot (${OFAC_SNAPSHOT_DATE}, ${source.entries} entries).`,
+    source,
+    disclaimer: "\"clear\" means NOT on this OFAC SDN snapshot — it is NOT a guarantee the address is unsanctioned under every program, nor that it is non-malicious/safe. Absence of a match is not safety.",
+    chain: "base",
+    screened_at: new Date().toISOString(),
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Demo token aliases — the SINGLE source of truth for "?token=usdc".
@@ -2459,6 +2524,7 @@ function tagFor(path: string): string {
 const FLAGSHIP_OPERATION_IDS: Record<string, string> = {
   "/chain/token-report": "token_honeypot_check",
   "/chain/token-security": "honeypot_check",
+  "/chain/wallet-screen": "ofac_wallet_sanctions_screen",
   "/gate/swap": "pre_trade_token_safety_gate_swap",
   "/v1/chat/completions": "openai_compatible_chat_completions_llm",
 };
@@ -2709,6 +2775,7 @@ app.get("/openapi.json", (c) => {
       "/chain/block": paid("Base block summary by number or latest.", "0.005", [{ name: "number", desc: "decimal block number or 'latest'", required: false, example: "latest" }]),
       "/chain/code": paid("Contract-code check for a Base mainnet address (EIP-7702 delegated-EOA aware).", "0.01", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
       "/chain/wallet": paid("Wallet screening bundle (balance, activity, contract vs EOA check): ETH balance + balance_usd + tx count + contract-code check (EIP-7702 delegated-EOA aware), in one call.", "0.003", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
+      "/chain/wallet-screen": paid("Pre-trade OFAC sanctions screen for an address: exact match against the U.S. Treasury OFAC SDN crypto-address list. Returns sanctioned + verdict (blocked/clear) + list source and snapshot date. 'clear' = not on the SDN list, not a safety guarantee.", "0.004", [{ name: "address", desc: "0x-prefixed address to screen (counterparty / recipient / spender)", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
       "/chain/token-report": paid("Token trade-safety verdict (honeypot + rug-pull risk) for a Base ERC-20 in one call: SAFE | CAUTION | AVOID plus risk_score (0-100) and reasons, bundling honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls.", "0.01", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
       "/gate/swap": paid("Pre-trade GO/HOLD/BLOCK gate for Base trading agents: token safety + liquidity-vs-size price-impact check in one call.", "0.008", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }, { name: "side", desc: "buy or sell", required: false, example: "buy" }, { name: "notional_usd", desc: "intended trade size in USD", required: false, example: "500" }]),
       "/gate/swap/preview": { get: { summary: "FREE live sample of /gate/swap (no payment).", description: "Free go/hold/block sample for a demo token (?token=degen) OR any real Base 0x address, 3 free real-token checks per IP per day. Paid /gate/swap accepts ANY Base ERC-20 ($0.008). Honors side and notional_usd.", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
@@ -2856,6 +2923,7 @@ const BAZAAR_SERVICE_NAME_OVERRIDES: Record<string, string> = {
   "/gate/swap": "Base Token Safety Swap Gate",
   "/chain/token-report": "Base Token Safety & Rug Check",
   "/chain/token-security": "Token Security & Honeypot Scan",
+  "/chain/wallet-screen": "OFAC Wallet Sanctions Screen",
   "/scan/mcp": "MCP Server Security Scan",
   "/enrich/tech-risk": "Domain & Tech Risk (CVE/EPSS)",
   "/crypto/funding": "Cross-Venue Perp Funding Rates",
@@ -2882,6 +2950,7 @@ const BAZAAR_TAG_OVERRIDES: Record<string, string[]> = {
   "/gate/swap": ["token-safety", "honeypot", "pre-trade", "base", "swap-gate"],
   "/chain/token-report": ["token-safety", "honeypot", "rug-check", "base", "erc20"],
   "/chain/token-security": ["honeypot", "token-safety", "rug-check", "base", "security"],
+  "/chain/wallet-screen": ["sanctions", "ofac", "compliance", "wallet-screening", "security"],
   "/scan/mcp": ["mcp", "security", "prompt-injection", "audit", "tool-poisoning"],
   "/enrich/tech-risk": ["security", "cve", "risk", "epss", "attack-surface"],
   "/enrich/domain": ["domain", "enrichment", "security", "dns", "risk"],
@@ -2927,7 +2996,7 @@ export function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "MCP tools/call over x402 for Base/crypto data + token safety: crypto_prices, crypto_funding, defi_yields, yield_entry_verdict (pool go/no-go), pm_markets, chain_block_number, chain_gas_price, chain_balance, chain_token_balance, chain_tx, chain_wallet, simulate (prospective-tx dry-run), gate_swap (pre-trade gate), chain_token_report (SAFE/CAUTION/AVOID), chain_token_security (honeypot), enrich_tech_risk, enrich_domain, scan_mcp_server. Use when an agent needs Base data or token-safety over MCP.",
+        "MCP tools/call over x402 for Base/crypto data + token safety: crypto_prices, crypto_funding, defi_yields, yield_entry_verdict, pm_markets, chain_block_number, chain_gas_price, chain_balance, chain_token_balance, chain_tx, chain_wallet, chain_wallet_screen (OFAC sanctions), simulate, gate_swap (pre-trade gate), chain_token_report, chain_token_security (honeypot), enrich_tech_risk, enrich_domain, scan_mcp_server. Use when an agent needs Base data or token-safety over MCP.",
       mimeType: "application/json",
     },
     "GET /scan/mcp": {
@@ -4071,6 +4140,41 @@ export function makeRoutes(payTo: string) {
             is_contract: true,
             is_eip7702_delegate: false,
             delegate_address: null,
+            chain: "base",
+          },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /chain/wallet-screen": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.004",
+        network: NETWORK,
+        payTo,
+      },
+      description:
+        "Is this wallet sanctioned? Pre-trade OFAC sanctions screen for a counterparty / recipient / token-spender address before an agent sends, swaps or approves — exact match against the U.S. Treasury OFAC SDN crypto-address list (authoritative, frozen snapshot). Returns sanctioned + verdict (blocked/clear) + the list source and snapshot date. 'clear' = not on the SDN list, not a safety guarantee.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { address: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" },
+        inputSchema: {
+          type: "object",
+          required: ["address"],
+          properties: {
+            address: { type: "string", description: "0x-prefixed 20-byte address to screen (counterparty / recipient / spender)" },
+          },
+        },
+        output: {
+          example: {
+            address: "0x5765ae06a52dc7a0bb71c36a11db512c7ea9ed10",
+            sanctioned: false,
+            verdict: "clear",
+            lists: [],
+            flags: [],
+            reason: "Not present on the OFAC SDN crypto-address snapshot.",
+            source: { name: "OFAC SDN — crypto addresses", authority: "U.S. Department of the Treasury, Office of Foreign Assets Control", snapshot_date: "2026-10-28", entries: 120 },
+            disclaimer: "\"clear\" means NOT on this OFAC SDN snapshot — it is NOT a guarantee the address is unsanctioned under every program, nor that it is non-malicious/safe.",
             chain: "base",
           },
         },
@@ -8581,6 +8685,49 @@ app.get("/chain/wallet", async (c) => {
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
+});
+
+// Pre-trade OFAC sanctions screen for a counterparty / recipient / spender
+// address. Pure data-match (no RPC), so it never 502s on an RPC hiccup.
+app.get("/chain/wallet-screen", async (c) => {
+  const address = c.req.query("address");
+  if (!address || !ADDR_RE.test(address)) {
+    return c.json({ error: "address query param must be a 0x-prefixed 20-byte address" }, { status: 400 });
+  }
+  const result = screenWalletAddress(address);
+  console.log(
+    JSON.stringify({ event: "paid_request", endpoint: "/chain/wallet-screen", address, verdict: result.verdict, sanctioned: result.sanctioned, ts: result.screened_at }),
+  );
+  const rail = c.get("rail") ?? "x402-paid";
+  fireAndForget(c, trackPaidRequest("GET /chain/wallet-screen", rail, makeUsageCounter(c.env)));
+  return c.json(result);
+});
+
+// Free preview — with NO ?address= it screens a fixed, currently-sanctioned OFAC
+// SDN address so an agent (and a correctness canary) always sees the positive
+// "blocked" shape. With ?address=<0x…> it screens the caller's OWN address under
+// the shared 3-real-checks/IP/day trial, matching the other /preview surfaces.
+const WALLET_SCREEN_PREVIEW_ADDR = OFAC_SANCTIONED_ADDRESSES[0];
+app.get("/chain/wallet-screen/preview", async (c) => {
+  const q = c.req.query("address");
+  if (q !== undefined && !ADDR_RE.test(q)) {
+    return c.json({ error: "address must be a 0x-prefixed 20-byte Base/EVM address" }, { status: 400 });
+  }
+  if (q === undefined) {
+    const result = screenWalletAddress(WALLET_SCREEN_PREVIEW_ADDR);
+    console.log(JSON.stringify({ event: "free_preview", endpoint: "/chain/wallet-screen/preview", verdict: result.verdict }));
+    return c.json({
+      ...result,
+      note: "Free live sample — a currently OFAC-sanctioned address, same data as the paid route. Pass ?address=<0x…> to screen YOUR address free (3/IP/day), or GET /chain/wallet-screen?address=<0x…> ($0.004) for unmetered screening.",
+      upgrade: upgradeCTA(paidUrlFrom(c), "0.004", "Unmetered, any address (this free preview is capped at 3 real addresses/IP/day)."),
+    });
+  }
+  const t = await trialToken(c, q);
+  if (t.exhausted) {
+    const pu = paidUrlFrom(c);
+    return c.json({ error: "free screen trial exhausted (3/day/IP) - this is NOT a result for the address you asked about", trial: { real_checks_left_today: 0 }, paid: pu, paid_url: pu, price_usdc: "0.004", pay_with: `x402: npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f("${pu}") - pays USDC on Base automatically. Docs: https://api.greyridgesignals.ai/llms.txt` }, { status: 429 });
+  }
+  return c.json({ ...screenWalletAddress(q), trial: { real_checks_left_today: t.left } });
 });
 
 // ---------------------------------------------------------------------------
@@ -15991,6 +16138,24 @@ const mcpHandler = createMcpHandler(() => {
       } catch (e) {
         return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
       }
+    },
+  );
+
+  server.registerTool(
+    "chain_wallet_screen",
+    {
+      description:
+        "Is this wallet sanctioned? Pre-trade OFAC sanctions screen for a counterparty / recipient / token-spender address before an agent sends, swaps or approves: exact match against the U.S. Treasury OFAC SDN crypto-address list (authoritative, frozen snapshot). Returns sanctioned (bool) + verdict (blocked/clear) + the list source and snapshot date. 'clear' means not on the SDN list — not a safety guarantee. Cost: $0.004 USDC per call via x402.",
+      inputSchema: {
+        address: z.string().describe("0x-prefixed 20-byte address to screen (counterparty / recipient / spender)"),
+      },
+    },
+    async ({ address }) => {
+      if (!ADDR_RE.test(address)) {
+        return { content: [{ type: "text" as const, text: "Error: address must be a 0x-prefixed 20-byte address" }] };
+      }
+      const result = screenWalletAddress(address);
+      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
     },
   );
 
