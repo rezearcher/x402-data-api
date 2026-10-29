@@ -2804,25 +2804,23 @@ app.get("/crypto/prices/preview", async (c) => {
 app.get("/crypto/funding/preview", async (c) => {
   try {
     if (c.req.query("debug") === "cex") {
+      const probes: [string, string][] = [
+        ["binance_direct", "https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT"],
+        ["binance_www", "https://www.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT"],
+        ["bybit_direct", "https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT"],
+        ["bybit_bytick", "https://api.bytick.com/v5/market/tickers?category=linear&symbol=BTCUSDT"],
+      ];
       const out: Record<string, unknown> = {};
-      for (const [venue, id] of [["binance", "binance_futures"], ["bybit", "bybit"]] as [string, string][]) {
+      await Promise.all(probes.map(async ([name, url]) => {
         try {
-          const r = await fetch(`https://api.coingecko.com/api/v3/derivatives/exchanges/${id}?include_tickers=unexpired`, { headers: CG_HEADERS });
+          const r = await fetch(url, { headers: { "User-Agent": "grey-ridge-x402-data/1.0" } });
           const txt = await r.text();
-          let tn = -1; let btc: unknown = null; let firstBases: string[] = [];
-          try {
-            const j = JSON.parse(txt) as { tickers?: { base?: string; target?: string; contract_type?: string; funding_rate?: unknown }[] };
-            const tk = j.tickers ?? [];
-            tn = tk.length;
-            firstBases = tk.slice(0, 5).map((x) => `${x.base}/${x.target}:${x.contract_type}`);
-            btc = tk.find((x) => (x.base || "").toUpperCase() === "BTC" && (x.target || "").toUpperCase() === "USDT") ?? null;
-          } catch { /* keep raw */ }
-          out[venue] = { status: r.status, ticker_count: tn, body_len: txt.length, firstBases, btc, snippet: tn < 0 ? txt.slice(0, 200) : undefined };
+          out[name] = { status: r.status, body_len: txt.length, snippet: txt.slice(0, 220) };
         } catch (e) {
-          out[venue] = { error: (e as Error).message };
+          out[name] = { error: (e as Error).message };
         }
-      }
-      return c.json({ cex_debug: out });
+      }));
+      return c.json({ direct_debug: out });
     }
     const all = await fetchFundingRates(20);
     return c.json({
