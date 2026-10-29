@@ -9,7 +9,7 @@ over-provision. Once an account exists, the automation does the rest (store the 
 1Password, wire the agent, add DNS records, claim listings).
 
 ## Standing rules for EVERY account (Security Officer lens)
-- Unique strong password in **1Password** (GreyRidge-Agent vault) + **MFA/TOTP** (seed stored
+- Unique strong password in **1Password** (Division vault) + **MFA/TOTP** (seed stored
   in 1Password; a hardware key for the money/identity ones: domain, AWS, Stripe, GitHub, email).
 - API credentials: **least-privilege scope** (posting-only, not account-admin), short-lived
   where offered, stored as `op://` refs — never plaintext, never in a client/edge response or
@@ -29,7 +29,7 @@ over-provision. Once an account exists, the automation does the rest (store the 
 |---|---|---|---|
 | `greyridgesignals.ai` domain | **HAVE** (on our Cloudflare) | — | — |
 | Cloudflare | **HAVE** | — | — |
-| 1Password GreyRidge-Agent vault | **HAVE** | — | — |
+| 1Password Division vault | **HAVE** | — | — |
 | **Grey Ridge email on the domain** (e.g. `hello@` / `support@` / `press@`) | **NEED** | free→$6/mo | **YES (atom #1)** |
 
 Email recommendation: start with **Cloudflare Email Routing** (free, we already own the zone —

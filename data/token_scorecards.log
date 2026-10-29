@@ -66,3 +66,15 @@ Traceback (most recent call last):
   File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
     raise HTTPError(req.full_url, code, msg, hdrs, fp)
 urllib.error.HTTPError: HTTP Error 429: Too Many Requests
+        WETH  GO     token-weth-420000-honeypot-check
+        USDC  GO     token-usdc-833589-honeypot-check
+       cbBTC  GO     token-cbbtc-cbb7c0-honeypot-check
+        AERO  GO     token-aero-940181-honeypot-check
+       DEGEN  GO     token-degen-4ed4e8-honeypot-check
+discovered 3 trending Base tokens from GeckoTerminal
+  scan failed 0xb200000000000000000000585fd80c20af698f01: HTTP Error 429: Too Many Requests
+  scan failed 0x5be75e3b0aff5d1a042a5363ae36acb1d6d755ea: HTTP Error 429: Too Many Requests
+  scan failed 0x3ec2156d4c0a9cbdab4a016633b7bcf6a8d68ea2: HTTP Error 429: Too Many Requests
+PUT docs/sitemap.xml (179 urls)
+IndexNow: submitted 6 URLs -> HTTP 200
+PUBLISHED 5 token scorecards + index

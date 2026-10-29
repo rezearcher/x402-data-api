@@ -232,3 +232,20 @@ DERIVED distribution candidates (rank top-3 across >=2 categories = aggregator/p
   api.marketintelligenceapi.com            categories=['token-safety', 'yields'] hits=2
   crypto.openverbs.com                     categories=['funding', 'yields'] hits=2
 written -> /home/rez/.hermes/data/x402_bazaar_index/discovery_rank.json
+bazaar discovery coverage: 6/10 queries surface us (60.0%)
+  [agentpay] indexed but not yet paid-probed: [{'url': 'https://x402-data-api.sigrunner.workers.dev/defi/yields', 'need': 'defi yields', 'paid_probes': 0, 'delivery_rate': None, 'delivery_factor': 1.0, 'flags': []}]
+  'token safety check before swap'         n= 9  NOT in top-20 | top3: api.usesaferoute.com, agent-data-tools.revmesh2074.workers.dev, chain.tollkit.dev
+  'is this token a scam'                   n=13  rank 10 pi.sigrunner.workers.dev/chain/token-security | top3: trust-check.gm-tools.workers.dev, grok-backtest-api.fly.dev, api.checkpoint402.com
+  'rug pull check base token'              n=15  rank 3 pi.sigrunner.workers.dev/chain/token-security | top3: 402.com.tr, api.marketintelligenceapi.com, crypto.theboredlab.com
+  'honeypot detector base erc20'           n=11  rank 1 pi.sigrunner.workers.dev/chain/token-security | top3: api.x402node.dev, crypto.theboredlab.com, chain.intel.rallylive.ca
+  'token risk report'                      n=12  NOT in top-20 | top3: token-risk.com, agent402.tools, agent402.tools
+  'pre-trade safety gate'                  n=15  rank 12 x402-data-api.sigrunner.workers.dev/gate/swap | top3: agentpay.tools, api.tradebot.devs.surf, 402.com.tr
+  'gas price base'                         n=11  rank 4 tps://api.greyridgesignals.ai/chain/gas-price | top3: base-gas-x402-production.up.railway.app, base-facts.yankii.fr, agent-data-tools.revmesh2074.workers.dev
+  'crypto funding rates'                   n=17  NOT in top-20 | top3: api.firstmention.uk, perpsignals.use.x402atlas.com, crypto.openverbs.com
+  'defi yields'                            n=18  rank 1 02-data-api.sigrunner.workers.dev/defi/yields | top3: api.marketintelligenceapi.com, bess-x402.onrender.com, crypto.openverbs.com
+  'prediction market odds'                 n=15  NOT in top-20 | top3: api.agentstools.dev, x402.shizu.me, hubvibe-io.com
+DERIVED distribution candidates (rank top-3 across >=2 categories = aggregator/platform surface):
+  agent-data-tools.revmesh2074.workers.dev categories=['gas', 'token-safety'] hits=2
+  api.marketintelligenceapi.com            categories=['token-safety', 'yields'] hits=2
+  crypto.openverbs.com                     categories=['funding', 'yields'] hits=2
+written -> /home/rez/.hermes/data/x402_bazaar_index/discovery_rank.json

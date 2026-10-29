@@ -785,3 +785,251 @@
   "n_enforced_routes": 62,
   "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
 }
+{
+  "ts": "2026-10-28T11:25:01.136290+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 61,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 0,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 62,
+  "summary": "0 price mismatch(es) across 62 enforced routes; 0 surface error(s)"
+}
+{
+  "ts": "2026-10-28T17:25:01.162014+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": false,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 63,
+      "mismatches": 0
+    },
+    "mcp": {
+      "checked": 16,
+      "mismatches": 0,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 0
+    }
+  },
+  "mismatches": [],
+  "errors": [],
+  "n_enforced_routes": 64,
+  "summary": "0 price mismatch(es) across 64 enforced routes; 0 surface error(s)"
+}
+{
+  "ts": "2026-10-28T23:25:01.985594+00:00",
+  "base": "https://api.greyridgesignals.ai",
+  "status": "ok",
+  "alert": true,
+  "surfaces": {
+    "landing": {
+      "checked": 3,
+      "mismatches": 0
+    },
+    "llms": {
+      "checked": 63,
+      "mismatches": 24
+    },
+    "mcp": {
+      "checked": 18,
+      "mismatches": 1,
+      "flat_price": 0.005
+    },
+    "repo": {
+      "checked": 19,
+      "mismatches": 2
+    }
+  },
+  "mismatches": [
+    {
+      "route": "/chain/block",
+      "advertised": 0.002,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/v1/chat/completions",
+      "advertised": 0.002,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/chain/erc20-meta",
+      "advertised": 0.002,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/chain/fee-estimate",
+      "advertised": 0.002,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/chain/network-status",
+      "advertised": 0.002,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/chain/l1-base-fee",
+      "advertised": 0.002,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/chain/fee-history",
+      "advertised": 0.002,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/defi/chains-tvl",
+      "advertised": 0.003,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/crypto/stablecoins",
+      "advertised": 0.003,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/defi/protocols-top",
+      "advertised": 0.003,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/defi/dex-volume",
+      "advertised": 0.003,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/crypto/trending",
+      "advertised": 0.003,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/crypto/global",
+      "advertised": 0.002,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/crypto/markets-top",
+      "advertised": 0.003,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/crypto/movers",
+      "advertised": 0.003,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/crypto/exchanges-top",
+      "advertised": 0.003,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/crypto/categories",
+      "advertised": 0.003,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/defi/hacks-recent",
+      "advertised": 0.003,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/crypto/derivatives-exchanges",
+      "advertised": 0.003,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/defi/yields-top",
+      "advertised": 0.003,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/ai/classify",
+      "advertised": 0.003,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/ai/summarize",
+      "advertised": 0.003,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/ai/translate",
+      "advertised": 0.003,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "route": "/chain/blob-base-fee",
+      "advertised": 0.002,
+      "enforced": 0.004,
+      "surface": "llms"
+    },
+    {
+      "tool": "yield_entry_verdict",
+      "advertised": [
+        0.01
+      ],
+      "enforced": 0.005,
+      "surface": "mcp"
+    },
+    {
+      "file": "examples/llm-chat.mjs",
+      "route": "/v1/chat/completions",
+      "advertised": 0.002,
+      "enforced": 0.004,
+      "where": "comment",
+      "surface": "repo"
+    }
+  ],
+  "errors": [],
+  "n_enforced_routes": 64,
+  "summary": "26 price mismatch(es) across 64 enforced routes; 0 surface error(s)"
+}

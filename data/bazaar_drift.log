@@ -121,3 +121,21 @@
 [ok]   GET /gate/swap: advertised example matches live output shape (16 keys)
 [DRIFT] GET /chain/token-security
    advertised example MISSING live keys: ['badge', 'badge.html', 'badge.image_url', 'badge.link', 'badge.markdown', 'ownership.owner_balance_raw', 'ownership.owner_percent_bps', 'ownership.owner_percent_note']
+[DRIFT] GET /chain/token-report
+   advertised example MISSING live keys: ['badge', 'badge.html', 'badge.image_url', 'badge.link', 'badge.markdown', 'security.ownerPercentBps', 'security.ownerPercentNote', 'security.sellabilityUnverified']
+[DRIFT] GET /gate/swap
+   advertised example MISSING live keys: ['cache_state', 'sellability_unverified']
+[DRIFT] GET /chain/token-security
+   advertised example MISSING live keys: ['badge', 'badge.html', 'badge.image_url', 'badge.link', 'badge.markdown', 'ownership.owner_balance_raw', 'ownership.owner_percent_bps', 'ownership.owner_percent_note']
+[DRIFT] GET /chain/token-report
+   advertised example MISSING live keys: ['badge', 'badge.html', 'badge.image_url', 'badge.link', 'badge.markdown', 'security.ownerPercentBps', 'security.ownerPercentNote', 'security.sellabilityUnverified']
+[DRIFT] GET /gate/swap
+   advertised example MISSING live keys: ['cache_state', 'sellability_unverified']
+[DRIFT] GET /chain/token-security
+   advertised example MISSING live keys: ['badge', 'badge.html', 'badge.image_url', 'badge.link', 'badge.markdown', 'ownership.owner_balance_raw', 'ownership.owner_percent_bps', 'ownership.owner_percent_note']
+[DRIFT] GET /chain/token-report
+   advertised example MISSING live keys: ['badge', 'badge.html', 'badge.image_url', 'badge.link', 'badge.markdown', 'security.ownerPercentBps', 'security.ownerPercentNote', 'security.sellabilityUnverified']
+[DRIFT] GET /gate/swap
+   advertised example MISSING live keys: ['cache_state', 'sellability_unverified']
+[DRIFT] GET /chain/token-security
+   advertised example MISSING live keys: ['badge', 'badge.html', 'badge.image_url', 'badge.link', 'badge.markdown', 'holders', 'holders.holder_count', 'holders.note', 'holders.source', 'holders.top_holder_pct_bps', 'ownership.owner_balance_raw', 'ownership.owner_percent_bps', 'ownership.owner_percent_note', 'source_verified', 'source_verified_note']
