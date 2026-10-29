@@ -1171,6 +1171,7 @@ ${provisionMeta}
     <li><a href="/openapi.json">/openapi.json</a></li>
     <li><a href="/.well-known/x402">/.well-known/x402</a></li>
     <li><a href="/.well-known/agent-card.json">A2A Agent Card</a></li>
+    <li><a href="/.well-known/erc-8004.json">ERC-8004 agent registration (x402-payable)</a></li>
     <li><a href="/mcp">/mcp</a></li>
     <li><a href="/miniapp">Base Token Gate &mdash; free GO/HOLD/BLOCK honeypot check (Farcaster Mini App)</a></li>
     <li><a href="https://t.me/GreyRidgeGateBot">Telegram bot &mdash; paste a Base token, get GO/HOLD/BLOCK in-chat (@GreyRidgeGateBot)</a></li>
@@ -1812,6 +1813,15 @@ app.get("/.well-known/x402", (c) => {
     // paid route and is documented here so a buyer-agent can discover it.
     demo_token_aliases: DEMO_TOKEN_ALIASES,
     mcp_endpoint: `${BASE}/mcp`,
+    // Cross-protocol discovery records so an ERC-8004 / A2A registry crawler
+    // (e.g. HOL's Universal Agent Registry protocol-detection, which indexes the
+    // "Best x402 Payable" category) ingests this agent as x402-payable on Base
+    // directly from the manifest it already reads.
+    discovery: {
+      a2a_agent_card: `${BASE}/.well-known/agent-card.json`,
+      erc8004_registration: `${BASE}/.well-known/erc-8004.json`,
+      x402_payable: true,
+    },
     // Drop-in framework packages that wrap the earning data routes. A buyer-agent
     // (or the dev reading this manifest) gets the one-line install for its own
     // framework here, at the same place it discovers the routes — so discovery
@@ -1874,6 +1884,73 @@ app.get("/.well-known/agent-capabilities.json", (c) => {
     // Same installable-tool index as /.well-known/x402 — both discovery surfaces
     // agree so an agent that lands here finds the one-line install for its framework.
     installable_tools: INSTALLABLE_TOOLS,
+  });
+});
+
+// ERC-8004 registration-v1 — the on-chain-agent registration file that
+// ERC-8004 / A2A discovery crawlers (HOL Universal Agent Registry's
+// protocol-detection, the QuickNode ERC-8004 explorer, Agent Arena, Polygon
+// Agentic) ingest to classify an agent as x402-payable on Base. Schema matches
+// the live registration-v1 files observed on those crawlers (top-level
+// x402Support:boolean, pricing{chain,currency,per_task}, services[{name,endpoint}]
+// for x402/a2a/MCP, supportedTrust, registrations). This is the machine input
+// behind HOL's "Best x402 Payable" discovery category — served keylessly so any
+// crawler ingests it without a broker account. `registrations` stays [] until an
+// on-chain ERC-8004 identity is minted (Registry Broker step). Every value here
+// is a real, live-enforced route/price derived from the same demand-ordered
+// catalog as /.well-known/x402 (no hand-kept list that can drift).
+app.get("/.well-known/erc-8004.json", (c) => {
+  const BASE = "https://x402-data-api.sigrunner.workers.dev";
+  const payTo = c.env.PAY_TO;
+  // Flagship pre-trade safety gate is the headline product an x402-payable
+  // discovery buyer wants; per_task carries it, with the full honest range +
+  // per-route pricing in extension fields (prices span $0.001–$0.05).
+  const rows = demandOrderedCatalog();
+  const prices = rows.map((r) => Number(r[2])).filter((n) => Number.isFinite(n) && n > 0);
+  const minP = prices.length ? Math.min(...prices) : 0.001;
+  const maxP = prices.length ? Math.max(...prices) : 0.05;
+  const flagship = rows.find((r) => r[0] === "/gate/swap");
+  const perTask = flagship ? Number(flagship[2]) : minP;
+  const routes = rows.map(([p, method, usd, , desc]) => ({
+    name: shortRouteName(p),
+    endpoint: BASE + p,
+    method,
+    price_usdc: usd,
+    use_when: (desc || "").split(/(?<=[.?!])\s/)[0],
+  }));
+  return c.json({
+    name: "Grey Ridge Signals — x402 Data & Security API",
+    type: "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+    image: "",
+    active: true,
+    // On-chain identity / settlement address: our live x402 receiving wallet on Base.
+    address: payTo,
+    agentAddress: payTo,
+    pricing: { chain: "base", currency: "USDC", per_task: perTask },
+    services: [
+      // x402 discovery doc an x402 client reads to find + price every paid route.
+      { name: "x402", endpoint: BASE + "/.well-known/x402" },
+      // A2A agent-card for Agent-to-Agent protocol discovery.
+      { name: "a2a", endpoint: BASE + "/.well-known/agent-card.json" },
+      // MCP streamable-HTTP endpoint (same products as MCP tools).
+      { name: "MCP", endpoint: BASE + "/mcp" },
+    ],
+    description:
+      "Agent-native, pay-per-call data & pre-trade token safety on Base mainnet (USDC via x402). " +
+      "No account, no API key — agents pay inline in USDC per call. Flagship: a one-call pre-trade swap " +
+      "gate (honeypot/sellability + pool-sizing, GO/HOLD/BLOCK) at $0.008, ~1/25th the price of comparable " +
+      "checks. Plus token-safety verdicts, DeFi yields, perp funding, prediction markets, Base on-chain reads, " +
+      "and MCP-server security scanning. Provider: Grey Ridge Signals Group LLC.",
+    x402Support: true,
+    documentation: BASE + "/llms.txt",
+    registrations: [],
+    supportedTrust: ["reputation"],
+    // --- Grey Ridge extension (non-breaking; canonical parsers ignore unknown keys) ---
+    payment: { protocol: "x402", version: 2, network: NETWORK, asset: "USDC" },
+    price_range_usdc: `${minP}-${maxP}`,
+    route_count: rows.length,
+    routes,
+    provider: { name: "Grey Ridge Signals Group LLC", url: BASE, contact: "contact@greyridgesignals.ai" },
   });
 });
 
@@ -1943,6 +2020,27 @@ app.get("/.well-known/agent-card.json", (c) => {
       },
     },
     security: [{ x402Payment: [] }],
+    // A2A trust-registry references: point crawlers (HOL protocol-detection,
+    // ERC-8004 explorers) at our ERC-8004 registration file so the A2A card and
+    // the on-chain-agent record cross-link into one identity.
+    registrations: [
+      {
+        protocol: "erc-8004",
+        registrationUri: BASE + "/.well-known/erc-8004.json",
+        agentAddress: c.env.PAY_TO,
+        network: "eip155:8453",
+      },
+    ],
+    // Structured x402 payment declaration (beyond the capabilities extension) so
+    // an x402-payable discovery filter classifies this agent without parsing prose.
+    payments: {
+      supported: ["x402"],
+      network: "eip155:8453",
+      asset: "USDC",
+      protocol: "x402",
+      version: 2,
+      manifest: BASE + "/.well-known/x402",
+    },
     defaultInputModes: ["application/json"],
     defaultOutputModes: ["application/json"],
     skills: [
