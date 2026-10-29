@@ -2803,25 +2803,6 @@ app.get("/crypto/prices/preview", async (c) => {
 });
 app.get("/crypto/funding/preview", async (c) => {
   try {
-    if (c.req.query("debug") === "cex") {
-      const out: Record<string, unknown> = {};
-      for (const [venue, id] of [["binance", "binance_futures"], ["bybit", "bybit"]] as [string, string][]) {
-        try {
-          const r = await fetch(`https://api.coingecko.com/api/v3/derivatives/exchanges/${id}?include_tickers=unexpired`);
-          const txt = await r.text();
-          let tn = -1, sample: unknown = null;
-          try {
-            const j = JSON.parse(txt) as { tickers?: unknown[] };
-            tn = Array.isArray(j.tickers) ? j.tickers.length : -1;
-            sample = Array.isArray(j.tickers) ? j.tickers[0] : j;
-          } catch { /* keep raw */ }
-          out[venue] = { status: r.status, ticker_count: tn, body_len: txt.length, snippet: txt.slice(0, 200), sample };
-        } catch (e) {
-          out[venue] = { error: (e as Error).message };
-        }
-      }
-      return c.json({ cex_debug: out });
-    }
     const all = await fetchFundingRates(20);
     return c.json({
       preview: all.slice(0, 1),
@@ -6349,6 +6330,14 @@ function fundingSignal(hlFunding: number): "LONGS_PAY" | "SHORTS_PAY" | "NEUTRAL
 // CoinGecko as a PERCENT, so we divide by 100 to match the fraction convention of
 // the other venues. Best-effort + degrade-open: any failure yields an empty map
 // and those venues resolve null, never failing the request.
+// CoinGecko's public API 403s any request without a descriptive User-Agent
+// (Cloudflare Workers send none by default), so every api.coingecko.com fetch
+// must carry this header or it silently fails.
+const CG_HEADERS = {
+  "User-Agent": "grey-ridge-x402-data/1.0 (+https://greyridgesignals.ai)",
+  accept: "application/json",
+};
+
 interface CexFundingMaps {
   binance: Map<string, number>;
   bybit: Map<string, number>;
@@ -6386,7 +6375,7 @@ async function fetchCexFundingMaps(): Promise<CexFundingMaps> {
     sources.map(async ([venue, id]) => {
       const res = await fetch(
         `https://api.coingecko.com/api/v3/derivatives/exchanges/${id}?include_tickers=unexpired`,
-        { cf: { cacheTtl: 60, cacheEverything: true } } as RequestInit,
+        { headers: CG_HEADERS, cf: { cacheTtl: 60, cacheEverything: true } } as RequestInit,
       );
       if (!res.ok) return;
       const j = (await res.json()) as { tickers?: CexDerivTicker[] };
@@ -8099,7 +8088,7 @@ app.get("/crypto/fear-greed", async (c) => {
 
 app.get("/crypto/trending", async (c) => {
   try {
-    const r = await fetch("https://api.coingecko.com/api/v3/search/trending");
+    const r = await fetch("https://api.coingecko.com/api/v3/search/trending", { headers: CG_HEADERS });
     if (!r.ok) return c.json({ error: "upstream " + r.status }, { status: 502 });
     const d = (await r.json()) as { coins: Array<{ item: { name: string; symbol: string; market_cap_rank: number | null; data?: { price_change_percentage_24h?: Record<string, number> } } }> };
     const trending = d.coins.map((x) => ({ name: x.item.name, symbol: x.item.symbol, market_cap_rank: x.item.market_cap_rank, change_24h_pct: x.item.data?.price_change_percentage_24h?.usd ?? null }));
@@ -8131,7 +8120,7 @@ app.get("/defi/fees-top", async (c) => {
 
 app.get("/crypto/global", async (c) => {
   try {
-    const r = await fetch("https://api.coingecko.com/api/v3/global");
+    const r = await fetch("https://api.coingecko.com/api/v3/global", { headers: CG_HEADERS });
     if (!r.ok) return c.json({ error: "upstream " + r.status }, { status: 502 });
     const d = ((await r.json()) as { data: { active_cryptocurrencies: number; markets: number; market_cap_change_percentage_24h_usd: number; total_market_cap: Record<string, number>; total_volume: Record<string, number>; market_cap_percentage: Record<string, number> } }).data;
     console.log(JSON.stringify({ event: "paid_request", endpoint: "/crypto/global", ts: new Date().toISOString() }));
@@ -8164,7 +8153,7 @@ app.get("/defi/yields-top", async (c) => {
 });
 
 const cgMarkets = async (n: number) => {
-  const r = await fetch("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=" + n + "&page=1&price_change_percentage=24h");
+  const r = await fetch("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=" + n + "&page=1&price_change_percentage=24h", { headers: CG_HEADERS });
   if (!r.ok) throw new Error("upstream " + r.status);
   return ((await r.json()) as Array<{ symbol: string; name: string; current_price: number; market_cap: number; market_cap_rank: number; total_volume: number; price_change_percentage_24h: number | null }>)
     .map((x) => ({ rank: x.market_cap_rank, symbol: x.symbol.toUpperCase(), name: x.name, price_usd: x.current_price, market_cap_usd: x.market_cap, volume_24h_usd: x.total_volume, change_24h_pct: x.price_change_percentage_24h == null ? null : Math.round(x.price_change_percentage_24h * 100) / 100 }));
@@ -8200,9 +8189,9 @@ app.get("/brief/market", async (c) => {
   try {
     const [fg, gl, mk, tr, fe] = await Promise.all([
       fetch("https://api.alternative.me/fng/?limit=1").then((r) => r.json() as Promise<{ data: Array<{ value: string; value_classification: string }> }>),
-      fetch("https://api.coingecko.com/api/v3/global").then((r) => r.json() as Promise<{ data: { total_market_cap: Record<string, number>; total_volume: Record<string, number>; market_cap_percentage: Record<string, number>; market_cap_change_percentage_24h_usd: number } }>),
+      fetch("https://api.coingecko.com/api/v3/global", { headers: CG_HEADERS }).then((r) => r.json() as Promise<{ data: { total_market_cap: Record<string, number>; total_volume: Record<string, number>; market_cap_percentage: Record<string, number>; market_cap_change_percentage_24h_usd: number } }>),
       cgMarkets(100),
-      fetch("https://api.coingecko.com/api/v3/search/trending").then((r) => r.json() as Promise<{ coins: Array<{ item: { name: string; symbol: string } }> }>),
+      fetch("https://api.coingecko.com/api/v3/search/trending", { headers: CG_HEADERS }).then((r) => r.json() as Promise<{ coins: Array<{ item: { name: string; symbol: string } }> }>),
       fetch("https://api.llama.fi/overview/fees?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true").then((r) => r.json() as Promise<{ total24h?: number; protocols?: Array<{ name: string; total24h?: number }> }>),
     ]);
     const sorted = mk.filter((x) => x.change_24h_pct != null).sort((a, b) => (b.change_24h_pct ?? 0) - (a.change_24h_pct ?? 0));
@@ -8224,7 +8213,7 @@ app.get("/brief/market", async (c) => {
 
 app.get("/crypto/exchanges-top", async (c) => {
   try {
-    const r = await fetch("https://api.coingecko.com/api/v3/exchanges?per_page=25");
+    const r = await fetch("https://api.coingecko.com/api/v3/exchanges?per_page=25", { headers: CG_HEADERS });
     if (!r.ok) return c.json({ error: "upstream " + r.status }, { status: 502 });
     const d = (await r.json()) as Array<{ name: string; country: string | null; year_established: number | null; trust_score: number | null; trust_score_rank: number | null; trade_volume_24h_btc: number | null }>;
     const exchanges = d.map((x) => ({ name: x.name, country: x.country, year_established: x.year_established, trust_score: x.trust_score, trust_score_rank: x.trust_score_rank, volume_24h_btc: Math.round(x.trade_volume_24h_btc ?? 0) }));
@@ -8239,7 +8228,7 @@ app.get("/crypto/exchanges-top", async (c) => {
 
 app.get("/crypto/categories", async (c) => {
   try {
-    const r = await fetch("https://api.coingecko.com/api/v3/coins/categories");
+    const r = await fetch("https://api.coingecko.com/api/v3/coins/categories", { headers: CG_HEADERS });
     if (!r.ok) return c.json({ error: "upstream " + r.status }, { status: 502 });
     const d = (await r.json()) as Array<{ name: string; market_cap: number | null; market_cap_change_24h: number | null; volume_24h: number | null }>;
     const categories = d.filter((x) => (x.market_cap ?? 0) > 0).sort((a, b) => (b.market_cap ?? 0) - (a.market_cap ?? 0)).slice(0, 30)
@@ -8272,7 +8261,7 @@ app.get("/defi/hacks-recent", async (c) => {
 
 app.get("/crypto/derivatives-exchanges", async (c) => {
   try {
-    const r = await fetch("https://api.coingecko.com/api/v3/derivatives/exchanges?per_page=25&order=open_interest_btc_desc");
+    const r = await fetch("https://api.coingecko.com/api/v3/derivatives/exchanges?per_page=25&order=open_interest_btc_desc", { headers: CG_HEADERS });
     if (!r.ok) return c.json({ error: "upstream " + r.status }, { status: 502 });
     const d = (await r.json()) as Array<{ name: string; open_interest_btc: number | null; trade_volume_24h_btc: string | null; number_of_perpetual_pairs: number | null; number_of_futures_pairs: number | null; year_established: number | null }>;
     const exchanges = d.map((x) => ({ name: x.name, open_interest_btc: Math.round(x.open_interest_btc ?? 0), volume_24h_btc: Math.round(Number(x.trade_volume_24h_btc ?? 0)), perpetual_pairs: x.number_of_perpetual_pairs, futures_pairs: x.number_of_futures_pairs, year_established: x.year_established }));
