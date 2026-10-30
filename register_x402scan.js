@@ -20,7 +20,7 @@ catch (e) { // vault down: SIWX is only a signature, an ephemeral key registers 
 }
 const account = privateKeyToAccount(wallet.privateKey);
 
-const ORIGIN = 'https://x402-data-api.sigrunner.workers.dev';
+const ORIGIN = process.env.X402_ORIGIN || 'https://x402-data-api.sigrunner.workers.dev';
 const single = process.argv[2];
 const endpoint = single
   ? 'https://www.x402scan.com/api/x402/registry/register'
