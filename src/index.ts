@@ -1556,6 +1556,24 @@ app.get("/.well-known/agent-tools-verify.txt", (c) =>
   c.text("atc_t_f4tvFe_XZtW8_rm2laZiN9CRlsvwSu"),
 );
 
+// nohumans.directory ownership proof — serving this one-time challenge token as
+// plain text under our own domain proves to the nohumans indexer that we control
+// api.greyridgesignals.ai, which lets us CLAIM an auto-indexed listing (origin=
+// indexed) and get its private edit token. Claiming is how we refresh a stale
+// listing's name/description/embedding so our live routes stay discoverable for
+// the exact buyer terms they serve (an indexed listing is embedded ONCE at
+// discovery and never re-pulls our updated 402 metadata without an edit).
+// Env-overridable so a future claim rotates the nonce with no code change;
+// falls back to the current committed challenge. The nonce is a public
+// proof-of-control value by design (single-use, 24h TTL), not a secret.
+app.get("/.well-known/nohumans-claim", (c) =>
+  c.text(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((c.env as any)?.NOHUMANS_CLAIM_CHALLENGE as string | undefined) ||
+      "678447de01b28cab954c24f86443b8b84432584971107841",
+  ),
+);
+
 // Installable framework tools — the drop-in packages that wrap the EARNING
 // data routes so a trading-agent dev adopts the whole set with one install
 // line instead of hand-wiring x402 calls. A trading agent never "discovers an
