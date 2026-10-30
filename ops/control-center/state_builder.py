@@ -369,6 +369,11 @@ def health(rt: dict, rev: dict, hist: dict, cfg: dict) -> dict:
         a = (a or "none").strip().lower()
         if a in ("", "none"):
             return True
+        # A verbose "no atom" phrasing is still clean (the builder writes "ATOM: none newly
+        # blocking (...)" / "no owner action" / "n/a"). Exact-"none"-only was a false-negative
+        # that kept super-green dark while the loop was genuinely unblocked.
+        if re.match(r"^(none|no\b|n/?a|nothing|—|-|clear)\b", a):
+            return True
         return bool(re.search(r"one-time|account|api[\s_-]?key|api[\s_-]?token|\btoken\b|credential|oauth|sign[\s_-]?up|register|passkey|2fa", a))
     atom_clean = all(_atom_clean(e.get("atom")) for e in builder_hist[:3]) if builder_hist else True
     super_ok = shipped and atom_clean

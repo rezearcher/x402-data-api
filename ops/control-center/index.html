@@ -249,9 +249,14 @@ function render(top){
    + lamp('super_green',`<span class="ring"></span><b>super-green</b>`)
    + `<div class="lamp ${h.ever_green&&h.ever_green.ok?'on':''}" title="${esc(h.ever_green&&h.ever_green.why)}">${waveSVG(d.rhythm.runs,d.rhythm.rests)||'<span class="dot"></span>'}<b>ever-green</b></div>`;
   const r=d.revenue||{}, pos=v=>v&&v>0?'pos':'';
-  document.getElementById('rev').innerHTML =
-    `<span>Line A <b class="mono ${pos(r.line_a_external_usdc)}">$${(r.line_a_external_usdc??0).toFixed(3)}</b> ext</span>`
-   +`<span>Line B <b class="mono ${pos(r.line_b_fiat_usd)}">$${(r.line_b_fiat_usd??0).toFixed(2)}</b></span>`;
+  // Each loop surfaces its OWN money shape: x402 => Line A (usdc) / Line B (fiat);
+  // a marketplace loop (assetfactory) => settled balance + metered runs + external payers.
+  document.getElementById('rev').innerHTML = ('balance_usd' in r)
+    ? `<span>Balance <b class="mono ${pos(r.balance_usd)}">$${Number(r.balance_usd??0).toFixed(2)}</b></span>`
+     +`<span>Runs <b class="mono">${r.metered_invocations??0}</b></span>`
+     +`<span>Payers <b class="mono ${pos(r.external_payers)}">${r.external_payers??0}</b></span>`
+    : `<span>Line A <b class="mono ${pos(r.line_a_external_usdc)}">$${(r.line_a_external_usdc??0).toFixed(3)}</b> ext</span>`
+     +`<span>Line B <b class="mono ${pos(r.line_b_fiat_usd)}">$${(r.line_b_fiat_usd??0).toFixed(2)}</b></span>`;
   // atoms — Rez's checklist (account/identity gates)
   const at=d.atoms||{open:[],cleared:[]};
   document.getElementById('acount').textContent = at.open.length?`· ${at.open.length} open`:'· clear';
