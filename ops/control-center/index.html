@@ -201,7 +201,41 @@ function buildSkeleton(){
   built=true;
 }
 
-function render(d){
+// ── Loop tabs: when multiple chains are armed, tab between them (money ⇄ assetfactory).
+// Each loop's state has the same shape, so render() just points at the selected one.
+let TAB=null;
+function renderTabs(top){
+  if(!document.getElementById('tabcss')){
+    const s=document.createElement('style'); s.id='tabcss'; s.textContent=`
+    .tabs{display:flex;gap:8px;padding:10px 14px 0;flex-wrap:wrap}
+    .tab{display:flex;align-items:center;gap:7px;padding:7px 14px;border-radius:9px;border:1px solid #2a2f37;background:#14171c;color:#9aa4b2;font:600 13px system-ui;cursor:pointer;text-transform:capitalize}
+    .tab.sel{color:#fff;border-color:#3BA7B4;background:#15232a}
+    .tab .tbal{font-size:11px;color:#6fd3a0;font-weight:700}
+    .tab .livedot{width:7px;height:7px;border-radius:50%;background:#45d483;box-shadow:0 0 6px #45d483;display:inline-block;animation:lp 1.4s infinite}
+    @keyframes lp{50%{opacity:.3}}`;
+    document.head.appendChild(s);
+  }
+  const names=top.loop_names||[];
+  let bar=document.getElementById('tabs');
+  if(!bar){ bar=document.createElement('div'); bar.id='tabs'; bar.className='tabs'; document.body.insertBefore(bar, document.body.firstChild); }
+  if(names.length<2){ bar.style.display='none'; return; }
+  bar.style.display='flex';
+  if(!TAB || !names.includes(TAB)) TAB=top.active;
+  bar.innerHTML=names.map(n=>{
+    const L=(top.loops||{})[n]||{}, r=L.revenue||{}, e=L.engine||{};
+    const running=(n===top.active)&&e.alive;
+    const bal = r.balance_usd!=null ? ('$'+Number(r.balance_usd).toFixed(2))
+              : r.line_a_balance_usdc!=null ? ('$'+Number(r.line_a_balance_usdc).toFixed(2))
+              : '';
+    return `<button class="tab${n===TAB?' sel':''}" onclick="selectTab('${n}')">${n}${running?' <span class="livedot"></span>':''}<span class="tbal mono">${bal}</span></button>`;
+  }).join('');
+}
+function selectTab(n){ TAB=n; tick(); }
+
+function render(top){
+  renderTabs(top);
+  const d=(top.loops&&top.loops[TAB||top.active])||top;
+  if(!d.engine){ return; }
   if(!built) buildSkeleton();
   // chain (no scroll — safe to replace)
   document.getElementById('chain').innerHTML = AG.map((a,i)=>

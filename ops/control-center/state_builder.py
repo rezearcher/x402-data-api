@@ -48,30 +48,56 @@ def _read(p: Path, limit=200_000) -> str:
     return p.read_text(errors="replace")[-limit:] if p and p.exists() else ""
 
 
-def resolve_active() -> dict:
-    """DERIVE the active chain from ground truth: the oldest-armed `.enabled` marker with a
-    manifest and no `.done` (mirrors agent_chain_routine.sh's pick). Fall back to a running
-    chain's --chain arg, then to 'money'. Everything downstream is built from the manifest."""
-    name = None
-    enabled = sorted(CHAIN_DIR.glob("*.enabled"), key=lambda p: p.stat().st_mtime)
-    for ef in enabled:
+def armed_names() -> list:
+    """All armed chains (ground truth: `.enabled` + manifest, no `.done`), oldest-armed first."""
+    out = []
+    for ef in sorted(CHAIN_DIR.glob("*.enabled"), key=lambda p: p.stat().st_mtime):
         n = ef.stem
         if (CHAIN_DIR / f"{n}.chain.json").exists() and not (CHAIN_DIR / f"{n}.done").exists():
-            name = n
-            break
-    if not name:
-        # fall back to a currently-running engine's --chain argument
-        try:
-            ps = subprocess.run(["pgrep", "-af", r"agent_chain\.sh --chain"],
-                                capture_output=True, text=True, timeout=5).stdout
-            m = re.search(r"agent-chains/([A-Za-z0-9_-]+)\.chain\.json", ps)
-            if m:
-                name = m.group(1)
-        except Exception:
-            pass
-    if not name:
-        name = "money"  # last-resort default (keeps the page working if nothing is armed)
+            out.append(n)
+    return out
 
+
+def running_name(candidates: list) -> str:
+    """Which armed chain is actually running now (holds the engine), else the one that ran most
+    recently (newest .lastrun). Used to pick the default tab + highlight the live loop."""
+    try:
+        ps = subprocess.run(["pgrep", "-af", r"agent_chain\.sh --chain"],
+                            capture_output=True, text=True, timeout=5).stdout
+        m = re.search(r"agent-chains/([A-Za-z0-9_-]+)\.chain\.json", ps)
+        if m and m.group(1) in candidates:
+            return m.group(1)
+    except Exception:
+        pass
+    best, bts = None, -1.0
+    for n in candidates:
+        lr = CHAIN_DIR / f"{n}.lastrun"
+        ts = lr.stat().st_mtime if lr.exists() else 0.0
+        if ts > bts:
+            bts, best = ts, n
+    return best or (candidates[0] if candidates else "money")
+
+
+def _active_name() -> str:
+    """The chain agent_chain_routine.sh would pick next-ish: oldest-armed eligible, else a
+    running engine's --chain arg, else 'money'."""
+    names = armed_names()
+    if names:
+        return names[0]
+    try:
+        ps = subprocess.run(["pgrep", "-af", r"agent_chain\.sh --chain"],
+                            capture_output=True, text=True, timeout=5).stdout
+        m = re.search(r"agent-chains/([A-Za-z0-9_-]+)\.chain\.json", ps)
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    return "money"
+
+
+def _cfg_for(name: str) -> dict:
+    """Build the reader-config for ONE chain from its manifest. Everything downstream is
+    derived from here, so the page is fully chain-agnostic."""
     manifest = _safe(lambda: json.loads(_read(CHAIN_DIR / f"{name}.chain.json")), {}) or {}
     cwd = Path(manifest.get("cwd") or DEFAULT_REPO)
     oracle = Path(manifest["oracle_file"]) if manifest.get("oracle_file") else None
@@ -393,8 +419,7 @@ def health(rt: dict, rev: dict, hist: dict, cfg: dict) -> dict:
     }
 
 
-def build() -> dict:
-    cfg = resolve_active()
+def build_for(cfg: dict) -> dict:
     agents = cfg["agents"]
     rt = _safe(lambda: parse_routine(cfg), {})
     hist = {a: _safe(lambda a=a: agent_history(a, cfg), []) for a in agents}
@@ -419,6 +444,26 @@ def build() -> dict:
     state["_sensor_path"] = str(cfg["sensor"])
     state["_is_x402"] = cfg["is_x402"]
     return state
+
+
+def build() -> dict:
+    """Multi-loop: build full state for EVERY armed chain so the page can tab between them.
+    The active (running / most-recently-run) loop's state is also spread at the top level for
+    backward compatibility with the single-loop page contract."""
+    names = armed_names() or [_active_name()]
+    loops = {n: _safe(lambda n=n: build_for(_cfg_for(n)), {}) for n in names}
+    active = running_name(names)
+    base = loops.get(active) or (next(iter(loops.values())) if loops else {})
+    state = dict(base)  # backward-compat: active loop's fields at top level
+    state["loops"] = loops
+    state["loop_names"] = names
+    state["active"] = active
+    return state
+
+
+def resolve_active() -> dict:
+    """Back-compat shim: the active chain's reader-config."""
+    return _cfg_for(_active_name())
 
 
 def emit_sensor(state: dict):
@@ -449,5 +494,9 @@ def emit_sensor(state: dict):
 
 if __name__ == "__main__":
     st = build()
-    emit_sensor(st)
+    # emit a loop-<name> sensor for EACH armed loop (both consumers stay fed)
+    for _n in st.get("loop_names", []):
+        _ls = st.get("loops", {}).get(_n)
+        if _ls:
+            _safe(lambda ls=_ls: emit_sensor(ls), None)
     print(json.dumps(st, indent=2))
