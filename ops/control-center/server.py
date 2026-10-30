@@ -32,7 +32,15 @@ class H(BaseHTTPRequestHandler):
         if self.path.startswith("/api/state"):
             try:
                 st = state_builder.build()
-                state_builder.emit_sensor(st)
+                # emit a loop-<name> sensor for EVERY armed loop (not just the active one),
+                # so an inactive loop's sensor never drifts stale between its turns.
+                for _n in st.get("loop_names", []):
+                    _ls = st.get("loops", {}).get(_n)
+                    if _ls:
+                        try:
+                            state_builder.emit_sensor(_ls)
+                        except Exception:
+                            pass
                 self._send(200, json.dumps(st).encode(), "application/json")
             except Exception as e:
                 self._send(500, json.dumps({"error": str(e)}).encode(), "application/json")
