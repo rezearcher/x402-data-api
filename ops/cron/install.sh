@@ -11,11 +11,14 @@ set -euo pipefail
 UNIT_DIR="${HOME}/.config/systemd/user"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_DIR="${HERE}/systemd"
-UNITS=(x402-revenue-reconcile.service x402-revenue-reconcile.timer)
+UNITS=(x402-revenue-reconcile.service x402-revenue-reconcile.timer \
+       x402-nohumans-resync.service x402-nohumans-resync.timer)
 
 if [ "${1:-}" = "--uninstall" ]; then
     systemctl --user disable --now x402-revenue-reconcile.timer 2>/dev/null || true
-    rm -f "${UNIT_DIR}/x402-revenue-reconcile.timer" "${UNIT_DIR}/x402-revenue-reconcile.service"
+    systemctl --user disable --now x402-nohumans-resync.timer 2>/dev/null || true
+    rm -f "${UNIT_DIR}/x402-revenue-reconcile.timer" "${UNIT_DIR}/x402-revenue-reconcile.service" \
+          "${UNIT_DIR}/x402-nohumans-resync.timer" "${UNIT_DIR}/x402-nohumans-resync.service"
     systemctl --user daemon-reload
     echo "uninstalled. (The producer's output files under ~/.hermes/data are left in place.)"
     exit 0
@@ -31,7 +34,7 @@ for u in "${UNITS[@]}"; do
     echo "linked ${UNIT_DIR}/${u} -> ${SRC_DIR}/${u}"
 done
 
-chmod +x "${HERE}/reconcile_x402_revenue.sh"
+chmod +x "${HERE}/reconcile_x402_revenue.sh" "${HERE}/nohumans_resync.sh"
 
 # daemon-reload is not optional. Editing a unit without it leaves the *previously loaded*
 # definition running; that is how the first install here kept aborting with status=216/GROUP
@@ -40,6 +43,9 @@ systemctl --user daemon-reload
 
 systemctl --user enable x402-revenue-reconcile.timer
 systemctl --user restart x402-revenue-reconcile.timer
+
+systemctl --user enable x402-nohumans-resync.timer
+systemctl --user restart x402-nohumans-resync.timer
 
 echo
 echo "--- smoke test (synchronous run) ---"

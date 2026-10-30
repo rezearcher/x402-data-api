@@ -1,0 +1,21 @@
+[Unit]
+Description=nohumans.directory listing embedding re-sync + discover-rank sensor
+# User unit: do NOT add User=/Group= (a user manager cannot switch identity; the
+# attempt aborts with status=216/GROUP before ExecStart runs).
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/rez/projects/x402-data-api/ops/cron/nohumans_resync.sh
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=x402-nohumans-resync
+
+# A healthy run is a handful of HTTP calls (~5-15 s). 180 s is wide headroom and
+# still catches a hung registry inside one timer period.
+TimeoutStartSec=180
+
+StartLimitIntervalSec=3600
+StartLimitBurst=3

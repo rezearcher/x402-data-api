@@ -1,0 +1,14 @@
+[Unit]
+Description=Daily nohumans listing re-sync + discover-rank measurement
+
+[Timer]
+# Embedding drift is slow (our last silent drift ran ~55 days), so a daily
+# re-sync is ample headroom while keeping the discover-rank sensor current.
+# Fire mid-morning UTC, catch up (Persistent) if the host was down.
+OnCalendar=*-*-* 09:17:00
+Persistent=true
+AccuracySec=5min
+RandomizedDelaySec=2min
+
+[Install]
+WantedBy=timers.target
