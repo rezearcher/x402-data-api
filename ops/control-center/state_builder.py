@@ -245,6 +245,42 @@ def revenue(cfg: dict) -> dict:
     }
 
 
+def discoverability(cfg: dict) -> dict:
+    """nohumans.directory discover-rank sensor (written by scripts/nohumans_resync.py).
+
+    Surfaces whether our LISTINGS actually surface for the real buyer terms they
+    serve, so a silent embedding drift (listed != discoverable) becomes a visible
+    signal the brief can act on instead of a dead-end JSON nobody reads. x402 only;
+    degrades open (missing/unreadable sensor -> {} and the UI just omits it)."""
+    if not cfg.get("is_x402"):
+        return {}
+    f = HOME / ".hermes" / "data" / "nohumans" / "discover_rank.json"
+    d = _safe(lambda: json.loads(_read(f)), {}) or {}
+    if not d:
+        return {}
+    lst = d.get("listings", []) or []
+    # flatten each listing's best-ranked term for a compact at-a-glance line
+    tops = []
+    for L in lst:
+        best = None
+        for q in L.get("queries", []):
+            r = q.get("our_best_rank")
+            if r and (best is None or r < best[1]):
+                best = (q.get("q", ""), r)
+        tops.append({
+            "listing_id": L.get("listing_id"),
+            "coverage_pct": L.get("coverage_pct"),
+            "best_term": best[0] if best else None,
+            "best_rank": best[1] if best else None,
+        })
+    return {
+        "coverage_pct": d.get("coverage_pct"),
+        "alert": bool(d.get("alert")),
+        "generated_at": d.get("generated_at"),
+        "listings": tops,
+    }
+
+
 def links(cfg: dict, n=12) -> list:
     out = []
     repo = cfg["repo"]
@@ -444,6 +480,7 @@ def build_for(cfg: dict) -> dict:
         "crew": _safe(lambda: crew(cfg), {}),
         "atoms": _safe(lambda: harvest_atoms(cfg["name"]), {"open": [], "done": [], "open_count": 0}),
         "monitor": _safe(monitor_state, {"on": False, "feed": []}),
+        "discoverability": _safe(lambda: discoverability(cfg), {}),
     }
     state["health"] = _safe(lambda: health(rt, rev, hist, cfg), {})
     state["_sensor_path"] = str(cfg["sensor"])
@@ -476,6 +513,11 @@ def emit_sensor(state: dict):
     Also mirrors to loop-money when the x402 money loop is active (backward-compat consumers)."""
     h = state.get("health", {})
     alerts = [k for k, v in h.items() if not v.get("ok")]
+    disc = state.get("discoverability", {}) or {}
+    disc_note = ""
+    if disc:
+        cov = disc.get("coverage_pct")
+        disc_note = f" | disc={cov}%{' DRIFT' if disc.get('alert') else ''}"
     payload = {
         "fetched_at": state["generated_at"],
         "loop": state.get("loop"),
@@ -483,8 +525,9 @@ def emit_sensor(state: dict):
         "alert": bool(alerts),
         "summary": f"loop={state.get('loop')} green={h.get('green',{}).get('ok')} super={h.get('super_green',{}).get('ok')} "
                    f"ever={h.get('ever_green',{}).get('ok')} gate={h.get('gate',{}).get('ok')} | pass {state['engine'].get('pass')} "
-                   f"stage {state['engine'].get('stage')} | rev={json.dumps(state.get('revenue', {}))[:120]}",
+                   f"stage {state['engine'].get('stage')} | rev={json.dumps(state.get('revenue', {}))[:120]}{disc_note}",
         "health": h, "revenue": state["revenue"], "engine": state["engine"],
+        "discoverability": disc,
     }
     targets = [Path(state["_sensor_path"])]
     if state.get("_is_x402"):
