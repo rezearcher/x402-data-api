@@ -172,7 +172,7 @@ const PREVIEW_ROUTES = new Set<string>([
   "/crypto/funding", "/defi/yields", "/pm/markets", "/chain/gas-price",
   "/chain/block-number", "/chain/token-balance", "/defi/protocol-risk",
   "/defi/safe-yields", "/enrich/tech-risk", "/scan/mcp", "/ai/ask", "/ai/extract",
-  "/v1/chat/completions", "/chain/simulate",
+  "/v1/chat/completions", "/chain/simulate", "/x402/preflight",
 ]);
 
 // --- Willingness-to-pay price floor (evidence-based, sensor-gated) ----------
@@ -279,6 +279,7 @@ export const ROUTE_CATALOG_BASE: Array<[string, string, string, string, string, 
   ["/chain/block", "GET", "0.002", "2000", "Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.", ["rpc", "base", "onchain", "blockchain", "data"]],
   ["/chain/wallet", "GET", "0.003", "3000", "Wallet screening bundle (balance, activity, contract vs EOA check): ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]],
   ["/chain/wallet-screen", "GET", "0.004", "4000", "Is this wallet sanctioned OR a known scammer? Pre-trade screen for a counterparty / recipient / token-spender address before an agent sends, swaps or approves: exact match against the U.S. Treasury OFAC SDN crypto-address list AND community scam/phishing/wallet-drainer threat-intel (ScamSniffer + MEW darklist). Returns sanctioned (bool) + malicious (bool) + verdict (blocked/clear) + lists + the list sources and snapshot dates. 'clear' means not on these lists, not a safety guarantee. Use alongside /gate/swap and /chain/token-security to avoid sanctioned-or-scammer-counterparty liability.", ["security", "sanctions", "ofac", "compliance", "scam", "phishing", "drainer", "wallet", "base", "onchain", "screening", "data"]],
+  ["/x402/preflight", "GET", "0.001", "1000", "x402 pre-payment endpoint check — before an agent pays an unknown x402 URL, fetch it once (never pays) and (1) validate the 402 challenge + accepts[] (scheme/network/payTo/amount/asset/resource = will it settle) and (2) scan the resource + any advertised MCP tools for LLM01/LLM08 prompt-injection and screen payTo against OFAC/scam lists (safe to pay). Returns PAY|CAUTION|AVOID + per-check fix hints + latency. Read-only, never pays, not a settlement guarantee. Pass ?url=<endpoint>.", ["x402", "preflight", "security", "verify", "payment", "safe-to-pay", "data"]],
   ["/dns", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH. Pass ?domain=stripe.com.", ["dns", "domain", "data", "recon"]],
   ["/whois", "GET", "0.01", "10000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain. Pass ?domain=cloudflare.com.", ["whois", "rdap", "domain", "data", "recon"]],
 ];
@@ -2565,6 +2566,7 @@ const FLAGSHIP_OPERATION_IDS: Record<string, string> = {
   "/chain/token-report": "token_honeypot_check",
   "/chain/token-security": "honeypot_check",
   "/chain/wallet-screen": "ofac_wallet_sanctions_screen",
+  "/x402/preflight": "x402_preflight_safe_to_pay",
   "/gate/swap": "pre_trade_token_safety_gate_swap",
   "/v1/chat/completions": "openai_compatible_chat_completions_llm",
 };
@@ -2821,6 +2823,7 @@ app.get("/openapi.json", (c) => {
       "/gate/swap/preview": { get: { summary: "FREE live sample of /gate/swap (no payment).", description: "Free go/hold/block sample for a demo token (?token=degen) OR any real Base 0x address, 3 free real-token checks per IP per day. Paid /gate/swap accepts ANY Base ERC-20 ($0.008). Honors side and notional_usd.", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-report/preview": { get: { summary: "FREE live sample of /chain/token-report (no payment).", description: "Free full trade-safety report for a demo token. Try ?token=aero. Paid /chain/token-report accepts ANY Base ERC-20 ($0.01).", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-security": paid("Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, contract source-verification (Sourcify), live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.", "0.009", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
+      "/x402/preflight": paid("x402 pre-payment endpoint check: fetch an unknown x402 URL once (never pays), validate the 402 challenge + accepts[] (will it settle), scan the resource + advertised MCP tools for LLM01/LLM08 prompt-injection and screen payTo against OFAC/scam lists (safe to pay). Returns PAY|CAUTION|AVOID + fix hints. Read-only, not a settlement guarantee.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to pre-check before paying", required: true, example: "https://api.greyridgesignals.ai/crypto/prices" }]),
       "/dns": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "query", required: true, example: "stripe.com" }]),
       "/whois": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.01", [{ name: "domain", desc: "domain name to look up", in: "query", required: true, example: "cloudflare.com" }]),
     })),
@@ -2964,6 +2967,7 @@ const BAZAAR_SERVICE_NAME_OVERRIDES: Record<string, string> = {
   "/chain/token-report": "Base Token Safety & Rug Check",
   "/chain/token-security": "Token Security & Honeypot Scan",
   "/chain/wallet-screen": "OFAC Wallet Sanctions Screen",
+  "/x402/preflight": "x402 Pre-Payment Safety Check",
   "/scan/mcp": "MCP Server Security Scan",
   "/enrich/tech-risk": "Domain & Tech Risk (CVE/EPSS)",
   "/crypto/funding": "Cross-Venue Perp Funding Rates",
@@ -2991,6 +2995,7 @@ const BAZAAR_TAG_OVERRIDES: Record<string, string[]> = {
   "/chain/token-report": ["token-safety", "honeypot", "rug-check", "base", "erc20"],
   "/chain/token-security": ["honeypot", "token-safety", "rug-check", "base", "security"],
   "/chain/wallet-screen": ["sanctions", "ofac", "compliance", "scam", "phishing", "drainer", "wallet-screening", "security"],
+  "/x402/preflight": ["x402", "preflight", "safe-to-pay", "verify", "payment", "security"],
   "/scan/mcp": ["mcp", "security", "prompt-injection", "audit", "tool-poisoning"],
   "/enrich/tech-risk": ["security", "cve", "risk", "epss", "attack-surface"],
   "/enrich/domain": ["domain", "enrichment", "security", "dns", "risk"],
@@ -3036,7 +3041,7 @@ export function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "MCP tools/call over x402 for Base/crypto data + token safety: crypto_prices, crypto_funding, defi_yields, yield_entry_verdict, pm_markets, chain_block_number, chain_gas_price, chain_balance, chain_token_balance, chain_tx, chain_wallet, chain_wallet_screen (OFAC sanctions + scam/drainer), simulate, gate_swap (pre-trade gate), chain_token_report, chain_token_security (honeypot), enrich_tech_risk, enrich_domain, scan_mcp_server. Use when an agent needs Base data or token-safety over MCP.",
+        "MCP tools/call over x402 for Base/crypto data + token safety: crypto_prices, crypto_funding, defi_yields, yield_entry_verdict, pm_markets, chain_block_number, chain_gas_price, chain_balance, chain_token_balance, chain_tx, chain_wallet, chain_wallet_screen (OFAC+scam), x402_preflight (pre-pay PAY/CAUTION/AVOID check of an unknown x402 URL), simulate, gate_swap, chain_token_report, chain_token_security, enrich_tech_risk, enrich_domain, scan_mcp_server.",
       mimeType: "application/json",
     },
     "GET /scan/mcp": {
@@ -4187,6 +4192,29 @@ export function makeRoutes(payTo: string) {
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
+    "GET /x402/preflight": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.001",
+        network: NETWORK,
+        payTo,
+      },
+      description:
+        "x402 pre-payment endpoint check: fetch an unknown x402 URL once (never pays), validate the 402 challenge + accepts[] (will it settle), scan the resource + advertised MCP tools for LLM01/LLM08 prompt-injection and screen payTo against OFAC/scam lists (safe to pay). Returns PAY | CAUTION | AVOID + fix hints. Read-only, not a settlement guarantee.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { url: "https://api.greyridgesignals.ai/crypto/prices" },
+        inputSchema: {
+          type: "object",
+          required: ["url"],
+          properties: {
+            url: { type: "string", description: "the x402 endpoint URL to pre-check before paying" },
+          },
+        },
+        output: { example: { url: "https://api.greyridgesignals.ai/crypto/prices", verdict: "PAY", will_settle: true, latency_ms: 142 } },
+      }),
+    },
     "GET /chain/wallet-screen": {
       accepts: {
         scheme: "exact" as const,
@@ -4223,6 +4251,44 @@ export function makeRoutes(payTo: string) {
             ],
             disclaimer: "\"clear\" means NOT on these OFAC SDN + community scam snapshots — it is NOT a guarantee the address is unsanctioned under every program, nor that it is non-malicious/safe.",
             chain: "base",
+          },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /x402/preflight": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.001",
+        network: NETWORK,
+        payTo,
+      },
+      description:
+        "Should an agent pay this x402 endpoint? One call fetches the URL once (never pays), validates the 402 challenge + accepts[] (scheme/network/payTo/amount/asset/resource = will it settle), scans the resource + any advertised MCP tools for LLM01/LLM08 prompt-injection, and screens payTo against the OFAC + community scam lists (safe to pay). Returns PAY | CAUTION | AVOID with per-check results + fix hints + latency. Read-only, never a settlement guarantee.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { url: "https://api.greyridgesignals.ai/crypto/prices" },
+        inputSchema: {
+          type: "object",
+          required: ["url"],
+          properties: {
+            url: { type: "string", description: "the x402 endpoint URL to pre-check before paying" },
+          },
+        },
+        output: {
+          example: {
+            url: "https://api.greyridgesignals.ai/crypto/prices",
+            verdict: "PAY",
+            will_settle: true,
+            checks: [
+              { name: "challenge", ok: true, detail: "HTTP 402 with a valid x402 accepts[] array", fix: null },
+              { name: "accepts", ok: true, detail: "scheme=exact network=eip155:8453 asset=USDC payTo=0x… amount set", fix: null },
+              { name: "payTo_safety", ok: true, detail: "payTo not on OFAC SDN nor community scam lists", fix: null },
+              { name: "resource_scan", ok: true, detail: "no LLM01/LLM08 prompt-injection patterns in resource/tools", fix: null },
+            ],
+            findings: [],
+            latency_ms: 142,
+            scope_note: "static 402 wire-format + liveness + LLM01/LLM08 description scan + payTo flag; read-only, never pays; not a settlement guarantee.",
           },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
@@ -8860,6 +8926,196 @@ app.get("/chain/wallet-screen/preview", async (c) => {
     return c.json({ error: "free screen trial exhausted (3/day/IP) - this is NOT a result for the address you asked about", trial: { real_checks_left_today: 0 }, paid: pu, paid_url: pu, price_usdc: "0.004", pay_with: `x402: npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f("${pu}") - pays USDC on Base automatically. Docs: https://api.greyridgesignals.ai/llms.txt` }, { status: 429 });
   }
   return c.json({ ...screenWalletAddress(q), trial: { real_checks_left_today: t.left } });
+});
+
+// ---------------------------------------------------------------------------
+// x402 PRE-PAYMENT ENDPOINT CHECK (/x402/preflight) — before an autonomous
+// buyer-agent pays an UNKNOWN x402 URL, answer two questions in one read-only
+// call: (1) WILL IT SETTLE — fetch the URL once (we never pay), confirm it
+// answers HTTP 402 with a well-formed x402 v2 accepts[] challenge (scheme,
+// network, asset, payTo, amount, resource); and (2) IS IT SAFE TO PAY — screen
+// the payTo against the OFAC SDN + community scam/drainer lists and scan the
+// advertised resource text / MCP tools for LLM01 (prompt-injection) and LLM08
+// (excessive-agency / tool-poisoning) patterns. Returns PAY | CAUTION | AVOID
+// plus per-check fix hints. Fuses what x402-doctor (settlement) and
+// settled.tools (safe/avoid) each do alone. Read-only; never a settlement
+// guarantee. Degrade-open: an unreachable/timed-out target is CAUTION, never a
+// 5xx from us.
+const USDC_ASSETS = new Set<string>([USDC_BASE.toLowerCase(), "usdc", "usd coin"]);
+
+interface PreflightCheck { name: string; ok: boolean; detail: string; fix: string | null; }
+interface PreflightResult {
+  url: string;
+  verdict: "PAY" | "CAUTION" | "AVOID";
+  will_settle: boolean;
+  checks: PreflightCheck[];
+  findings: ScanFinding[];
+  latency_ms: number;
+  scope_note: string;
+  checked_at: string;
+}
+const PREFLIGHT_SCOPE_NOTE =
+  "static 402 wire-format + liveness + LLM01/LLM08 description scan + payTo OFAC/scam flag; read-only, never pays; not a settlement guarantee.";
+
+function preflightResult(url: string, started: number, verdict: PreflightResult["verdict"], will_settle: boolean, checks: PreflightCheck[], findings: ScanFinding[]): PreflightResult {
+  return { url, verdict, will_settle, checks, findings, latency_ms: Date.now() - started, scope_note: PREFLIGHT_SCOPE_NOTE, checked_at: new Date().toISOString() };
+}
+
+export async function x402Preflight(url: string): Promise<PreflightResult> {
+  const started = Date.now();
+  const checks: PreflightCheck[] = [];
+  const findings: ScanFinding[] = [];
+
+  // SSRF guard — only pre-check a public https(s) hostname (never a proxy into
+  // private infra, same guard as /scan/mcp).
+  let u: URL;
+  try { u = new URL(url); } catch {
+    checks.push({ name: "url", ok: false, detail: "not a valid absolute URL", fix: "pass a full https:// endpoint URL" });
+    return preflightResult(url, started, "AVOID", false, checks, findings);
+  }
+  if (!/^https?:$/.test(u.protocol) || !isValidHostname(u.hostname)) {
+    checks.push({ name: "url", ok: false, detail: "target must be a public http(s) hostname (no IPs/localhost/internal hosts)", fix: "only public x402 endpoints can be pre-checked" });
+    return preflightResult(url, started, "AVOID", false, checks, findings);
+  }
+
+  // (1) Reachability + the 402 challenge. An UNPAID GET must answer HTTP 402.
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: { "User-Agent": "greyridge-x402-preflight/1", accept: "application/json" }, signal: AbortSignal.timeout(6000) });
+  } catch (e) {
+    checks.push({ name: "reachability", ok: false, detail: `endpoint unreachable or timed out: ${(e as Error).message}`, fix: "confirm the URL is live and publicly reachable" });
+    // Degrade-open: we could not observe a challenge, so we cannot say it will
+    // settle — but we return CAUTION (not AVOID) and never a 5xx.
+    return preflightResult(url, started, "CAUTION", false, checks, findings);
+  }
+  checks.push({ name: "reachability", ok: true, detail: `responded HTTP ${res.status}`, fix: null });
+
+  let raw = "";
+  try { raw = await res.text(); } catch { /* body optional */ }
+  let parsed: Record<string, unknown> | null = null;
+  try { parsed = JSON.parse(raw) as Record<string, unknown>; } catch { parsed = null; }
+
+  if (res.status === 402) {
+    checks.push({ name: "challenge", ok: true, detail: "HTTP 402 Payment Required", fix: null });
+  } else {
+    checks.push({ name: "challenge", ok: false, detail: `expected HTTP 402 Payment Required, got ${res.status} — no x402 challenge`, fix: "an x402 endpoint must answer an unpaid request with HTTP 402 + an accepts[] array" });
+  }
+
+  // (2) accepts[] wire-format (x402 v2). Accept either the top-level `accepts`
+  // array or the facilitator-style `paymentRequirements` array.
+  const acceptsRaw = parsed ? ((parsed.accepts as unknown[]) ?? (parsed.paymentRequirements as unknown[])) : undefined;
+  const accepts = Array.isArray(acceptsRaw) ? (acceptsRaw as Record<string, unknown>[]) : null;
+  let will_settle = false;
+  let payTo: string | null = null;
+  let nonUsdcAsset = false;
+  if (!accepts || accepts.length === 0) {
+    checks.push({ name: "accepts", ok: false, detail: "no accepts[] / paymentRequirements array in the 402 body", fix: "x402 v2 needs a JSON body: accepts:[{scheme,network,asset,payTo,maxAmountRequired,resource}]" });
+  } else {
+    const a = accepts[0];
+    const amount = a.maxAmountRequired ?? a.amount;
+    payTo = typeof a.payTo === "string" ? a.payTo : null;
+    const fields: Array<[string, unknown]> = [["scheme", a.scheme], ["network", a.network], ["asset", a.asset], ["payTo", a.payTo], ["amount", amount], ["resource", a.resource]];
+    const missing = fields.filter(([, v]) => v === undefined || v === null || v === "").map(([k]) => k);
+    const schemeOk = a.scheme === "exact";
+    if (missing.length === 0 && schemeOk) {
+      will_settle = true;
+      checks.push({ name: "accepts", ok: true, detail: `scheme=${String(a.scheme)} network=${String(a.network)} asset=${String(a.asset)} payTo=${payTo} amount=${String(amount)}`, fix: null });
+    } else {
+      const probs: string[] = [];
+      if (missing.length) probs.push(`missing ${missing.join("/")}`);
+      if (!schemeOk) probs.push(`scheme=${a.scheme === undefined ? "(none)" : String(a.scheme)} (expected "exact")`);
+      checks.push({ name: "accepts", ok: false, detail: `malformed challenge: ${probs.join("; ")}`, fix: "populate the required accepts[] fields with scheme=\"exact\"" });
+    }
+    // Soft asset check — a non-USDC settlement asset is a CAUTION, not a block.
+    const assetStr = typeof a.asset === "string" ? a.asset.toLowerCase() : "";
+    const extraName = typeof (a.extra as Record<string, unknown> | undefined)?.name === "string" ? String((a.extra as Record<string, unknown>).name).toLowerCase() : "";
+    if (assetStr && !USDC_ASSETS.has(assetStr) && !extraName.includes("usd")) {
+      nonUsdcAsset = true;
+      checks.push({ name: "asset", ok: false, detail: `settlement asset ${String(a.asset)} is not the canonical USDC — confirm your wallet holds it`, fix: "verify you can pay the advertised asset on the advertised network" });
+    }
+  }
+
+  // (3) payTo on-chain safety — reuse the OFAC SDN + scam/drainer screen.
+  let payToBad = false;
+  if (payTo && ADDR_RE.test(payTo)) {
+    const screen = screenWalletAddress(payTo);
+    if (screen.verdict === "blocked") {
+      payToBad = true;
+      checks.push({ name: "payTo_safety", ok: false, detail: `payTo ${payTo} is on ${screen.lists.join(" + ")} — paying it may be illegal or fund a scam`, fix: "DO NOT PAY: the receiving address is sanctioned/flagged" });
+    } else {
+      checks.push({ name: "payTo_safety", ok: true, detail: "payTo not on the OFAC SDN nor community scam/drainer lists", fix: null });
+    }
+  } else if (will_settle) {
+    checks.push({ name: "payTo_safety", ok: false, detail: `payTo is not a 0x EVM address (${payTo ?? "absent"}) — cannot screen it`, fix: "verify the recipient address out of band before paying" });
+  }
+
+  // (4) LLM01/LLM08 scan of the advertised text (description/name/resource/tags
+  // from the 402 body) plus, when the URL is an MCP endpoint, its tools/list.
+  const scanParts: string[] = [];
+  const pushStr = (v: unknown) => { if (typeof v === "string" && v) scanParts.push(v); };
+  if (parsed) {
+    pushStr(parsed.description); pushStr(parsed.name); pushStr(parsed.error);
+    if (accepts) for (const a of accepts) { pushStr(a.description); pushStr(a.resource); if (Array.isArray(a.tags)) scanParts.push((a.tags as unknown[]).join(" ")); }
+  }
+  const scanText = scanParts.join("\n").slice(0, 8000);
+  if (scanText) findings.push(...analyzeMcpTool("(x402-manifest)", scanText, ""));
+  if (/\/mcp\b|\/mcp$/.test(u.pathname)) {
+    try {
+      const sub = await scanMcpServer(url);
+      findings.push(...sub.findings);
+      checks.push({ name: "mcp_tools", ok: sub.findings.length === 0, detail: `scanned ${sub.tools_scanned} advertised MCP tool(s); ${sub.findings.length} finding(s)`, fix: sub.findings.length ? "review the itemized findings — a tool description can carry injected instructions" : null });
+    } catch {
+      checks.push({ name: "mcp_tools", ok: true, detail: "target looks like an MCP endpoint but tools/list could not be read (not scored against it)", fix: null });
+    }
+  }
+
+  // Verdict. AVOID on a hard problem (won't settle, a critical/high finding, or
+  // a sanctioned/flagged payTo); CAUTION on any soft issue; else PAY.
+  const hasCritHigh = findings.some((f) => f.severity === "critical" || f.severity === "high");
+  const anySoftIssue = checks.some((c) => !c.ok) || findings.length > 0 || nonUsdcAsset;
+  let verdict: PreflightResult["verdict"];
+  if (!will_settle || hasCritHigh || payToBad) verdict = "AVOID";
+  else if (anySoftIssue) verdict = "CAUTION";
+  else verdict = "PAY";
+  return preflightResult(url, started, verdict, will_settle, checks, findings);
+}
+
+app.get("/x402/preflight", async (c) => {
+  const url = c.req.query("url");
+  if (!url || !/^https?:\/\//i.test(url)) {
+    return c.json({ error: "url query param must be an absolute http(s) x402 endpoint URL" }, { status: 400 });
+  }
+  const result = await x402Preflight(url);
+  console.log(JSON.stringify({ event: "paid_request", endpoint: "/x402/preflight", url, verdict: result.verdict, will_settle: result.will_settle, findings: result.findings.length, ts: result.checked_at }));
+  const rail = c.get("rail") ?? "x402-paid";
+  fireAndForget(c, trackPaidRequest("GET /x402/preflight", rail, makeUsageCounter(c.env)));
+  return c.json(result);
+});
+
+// Free preview — with NO ?url= it pre-checks OUR OWN /crypto/prices (always a
+// well-formed PAY shape, for an agent and the correctness canary). With ?url=
+// it pre-checks the caller's target under the shared 3-real-checks/IP/day trial.
+const PREFLIGHT_PREVIEW_URL = "https://api.greyridgesignals.ai/crypto/prices";
+app.get("/x402/preflight/preview", async (c) => {
+  const q = c.req.query("url");
+  if (q !== undefined && !/^https?:\/\//i.test(q)) {
+    return c.json({ error: "url must be an absolute http(s) x402 endpoint URL" }, { status: 400 });
+  }
+  if (q === undefined) {
+    const result = await x402Preflight(PREFLIGHT_PREVIEW_URL);
+    console.log(JSON.stringify({ event: "free_preview", endpoint: "/x402/preflight/preview", verdict: result.verdict }));
+    return c.json({
+      ...result,
+      note: "Free live sample — pre-checks a known-good x402 endpoint (our /crypto/prices). Pass ?url=<endpoint> to pre-check YOUR target free (3/IP/day), or GET /x402/preflight?url=<endpoint> ($0.001) for unmetered checks.",
+      upgrade: upgradeCTA(paidUrlFrom(c), "0.001", "Unmetered, any endpoint (this free preview is capped at 3 real URLs/IP/day)."),
+    });
+  }
+  const t = await trialToken(c, q);
+  if (t.exhausted) {
+    const pu = paidUrlFrom(c);
+    return c.json({ error: "free preflight trial exhausted (3/day/IP) - this is NOT a result for the URL you asked about", trial: { real_checks_left_today: 0 }, paid: pu, paid_url: pu, price_usdc: "0.001", pay_with: `x402: npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f("${pu}") - pays USDC on Base automatically. Docs: https://api.greyridgesignals.ai/llms.txt` }, { status: 429 });
+  }
+  return c.json({ ...(await x402Preflight(q)), trial: { real_checks_left_today: t.left } });
 });
 
 // ---------------------------------------------------------------------------
@@ -16288,6 +16544,28 @@ const mcpHandler = createMcpHandler(() => {
       }
       const result = screenWalletAddress(address);
       return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    "x402_preflight",
+    {
+      description:
+        "Should an agent pay this x402 endpoint? Pre-payment check of an UNKNOWN x402 URL: fetch it once (never pays) to validate the 402 challenge + accepts[] (scheme/network/payTo/amount/asset/resource = will it settle) AND scan the resource + any advertised MCP tools for LLM01/LLM08 prompt-injection and screen payTo against the OFAC SDN + community scam lists (safe to pay). Returns verdict PAY | CAUTION | AVOID + per-check results and fix hints + latency. Read-only, never a settlement guarantee. Cost: $0.001 USDC per call via x402.",
+      inputSchema: {
+        url: z.string().describe("the x402 endpoint URL to pre-check before paying"),
+      },
+    },
+    async ({ url }) => {
+      if (!/^https?:\/\//i.test(url)) {
+        return { content: [{ type: "text" as const, text: "Error: url must be an absolute http(s) x402 endpoint URL" }] };
+      }
+      try {
+        const result = await x402Preflight(url);
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
     },
   );
 
