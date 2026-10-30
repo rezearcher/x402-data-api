@@ -4192,29 +4192,6 @@ export function makeRoutes(payTo: string) {
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
-    "GET /x402/preflight": {
-      accepts: {
-        scheme: "exact" as const,
-        price: "$0.001",
-        network: NETWORK,
-        payTo,
-      },
-      description:
-        "x402 pre-payment endpoint check: fetch an unknown x402 URL once (never pays), validate the 402 challenge + accepts[] (will it settle), scan the resource + advertised MCP tools for LLM01/LLM08 prompt-injection and screen payTo against OFAC/scam lists (safe to pay). Returns PAY | CAUTION | AVOID + fix hints. Read-only, not a settlement guarantee.",
-      mimeType: "application/json",
-      extensions: declareDiscoveryExtension({
-        method: "GET",
-        input: { url: "https://api.greyridgesignals.ai/crypto/prices" },
-        inputSchema: {
-          type: "object",
-          required: ["url"],
-          properties: {
-            url: { type: "string", description: "the x402 endpoint URL to pre-check before paying" },
-          },
-        },
-        output: { example: { url: "https://api.greyridgesignals.ai/crypto/prices", verdict: "PAY", will_settle: true, latency_ms: 142 } },
-      }),
-    },
     "GET /chain/wallet-screen": {
       accepts: {
         scheme: "exact" as const,
@@ -9014,7 +8991,11 @@ export async function x402Preflight(url: string): Promise<PreflightResult> {
     const a = accepts[0];
     const amount = a.maxAmountRequired ?? a.amount;
     payTo = typeof a.payTo === "string" ? a.payTo : null;
-    const fields: Array<[string, unknown]> = [["scheme", a.scheme], ["network", a.network], ["asset", a.asset], ["payTo", a.payTo], ["amount", amount], ["resource", a.resource]];
+    // The settle-critical fields are scheme/network/asset/payTo/amount. `resource`
+    // is handled separately below: real x402 servers (ours, x402-doctor) carry it
+    // at the TOP LEVEL of the 402 body, not inside accepts[0], so requiring it
+    // inside the entry would false-negative a perfectly payable endpoint.
+    const fields: Array<[string, unknown]> = [["scheme", a.scheme], ["network", a.network], ["asset", a.asset], ["payTo", a.payTo], ["amount", amount]];
     const missing = fields.filter(([, v]) => v === undefined || v === null || v === "").map(([k]) => k);
     const schemeOk = a.scheme === "exact";
     if (missing.length === 0 && schemeOk) {
@@ -9025,6 +9006,17 @@ export async function x402Preflight(url: string): Promise<PreflightResult> {
       if (missing.length) probs.push(`missing ${missing.join("/")}`);
       if (!schemeOk) probs.push(`scheme=${a.scheme === undefined ? "(none)" : String(a.scheme)} (expected "exact")`);
       checks.push({ name: "accepts", ok: false, detail: `malformed challenge: ${probs.join("; ")}`, fix: "populate the required accepts[] fields with scheme=\"exact\"" });
+    }
+    // `resource` check — satisfied by accepts[0].resource OR the top-level
+    // `resource` (string, or object with a url). Informational: a missing
+    // resource is a soft CAUTION, never a settle blocker.
+    const topResource = parsed ? parsed.resource : undefined;
+    const topResourceUrl = typeof topResource === "string" ? topResource : (topResource && typeof topResource === "object" ? (topResource as Record<string, unknown>).url : undefined);
+    const resourceVal = a.resource ?? topResourceUrl;
+    if (resourceVal !== undefined && resourceVal !== null && resourceVal !== "") {
+      checks.push({ name: "resource", ok: true, detail: `resource=${String(resourceVal)}`, fix: null });
+    } else {
+      checks.push({ name: "resource", ok: false, detail: "no resource field (neither in accepts[0] nor top-level) — you cannot confirm what you are paying for", fix: "x402 should advertise a resource URL identifying the paid resource" });
     }
     // Soft asset check — a non-USDC settlement asset is a CAUTION, not a block.
     const assetStr = typeof a.asset === "string" ? a.asset.toLowerCase() : "";
@@ -9092,21 +9084,42 @@ app.get("/x402/preflight", async (c) => {
   return c.json(result);
 });
 
-// Free preview — with NO ?url= it pre-checks OUR OWN /crypto/prices (always a
-// well-formed PAY shape, for an agent and the correctness canary). With ?url=
-// it pre-checks the caller's target under the shared 3-real-checks/IP/day trial.
-const PREFLIGHT_PREVIEW_URL = "https://api.greyridgesignals.ai/crypto/prices";
+// Free preview — with NO ?url= it returns a DETERMINISTIC representative sample
+// (the shape of a PAY verdict on a well-formed USDC-on-Base endpoint). It does
+// NOT live-fetch: a Cloudflare Worker subrequest to another CF-fronted host
+// (including our own zone) returns 522, so a live canary against our own API is
+// unreliable — the fixed sample always shows the correct shape (same pattern as
+// /chain/wallet-screen/preview screening a fixed known address). With ?url= it
+// pre-checks the caller's REAL target under the shared 3-real-checks/IP/day trial.
+function preflightSample(): PreflightResult {
+  return {
+    url: "https://<the-x402-endpoint-you-pass-in>",
+    verdict: "PAY",
+    will_settle: true,
+    checks: [
+      { name: "reachability", ok: true, detail: "responded HTTP 402", fix: null },
+      { name: "challenge", ok: true, detail: "HTTP 402 Payment Required", fix: null },
+      { name: "accepts", ok: true, detail: "scheme=exact network=eip155:8453 asset=0x833589…USDC payTo=0x… amount=4000", fix: null },
+      { name: "resource", ok: true, detail: "resource=https://seller.example/data", fix: null },
+      { name: "payTo_safety", ok: true, detail: "payTo not on the OFAC SDN nor community scam/drainer lists", fix: null },
+    ],
+    findings: [],
+    latency_ms: 0,
+    scope_note: PREFLIGHT_SCOPE_NOTE,
+    checked_at: new Date().toISOString(),
+  };
+}
 app.get("/x402/preflight/preview", async (c) => {
   const q = c.req.query("url");
   if (q !== undefined && !/^https?:\/\//i.test(q)) {
     return c.json({ error: "url must be an absolute http(s) x402 endpoint URL" }, { status: 400 });
   }
   if (q === undefined) {
-    const result = await x402Preflight(PREFLIGHT_PREVIEW_URL);
-    console.log(JSON.stringify({ event: "free_preview", endpoint: "/x402/preflight/preview", verdict: result.verdict }));
+    console.log(JSON.stringify({ event: "free_preview", endpoint: "/x402/preflight/preview", verdict: "PAY", sample: true }));
     return c.json({
-      ...result,
-      note: "Free live sample — pre-checks a known-good x402 endpoint (our /crypto/prices). Pass ?url=<endpoint> to pre-check YOUR target free (3/IP/day), or GET /x402/preflight?url=<endpoint> ($0.001) for unmetered checks.",
+      ...preflightSample(),
+      sample: true,
+      note: "Representative sample output (the shape of a PAY verdict on a well-formed USDC-on-Base endpoint). Pass ?url=<endpoint> to pre-check YOUR real target free (3/IP/day), or GET /x402/preflight?url=<endpoint> ($0.001) for unmetered live checks.",
       upgrade: upgradeCTA(paidUrlFrom(c), "0.001", "Unmetered, any endpoint (this free preview is capped at 3 real URLs/IP/day)."),
     });
   }

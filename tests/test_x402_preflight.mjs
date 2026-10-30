@@ -120,7 +120,23 @@ await check("prompt-injection in advertised description -> AVOID", async () => {
   assert.strictEqual(r.verdict, "AVOID", `verdict ${r.verdict}`);
 });
 
-// 9. Route registered on the 402 gate AND the catalog at the magnet price 1000.
+// 9b. Real x402 wire-format: `resource` at the TOP LEVEL (not inside accepts[0])
+//     must still settle — this is how our own API and x402-doctor emit it.
+await check("top-level resource (real x402 shape) -> will_settle true, PAY", async () => {
+  const topLevelResource = {
+    x402Version: 2,
+    resource: { url: "https://seller.example/data", description: "spot prices" },
+    accepts: [{ scheme: "exact", network: "eip155:8453", asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", payTo: GOOD_PAYTO, maxAmountRequired: "4000", extra: { name: "USD Coin" } }],
+  };
+  stubFetch(() => fakeRes(402, topLevelResource));
+  const r = await x402Preflight("https://seller.example/data");
+  restoreFetch();
+  assert.strictEqual(r.will_settle, true, "will_settle true with top-level resource");
+  assert.strictEqual(r.verdict, "PAY", `verdict ${r.verdict}`);
+  assert.ok(r.checks.find((c) => c.name === "resource" && c.ok), "resource resolved from top-level");
+});
+
+// 10. Route registered on the 402 gate AND the catalog at the magnet price 1000.
 await check("route registered on gate + catalog at magnet 1000 (advertise==charge)", () => {
   const routes = makeRoutes(GOOD_PAYTO);
   const gate = routes["GET /x402/preflight"];
