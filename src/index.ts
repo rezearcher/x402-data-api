@@ -279,7 +279,7 @@ export const ROUTE_CATALOG_BASE: Array<[string, string, string, string, string, 
   ["/chain/block", "GET", "0.002", "2000", "Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.", ["rpc", "base", "onchain", "blockchain", "data"]],
   ["/chain/wallet", "GET", "0.003", "3000", "Wallet screening bundle (balance, activity, contract vs EOA check): ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]],
   ["/chain/wallet-screen", "GET", "0.004", "4000", "Is this wallet sanctioned OR a known scammer? Pre-trade screen for a counterparty / recipient / token-spender address before an agent sends, swaps or approves: exact match against the U.S. Treasury OFAC SDN crypto-address list AND community scam/phishing/wallet-drainer threat-intel (ScamSniffer + MEW darklist). Returns sanctioned (bool) + malicious (bool) + verdict (blocked/clear) + lists + the list sources and snapshot dates. 'clear' means not on these lists, not a safety guarantee. Use alongside /gate/swap and /chain/token-security to avoid sanctioned-or-scammer-counterparty liability.", ["security", "sanctions", "ofac", "compliance", "scam", "phishing", "drainer", "wallet", "base", "onchain", "screening", "data"]],
-  ["/x402/preflight", "GET", "0.001", "1000", "x402 pre-payment endpoint check — before an agent pays an unknown x402 URL, fetch it once (never pays) and (1) validate the 402 challenge + accepts[] (scheme/network/payTo/amount/asset/resource = will it settle) and (2) scan the resource + any advertised MCP tools for LLM01/LLM08 prompt-injection and screen payTo against OFAC/scam lists (safe to pay). Returns PAY|CAUTION|AVOID + per-check fix hints + latency. Read-only, never pays, not a settlement guarantee. Pass ?url=<endpoint>.", ["x402", "preflight", "security", "verify", "payment", "safe-to-pay", "data"]],
+  ["/x402/preflight", "GET", "0.001", "1000", "x402 pre-payment endpoint check — before an agent pays an unknown x402 URL, fetch it once (never pays): (1) validate the 402 challenge + accepts[] (will it settle), (2) scan the resource + advertised MCP tools for LLM01/LLM08 injection and screen payTo vs OFAC/scam lists (safe to pay), (3) optional &samples=N (1-5) reliability/payability burst (settle-consistency + latency). Returns PAY|CAUTION|AVOID + fix hints. Read-only, not a settlement guarantee. ?url=<endpoint>.", ["x402", "preflight", "security", "verify", "payment", "safe-to-pay", "reliability", "uptime", "data"]],
   ["/dns", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH. Pass ?domain=stripe.com.", ["dns", "domain", "data", "recon"]],
   ["/whois", "GET", "0.01", "10000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain. Pass ?domain=cloudflare.com.", ["whois", "rdap", "domain", "data", "recon"]],
 ];
@@ -4268,6 +4268,7 @@ export function makeRoutes(payTo: string) {
           required: ["url"],
           properties: {
             url: { type: "string", description: "the x402 endpoint URL to pre-check before paying" },
+            samples: { type: "integer", minimum: 1, maximum: 5, description: "optional reliability burst: sample the 402 challenge N times (1-5) and return settle-consistency + latency distribution; a flapping endpoint is downgraded PAY->CAUTION" },
           },
         },
         output: {
@@ -4280,9 +4281,11 @@ export function makeRoutes(payTo: string) {
               { name: "accepts", ok: true, detail: "scheme=exact network=eip155:8453 asset=USDC payTo=0x… amount set", fix: null },
               { name: "payTo_safety", ok: true, detail: "payTo not on OFAC SDN nor community scam lists", fix: null },
               { name: "resource_scan", ok: true, detail: "no LLM01/LLM08 prompt-injection patterns in resource/tools", fix: null },
+              { name: "reliability", ok: true, detail: "3/3 probes payable; latency median 210ms (max 240ms)", fix: null },
             ],
             findings: [],
             latency_ms: 142,
+            reliability: { samples: 3, settle_consistency: "3/3", settle_rate: 1, reachable_rate: 1, stable: true, latency_ms: { min: 190, median: 210, max: 240 }, note: "point-in-time burst sampled now (not historical uptime); a stable burst is not a durability guarantee" },
             scope_note: "static 402 wire-format + liveness + LLM01/LLM08 description scan + payTo flag; read-only, never pays; not a settlement guarantee.",
           },
         },
@@ -8939,6 +8942,23 @@ app.get("/chain/wallet-screen/preview", async (c) => {
 const USDC_ASSETS = new Set<string>([USDC_BASE.toLowerCase(), "usdc", "usd coin"]);
 
 interface PreflightCheck { name: string; ok: boolean; detail: string; fix: string | null; }
+// Reliability/payability burst — the answer to the live demand term "x402
+// endpoint reliability uptime data" / "is this endpoint reliably payable right
+// now". A single probe (what x402-doctor / settled.tools do) cannot tell a
+// flaky endpoint from a solid one; we sample the 402 challenge N times in the
+// same call and report settle-consistency + a latency distribution. HONEST
+// SCOPE: this is a point-in-time burst sampled NOW, not historical uptime — a
+// stable burst is not a durability guarantee, and we never claim it is.
+interface PreflightReliability {
+  samples: number;
+  settle_consistency: string;   // "3/3"
+  settle_rate: number;          // 0..1, fraction of probes that returned a payable 402
+  reachable_rate: number;       // 0..1, fraction of probes that answered at all
+  stable: boolean;              // every probe agreed on will_settle (no flapping)
+  latency_ms: { min: number; median: number; max: number };
+  probes: Array<{ reachable: boolean; http_402: boolean; will_settle: boolean; latency_ms: number }>;
+  note: string;
+}
 interface PreflightResult {
   url: string;
   verdict: "PAY" | "CAUTION" | "AVOID";
@@ -8946,17 +8966,67 @@ interface PreflightResult {
   checks: PreflightCheck[];
   findings: ScanFinding[];
   latency_ms: number;
+  reliability?: PreflightReliability;
   scope_note: string;
   checked_at: string;
 }
 const PREFLIGHT_SCOPE_NOTE =
   "static 402 wire-format + liveness + LLM01/LLM08 description scan + payTo OFAC/scam flag; read-only, never pays; not a settlement guarantee.";
 
-function preflightResult(url: string, started: number, verdict: PreflightResult["verdict"], will_settle: boolean, checks: PreflightCheck[], findings: ScanFinding[]): PreflightResult {
-  return { url, verdict, will_settle, checks, findings, latency_ms: Date.now() - started, scope_note: PREFLIGHT_SCOPE_NOTE, checked_at: new Date().toISOString() };
+function preflightResult(url: string, started: number, verdict: PreflightResult["verdict"], will_settle: boolean, checks: PreflightCheck[], findings: ScanFinding[], reliability?: PreflightReliability): PreflightResult {
+  return { url, verdict, will_settle, checks, findings, latency_ms: Date.now() - started, ...(reliability ? { reliability } : {}), scope_note: PREFLIGHT_SCOPE_NOTE, checked_at: new Date().toISOString() };
 }
 
-export async function x402Preflight(url: string): Promise<PreflightResult> {
+// One lightweight 402-handshake probe (fetch-only, no LLM scan) used to sample
+// payability repeatedly for the reliability burst. Returns the fetch latency,
+// whether the endpoint answered, whether it answered 402, and whether the
+// accepts[] challenge is settle-complete (same settle rule as the deep check:
+// scheme=="exact" + network/asset/payTo/amount all present). Degrade-open: any
+// error is a single failed probe, never a throw.
+async function probeSettleOnce(url: string): Promise<{ reachable: boolean; http_402: boolean; will_settle: boolean; latency_ms: number }> {
+  const t = Date.now();
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": "greyridge-x402-preflight/1", accept: "application/json" }, signal: AbortSignal.timeout(4000) });
+    const http_402 = res.status === 402;
+    let will_settle = false;
+    if (http_402) {
+      let raw = ""; try { raw = await res.text(); } catch { /* body optional */ }
+      let parsed: Record<string, unknown> | null = null; try { parsed = JSON.parse(raw) as Record<string, unknown>; } catch { parsed = null; }
+      const acc = parsed ? ((parsed.accepts as unknown[]) ?? (parsed.paymentRequirements as unknown[])) : undefined;
+      if (Array.isArray(acc) && acc.length) {
+        const a = acc[0] as Record<string, unknown>;
+        const amount = a.maxAmountRequired ?? a.amount;
+        will_settle = a.scheme === "exact" && [a.network, a.asset, a.payTo, amount].every((v) => v !== undefined && v !== null && v !== "");
+      }
+    }
+    return { reachable: true, http_402, will_settle, latency_ms: Date.now() - t };
+  } catch {
+    return { reachable: false, http_402: false, will_settle: false, latency_ms: Date.now() - t };
+  }
+}
+
+// Aggregate a set of probes into the reliability report. median = the middle of
+// the sorted latencies (lower-middle for an even count) — honest and cheap.
+function buildReliability(probes: Array<{ reachable: boolean; http_402: boolean; will_settle: boolean; latency_ms: number }>): PreflightReliability {
+  const n = probes.length;
+  const settled = probes.filter((p) => p.will_settle).length;
+  const reached = probes.filter((p) => p.reachable).length;
+  const lat = probes.map((p) => p.latency_ms).sort((a, b) => a - b);
+  const median = lat.length ? lat[Math.floor((lat.length - 1) / 2)] : 0;
+  const stable = probes.every((p) => p.will_settle === probes[0].will_settle);
+  return {
+    samples: n,
+    settle_consistency: `${settled}/${n}`,
+    settle_rate: n ? +(settled / n).toFixed(3) : 0,
+    reachable_rate: n ? +(reached / n).toFixed(3) : 0,
+    stable,
+    latency_ms: { min: lat[0] ?? 0, median, max: lat[lat.length - 1] ?? 0 },
+    probes,
+    note: "point-in-time burst sampled now (not historical uptime); a stable burst is not a durability guarantee",
+  };
+}
+
+export async function x402Preflight(url: string, samples = 1): Promise<PreflightResult> {
   const started = Date.now();
   const checks: PreflightCheck[] = [];
   const findings: ScanFinding[] = [];
@@ -8980,8 +9050,17 @@ export async function x402Preflight(url: string): Promise<PreflightResult> {
   } catch (e) {
     checks.push({ name: "reachability", ok: false, detail: `endpoint unreachable or timed out: ${(e as Error).message}`, fix: "confirm the URL is live and publicly reachable" });
     // Degrade-open: we could not observe a challenge, so we cannot say it will
-    // settle — but we return CAUTION (not AVOID) and never a 5xx.
-    return preflightResult(url, started, "CAUTION", false, checks, findings);
+    // settle — but we return CAUTION (not AVOID) and never a 5xx. When a
+    // reliability burst was asked, keep sampling so the caller can tell a
+    // consistently-dead endpoint from one that flaps in and out.
+    let rel: PreflightReliability | undefined;
+    const n = Math.max(1, Math.min(5, Math.floor(samples) || 1));
+    if (n > 1) {
+      const probes = [{ reachable: false, http_402: false, will_settle: false, latency_ms: Date.now() - started }];
+      for (let i = 1; i < n; i++) probes.push(await probeSettleOnce(url));
+      rel = buildReliability(probes);
+    }
+    return preflightResult(url, started, "CAUTION", false, checks, findings, rel);
   }
   checks.push({ name: "reachability", ok: true, detail: `responded HTTP ${res.status}`, fix: null });
 
@@ -9079,15 +9158,36 @@ export async function x402Preflight(url: string): Promise<PreflightResult> {
     }
   }
 
+  // (5) Reliability burst — sample the 402 challenge a few more times to answer
+  // "is this endpoint reliably payable right now". The first probe above counts
+  // as sample 1; run (samples-1) extra lightweight handshake probes and
+  // aggregate. A FLAPPING endpoint (some probes don't present a payable 402) is
+  // a real pay-risk even when the first probe looked fine → downgrade PAY to
+  // CAUTION and add a check. Bounded: samples clamped 1..5.
+  let reliability: PreflightReliability | undefined;
+  const nSamples = Math.max(1, Math.min(5, Math.floor(samples) || 1));
+  if (nSamples > 1) {
+    const probes = [{ reachable: true, http_402: res.status === 402, will_settle, latency_ms: Date.now() - started }];
+    for (let i = 1; i < nSamples; i++) probes.push(await probeSettleOnce(url));
+    reliability = buildReliability(probes);
+    if (!reliability.stable) {
+      checks.push({ name: "reliability", ok: false, detail: `flapping: only ${reliability.settle_consistency} probes returned a payable 402 (settle_rate ${reliability.settle_rate})`, fix: "the endpoint intermittently fails to present a valid 402 — retry/backoff before paying, or treat as unreliable" });
+    } else {
+      checks.push({ name: "reliability", ok: true, detail: `${reliability.settle_consistency} probes payable; latency median ${reliability.latency_ms.median}ms (max ${reliability.latency_ms.max}ms)`, fix: null });
+    }
+  }
+
   // Verdict. AVOID on a hard problem (won't settle, a critical/high finding, or
-  // a sanctioned/flagged payTo); CAUTION on any soft issue; else PAY.
+  // a sanctioned/flagged payTo); CAUTION on any soft issue (incl. a flapping
+  // reliability burst); else PAY.
   const hasCritHigh = findings.some((f) => f.severity === "critical" || f.severity === "high");
-  const anySoftIssue = checks.some((c) => !c.ok) || findings.length > 0 || nonUsdcAsset;
+  const flapping = reliability !== undefined && !reliability.stable;
+  const anySoftIssue = checks.some((c) => !c.ok) || findings.length > 0 || nonUsdcAsset || flapping;
   let verdict: PreflightResult["verdict"];
   if (!will_settle || hasCritHigh || payToBad) verdict = "AVOID";
   else if (anySoftIssue) verdict = "CAUTION";
   else verdict = "PAY";
-  return preflightResult(url, started, verdict, will_settle, checks, findings);
+  return preflightResult(url, started, verdict, will_settle, checks, findings, reliability);
 }
 
 app.get("/x402/preflight", async (c) => {
@@ -9095,8 +9195,12 @@ app.get("/x402/preflight", async (c) => {
   if (!url || !/^https?:\/\//i.test(url)) {
     return c.json({ error: "url query param must be an absolute http(s) x402 endpoint URL" }, { status: 400 });
   }
-  const result = await x402Preflight(url);
-  console.log(JSON.stringify({ event: "paid_request", endpoint: "/x402/preflight", url, verdict: result.verdict, will_settle: result.will_settle, findings: result.findings.length, ts: result.checked_at }));
+  // Optional reliability burst: ?samples=N (1..5) samples the 402 challenge N
+  // times and returns settle-consistency + latency distribution. Default 1
+  // (single probe, backward-compatible).
+  const samples = Math.max(1, Math.min(5, parseInt(c.req.query("samples") ?? "1", 10) || 1));
+  const result = await x402Preflight(url, samples);
+  console.log(JSON.stringify({ event: "paid_request", endpoint: "/x402/preflight", url, verdict: result.verdict, will_settle: result.will_settle, samples, settle_consistency: result.reliability?.settle_consistency, findings: result.findings.length, ts: result.checked_at }));
   const rail = c.get("rail") ?? "x402-paid";
   fireAndForget(c, trackPaidRequest("GET /x402/preflight", rail, makeUsageCounter(c.env)));
   return c.json(result);
@@ -9120,9 +9224,24 @@ function preflightSample(): PreflightResult {
       { name: "accepts", ok: true, detail: "scheme=exact network=eip155:8453 asset=0x833589…USDC payTo=0x… amount=4000", fix: null },
       { name: "resource", ok: true, detail: "resource=https://seller.example/data", fix: null },
       { name: "payTo_safety", ok: true, detail: "payTo not on the OFAC SDN nor community scam/drainer lists", fix: null },
+      { name: "reliability", ok: true, detail: "3/3 probes payable; latency median 210ms (max 240ms)", fix: null },
     ],
     findings: [],
     latency_ms: 0,
+    reliability: {
+      samples: 3,
+      settle_consistency: "3/3",
+      settle_rate: 1,
+      reachable_rate: 1,
+      stable: true,
+      latency_ms: { min: 190, median: 210, max: 240 },
+      probes: [
+        { reachable: true, http_402: true, will_settle: true, latency_ms: 240 },
+        { reachable: true, http_402: true, will_settle: true, latency_ms: 210 },
+        { reachable: true, http_402: true, will_settle: true, latency_ms: 190 },
+      ],
+      note: "point-in-time burst sampled now (not historical uptime); a stable burst is not a durability guarantee",
+    },
     scope_note: PREFLIGHT_SCOPE_NOTE,
     checked_at: new Date().toISOString(),
   };
@@ -9137,16 +9256,17 @@ app.get("/x402/preflight/preview", async (c) => {
     return c.json({
       ...preflightSample(),
       sample: true,
-      note: "Representative sample output (the shape of a PAY verdict on a well-formed USDC-on-Base endpoint). Pass ?url=<endpoint> to pre-check YOUR real target free (3/IP/day), or GET /x402/preflight?url=<endpoint> ($0.001) for unmetered live checks.",
+      note: "Representative sample output (the shape of a PAY verdict on a well-formed USDC-on-Base endpoint, with a 3-sample reliability burst). Pass ?url=<endpoint> to pre-check YOUR real target free (3/IP/day), add &samples=N (1-5) for a reliability/payability burst, or GET /x402/preflight?url=<endpoint>&samples=N ($0.001) for unmetered live checks.",
       upgrade: upgradeCTA(paidUrlFrom(c), "0.001", "Unmetered, any endpoint (this free preview is capped at 3 real URLs/IP/day)."),
     });
   }
+  const samples = Math.max(1, Math.min(5, parseInt(c.req.query("samples") ?? "1", 10) || 1));
   const t = await trialToken(c, q);
   if (t.exhausted) {
     const pu = paidUrlFrom(c);
     return c.json({ error: "free preflight trial exhausted (3/day/IP) - this is NOT a result for the URL you asked about", trial: { real_checks_left_today: 0 }, paid: pu, paid_url: pu, price_usdc: "0.001", pay_with: `x402: npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f("${pu}") - pays USDC on Base automatically. Docs: https://api.greyridgesignals.ai/llms.txt` }, { status: 429 });
   }
-  return c.json({ ...(await x402Preflight(q)), trial: { real_checks_left_today: t.left } });
+  return c.json({ ...(await x402Preflight(q, samples)), trial: { real_checks_left_today: t.left } });
 });
 
 // ---------------------------------------------------------------------------
@@ -16582,17 +16702,18 @@ const mcpHandler = createMcpHandler(() => {
     "x402_preflight",
     {
       description:
-        "Should an agent pay this x402 endpoint? Pre-payment check of an UNKNOWN x402 URL: fetch it once (never pays) to validate the 402 challenge + accepts[] (scheme/network/payTo/amount/asset/resource = will it settle) AND scan the resource + any advertised MCP tools for LLM01/LLM08 prompt-injection and screen payTo against the OFAC SDN + community scam lists (safe to pay). Returns verdict PAY | CAUTION | AVOID + per-check results and fix hints + latency. Read-only, never a settlement guarantee. Cost: $0.001 USDC per call via x402.",
+        "Should an agent pay this x402 endpoint? Pre-payment check of an UNKNOWN x402 URL: fetch it once (never pays) to validate the 402 challenge + accepts[] (scheme/network/payTo/amount/asset/resource = will it settle) AND scan the resource + any advertised MCP tools for LLM01/LLM08 prompt-injection and screen payTo against the OFAC SDN + community scam lists (safe to pay). Optional samples=N (1-5) runs a reliability/payability burst (settle-consistency + latency distribution; a flapping endpoint downgrades PAY to CAUTION). Returns verdict PAY | CAUTION | AVOID + per-check fix hints + latency. Read-only, never a settlement guarantee. Cost: $0.001 USDC per call via x402.",
       inputSchema: {
         url: z.string().describe("the x402 endpoint URL to pre-check before paying"),
+        samples: z.number().int().min(1).max(5).optional().describe("optional reliability burst: sample the 402 challenge N times (1-5) for settle-consistency + latency; default 1"),
       },
     },
-    async ({ url }) => {
+    async ({ url, samples }) => {
       if (!/^https?:\/\//i.test(url)) {
         return { content: [{ type: "text" as const, text: "Error: url must be an absolute http(s) x402 endpoint URL" }] };
       }
       try {
-        const result = await x402Preflight(url);
+        const result = await x402Preflight(url, samples ?? 1);
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };

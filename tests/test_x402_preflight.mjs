@@ -148,4 +148,50 @@ await check("route registered on gate + catalog at magnet 1000 (advertise==charg
   assert.strictEqual(row[2], "0.001", `catalog price ${row[2]}`);
 });
 
+// 11. Reliability burst (samples=1, default) → no reliability block (backward compatible).
+await check("samples=1 (default) -> no reliability block", async () => {
+  stubFetch(() => fakeRes(402, GOOD_402));
+  const r = await x402Preflight("https://seller.example/data", 1);
+  restoreFetch();
+  assert.strictEqual(r.reliability, undefined, "no reliability block at samples=1");
+});
+
+// 12. Reliability burst (samples=3) on a stable endpoint → 3/3, stable, PAY kept.
+await check("samples=3 stable endpoint -> 3/3, stable, PAY", async () => {
+  stubFetch(() => fakeRes(402, GOOD_402));
+  const r = await x402Preflight("https://seller.example/data", 3);
+  restoreFetch();
+  assert.ok(r.reliability, "reliability block present");
+  assert.strictEqual(r.reliability.samples, 3, "3 samples");
+  assert.strictEqual(r.reliability.settle_consistency, "3/3", "3/3 payable");
+  assert.strictEqual(r.reliability.stable, true, "stable");
+  assert.strictEqual(r.reliability.settle_rate, 1, "settle_rate 1");
+  assert.strictEqual(r.verdict, "PAY", `verdict ${r.verdict} (stable stays PAY)`);
+  assert.ok(r.checks.find((c) => c.name === "reliability" && c.ok), "reliability check ok");
+  // Claims law: the burst is honestly scoped as point-in-time, not uptime.
+  assert.ok(/not historical uptime/i.test(r.reliability.note), "honest scope note (not historical uptime)");
+});
+
+// 13. Reliability burst with a FLAPPING endpoint → PAY downgraded to CAUTION.
+await check("samples=3 flapping endpoint -> settle_rate<1, CAUTION (downgrade)", async () => {
+  let n = 0;
+  // probe 1 (the deep check) + probe 2 good 402, probe 3 returns a 200 (no payable challenge).
+  stubFetch(() => { n++; return n >= 3 ? fakeRes(200, { ok: true }) : fakeRes(402, GOOD_402); });
+  const r = await x402Preflight("https://flaky.example/data", 3);
+  restoreFetch();
+  assert.ok(r.reliability, "reliability present");
+  assert.strictEqual(r.reliability.stable, false, "flagged as not stable");
+  assert.ok(r.reliability.settle_rate < 1, `settle_rate ${r.reliability.settle_rate} < 1`);
+  assert.strictEqual(r.verdict, "CAUTION", `verdict ${r.verdict} (flapping downgrades PAY->CAUTION)`);
+  assert.ok(r.checks.find((c) => c.name === "reliability" && !c.ok), "reliability check flagged");
+});
+
+// 14. samples clamped to 1..5 (samples=99 -> at most 5 probes).
+await check("samples clamp: samples=99 -> 5 probes max", async () => {
+  stubFetch(() => fakeRes(402, GOOD_402));
+  const r = await x402Preflight("https://seller.example/data", 99);
+  restoreFetch();
+  assert.strictEqual(r.reliability.samples, 5, "clamped to 5");
+});
+
 console.log(`\n${pass} checks passed`);
