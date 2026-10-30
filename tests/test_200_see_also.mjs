@@ -96,4 +96,49 @@ const FLAGSHIP = flagshipRow[0];
   ok(!threw, "injectSeeAlso never throws and always emits valid JSON across the whole catalog");
 }
 
+// --- (g) a free /preview path resolves to its paid parent and cross-sells ----
+// The warm-lead leak fix: previews ride the same traffic as the paid parent but
+// were never in ROUTE_CATALOG, so used to fail-closed at $0. A preview must now
+// carry the SAME cross-sell as its parent, and must NEVER upsell the parent to
+// itself (the existing same-route note already points there).
+{
+  const parent = buildSeeAlso("/defi/yields", "https://x.test");
+  const prev = buildSeeAlso("/defi/yields/preview", "https://x.test");
+  ok(prev.length > 0, "a /preview path yields a non-empty cross-sell (no longer $0 leak)");
+  assert.deepStrictEqual(prev, parent, "a /preview carries the SAME see_also as its paid parent"); pass++;
+  eq(prev.filter((e) => e.resource === "https://x.test/defi/yields").length, 0,
+    "a /preview never upsells its own paid parent (not self)");
+  // Injected onto a real preview-shaped body, original fields survive.
+  const body = JSON.stringify({ preview: [{ pool: "x" }], total_available: 20, note: "sample" });
+  const parsed = JSON.parse(injectSeeAlso(body, "/defi/yields/preview", "https://x.test"));
+  eq(parsed.note, "sample", "preview body `note` preserved under injection");
+  ok(Array.isArray(parsed.preview) && parsed._greyridge.see_also.length > 0,
+    "preview body keeps its data AND gains _greyridge.see_also");
+}
+
+// --- (h) same-family proprietary UPGRADE leads the data cross-sell -----------
+// A /defi/yields caller's warmest upgrade is the proprietary per-pool verdict
+// (/defi/yield-entry-verdict) — same family, a DECISION verdict, priced higher —
+// NOT a generic cross-lane sibling. Asserted by PROPERTY so it is rename/retag
+// proof: the first entry shares a specific family tag, is priced above the
+// source route, and carries a verdict/decision character.
+{
+  const DECISION = new Set(["verdict", "due-diligence", "risk"]);
+  const GENERIC = new Set(["data", "defi", "crypto", "chain", "market-data"]);
+  const srcRow = ROUTE_CATALOG.find((r) => r[0] === "/defi/yields");
+  const srcFamily = (srcRow[5] || []).filter((t) => !GENERIC.has(t));
+  const srcPrice = parseFloat(srcRow[2]);
+  const se = buildSeeAlso("/defi/yields", "https://x.test");
+  ok(se.length >= 1, "a /defi/yields caller gets at least one cross-sell");
+  const lead = se[0];
+  const leadRow = ROUTE_CATALOG.find((r) => "https://x.test" + r[0] === lead.resource);
+  ok(leadRow, "lead cross-sell resolves to a real catalog row");
+  const leadTags = leadRow[5] || [];
+  ok(leadTags.some((t) => DECISION.has(t)), "lead cross-sell is a DECISION/verdict route (the moat tier)");
+  ok(leadTags.some((t) => srcFamily.includes(t)), "lead cross-sell shares a SPECIFIC family tag with /defi/yields");
+  ok(parseFloat(lead.price_usdc) > srcPrice, "lead cross-sell is priced above the previewed route (10x capture)");
+  ok(typeof lead.preview === "string" && lead.preview.endsWith("/preview"),
+    "the verdict upgrade advertises its own free /preview try-surface");
+}
+
 console.log(`\n✓ 200-envelope see_also contract: ${pass} checks passed`);

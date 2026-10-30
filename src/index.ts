@@ -337,36 +337,83 @@ export function demandOrderedCatalog(
 //  • unknown route (not in ROUTE_CATALOG) → inject nothing (fail-closed).
 //  • self is never upserted; a security caller never gets a safety→safety nudge.
 export type SeeAlsoEntry = { resource: string; price_usdc: string; description: string; preview?: string };
+// Tag-class vocabulary (config over the tag vocabulary, NOT a route roster):
+//  • GENERIC_TAGS are too broad to prove same-family kinship — a shared "data"
+//    or "defi" tag doesn't make two routes the same subject. Stripping them
+//    leaves each route's SPECIFIC family (e.g. "yield", "funding").
+//  • DECISION_TAGS mark a route that returns a packaged go/no-go VERDICT (the
+//    proprietary moat tier CoinGecko/DeFiLlama cannot offer) rather than raw
+//    numbers. A same-family route carrying one of these AND priced higher is the
+//    natural "upgrade" of the route a buyer is previewing.
+// Derivation over tags, degrade-open: an unclassified tag just doesn't match, so
+// the worst case is no upgrade pick (never a wrong one). Editable without a code
+// change to a decision path; mirrors the existing security/verdict/data keying.
+const GENERIC_TAGS = new Set(["data", "defi", "crypto", "chain", "market-data"]);
+const DECISION_TAGS = new Set(["verdict", "due-diligence", "risk"]);
 export function buildSeeAlso(
   curPath: string,
   origin: string = CANONICAL_ORIGIN,
   catalog: readonly RouteRow[] = ROUTE_CATALOG,
   byRoute: Record<string, number> = (DEMAND_SNAPSHOT && DEMAND_SNAPSHOT.external_by_route) || {},
 ): SeeAlsoEntry[] {
-  const curRow = catalog.find((r) => r[0] === curPath);
+  // A free /preview rides on the SAME warm traffic as its paid parent but was
+  // never in ROUTE_CATALOG, so buildSeeAlso used to fail-closed on it and 100%
+  // of preview callers (our warmest leads — 407 ext preview calls/30d) leaked
+  // past the moat at $0. Resolve "/x/preview" to its paid parent "/x" for the
+  // lookup, and treat the PARENT as "self" so we never re-upsell the very route
+  // the existing same-route note already points at — we cross-sell UP instead.
+  const lookupPath = curPath.endsWith("/preview") ? curPath.slice(0, -"/preview".length) : curPath;
+  const curRow = catalog.find((r) => r[0] === lookupPath);
   if (!curRow) return []; // fail-closed: never upsell from an unknown route
   const curTags = curRow[5] || [];
   const curIsSecurity = curTags.includes("security");
   // A security buyer is already in the safety lane — cap at one cross-lane data
-  // sibling and never nudge safety→safety. A data buyer gets the flagship
-  // safety verdict (the 10x upsell) plus one top-demand data sibling.
+  // sibling and never nudge safety→safety. A data buyer gets, in priority order:
+  // the same-family proprietary verdict upgrade (the moat), then the flagship
+  // safety verdict (the 10x cross-lane upsell), capped at two.
   const maxEntries = curIsSecurity ? 1 : 2;
   const picked: RouteRow[] = [];
 
   if (!curIsSecurity) {
+    // (1) Same-family proprietary UPGRADE: a route sharing one of this route's
+    // SPECIFIC family tags, returning a packaged verdict (DECISION_TAGS), and
+    // priced strictly higher — i.e. the moat version of the thing being
+    // previewed (e.g. /defi/yields → /defi/yield-entry-verdict). This is the
+    // 10x capture on a warm lead that CoinGecko/DeFiLlama structurally can't
+    // match. Derived, never a path literal; absent → nothing added.
+    const curFamily = new Set(curTags.filter((t) => !GENERIC_TAGS.has(t)));
+    const curPrice = parseFloat(curRow[2]) || 0;
+    const kinship = (t: string[]) => t.reduce((n, x) => n + (curFamily.has(x) ? 1 : 0), 0);
+    const candidates = catalog.filter((r) => {
+      if (r[0] === lookupPath) return false;            // never self
+      const t = r[5] || [];
+      if (!t.some((x) => DECISION_TAGS.has(x))) return false;   // must be a verdict route
+      if (kinship(t) === 0) return false;                       // must share a specific family tag
+      return (parseFloat(r[2]) || 0) > curPrice;                // must be the higher-tier (paid-up) route
+    });
+    // Rank the qualifying upgrades: strongest family kinship first (the verdict
+    // on the exact thing being previewed beats a looser cousin), then observed
+    // demand, then price. Pure/deterministic; no path literal decides this.
+    candidates.sort((a, b) =>
+      kinship(b[5] || []) - kinship(a[5] || []) ||
+      ((byRoute[b[0]] || 0) - (byRoute[a[0]] || 0)) ||
+      ((parseFloat(b[2]) || 0) - (parseFloat(a[2]) || 0)));
+    const upgrade = candidates[0];
+    if (upgrade) picked.push(upgrade);
+    // (2) Flagship cross-lane safety verdict (the 10x safety upsell).
     const flagship = catalog.find((r) => {
       const t = r[5] || [];
-      return t.includes("security") && t.includes("verdict") && r[0] !== curPath;
+      return t.includes("security") && t.includes("verdict") && r[0] !== lookupPath && r[0] !== upgrade?.[0];
     });
     if (flagship) picked.push(flagship);
   }
 
-  const flagshipPath = picked[0]?.[0];
+  const alreadyPicked = new Set(picked.map((r) => r[0]));
   for (const r of demandOrderedCatalog(catalog, byRoute)) {
     if (picked.length >= maxEntries) break;
     const t = r[5] || [];
-    if (r[0] === curPath) continue;          // never self
-    if (r[0] === flagshipPath) continue;     // already picked as the flagship
+    if (r[0] === lookupPath) continue;       // never self
+    if (alreadyPicked.has(r[0])) continue;   // already picked (upgrade/flagship)
     if (t.includes("security")) continue;    // the sibling must be a data route
     if (!t.includes("data")) continue;
     picked.push(r);
@@ -375,7 +422,7 @@ export function buildSeeAlso(
   const seen = new Set<string>();
   const out: SeeAlsoEntry[] = [];
   for (const r of picked) {
-    if (r[0] === curPath || seen.has(r[0])) continue;
+    if (r[0] === lookupPath || seen.has(r[0])) continue;
     seen.add(r[0]);
     const t = r[5] || [];
     const desc = String(r[4] || "");
@@ -385,11 +432,11 @@ export function buildSeeAlso(
       price_usdc: r[2],
       description: (cut > 0 && cut < 140 ? desc.slice(0, cut + 1) : desc.slice(0, 140)).trim(),
     };
-    // Every security-verdict flagship route ships a free keyless /preview (a $0
-    // try surface) by product convention — point the buyer at it so it can
-    // sample the verdict before paying. Cosmetic only; a missing preview just
-    // 404s and the 402 body stays valid (degrade-open).
-    if (t.includes("security") && t.includes("verdict")) e.preview = origin + r[0] + "/preview";
+    // Every verdict route ships a free keyless /preview (a $0 try surface) by
+    // product convention — point the buyer at it so it can sample the verdict
+    // before paying. Cosmetic only; a missing preview just 404s and the body
+    // stays valid (degrade-open).
+    if (t.some((x) => DECISION_TAGS.has(x))) e.preview = origin + r[0] + "/preview";
     out.push(e);
     if (out.length >= maxEntries) break;
   }
