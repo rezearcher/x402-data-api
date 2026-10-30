@@ -5,7 +5,7 @@ Most token-safety tools on Base are an HTTP API or a library you import and writ
 So the gate now installs as a command.
 
 ```
-pip install "git+https://github.com/rezearcher/greyridge-x402-tools@main"
+pip install greyridge-x402-tools
 
 greyridge-gate aero
 greyridge-report aero
@@ -64,7 +64,7 @@ We are not the cheapest safety route on Base and we do not claim to be. The free
 
 This is a static and heuristic safety signal, not a pentest, not financial advice, and not a guarantee. A GO or a SAFE means no known honeypot pattern matched, admin controls look ordinary, and the pool is deep enough for the order as sized. It does not mean the trade will be profitable and it does not mean the token is risk free. The pool-impact figure is measured at scan time and markets move. Wire it as one gate in your pre-trade path, set to actually block, alongside your own slippage and position limits. Never treat a GO as "safe" in the absolute.
 
-One note on install: the `git+` URL above is the live channel today. The plain `pip install greyridge-x402-tools` name on PyPI is being set up and is not live yet, so use the git URL for now.
+One note on install: `pip install greyridge-x402-tools` resolves from PyPI (current release 0.4.1). If you want to pin to an unreleased commit you can still use `pip install "git+https://github.com/rezearcher/greyridge-x402-tools@main"`.
 
 ## Try it
 
