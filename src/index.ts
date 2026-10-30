@@ -1636,6 +1636,16 @@ const INSTALLABLE_TOOLS: Array<{
     wraps: DATA_TOOL_ROUTES_11,
     note: "CrewAI BaseTool wrappers plus framework-agnostic plain functions; dep-free keyless stdlib core, x402 paid rail via the [pay] extra; check_token returns a pre-trade SAFE/CAUTION/AVOID verdict; yield_entry_verdict gives a per-pool SUSTAINABLE/DECAYING/OUTLIER/AVOID go-no-go and simulate_tx dry-runs a prospective transaction (revert + gas + asset changes) before you send it.",
   },
+  {
+    framework: "LangChain / CrewAI / plain Python (PyPI)",
+    language: "Python",
+    package: "greyridge-x402-tools",
+    install: "pip install greyridge-x402-tools",
+    repository: "https://github.com/rezearcher/greyridge-x402-tools",
+    tool_count: 5,
+    wraps: ["/crypto/prices", "/defi/yields", "/crypto/funding", "/chain/token-report", "/gate/swap"],
+    note: "Published on PyPI — one `pip install`, no git. Named functions with pycoingecko-style ergonomics: token_prices(coins) (get_price(ids=) alias), defi_yields(project=), funding_rates(symbol=), plus token_report() and swap_gate(). Keyless free preview by default; x402 paid rail via the [pay] extra (reads X402_PRIVATE_KEY). langchain_tools()/crewai_tools() return all 5; CLIs greyridge-data / greyridge-gate / greyridge-report.",
+  },
 ];
 
 // ─── Machine-readable call contracts for the discovery manifest ──────────────
