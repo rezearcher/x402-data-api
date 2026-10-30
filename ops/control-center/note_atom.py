@@ -59,6 +59,31 @@ def add(text: str, agent: str = "agent", steps: list[str] | None = None) -> str 
             if changed:
                 ATOMS.write_text(json.dumps(store, indent=0))
             return aid
+    # FUZZY-DEDUP: the loop re-raises the SAME ask with reworded text (new exact hash),
+    # which piled up ~12 npm-token / 3 PyPI near-duplicate atoms. Before appending, if an
+    # OPEN atom of this loop strongly overlaps on significant tokens, treat it as the same
+    # ask: enrich + return it instead of adding a near-dup. Thresholds are conservative
+    # (mutual coverage) so genuinely distinct atoms (x402scan vs HOL registry) stay separate.
+    def _sig(t: str) -> set:
+        t = re.sub(r"\([^)]*\)", " ", (t or "").lower())
+        stop = {"that", "this", "with", "from", "your", "once", "needs", "need", "into",
+                "they", "them", "loop", "grey", "ridge", "will", "make", "makes", "already",
+                "pushed", "done", "ready", "creates", "create", "so", "the", "and", "for"}
+        return {w for w in re.findall(r"[a-z0-9@._/+-]{4,}", t) if w not in stop}
+    nsig = _sig(text)
+    if nsig:
+        for a in store["atoms"]:
+            if a.get("done") or (a.get("loop") or loop) != loop:
+                continue
+            esig = _sig(a.get("text", ""))
+            if not esig:
+                continue
+            inter = len(nsig & esig)
+            if inter / len(nsig) >= 0.7 and inter / len(esig) >= 0.6:
+                if steps and not a.get("steps"):
+                    a["steps"] = steps
+                    ATOMS.write_text(json.dumps(store, indent=0))
+                return a["id"]  # same ask already open — suppress the near-duplicate
     store["atoms"].append({"id": aid, "text": text[:260], "agent": agent, "steps": steps, "loop": loop,
                            "first_seen": datetime.now(timezone.utc).isoformat(), "done": False, "done_at": None})
     ATOMS.parent.mkdir(parents=True, exist_ok=True)
