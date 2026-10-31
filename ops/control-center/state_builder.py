@@ -488,6 +488,43 @@ def build_for(cfg: dict) -> dict:
     return state
 
 
+def sentinel() -> dict:
+    """Cross-cutting: the Sentinel sovereignty layer across BOTH chains (it is agent-4 of each, not a
+    loop of its own). Reads per-chain verdict ledgers, the health + adversarial sensors, HALT markers,
+    and the newest sentinel goal-loop transcript (= last autonomous run). Degrade-open."""
+    import glob
+    SENT = HOME / ".hermes" / "data" / "sentinel"
+    health = _safe(lambda: json.loads(_read(HOME / ".hermes/data/sentinel_health/latest.json") or "{}"), {})
+    adv = _safe(lambda: json.loads(_read(HOME / ".hermes/data/sentinel_adversarial/latest.json") or "{}"), {})
+    chains = {}
+    for c in ("money", "assetfactory"):
+        led = SENT / f"{c}.ledger.jsonl"
+        last = {}
+        if led.exists():
+            lines = [ln for ln in _read(led).splitlines() if ln.strip()]
+            if lines:
+                last = _safe(lambda: json.loads(lines[-1]), {})
+        halt = (CHAIN_DIR / f"{c}.HALT").exists()
+        trs = sorted(glob.glob(str(GL / f"chain-{c}-sentinel" / "history" / "*.jsonl")))
+        auto = None
+        if trs:
+            auto = datetime.fromtimestamp(Path(trs[-1]).stat().st_mtime, timezone.utc).isoformat()
+        chains[c] = {
+            "verdict": last.get("verdict"), "ts": last.get("ts"),
+            "checks": list((last.get("checks") or {}).keys()),
+            "halted": halt,
+            "halt_reason": (_read(CHAIN_DIR / f"{c}.HALT")[:200].strip() if halt else None),
+            "last_autonomous": auto,
+        }
+    return {
+        "chains": chains,
+        "adversarial_verdict": (adv.get("detail") or {}).get("verdict"),
+        "adversarial_summary": adv.get("summary"),
+        "adversarial_at": adv.get("fetched_at"),
+        "alert": health.get("alert") or adv.get("alert"),
+    }
+
+
 def build() -> dict:
     """Multi-loop: build full state for EVERY armed chain so the page can tab between them.
     The active (running / most-recently-run) loop's state is also spread at the top level for
@@ -500,6 +537,7 @@ def build() -> dict:
     state["loops"] = loops
     state["loop_names"] = names
     state["active"] = active
+    state["sentinel"] = _safe(sentinel, {})
     return state
 
 

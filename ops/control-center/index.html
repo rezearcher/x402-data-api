@@ -134,6 +134,10 @@
     <div id="atomlist"></div>
   </div>
 
+  <div class="sentinel" id="sentinelbox">
+    <div class="shead">🛡 SENTINEL · sovereignty auditor <span class="ssub">agent-4, audits every pass on both chains — protect-from-others, not lockdown</span><span class="sadv" id="sadv"></span></div>
+    <div class="srow" id="sentinelrows"></div>
+  </div>
   <div class="grid" id="agents"></div>
 
   <div class="btm">
@@ -232,8 +236,41 @@ function renderTabs(top){
 }
 function selectTab(n){ TAB=n; tick(); }
 
+function renderSentinel(top){
+  if(!document.getElementById('sentinelcss')){
+    const s=document.createElement('style'); s.id='sentinelcss'; s.textContent=`
+    .sentinel{margin:12px 14px 0;border:1px solid var(--line);background:linear-gradient(180deg,#141d2b,#111823);border-radius:10px;padding:11px 14px}
+    .sentinel .shead{font:700 12px system-ui;letter-spacing:.04em;color:#cbd6e6;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+    .sentinel .ssub{font:500 11px system-ui;color:#6b7788;letter-spacing:0}
+    .sentinel .sadv{margin-left:auto;font:700 11px system-ui;padding:3px 9px;border-radius:7px}
+    .sadv.pass{color:#7ff0b5;background:#12301f;border:1px solid #1f5c3a}
+    .sadv.warn{color:#ffd27f;background:#33260f;border:1px solid #6b5120}
+    .sentinel .srow{display:flex;gap:10px;flex-wrap:wrap;margin-top:9px}
+    .schip{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:9px;border:1px solid #273346;background:#0f1722;min-width:210px}
+    .schip .snm{font:700 12px system-ui;color:#aeb9c8;text-transform:capitalize}
+    .schip .sv{font:700 11px system-ui;padding:2px 8px;border-radius:6px;margin-left:auto}
+    .sv.sov{color:#7ff0b5;background:#12301f} .sv.viol{color:#ff9d9d;background:#3a1416} .sv.halt{color:#fff;background:#b3261e;animation:lp 1.2s infinite}
+    .schip .smeta{font:500 10px system-ui;color:#64707f;width:100%;margin-top:3px}`;
+    document.head.appendChild(s);
+  }
+  const S=top.sentinel||{}; const box=document.getElementById('sentinelbox'); if(!box) return;
+  const av=document.getElementById('sadv');
+  const avv=S.adversarial_verdict;
+  av.className='sadv '+(avv==='PASS'?'pass':'warn');
+  av.textContent = avv ? ('AgentDojo+InjecAgent: '+avv) : 'validation: —';
+  av.title = esc(S.adversarial_summary||'')+(S.adversarial_at?('  ·  '+S.adversarial_at):'');
+  const ago=ts=>{ if(!ts)return '—'; const m=Math.round((Date.now()-new Date(ts))/60000); return m<60?m+'m ago':(Math.round(m/60)+'h ago'); };
+  document.getElementById('sentinelrows').innerHTML = Object.entries(S.chains||{}).map(([n,c])=>{
+    const v=c.halted?'HALT':(c.verdict==='VIOLATION'?'VIOL':'SOV'); const cl=c.halted?'halt':(c.verdict==='VIOLATION'?'viol':'sov');
+    const vt=c.halted?'HALTED':(c.verdict||'—');
+    return `<div class="schip"><span class="snm">${n}</span><span class="sv ${cl}" title="${esc(c.halt_reason||'')}">${vt}</span>
+      <span class="smeta">autonomous ${ago(c.last_autonomous)} · ${(c.checks||[]).length}/4 checks${c.halted?' · needs Rez':''}</span></div>`;
+  }).join('') || '<span style="color:#64707f;font-size:11px">no verdicts yet</span>';
+}
+
 function render(top){
   renderTabs(top);
+  renderSentinel(top);
   const d=(top.loops&&top.loops[TAB||top.active])||top;
   if(!d.engine){ return; }
   if(!built) buildSkeleton();
