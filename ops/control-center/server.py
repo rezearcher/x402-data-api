@@ -6,6 +6,7 @@ POST /api/monitor toggle. Localhost-only by default. stdlib only, no build step.
 """
 from __future__ import annotations
 import json
+import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -74,6 +75,24 @@ class H(BaseHTTPRequestHandler):
                 body = json.loads(self.rfile.read(n) or b"{}")
                 ok = state_builder.mark_atom(str(body.get("id", "")), bool(body.get("done", True)))
                 self._send(200, json.dumps({"ok": ok}).encode(), "application/json")
+            except Exception as e:
+                self._send(500, json.dumps({"error": str(e)}).encode(), "application/json")
+        elif self.path == "/api/toggle_loop":
+            # Turn a loop on/off by creating/removing its <name>.enabled marker (arb starts OFF).
+            n = int(self.headers.get("content-length", 0) or 0)
+            try:
+                body = json.loads(self.rfile.read(n) or b"{}")
+                name = str(body.get("loop", "")).strip()
+                on = bool(body.get("on"))
+                if not re.fullmatch(r"[a-z0-9_-]{1,40}", name) or not (state_builder.CHAIN_DIR / f"{name}.chain.json").exists():
+                    self._send(400, json.dumps({"error": "unknown loop"}).encode(), "application/json")
+                    return
+                marker = state_builder.CHAIN_DIR / f"{name}.enabled"
+                if on:
+                    marker.write_text("on")
+                elif marker.exists():
+                    marker.unlink()
+                self._send(200, json.dumps({"loop": name, "on": on}).encode(), "application/json")
             except Exception as e:
                 self._send(500, json.dumps({"error": str(e)}).encode(), "application/json")
         else:

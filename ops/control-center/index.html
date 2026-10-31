@@ -157,7 +157,16 @@
 </div>
 
 <script>
-const AG=['research','builder','marketing'], LABEL={research:'RESEARCH · GM',builder:'BUILDER',marketing:'MARKETING'};
+// Agent columns are DATA-DRIVEN per loop (money/assetfactory show research/builder/marketing;
+// arb shows its scout_money/scout_assetfactory/scout_group). Sentinel has its own panel, so it's
+// excluded from the columns here.
+const KNOWN_LABEL={research:'RESEARCH · GM',builder:'BUILDER',marketing:'MARKETING',sentinel:'SENTINEL'};
+function labelOf(n){ return KNOWN_LABEL[n] || String(n).replace(/_/g,' · ').toUpperCase(); }
+function agentsOf(d){
+  const names=((d&&d.chain)||[]).map(c=>c.stage).filter(Boolean);
+  const src=names.length?names:Object.keys((d&&d.agents)||{});
+  return src.filter(n=>n!=='sentinel');
+}
 let monOn=false, built=false;
 const counts={};  // scroll-id -> last item count
 
@@ -194,15 +203,18 @@ function reflectPaused(){
   document.getElementById('paused').classList.toggle('show', any);
 }
 
-function buildSkeleton(){
-  document.getElementById('agents').innerHTML = AG.map(a=>`
+let skelSig='';
+function buildSkeleton(agents){
+  const sig=agents.join(',');
+  if(sig===skelSig && built) return;  // skeleton already matches this loop's agent set
+  document.getElementById('agents').innerHTML = agents.map(a=>`
     <div class="col" id="col-${a}">
-      <h3>${LABEL[a]} <span class="badge" id="badge-${a}">·</span></h3>
+      <h3>${labelOf(a)} <span class="badge" id="badge-${a}">·</span></h3>
       <div class="now" id="now-${a}"><span class="k">NOW</span></div>
       <div class="scrollwrap"><div class="hist" id="hist-${a}"></div>
         <button class="pill" data-k="${a}" onclick="jump('hist-${a}')">↓ new updates</button></div>
     </div>`).join('');
-  built=true;
+  skelSig=sig; built=true;
 }
 
 // ── Loop tabs: when multiple chains are armed, tab between them (money ⇄ assetfactory).
@@ -225,16 +237,30 @@ function renderTabs(top){
   if(names.length<2){ bar.style.display='none'; return; }
   bar.style.display='flex';
   if(!TAB || !names.includes(TAB)) TAB=top.active;
+  if(!document.getElementById('tabtoggle-css')){
+    const s=document.createElement('style'); s.id='tabtoggle-css'; s.textContent=`
+    .tab.off{opacity:.5} .tab .pw{margin-left:6px;font-size:12px;cursor:pointer;opacity:.75;border:0;background:none;padding:0 2px}
+    .tab .pw.on{color:#45d483} .tab .pw.offc{color:#6b7788} .tab .daily{font-size:9px;color:#8a7;letter-spacing:.05em}`;
+    document.head.appendChild(s);
+  }
   bar.innerHTML=names.map(n=>{
     const L=(top.loops||{})[n]||{}, r=L.revenue||{}, e=L.engine||{};
+    const enabled = L.enabled!==false;  // undefined (legacy) treated as on
     const running=(n===top.active)&&e.alive;
     const bal = r.balance_usd!=null ? ('$'+Number(r.balance_usd).toFixed(2))
               : r.line_a_balance_usdc!=null ? ('$'+Number(r.line_a_balance_usdc).toFixed(2))
               : '';
-    return `<button class="tab${n===TAB?' sel':''}" onclick="selectTab('${n}')">${n}${running?' <span class="livedot"></span>':''}<span class="tbal mono">${bal}</span></button>`;
+    const daily = L.daily ? '<span class="daily">1×/day</span>' : '';
+    const pw = `<button class="pw ${enabled?'on':'offc'}" title="${enabled?'on — click to turn OFF':'off — click to turn ON'}" onclick="event.stopPropagation();toggleLoop('${n}',${!enabled})">⏻</button>`;
+    return `<button class="tab${n===TAB?' sel':''}${enabled?'':' off'}" onclick="selectTab('${n}')">${n}${running?' <span class="livedot"></span>':''}${daily}<span class="tbal mono">${bal}</span>${pw}</button>`;
   }).join('');
 }
 function selectTab(n){ TAB=n; tick(); }
+function toggleLoop(n,on){
+  if(!confirm((on?'Turn ON':'Turn OFF')+' the '+n+' loop?')) return;
+  fetch('/api/toggle_loop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({loop:n,on})})
+    .then(r=>r.json()).then(()=>tick()).catch(e=>alert('toggle failed: '+e));
+}
 
 function renderSentinel(top){
   if(!document.getElementById('sentinelcss')){
@@ -273,11 +299,13 @@ function render(top){
   renderSentinel(top);
   const d=(top.loops&&top.loops[TAB||top.active])||top;
   if(!d.engine){ return; }
-  if(!built) buildSkeleton();
+  const AG=agentsOf(d);                     // this loop's real agent columns (sentinel excluded)
+  buildSkeleton(AG);                         // rebuilds only when the agent set changes (e.g. tab switch)
+  const hasSentinel=((d.chain||[]).some(c=>c.stage==='sentinel'))||('sentinel' in (d.agents||{}));
   // chain (no scroll — safe to replace)
   document.getElementById('chain').innerHTML = AG.map((a,i)=>
-    `<span class="node ${d.engine.stage===a?'active':''}">${a}</span>${i<2?'<span class="arrow">▸</span>':''}`
-  ).join('') + `<span class="arrow">▸</span><span class="node ${d.engine.stage==='sentinel'?'active':''}">🛡 sentinel</span>`
+    `<span class="node ${d.engine.stage===a?'active':''}">${a}</span>${i<AG.length-1?'<span class="arrow">▸</span>':''}`
+  ).join('') + (hasSentinel?`<span class="arrow">▸</span><span class="node ${d.engine.stage==='sentinel'?'active':''}">🛡 sentinel</span>`:'')
     + `<span class="arrow">▸</span><span class="node rest ${d.engine.stage==='rest'?'active':''}">rest ∿</span>`
     + ` <span style="color:var(--muted);font-size:11px" class="mono">pass ${d.engine.pass??'—'}</span>`;
   const h=d.health||{};
@@ -310,7 +338,7 @@ function render(top){
   }
   document.getElementById('atomlist').innerHTML = ahtml;
   // agents — NOW replaced freely; history updated IN PLACE (scroll preserved)
-  const order=['research','builder','marketing'], cur=order.indexOf(d.engine.stage);
+  const cur=AG.indexOf(d.engine.stage);
   AG.forEach((a,i)=>{
     const ag=d.agents[a]||{};
     // phase is driven by the ENGINE's real current stage — only ONE agent is ever "working"

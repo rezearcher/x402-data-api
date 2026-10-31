@@ -529,13 +529,32 @@ def build() -> dict:
     """Multi-loop: build full state for EVERY armed chain so the page can tab between them.
     The active (running / most-recently-run) loop's state is also spread at the top level for
     backward compatibility with the single-loop page contract."""
-    names = armed_names() or [_active_name()]
-    loops = {n: _safe(lambda n=n: build_for(_cfg_for(n)), {}) for n in names}
-    active = running_name(names)
+    armed = armed_names()
+    names = armed or [_active_name()]
+    # Also surface manifest chains that EXIST but aren't armed (e.g. arb, off by default) so the page
+    # shows them as an off tab with a toggle. Armed/active first, then the rest.
+    show = list(names)
+    for p in sorted(CHAIN_DIR.glob("*.chain.json")):
+        n = p.name[:-len(".chain.json")]
+        if n not in show and not (CHAIN_DIR / f"{n}.done").exists():
+            show.append(n)
+    loops = {}
+    for n in show:
+        st = _safe(lambda n=n: build_for(_cfg_for(n)), {}) or {}
+        st["enabled"] = (CHAIN_DIR / f"{n}.enabled").exists()
+        st["halted"] = (CHAIN_DIR / f"{n}.HALT").exists()
+        mani = _safe(lambda n=n: json.loads(_read(CHAIN_DIR / f"{n}.chain.json")), {}) or {}
+        st["daily"] = bool(mani.get("daily"))
+        lr = CHAIN_DIR / f"{n}.lastrun"
+        st["last_run"] = (datetime.fromtimestamp(lr.stat().st_mtime, timezone.utc).isoformat() if lr.exists() else None)
+        if n == "arb":  # arb's Rez-facing output (ideas it surfaced) for its tab
+            st["ideas"] = _safe(lambda: json.loads(_read(HOME / ".hermes/data/arb_ideas/latest.json") or "{}"), {})
+        loops[n] = st
+    active = running_name(armed) if armed else show[0]
     base = loops.get(active) or (next(iter(loops.values())) if loops else {})
     state = dict(base)  # backward-compat: active loop's fields at top level
     state["loops"] = loops
-    state["loop_names"] = names
+    state["loop_names"] = show
     state["active"] = active
     state["sentinel"] = _safe(sentinel, {})
     return state
