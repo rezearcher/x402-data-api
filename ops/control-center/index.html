@@ -223,7 +223,7 @@ let TAB=null;
 function renderTabs(top){
   if(!document.getElementById('tabcss')){
     const s=document.createElement('style'); s.id='tabcss'; s.textContent=`
-    .tabs{display:flex;gap:8px;padding:10px 14px 0;flex-wrap:wrap}
+    .tabs{display:flex;gap:8px;padding:10px 14px 0;flex-wrap:wrap;justify-content:center}
     .tab{display:flex;align-items:center;gap:7px;padding:7px 14px;border-radius:9px;border:1px solid #2a2f37;background:#14171c;color:#9aa4b2;font:600 13px system-ui;cursor:pointer;text-transform:capitalize}
     .tab.sel{color:#fff;border-color:#3BA7B4;background:#15232a}
     .tab .tbal{font-size:11px;color:#6fd3a0;font-weight:700}

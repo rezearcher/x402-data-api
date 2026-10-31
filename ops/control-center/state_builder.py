@@ -550,6 +550,20 @@ def build() -> dict:
         if n == "arb":  # arb's Rez-facing output (ideas it surfaced) for its tab
             st["ideas"] = _safe(lambda: json.loads(_read(HOME / ".hermes/data/arb_ideas/latest.json") or "{}"), {})
         loops[n] = st
+    # Stage-4: arb is the HEAD loop → list it FIRST, and show its "money" as the AGGREGATE of the
+    # loops it serves (it earns nothing directly). Centering the tabs is a CSS change in index.html.
+    if "arb" in loops:
+        show = ["arb"] + [n for n in show if n != "arb"]
+        agg_usd = agg_pay = agg_runs = 0.0
+        for n2, L in loops.items():
+            if n2 == "arb":
+                continue
+            rv = L.get("revenue") or {}
+            agg_usd += float(rv.get("balance_usd") or rv.get("line_a_external_usdc") or 0) + float(rv.get("line_b_fiat_usd") or 0)
+            agg_pay += float(rv.get("external_payers") or 0)
+            agg_runs += float(rv.get("metered_invocations") or 0)
+        loops["arb"]["revenue"] = {"balance_usd": round(agg_usd, 2), "external_payers": int(agg_pay),
+                                   "metered_invocations": int(agg_runs), "aggregate": True}
     active = running_name(armed) if armed else show[0]
     base = loops.get(active) or (next(iter(loops.values())) if loops else {})
     state = dict(base)  # backward-compat: active loop's fields at top level
