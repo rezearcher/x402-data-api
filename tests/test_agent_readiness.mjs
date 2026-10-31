@@ -111,6 +111,12 @@ const eq = (a, b, msg) => { assert.strictEqual(a, b, `${msg} (got ${JSON.stringi
 for (const p of ["/api", "/api/v1"]) {
   const res = await app.request(p, {}, { PAY_TO: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" });
   eq(res.status, 402, `${p} returns HTTP 402 (x402 signpost)`);
+  const pr = res.headers.get("payment-required") || "";
+  ok(pr.length > 0, `${p} sets the payment-required header`);
+  const decoded = JSON.parse(Buffer.from(pr, "base64").toString("utf8"));
+  eq(decoded.x402Version, 2, `${p} payment-required header is a base64 x402 v2 challenge`);
+  ok(decoded.accepts[0].network === "eip155:8453", `${p} header challenge declares Base`);
+  eq((res.headers.get("www-authenticate") || "").toLowerCase(), "x402", `${p} sets www-authenticate: x402`);
   const j = await res.json();
   eq(j.x402Version, 2, `${p} body is an x402 v2 challenge`);
   ok(Array.isArray(j.accepts) && j.accepts[0].network === "eip155:8453" && j.accepts[0].asset.startsWith("0x"), `${p} accepts[] declares Base USDC`);

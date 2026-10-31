@@ -2302,6 +2302,15 @@ app.get("/auth.md", (c) => {
       `- Payment manifest: ${CANONICAL_ORIGIN}/.well-known/x402\n` +
       `- Free previews: append \`/preview\` to a paid route (no payment)\n` +
       `- Spec: https://x402.org\n\n` +
+      `## Agent registration\n\n` +
+      `No pre-registration, account, client_id, or API-key issuance is required to call this service —\n` +
+      `payment itself is the credential. An agent authenticates per request by signing the x402\n` +
+      `payment authorization; there is no registration endpoint to obtain long-lived credentials.\n\n` +
+      `For agents that want a verifiable on-chain identity, this service publishes an ERC-8004 agent\n` +
+      `registration record so an agent registry / trust directory can register and cross-reference us:\n\n` +
+      `- Agent registration (ERC-8004): ${CANONICAL_ORIGIN}/.well-known/erc-8004.json\n` +
+      `- A2A agent card: ${CANONICAL_ORIGIN}/.well-known/agent-card.json\n` +
+      `- OAuth protected-resource metadata: ${CANONICAL_ORIGIN}/.well-known/oauth-protected-resource\n\n` +
       `Grey Ridge Signals Group LLC\n`,
   );
 });
@@ -2327,33 +2336,40 @@ app.get("/.well-known/security.txt", (c) => {
 // learns the asset/network/payTo. Agent-readiness scanners probe /api and /api/v1
 // for a 402 to classify an endpoint as an x402 commerce service.
 const x402Signpost = (c: Context) => {
-  return c.json(
-    {
-      x402Version: 2,
-      error: "Payment required",
-      resource: {
-        url: CANONICAL_ORIGIN + "/.well-known/x402",
-        description:
-          "Grey Ridge Signals x402 API — agent-native, pay-per-call Base on-chain / crypto / DeFi data and security tools. " +
-          "This base path requires x402 payment; the manifest enumerates every payable route, its price, and a free preview.",
-        mimeType: "application/json",
-        serviceName: "Grey Ridge Signals — x402 Data & Security API",
-        tags: ["x402", "data", "security", "base", "usdc"],
-      },
-      accepts: [
-        {
-          scheme: "exact",
-          network: "eip155:8453",
-          amount: "1000",
-          asset: USDC_BASE,
-          payTo: c.env.PAY_TO,
-          maxTimeoutSeconds: 300,
-          extra: { name: "USD Coin", version: "2", decimals: 6 },
-        },
-      ],
-      manifest: CANONICAL_ORIGIN + "/.well-known/x402",
-      openapi: CANONICAL_ORIGIN + "/openapi.json",
+  const challenge = {
+    x402Version: 2,
+    error: "Payment required",
+    resource: {
+      url: CANONICAL_ORIGIN + "/.well-known/x402",
+      description:
+        "Grey Ridge Signals x402 API — agent-native, pay-per-call Base on-chain / crypto / DeFi data and security tools. " +
+        "This base path requires x402 payment; the manifest enumerates every payable route, its price, and a free preview.",
+      mimeType: "application/json",
+      serviceName: "Grey Ridge Signals — x402 Data & Security API",
+      tags: ["x402", "data", "security", "base", "usdc"],
     },
+    accepts: [
+      {
+        scheme: "exact",
+        network: "eip155:8453",
+        amount: "1000",
+        asset: USDC_BASE,
+        payTo: c.env.PAY_TO,
+        maxTimeoutSeconds: 300,
+        extra: { name: "USD Coin", version: "2", decimals: 6 },
+      },
+    ],
+  };
+  // x402 v2 wire headers: the challenge, base64-encoded in `payment-required`,
+  // plus `www-authenticate: x402`. Agent-readiness scanners (and x402 clients)
+  // read these headers to classify the endpoint as an x402 commerce service.
+  // UTF-8-safe base64 (btoa alone throws on non-Latin1 like the em-dash).
+  const challengeJson = JSON.stringify(challenge);
+  const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(challengeJson)));
+  c.header("payment-required", b64);
+  c.header("www-authenticate", "x402");
+  return c.json(
+    { ...challenge, manifest: CANONICAL_ORIGIN + "/.well-known/x402", openapi: CANONICAL_ORIGIN + "/openapi.json" },
     402,
   );
 };
