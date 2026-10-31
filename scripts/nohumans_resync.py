@@ -82,17 +82,21 @@ LISTINGS = [
     },
     {
         "id": "d9a8d4c4-19e",
-        "name": "Funding rates data feed — 6-venue perp funding (Binance+Bybit+OKX+Hyperliquid+dYdX+Gate) + CEX↔DEX arb",
+        "name": "Funding rates data feed — 6-venue perp funding + OI-weighted CEX↔DEX arb verdict (thin-book venues excluded)",
         "description": (
             "Funding rates data feed for derivatives / perp trading agents: one keyless "
             "x402 call returns live perpetual funding rates across 6 venues — Binance, "
-            "Bybit, OKX, Hyperliquid, dYdX and Gate.io — for the top coins by 24h notional. Per coin "
-            "you get each venue's funding, the annualized rate per venue (annualized_binance "
-            "/ bybit / okx / hl / gate), the cross-venue funding spread in bps, the cheapest-long "
-            "and richest-short venue for a CEX↔DEX funding-arb, premium/basis, mark/oracle "
-            "prices, open interest, next_funding_ts, and a LONGS_PAY / SHORTS_PAY / NEUTRAL "
-            "directional signal. $0.004/call — Base-native USDC, no account, no key, pay "
-            "inline. Free preview returns representative output before you pay."
+            "Bybit, OKX, Hyperliquid, dYdX and Gate.io — for the top coins by 24h notional. "
+            "The edge over a raw multi-venue feed is CORRECTNESS: the CEX↔DEX arb verdict "
+            "(funding spread in bps, cheapest-long / richest-short venue) is computed over an "
+            "OPEN-INTEREST-SCREENED venue set, so a near-empty book printing an extreme rate "
+            "never inflates the spread or names a venue you can't get size on — you get an "
+            "executable verdict, not a thin-book mirage. Per coin you also get each venue's "
+            "funding, per-venue open interest in USD, the annualized rate per venue, "
+            "premium/basis, mark/oracle prices, next_funding_ts, excluded_thin_venues + an "
+            "oi_weighted flag, and a LONGS_PAY / SHORTS_PAY / NEUTRAL directional signal. "
+            "$0.004/call — Base-native USDC, no account, no key, pay inline. Free preview "
+            "returns representative output before you pay."
         ),
         "sample_query": "https://api.greyridgesignals.ai/crypto/funding/preview",
         "queries": [
@@ -100,6 +104,8 @@ LISTINGS = [
             "funding rates data feed for derivatives trading",
             "perpetual funding rate across exchanges",
             "cross-venue funding arbitrage signal",
+            "open-interest-weighted funding arbitrage",
+            "executable funding arb excluding thin books",
             "cheapest venue to go long funding",
         ],
     },
