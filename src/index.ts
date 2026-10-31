@@ -279,7 +279,7 @@ export const ROUTE_CATALOG_BASE: Array<[string, string, string, string, string, 
   ["/chain/block", "GET", "0.002", "2000", "Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.", ["rpc", "base", "onchain", "blockchain", "data"]],
   ["/chain/wallet", "GET", "0.003", "3000", "Wallet screening bundle (balance, activity, contract vs EOA check): ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]],
   ["/chain/wallet-screen", "GET", "0.004", "4000", "Is this wallet sanctioned OR a known scammer? Pre-trade screen for a counterparty / recipient / token-spender address before an agent sends, swaps or approves: exact match against the U.S. Treasury OFAC SDN crypto-address list AND community scam/phishing/wallet-drainer threat-intel (ScamSniffer + MEW darklist). Returns sanctioned (bool) + malicious (bool) + verdict (blocked/clear) + lists + the list sources and snapshot dates. 'clear' means not on these lists, not a safety guarantee. Use alongside /gate/swap and /chain/token-security to avoid sanctioned-or-scammer-counterparty liability.", ["security", "sanctions", "ofac", "compliance", "scam", "phishing", "drainer", "wallet", "base", "onchain", "screening", "data"]],
-  ["/x402/preflight", "GET", "0.001", "1000", "x402 pre-payment endpoint check — before an agent pays an unknown x402 URL, fetch it once (never pays): (1) validate the 402 challenge + accepts[] (will it settle), (2) scan the resource + advertised MCP tools for LLM01/LLM08 injection and screen payTo vs OFAC/scam lists (safe to pay), (3) PRICE ACCURACY — does the live accepts[].amount match the advertised price? pass &advertised=<usdc> or it self-checks the endpoint's /.well-known/x402: MATCH|OVERCHARGE|UNDERCHARGE, (4) optional &samples=N (1-5) reliability burst, (5) DELIVERY readiness — flags a leaking paywall (resource served to an UNPAID request while the manifest advertises a paid price) and whether the output shape is specified. Returns PAY|CAUTION|AVOID + fix hints. Read-only, not a settlement guarantee. ?url=<endpoint>.", ["x402", "preflight", "security", "verify", "payment", "safe-to-pay", "price-accuracy", "overcharge", "reliability", "uptime", "delivery", "data"]],
+  ["/x402/preflight", "GET", "0.001", "1000", "x402 pre-payment endpoint check — before an agent pays an unknown x402 URL, fetch it once (never pays): (1) validate the 402 challenge + accepts[] (will it settle), (2) LIVENESS label LIVE|ZOMBIE|DEAD (is it a working payable endpoint now or listed-active-but-broken), (3) absolute PRICE-TRAP flag — a honeypot charging >=$1000/call trips AVOID even when its advertised==live price looks self-consistent; pass &max=<usdc> for your own budget ceiling, (4) scan the resource + advertised MCP tools for LLM01/LLM08 injection and screen payTo vs OFAC/scam lists (safe to pay), (5) PRICE ACCURACY — does the live accepts[].amount match the advertised price? pass &advertised=<usdc> or it self-checks /.well-known/x402: MATCH|OVERCHARGE|UNDERCHARGE, (6) optional &samples=N (1-5) reliability burst, (7) DELIVERY readiness — flags a leaking paywall and whether the output shape is specified. Returns PAY|CAUTION|AVOID + fix hints. Read-only, not a settlement guarantee. ?url=<endpoint>.", ["x402", "preflight", "security", "verify", "payment", "safe-to-pay", "liveness", "zombie", "honeypot", "price-trap", "price-accuracy", "overcharge", "reliability", "uptime", "delivery", "data"]],
   ["/x402/receipt-verify", "GET", "0.004", "4000", "x402 POST-payment settlement proof. After you pay an x402 endpoint, bring your Base settlement ?tx=<0x hash> + ?url=<resource paid> for on-chain proof it settled: reads the tx receipt, decodes its USDC Transfer events, reconciles them against the endpoint's advertised payTo + amount (from its live 402, or &payto=/&expect= to bind). Verdict SETTLED|UNDERPAID|WRONG_RECIPIENT|NO_TRANSFER|REVERTED|NOT_FOUND|UNVERIFIED. Confirms settlement, not off-chain delivery.", ["x402", "receipt", "settlement", "verify", "payment", "proof", "post-payment", "onchain", "base", "usdc", "data"]],
   ["/dns", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH. Pass ?domain=stripe.com.", ["dns", "domain", "data", "recon"]],
   ["/whois", "GET", "0.01", "10000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain. Pass ?domain=cloudflare.com.", ["whois", "rdap", "domain", "data", "recon"]],
@@ -3157,7 +3157,7 @@ app.get("/openapi.json", (c) => {
       "/gate/swap/preview": { get: { summary: "FREE live sample of /gate/swap (no payment).", description: "Free go/hold/block sample for a demo token (?token=degen) OR any real Base 0x address, 3 free real-token checks per IP per day. Paid /gate/swap accepts ANY Base ERC-20 ($0.008). Honors side and notional_usd.", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-report/preview": { get: { summary: "FREE live sample of /chain/token-report (no payment).", description: "Free full trade-safety report for a demo token. Try ?token=aero. Paid /chain/token-report accepts ANY Base ERC-20 ($0.01).", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-security": paid("Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, contract source-verification (Sourcify), live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.", "0.009", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
-      "/x402/preflight": paid("x402 pre-payment check: fetch an unknown URL once (never pays) and return PAY|CAUTION|AVOID — validate the 402+accepts[] (will it settle), scan resource+MCP tools for LLM01/LLM08 and screen payTo vs OFAC/scam (safe to pay), verify live amount vs advertised price (MATCH|OVERCHARGE|UNDERCHARGE), and flag delivery readiness (leak/output-spec). Not a settlement guarantee.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to pre-check before paying", required: true, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "advertised", desc: "optional USDC-dollars price your catalog quoted (e.g. 0.001) to verify against the live charge", required: false, example: "0.001" }]),
+      "/x402/preflight": paid("x402 pre-payment check: fetch an unknown URL once (never pays) and return PAY|CAUTION|AVOID — validate the 402+accepts[] (will it settle), label liveness LIVE|ZOMBIE|DEAD, flag an absolute price-trap (>=$1000/call honeypot => AVOID even when advertised==live), scan resource+MCP tools for LLM01/LLM08 and screen payTo vs OFAC/scam (safe to pay), verify live amount vs advertised price (MATCH|OVERCHARGE|UNDERCHARGE), and flag delivery readiness (leak/output-spec). Not a settlement guarantee.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to pre-check before paying", required: true, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "advertised", desc: "optional USDC-dollars price your catalog quoted (e.g. 0.001) to verify against the live charge", required: false, example: "0.001" }, { name: "max", desc: "optional per-call budget ceiling in USDC dollars; flags the live charge if it exceeds this", required: false, example: "0.05" }]),
       "/x402/receipt-verify": paid("x402 POST-payment settlement proof (the other half of /x402/preflight): bring your Base settlement tx + the resource URL you paid, get on-chain proof it settled — reads the receipt, decodes USDC Transfer events, reconciles vs the endpoint's advertised payTo + amount. SETTLED|UNDERPAID|WRONG_RECIPIENT|NO_TRANSFER|REVERTED|NOT_FOUND|UNVERIFIED. Read-only.", "0.004", [{ name: "tx", desc: "0x-prefixed 32-byte Base-mainnet settlement transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }, { name: "url", desc: "the x402 resource URL you paid (its live 402 supplies the advertised payTo+amount)", required: false, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "payto", desc: "optional 0x payTo to reconcile against (bind without fetching the endpoint)", required: false, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "expect", desc: "optional advertised amount in USDC dollars to verify the settled amount against", required: false, example: "0.004" }]),
       "/dns": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "query", required: true, example: "stripe.com" }]),
       "/whois": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.01", [{ name: "domain", desc: "domain name to look up", in: "query", required: true, example: "cloudflare.com" }]),
@@ -4595,7 +4595,7 @@ export function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Should an agent pay this x402 endpoint? One read-only call fetches it once (never pays): validates the 402 + accepts[] (will it settle), scans the resource + advertised MCP tools for LLM01/LLM08 injection and screens payTo vs OFAC/scam lists (safe to pay), and VERIFIES THE PRICE — live accepts[].amount vs advertised (pass &advertised=<usdc> or self-check /.well-known/x402): MATCH | OVERCHARGE | UNDERCHARGE. Returns PAY | CAUTION | AVOID + fix hints. Not a settlement guarantee.",
+        "Should an agent pay this x402 endpoint? One read-only call fetches it once (never pays): validates the 402 + accepts[] (will it settle), labels LIVENESS (LIVE | ZOMBIE | DEAD), flags an absolute PRICE-TRAP (a honeypot charging >=$1000/call => AVOID even when advertised==live is self-consistent; pass &max=<usdc> for your budget ceiling), scans the resource + advertised MCP tools for LLM01/LLM08 injection and screens payTo vs OFAC/scam lists (safe to pay), and VERIFIES THE PRICE — live accepts[].amount vs advertised (pass &advertised=<usdc> or self-check /.well-known/x402): MATCH | OVERCHARGE | UNDERCHARGE. Returns PAY | CAUTION | AVOID + fix hints. Not a settlement guarantee.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -4606,6 +4606,7 @@ export function makeRoutes(payTo: string) {
           properties: {
             url: { type: "string", description: "the x402 endpoint URL to pre-check before paying" },
             advertised: { type: "string", description: "optional: the price (USDC dollars, e.g. 0.001) your catalog/listing quoted — the check returns MATCH/OVERCHARGE/UNDERCHARGE vs the live accepts[].amount. If omitted, the endpoint's own /.well-known/x402 manifest is used for a self-consistency check." },
+            max: { type: "string", description: "optional: your per-call budget ceiling in USDC dollars (e.g. 0.05) — the result flags price_trap.exceeds_caller_max if the live charge is over it. An absolute >=$1000/call charge trips AVOID regardless." },
             samples: { type: "integer", minimum: 1, maximum: 5, description: "optional reliability burst: sample the 402 challenge N times (1-5) and return settle-consistency + latency distribution; a flapping endpoint is downgraded PAY->CAUTION" },
           },
         },
@@ -4620,15 +4621,18 @@ export function makeRoutes(payTo: string) {
               { name: "payTo_safety", ok: true, detail: "payTo not on OFAC SDN nor community scam lists", fix: null },
               { name: "resource_scan", ok: true, detail: "no LLM01/LLM08 prompt-injection patterns in resource/tools", fix: null },
               { name: "price_accuracy", ok: true, detail: "charged 0.001 USDC == advertised (source: self-manifest)", fix: null },
+              { name: "liveness", ok: true, detail: "liveness: LIVE — reachable, presents a settle-complete 402, stable across 3 probes", fix: null },
               { name: "reliability", ok: true, detail: "3/3 probes payable; latency median 210ms (max 240ms)", fix: null },
               { name: "delivery", ok: true, detail: "the challenge declares the output shape (schema/example) so you know what the payment buys", fix: null },
             ],
             findings: [],
             latency_ms: 142,
             price_accuracy: { verdict: "MATCH", charged_atomic: 1000, charged_usdc: "0.001", advertised_atomic: 1000, advertised_usdc: "0.001", advertised_source: "self-manifest", ratio: 1, delta_atomic: 0, decimals: 6, note: "wire price matches the price in the endpoint's own /.well-known/x402 manifest (within rounding tolerance)" },
+            liveness: { label: "LIVE", reachable: true, presents_challenge: true, payable: true, stable: true, note: "reachable, presents a settle-complete 402, stable across 3 probes — a working payable x402 endpoint right now" },
+            price_trap: { flagged: false, tier: "none", charged_atomic: 1000, charged_usdc: "0.001", ceiling_usdc: "1.000000", extreme_ceiling_usdc: "1000.000000", caller_max_usdc: null, exceeds_caller_max: false, note: "the live 402 charges 0.001 USDC/call — within the normal x402 micro-payment band (below 1.000000)" },
             reliability: { samples: 3, settle_consistency: "3/3", settle_rate: 1, reachable_rate: 1, stable: true, latency_ms: { min: 190, median: 210, max: 240 }, note: "point-in-time burst sampled now (not historical uptime); a stable burst is not a durability guarantee" },
             delivery: { verdict: "SPECIFIED", output_specified: true, served_without_payment: false, note: "the challenge declares the output shape (schema/example) so you know what the payment buys; post-payment delivery is still only provable from your on-chain settlement receipt after you pay" },
-            scope_note: "static 402 wire-format + liveness + LLM01/LLM08 description scan + payTo flag + advertised-vs-charged price-accuracy + delivery-readiness check; read-only, never pays; not a settlement guarantee.",
+            scope_note: "static 402 wire-format + LIVE/ZOMBIE/DEAD liveness label + absolute price-trap flag + LLM01/LLM08 description scan + payTo flag + advertised-vs-charged price-accuracy + delivery-readiness check; read-only, never pays; not a settlement guarantee.",
           },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
@@ -9543,14 +9547,16 @@ interface PreflightResult {
   reliability?: PreflightReliability;
   price_accuracy?: PriceAccuracyVerdict;
   delivery?: PreflightDelivery;
+  liveness?: PreflightLiveness;
+  price_trap?: PriceTrap;
   scope_note: string;
   checked_at: string;
 }
 const PREFLIGHT_SCOPE_NOTE =
-  "static 402 wire-format + liveness + LLM01/LLM08 description scan + payTo OFAC/scam flag + advertised-vs-charged price-accuracy + delivery-readiness (broken-paywall / output-spec) check; read-only, never pays; not a settlement guarantee.";
+  "static 402 wire-format + LIVE/ZOMBIE/DEAD liveness label + absolute price-trap flag + LLM01/LLM08 description scan + payTo OFAC/scam flag + advertised-vs-charged price-accuracy + delivery-readiness (broken-paywall / output-spec) check; read-only, never pays; not a settlement guarantee.";
 
-function preflightResult(url: string, started: number, verdict: PreflightResult["verdict"], will_settle: boolean, checks: PreflightCheck[], findings: ScanFinding[], reliability?: PreflightReliability, priceAccuracy?: PriceAccuracyVerdict, delivery?: PreflightDelivery): PreflightResult {
-  return { url, verdict, will_settle, checks, findings, latency_ms: Date.now() - started, ...(reliability ? { reliability } : {}), ...(priceAccuracy ? { price_accuracy: priceAccuracy } : {}), ...(delivery ? { delivery } : {}), scope_note: PREFLIGHT_SCOPE_NOTE, checked_at: new Date().toISOString() };
+function preflightResult(url: string, started: number, verdict: PreflightResult["verdict"], will_settle: boolean, checks: PreflightCheck[], findings: ScanFinding[], reliability?: PreflightReliability, priceAccuracy?: PriceAccuracyVerdict, delivery?: PreflightDelivery, liveness?: PreflightLiveness, priceTrap?: PriceTrap): PreflightResult {
+  return { url, verdict, will_settle, checks, findings, latency_ms: Date.now() - started, ...(reliability ? { reliability } : {}), ...(priceAccuracy ? { price_accuracy: priceAccuracy } : {}), ...(delivery ? { delivery } : {}), ...(liveness ? { liveness } : {}), ...(priceTrap ? { price_trap: priceTrap } : {}), scope_note: PREFLIGHT_SCOPE_NOTE, checked_at: new Date().toISOString() };
 }
 
 // Pure delivery-readiness verdict. Exported for unit tests. LEAK requires BOTH
@@ -9787,7 +9793,120 @@ async function fetchSelfManifestAdvertised(targetUrl: string): Promise<number | 
   } catch { return null; }
 }
 
-export async function x402Preflight(url: string, samples = 1, advertisedUsdc: string | null = null): Promise<PreflightResult> {
+// ── LIVENESS TAXONOMY ───────────────────────────────────────────────────────
+// x402 catalog buyers now filter endpoints on a liveness label (the incumbent
+// oracle publishes {dead / zombie / never_paid_zombie} over the whole agentic
+// catalog). We already observe everything needed to label ONE endpoint honestly
+// from the read-only probe we run anyway (reachability + the 402 challenge +
+// settle-completeness + the reliability burst) — this just NAMES it so a buyer
+// can filter our result the same way. HONEST SCOPE: a point-in-time read of
+// whether THIS endpoint is a working payable x402 resource right now — never a
+// payment-history claim (we are not an indexer; we do not fabricate NEVER_PAID).
+//   LIVE   — reachable, presents a settle-complete 402, and (if sampled) stable.
+//   ZOMBIE — reachable / listed-active but NOT actually payable now: a malformed
+//            402, an erroring/non-x402 response, or a flapping burst. The scout's
+//            "erroring/hr still is_active:true" case.
+//   DEAD   — never answered (unreachable/gone), even across a reliability burst.
+export interface PreflightLiveness {
+  label: "LIVE" | "ZOMBIE" | "DEAD";
+  reachable: boolean;
+  presents_challenge: boolean;  // answered HTTP 402
+  payable: boolean;             // 402 + settle-complete accepts[]
+  stable: boolean | null;       // burst agreement; null when not sampled (samples=1)
+  note: string;
+}
+export function computeLiveness(
+  reachable: boolean,
+  presentsChallenge: boolean,
+  payable: boolean,
+  reliability?: PreflightReliability,
+): PreflightLiveness {
+  const reachableEff = reachable || (reliability !== undefined && reliability.reachable_rate > 0);
+  const stable = reliability !== undefined ? reliability.stable : null;
+  const base = { reachable: reachableEff, presents_challenge: presentsChallenge, payable, stable };
+  if (!reachableEff) {
+    return { ...base, label: "DEAD",
+      note: reliability !== undefined
+        ? `endpoint did not answer on any of ${reliability.samples} probes — gone or unreachable`
+        : "endpoint did not answer — gone or unreachable" };
+  }
+  if (payable) {
+    const flapping = reliability !== undefined && (!reliability.stable || reliability.settle_rate < 1);
+    if (flapping) {
+      return { ...base, label: "ZOMBIE",
+        note: `reachable and presents a 402 but payability flaps across the burst (settle ${reliability!.settle_consistency}) — listed-active yet not reliably payable right now` };
+    }
+    return { ...base, label: "LIVE",
+      note: reliability !== undefined
+        ? `reachable, presents a settle-complete 402, stable across ${reliability.samples} probes — a working payable x402 endpoint right now`
+        : "reachable and presents a settle-complete 402 — a working payable x402 endpoint right now (single probe; pass &samples=N to burst-test stability)" };
+  }
+  return { ...base, label: "ZOMBIE",
+    note: presentsChallenge
+      ? "reachable and answers HTTP 402 but the challenge is not settle-complete — listed-active yet not actually payable"
+      : "reachable but does not present a payable x402 challenge — listed-active (or catalog-indexed) yet not a working x402 resource right now" };
+}
+
+// ── ABSOLUTE PRICE-TRAP FLAG ─────────────────────────────────────────────────
+// price_accuracy only checks SELF-CONSISTENCY (advertised == charged). A honeypot
+// whose advertised price equals its live price passes MATCH clean while still
+// charging an absurd amount — the documented x402 trap zone is 74 endpoints
+// >= $1,000/call ($23.2M aggregate sticker), incl. several at $500,000. This is
+// an ABSOLUTE sanity flag independent of self-consistency: an autonomous agent
+// should essentially never silently auto-pay a per-call price above a sane
+// ceiling. Two honest, zero-COGS tiers (pure arithmetic on the live wire amount):
+//   extreme  — charged >= $1,000/call: the honeypot trap zone; no legitimate
+//              x402 micro-service charges this per call => AVOID.
+//   elevated — charged >= $1/call (or over a caller-supplied &max budget):
+//              above the typical x402 micro-payment band => CAUTION, confirm intent.
+const PRICE_TRAP_ELEVATED_ATOMIC = 1_000_000;      // $1.00 in USDC atomic (6 dp)
+const PRICE_TRAP_EXTREME_ATOMIC = 1_000_000_000;   // $1,000.00 — the documented trap zone floor
+export interface PriceTrap {
+  flagged: boolean;
+  tier: "none" | "elevated" | "extreme";
+  charged_atomic: number | null;
+  charged_usdc: string | null;
+  ceiling_usdc: string;              // the absolute elevated ceiling applied
+  extreme_ceiling_usdc: string;      // the extreme/AVOID ceiling applied
+  caller_max_usdc: string | null;    // caller's own budget ceiling (&max=), if supplied
+  exceeds_caller_max: boolean;
+  note: string;
+}
+export function computePriceTrap(
+  chargedAtomic: number | null,
+  callerMaxAtomic: number | null,
+  decimals = PRICE_ASSET_DECIMALS,
+): PriceTrap {
+  const base = {
+    charged_atomic: chargedAtomic,
+    charged_usdc: atomicToUsdcStr(chargedAtomic, decimals),
+    ceiling_usdc: atomicToUsdcStr(PRICE_TRAP_ELEVATED_ATOMIC, decimals)!,
+    extreme_ceiling_usdc: atomicToUsdcStr(PRICE_TRAP_EXTREME_ATOMIC, decimals)!,
+    caller_max_usdc: atomicToUsdcStr(callerMaxAtomic, decimals),
+  };
+  if (chargedAtomic === null) {
+    return { ...base, flagged: false, tier: "none", exceeds_caller_max: false,
+      note: "no chargeable amount observed on the wire — no absolute price check possible" };
+  }
+  const exceedsCaller = callerMaxAtomic !== null && chargedAtomic > callerMaxAtomic;
+  const extreme = chargedAtomic >= PRICE_TRAP_EXTREME_ATOMIC;
+  const elevated = chargedAtomic >= PRICE_TRAP_ELEVATED_ATOMIC;
+  const tier: PriceTrap["tier"] = extreme ? "extreme" : elevated ? "elevated" : "none";
+  const flagged = extreme || elevated || exceedsCaller;
+  let note: string;
+  if (extreme) {
+    note = `the live 402 charges ${base.charged_usdc} USDC/call — at or above the ${base.extreme_ceiling_usdc} trap-zone floor; no legitimate x402 micro-service prices a single call this high. Treat as a probable honeypot: DO NOT auto-pay`;
+  } else if (elevated) {
+    note = `the live 402 charges ${base.charged_usdc} USDC/call — above the ${base.ceiling_usdc} typical x402 micro-payment ceiling${exceedsCaller ? ` and above your &max of ${base.caller_max_usdc}` : ""}; confirm this per-call price is intended before paying`;
+  } else if (exceedsCaller) {
+    note = `the live 402 charges ${base.charged_usdc} USDC/call — above your supplied &max budget of ${base.caller_max_usdc}; within the normal micro-payment band but over your stated ceiling`;
+  } else {
+    note = `the live 402 charges ${base.charged_usdc} USDC/call — within the normal x402 micro-payment band (below ${base.ceiling_usdc})`;
+  }
+  return { ...base, flagged, tier, exceeds_caller_max: exceedsCaller, note };
+}
+
+export async function x402Preflight(url: string, samples = 1, advertisedUsdc: string | null = null, callerMaxUsdc: string | null = null): Promise<PreflightResult> {
   const started = Date.now();
   const checks: PreflightCheck[] = [];
   const findings: ScanFinding[] = [];
@@ -9822,7 +9941,9 @@ export async function x402Preflight(url: string, samples = 1, advertisedUsdc: st
       for (let i = 1; i < n; i++) probes.push(await probeSettleOnce(url));
       rel = buildReliability(probes);
     }
-    return preflightResult(url, started, "CAUTION", false, checks, findings, rel);
+    const deadLiveness = computeLiveness(false, false, false, rel);
+    checks.push({ name: "liveness", ok: false, detail: `liveness: ${deadLiveness.label} — ${deadLiveness.note}`, fix: "confirm the URL is live and publicly reachable" });
+    return preflightResult(url, started, "CAUTION", false, checks, findings, rel, undefined, undefined, deadLiveness);
   }
   checks.push({ name: "reachability", ok: true, detail: `responded HTTP ${res.status}`, fix: null });
 
@@ -9992,20 +10113,42 @@ export async function x402Preflight(url: string, samples = 1, advertisedUsdc: st
     }
   }
 
-  // Verdict. AVOID on a hard problem (won't settle, a critical/high finding, or
-  // a sanctioned/flagged payTo); CAUTION on any soft issue (incl. a flapping
-  // reliability burst or an advertised-vs-charged OVERCHARGE); else PAY. A
-  // delivery LEAK can only arise on a NON-402 response (the resource came back
-  // on an unpaid request), so will_settle is already false and the verdict is
-  // AVOID — the delivery.note explains WHY (mis-gated paywall), no extra branch.
+  // (8) ABSOLUTE PRICE-TRAP — independent of price_accuracy's self-consistency.
+  // A honeypot whose advertised==live price passes MATCH clean still trips this
+  // if the per-call amount is absurd. extreme (>=$1,000/call) => AVOID; elevated
+  // (>=$1/call or over the caller's &max) => CAUTION. Pure arithmetic, zero COGS.
+  const callerMaxAtomic = usdcDollarsToAtomic(callerMaxUsdc);
+  const priceTrap = computePriceTrap(chargedAtomic, callerMaxAtomic);
+  if (priceTrap.flagged) {
+    checks.push({ name: "price_trap", ok: false, detail: priceTrap.note,
+      fix: priceTrap.tier === "extreme"
+        ? "do NOT auto-pay — a per-call price in the trap zone is almost certainly a honeypot"
+        : "confirm you intend to pay this per-call amount (it is above the typical x402 micro-payment band)" });
+  }
+
+  // (9) LIVENESS LABEL {LIVE|ZOMBIE|DEAD} — names what we already observed so a
+  // buyer can filter our result the same way they filter the catalog oracle.
+  // Informational: it never changes the verdict (the underlying signals already
+  // do — a ZOMBIE is unreachable-flapping or unsettleable, both already scored).
+  const liveness = computeLiveness(true, res.status === 402, will_settle, reliability);
+  checks.push({ name: "liveness", ok: liveness.label === "LIVE", detail: `liveness: ${liveness.label} — ${liveness.note}`, fix: liveness.label === "LIVE" ? null : "a ZOMBIE/DEAD endpoint is listed-active but not a working payable x402 resource right now" });
+
+  // Verdict. AVOID on a hard problem (won't settle, a critical/high finding, a
+  // sanctioned/flagged payTo, or an extreme price-trap); CAUTION on any soft
+  // issue (incl. a flapping reliability burst, an advertised-vs-charged
+  // OVERCHARGE, or an elevated/over-budget price); else PAY. A delivery LEAK can
+  // only arise on a NON-402 response (the resource came back on an unpaid
+  // request), so will_settle is already false and the verdict is AVOID — the
+  // delivery.note explains WHY (mis-gated paywall), no extra branch.
   const hasCritHigh = findings.some((f) => f.severity === "critical" || f.severity === "high");
   const flapping = reliability !== undefined && !reliability.stable;
-  const anySoftIssue = checks.some((c) => !c.ok) || findings.length > 0 || nonUsdcAsset || flapping || overcharge;
+  const priceTrapExtreme = priceTrap.tier === "extreme";
+  const anySoftIssue = checks.some((c) => !c.ok) || findings.length > 0 || nonUsdcAsset || flapping || overcharge || priceTrap.flagged;
   let verdict: PreflightResult["verdict"];
-  if (!will_settle || hasCritHigh || payToBad) verdict = "AVOID";
+  if (!will_settle || hasCritHigh || payToBad || priceTrapExtreme) verdict = "AVOID";
   else if (anySoftIssue) verdict = "CAUTION";
   else verdict = "PAY";
-  return preflightResult(url, started, verdict, will_settle, checks, findings, reliability, priceAccuracy, delivery);
+  return preflightResult(url, started, verdict, will_settle, checks, findings, reliability, priceAccuracy, delivery, liveness, priceTrap);
 }
 
 app.get("/x402/preflight", async (c) => {
@@ -10018,8 +10161,9 @@ app.get("/x402/preflight", async (c) => {
   // (single probe, backward-compatible).
   const samples = Math.max(1, Math.min(5, parseInt(c.req.query("samples") ?? "1", 10) || 1));
   const advertised = c.req.query("advertised") ?? null;
-  const result = await x402Preflight(url, samples, advertised);
-  console.log(JSON.stringify({ event: "paid_request", endpoint: "/x402/preflight", url, verdict: result.verdict, will_settle: result.will_settle, samples, settle_consistency: result.reliability?.settle_consistency, price_accuracy: result.price_accuracy?.verdict, delivery: result.delivery?.verdict, findings: result.findings.length, ts: result.checked_at }));
+  const max = c.req.query("max") ?? null;
+  const result = await x402Preflight(url, samples, advertised, max);
+  console.log(JSON.stringify({ event: "paid_request", endpoint: "/x402/preflight", url, verdict: result.verdict, will_settle: result.will_settle, samples, settle_consistency: result.reliability?.settle_consistency, price_accuracy: result.price_accuracy?.verdict, liveness: result.liveness?.label, price_trap: result.price_trap?.tier, delivery: result.delivery?.verdict, findings: result.findings.length, ts: result.checked_at }));
   const rail = c.get("rail") ?? "x402-paid";
   fireAndForget(c, trackPaidRequest("GET /x402/preflight", rail, makeUsageCounter(c.env)));
   return c.json(result);
@@ -10101,12 +10245,13 @@ app.get("/x402/preflight/preview", async (c) => {
   }
   const samples = Math.max(1, Math.min(5, parseInt(c.req.query("samples") ?? "1", 10) || 1));
   const advertised = c.req.query("advertised") ?? null;
+  const max = c.req.query("max") ?? null;
   const t = await trialToken(c, q);
   if (t.exhausted) {
     const pu = paidUrlFrom(c);
     return c.json({ error: "free preflight trial exhausted (3/day/IP) - this is NOT a result for the URL you asked about", trial: { real_checks_left_today: 0 }, paid: pu, paid_url: pu, price_usdc: "0.001", pay_with: `x402: npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f("${pu}") - pays USDC on Base automatically. Docs: https://api.greyridgesignals.ai/llms.txt` }, { status: 429 });
   }
-  return c.json({ ...(await x402Preflight(q, samples, advertised)), trial: { real_checks_left_today: t.left } });
+  return c.json({ ...(await x402Preflight(q, samples, advertised, max)), trial: { real_checks_left_today: t.left } });
 });
 
 // ---------------------------------------------------------------------------
@@ -17819,19 +17964,20 @@ const mcpHandler = createMcpHandler(() => {
     "x402_preflight",
     {
       description:
-        "Should an agent pay this x402 endpoint? Pre-payment check of an UNKNOWN x402 URL: fetch it once (never pays) to validate the 402 challenge + accepts[] (scheme/network/payTo/amount/asset/resource = will it settle) AND scan the resource + any advertised MCP tools for LLM01/LLM08 prompt-injection and screen payTo against the OFAC SDN + community scam lists (safe to pay) AND verify the PRICE — does the live accepts[].amount match the advertised price? pass advertised=<usdc> (the figure your catalog quoted) or it self-checks the endpoint's /.well-known/x402: MATCH | OVERCHARGE | UNDERCHARGE. Optional samples=N (1-5) runs a reliability/payability burst (settle-consistency + latency; a flapping endpoint downgrades PAY to CAUTION). Returns verdict PAY | CAUTION | AVOID + per-check fix hints + latency. Read-only, never a settlement guarantee. Cost: $0.001 USDC per call via x402.",
+        "Should an agent pay this x402 endpoint? Pre-payment check of an UNKNOWN x402 URL: fetch it once (never pays) to validate the 402 challenge + accepts[] (scheme/network/payTo/amount/asset/resource = will it settle) AND label its LIVENESS (LIVE | ZOMBIE | DEAD — is it a working payable endpoint right now, or listed-active-but-broken) AND flag an absolute PRICE TRAP (a honeypot charging >= $1,000/call trips AVOID even when its advertised==live price looks self-consistent; pass max=<usdc> for your own budget ceiling) AND scan the resource + any advertised MCP tools for LLM01/LLM08 prompt-injection and screen payTo against the OFAC SDN + community scam lists (safe to pay) AND verify the PRICE — does the live accepts[].amount match the advertised price? pass advertised=<usdc> (the figure your catalog quoted) or it self-checks the endpoint's /.well-known/x402: MATCH | OVERCHARGE | UNDERCHARGE. Optional samples=N (1-5) runs a reliability/payability burst (settle-consistency + latency; a flapping endpoint downgrades PAY to CAUTION). Returns verdict PAY | CAUTION | AVOID + per-check fix hints + latency. Read-only, never a settlement guarantee. Cost: $0.001 USDC per call via x402.",
       inputSchema: {
         url: z.string().describe("the x402 endpoint URL to pre-check before paying"),
         advertised: z.string().optional().describe("optional: the price (USDC dollars, e.g. 0.001) your catalog/listing quoted — returns MATCH/OVERCHARGE/UNDERCHARGE vs the live accepts[].amount; omit to self-check against the endpoint's own /.well-known/x402"),
+        max: z.string().optional().describe("optional: your per-call budget ceiling in USDC dollars (e.g. 0.05) — the result flags price_trap.exceeds_caller_max if the live charge is over it; an absolute >=$1000/call trap trips AVOID regardless"),
         samples: z.number().int().min(1).max(5).optional().describe("optional reliability burst: sample the 402 challenge N times (1-5) for settle-consistency + latency; default 1"),
       },
     },
-    async ({ url, advertised, samples }) => {
+    async ({ url, advertised, max, samples }) => {
       if (!/^https?:\/\//i.test(url)) {
         return { content: [{ type: "text" as const, text: "Error: url must be an absolute http(s) x402 endpoint URL" }] };
       }
       try {
-        const result = await x402Preflight(url, samples ?? 1, advertised ?? null);
+        const result = await x402Preflight(url, samples ?? 1, advertised ?? null, max ?? null);
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };

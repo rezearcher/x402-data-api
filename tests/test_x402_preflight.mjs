@@ -17,7 +17,7 @@ import { register } from "node:module";
 
 register(new URL("./cfw-hooks.mjs", import.meta.url));
 
-const { x402Preflight, makeRoutes, ROUTE_CATALOG, computePriceAccuracy, findManifestAdvertisedAtomic, usdcDollarsToAtomic, computeDelivery } = await import("../src/index.ts");
+const { x402Preflight, makeRoutes, ROUTE_CATALOG, computePriceAccuracy, findManifestAdvertisedAtomic, usdcDollarsToAtomic, computeDelivery, computeLiveness, computePriceTrap } = await import("../src/index.ts");
 
 let pass = 0;
 function check(name, fn) { return Promise.resolve(fn()).then(() => { pass++; console.log(`ok - ${name}`); }); }
@@ -357,6 +357,143 @@ await check("e2e: open paywall (200 data) + paid manifest -> LEAK + AVOID", asyn
   assert.strictEqual(r.delivery.verdict, "LEAK", `delivery ${r.delivery.verdict}`);
   assert.strictEqual(r.verdict, "AVOID", `verdict ${r.verdict} (no 402 to pay)`);
   assert.ok(r.checks.find((c) => c.name === "delivery" && !c.ok), "delivery check flagged");
+});
+
+// ── LIVENESS TAXONOMY {LIVE|ZOMBIE|DEAD} (the catalog-oracle filter buyers use) ──
+
+// 32. Pure: reachable + payable + stable burst -> LIVE.
+await check("liveness: reachable+payable+stable -> LIVE", () => {
+  const rel = { samples: 3, settle_consistency: "3/3", settle_rate: 1, reachable_rate: 1, stable: true, latency_ms: {}, probes: [], note: "" };
+  const l = computeLiveness(true, true, true, rel);
+  assert.strictEqual(l.label, "LIVE", `label ${l.label}`);
+  assert.strictEqual(l.payable, true, "payable");
+  assert.strictEqual(l.stable, true, "stable");
+});
+
+// 33. Pure: reachable + payable but FLAPPING burst -> ZOMBIE (listed-active, not reliably payable).
+await check("liveness: reachable+payable+flapping -> ZOMBIE", () => {
+  const rel = { samples: 3, settle_consistency: "1/3", settle_rate: 0.333, reachable_rate: 1, stable: false, latency_ms: {}, probes: [], note: "" };
+  const l = computeLiveness(true, true, true, rel);
+  assert.strictEqual(l.label, "ZOMBIE", `label ${l.label}`);
+  assert.ok(/flap/i.test(l.note), "note explains flapping");
+});
+
+// 34. Pure: reachable, answers 402 but NOT settle-complete -> ZOMBIE.
+await check("liveness: reachable+402-but-unsettleable -> ZOMBIE", () => {
+  const l = computeLiveness(true, true, false);
+  assert.strictEqual(l.label, "ZOMBIE", `label ${l.label}`);
+  assert.ok(/not settle-complete|not actually payable/i.test(l.note), "note explains unsettleable");
+});
+
+// 35. Pure: reachable but no x402 challenge at all -> ZOMBIE (up, not a working x402 resource).
+await check("liveness: reachable+no-challenge -> ZOMBIE", () => {
+  const l = computeLiveness(true, false, false);
+  assert.strictEqual(l.label, "ZOMBIE", `label ${l.label}`);
+});
+
+// 36. Pure: never answered -> DEAD; and a burst that never reached -> DEAD.
+await check("liveness: unreachable -> DEAD (single + burst)", () => {
+  assert.strictEqual(computeLiveness(false, false, false).label, "DEAD", "single unreachable -> DEAD");
+  const relDead = { samples: 3, settle_consistency: "0/3", settle_rate: 0, reachable_rate: 0, stable: true, latency_ms: {}, probes: [], note: "" };
+  assert.strictEqual(computeLiveness(false, false, false, relDead).label, "DEAD", "burst all-unreachable -> DEAD");
+  // but a burst that reached SOMETIMES while the first probe failed -> ZOMBIE (flaps in/out)
+  const relFlap = { samples: 3, settle_consistency: "0/3", settle_rate: 0, reachable_rate: 0.666, stable: true, latency_ms: {}, probes: [], note: "" };
+  assert.strictEqual(computeLiveness(false, false, false, relFlap).label, "ZOMBIE", "reached-sometimes -> ZOMBIE");
+});
+
+// 37. E2E: a well-formed clean 402 (samples=3 stable) -> liveness LIVE on the result.
+await check("e2e: clean stable 402 -> result.liveness LIVE", async () => {
+  stubFetch(() => fakeRes(402, GOOD_402));
+  const r = await x402Preflight("https://seller.example/data", 3);
+  restoreFetch();
+  assert.ok(r.liveness, "liveness present");
+  assert.strictEqual(r.liveness.label, "LIVE", `label ${r.liveness.label}`);
+  assert.strictEqual(r.verdict, "PAY", `verdict ${r.verdict} (LIVE never penalizes)`);
+  assert.ok(r.checks.find((c) => c.name === "liveness" && c.ok), "liveness check ok");
+});
+
+// 38. E2E: an unreachable target -> result.liveness DEAD (and CAUTION, degrade-open).
+await check("e2e: unreachable -> result.liveness DEAD + CAUTION", async () => {
+  stubFetch(() => { throw new Error("ENOTFOUND"); });
+  const r = await x402Preflight("https://dead.example/");
+  restoreFetch();
+  assert.strictEqual(r.liveness.label, "DEAD", `label ${r.liveness?.label}`);
+  assert.strictEqual(r.verdict, "CAUTION", `verdict ${r.verdict}`);
+});
+
+// ── ABSOLUTE PRICE-TRAP (the gap: a $500k honeypot whose advertised==live is MATCH-clean) ──
+
+// 39. Pure: a normal micro-payment ($0.004) -> not flagged, tier none.
+await check("price_trap: $0.004 -> not flagged (none)", () => {
+  const t = computePriceTrap(4000, null);
+  assert.strictEqual(t.flagged, false, "not flagged");
+  assert.strictEqual(t.tier, "none", `tier ${t.tier}`);
+});
+
+// 40. Pure: the documented $500,000/call honeypot -> extreme (AVOID tier).
+await check("price_trap: $500,000/call -> extreme", () => {
+  const t = computePriceTrap(500000 * 1_000_000, null);
+  assert.strictEqual(t.tier, "extreme", `tier ${t.tier}`);
+  assert.strictEqual(t.flagged, true, "flagged");
+  assert.ok(/honeypot|trap-zone/i.test(t.note), "note names the trap zone");
+});
+
+// 41. Pure: $2/call -> elevated (above the $1 micro-payment ceiling, CAUTION tier).
+await check("price_trap: $2/call -> elevated", () => {
+  const t = computePriceTrap(2_000_000, null);
+  assert.strictEqual(t.tier, "elevated", `tier ${t.tier}`);
+  assert.strictEqual(t.flagged, true, "flagged");
+});
+
+// 42. Pure: a sub-$1 charge over the caller's &max -> flagged (exceeds_caller_max), tier none.
+await check("price_trap: $0.05 over &max $0.01 -> exceeds_caller_max, tier none", () => {
+  const t = computePriceTrap(50000, 10000); // charged $0.05, max $0.01
+  assert.strictEqual(t.exceeds_caller_max, true, "exceeds caller max");
+  assert.strictEqual(t.flagged, true, "flagged");
+  assert.strictEqual(t.tier, "none", "still within the absolute band");
+});
+
+// 43. Pure: no chargeable amount -> not flagged (degrade-open).
+await check("price_trap: null charge -> not flagged (degrade-open)", () => {
+  const t = computePriceTrap(null, null);
+  assert.strictEqual(t.flagged, false, "not flagged");
+  assert.ok(/no chargeable amount/i.test(t.note), "note explains");
+});
+
+// 44. E2E: a honeypot 402 charging $500,000 whose advertised==live is MATCH-clean
+//     still -> AVOID via price_trap=extreme (the self-consistency gap, closed).
+await check("e2e: $500k honeypot, advertised==live (MATCH) -> AVOID via price_trap extreme", async () => {
+  const atomic = String(500000 * 1_000_000); // 5e11 atomic
+  const honeypot = { x402Version: 2, accepts: [{ scheme: "exact", network: "eip155:8453", asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", payTo: GOOD_PAYTO, maxAmountRequired: atomic, resource: "https://trap.example/swarm", extra: { name: "USD Coin" } }] };
+  stubFetch(() => fakeRes(402, honeypot));
+  // advertised == live: price_accuracy would be MATCH (clean) — the trap must be caught independently.
+  const r = await x402Preflight("https://trap.example/swarm", 1, "500000");
+  restoreFetch();
+  assert.strictEqual(r.will_settle, true, "the challenge is wire-valid (settles)");
+  assert.strictEqual(r.price_accuracy.verdict, "MATCH", "advertised==live is self-consistent (MATCH) — the old blind spot");
+  assert.ok(r.price_trap, "price_trap present");
+  assert.strictEqual(r.price_trap.tier, "extreme", `tier ${r.price_trap.tier}`);
+  assert.strictEqual(r.verdict, "AVOID", `verdict ${r.verdict} (extreme price-trap overrides a clean MATCH)`);
+  assert.ok(r.checks.find((c) => c.name === "price_trap" && !c.ok), "price_trap check flagged");
+});
+
+// 45. E2E: a normal $0.004 call with no &max -> price_trap present, not flagged, PAY kept.
+await check("e2e: normal $0.004, no max -> price_trap none, PAY", async () => {
+  stubFetch(() => fakeRes(402, GOOD_402));
+  const r = await x402Preflight("https://seller.example/data", 1, "0.004");
+  restoreFetch();
+  assert.ok(r.price_trap, "price_trap present");
+  assert.strictEqual(r.price_trap.flagged, false, "not flagged");
+  assert.strictEqual(r.verdict, "PAY", `verdict ${r.verdict}`);
+});
+
+// 46. E2E: &max below the live charge (both sub-$1) -> CAUTION (over budget), not AVOID.
+await check("e2e: live $0.004 over &max $0.001 -> CAUTION (budget), not AVOID", async () => {
+  stubFetch(() => fakeRes(402, GOOD_402)); // charges 4000 atomic = $0.004
+  const r = await x402Preflight("https://seller.example/data", 1, null, "0.001");
+  restoreFetch();
+  assert.strictEqual(r.price_trap.exceeds_caller_max, true, "exceeds caller max");
+  assert.strictEqual(r.verdict, "CAUTION", `verdict ${r.verdict} (over budget, not a honeypot)`);
 });
 
 console.log(`\n${pass} checks passed`);
