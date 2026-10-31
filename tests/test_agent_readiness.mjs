@@ -93,6 +93,30 @@ const eq = (a, b, msg) => { assert.strictEqual(a, b, `${msg} (got ${JSON.stringi
   ok(j.supportedInterfaces.every((i) => i.transport && i.url), "each interface has transport + url");
 }
 
+// --- mcp server-card has serverInfo.name (MCP discovery requirement) ---------
+{
+  const res = await app.request("/.well-known/mcp/server-card.json", {}, {});
+  const j = await res.json();
+  ok(j.serverInfo && j.serverInfo.name === "grey-ridge-x402", "mcp card exposes serverInfo.name");
+}
+
+// --- auth.md H1 contains "auth.md" (scanner requirement) ---------------------
+{
+  const res = await app.request("/auth.md", {}, {});
+  const body = await res.text();
+  ok(/^#\s.*auth\.md/im.test(body), "auth.md H1 contains 'auth.md'");
+}
+
+// --- /api + /api/v1 x402 signpost 402 (commerce.x402 detection) --------------
+for (const p of ["/api", "/api/v1"]) {
+  const res = await app.request(p, {}, { PAY_TO: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" });
+  eq(res.status, 402, `${p} returns HTTP 402 (x402 signpost)`);
+  const j = await res.json();
+  eq(j.x402Version, 2, `${p} body is an x402 v2 challenge`);
+  ok(Array.isArray(j.accepts) && j.accepts[0].network === "eip155:8453" && j.accepts[0].asset.startsWith("0x"), `${p} accepts[] declares Base USDC`);
+  ok(j.resource.url.includes("/.well-known/x402"), `${p} points at the manifest (signpost, not a dup SKU)`);
+}
+
 // --- robots.txt Content-Signal ----------------------------------------------
 {
   const res = await app.request("/robots.txt", {}, {});

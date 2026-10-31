@@ -2220,6 +2220,8 @@ app.get("/.well-known/api-catalog", (c) => {
 app.get("/.well-known/mcp/server-card.json", (c) =>
   c.json({
     schemaVersion: "2025-06-18",
+    // MCP initialize-result shape: discovery clients key off serverInfo.name.
+    serverInfo: { name: "grey-ridge-x402", version: "0.1.0" },
     name: "grey-ridge-x402",
     title: "Grey Ridge Signals — x402 Data & Security MCP",
     description:
@@ -2291,7 +2293,7 @@ app.get("/.well-known/oauth-protected-resource", (c) =>
 app.get("/auth.md", (c) => {
   c.header("Content-Type", "text/markdown; charset=utf-8");
   return c.body(
-    `# Authentication — Grey Ridge Signals x402 API\n\n` +
+    `# auth.md — Authentication (Grey Ridge Signals x402 API)\n\n` +
       `This API uses **x402 micropayment**, not API keys or OAuth. There is no account to create.\n\n` +
       "Each paid route returns `HTTP 402 Payment Required` with an x402 v2 challenge until the request\n" +
       "carries a valid `X-PAYMENT` header: an EIP-3009 gasless USDC authorization on Base (network\n" +
@@ -2316,6 +2318,47 @@ app.get("/.well-known/security.txt", (c) => {
       `Policy: ${CANONICAL_ORIGIN}/terms\n`,
   );
 });
+
+// x402 service entrypoint — GET /api and /api/v1 return the x402 v2 payment
+// challenge (HTTP 402) that signals "this base is an x402-paid API." It is a
+// signpost, not a duplicate SKU: it sells nothing itself; `resource.url` and
+// the body point at /.well-known/x402 (the free manifest enumerating every
+// payable route) and accepts[] mirrors our floor-priced route so an x402 client
+// learns the asset/network/payTo. Agent-readiness scanners probe /api and /api/v1
+// for a 402 to classify an endpoint as an x402 commerce service.
+const x402Signpost = (c: Context) => {
+  return c.json(
+    {
+      x402Version: 2,
+      error: "Payment required",
+      resource: {
+        url: CANONICAL_ORIGIN + "/.well-known/x402",
+        description:
+          "Grey Ridge Signals x402 API — agent-native, pay-per-call Base on-chain / crypto / DeFi data and security tools. " +
+          "This base path requires x402 payment; the manifest enumerates every payable route, its price, and a free preview.",
+        mimeType: "application/json",
+        serviceName: "Grey Ridge Signals — x402 Data & Security API",
+        tags: ["x402", "data", "security", "base", "usdc"],
+      },
+      accepts: [
+        {
+          scheme: "exact",
+          network: "eip155:8453",
+          amount: "1000",
+          asset: USDC_BASE,
+          payTo: c.env.PAY_TO,
+          maxTimeoutSeconds: 300,
+          extra: { name: "USD Coin", version: "2", decimals: 6 },
+        },
+      ],
+      manifest: CANONICAL_ORIGIN + "/.well-known/x402",
+      openapi: CANONICAL_ORIGIN + "/openapi.json",
+    },
+    402,
+  );
+};
+app.get("/api", x402Signpost);
+app.get("/api/v1", x402Signpost);
 
 // A2A Agent Card — RFC-8615 well-known URI for Agent-to-Agent protocol
 // discovery (https://a2a-protocol.org/latest/topics/agent-discovery).
