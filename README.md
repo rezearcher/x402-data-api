@@ -62,6 +62,16 @@ Base-native, multi-provider RPC with automatic failover (never fails a paid call
 | `GET /enrich/tech-risk?domain=` | $0.05 | Tech-stack fingerprint → CVE (NVD) + EPSS + CISA-KEV attack-surface risk |
 | `GET /enrich/domain?domain=` | $0.01 | Firmographic + tech-stack enrichment, incl. **full subdomain enumeration** (`subdomains[]`) via crt.sh certificate-transparency logs, RDAP, DoH, HTTP fingerprint |
 
+### x402 payment verification (before and after your agent pays)
+| Endpoint | Price | Returns |
+|---|---|---|
+| `GET /x402/preflight?url=` | $0.001 | Pre-pay check on any x402 endpoint: will it settle, is the payee safe (OFAC / scam lists), price accuracy, delivery readiness, liveness → `PAY` / `CAUTION` / `AVOID` |
+| `GET /x402/receipt-verify?tx=&url=` | $0.004 | Post-pay proof: reads the Base settlement tx from two independent RPCs and reconciles the USDC `Transfer` against the endpoint's own live 402 (`payTo` + amount) → `SETTLED` / `UNDERPAID` / `WRONG_RECIPIENT` / `NO_TRANSFER` / `REVERTED` / `NOT_FOUND` / `UNVERIFIED` |
+
+Free in MCP: `x402_receipt_verify_preview` (tx + payto, no payment).
+
+How `x402_receipt_verify` differs from the read-only verifier [`@tensorfeed/x402-base-mcp`](https://www.npmjs.com/package/@tensorfeed/x402-base-mcp) (`verify_x402_settlement`, checked against its 0.2.1 README): theirs matches a Transfer against a recipient and amount the caller types in. Ours can pull `payTo` and amount from the endpoint's live 402 (`?url=`), so a wrong or stale expectation doesn't pass, and it compares two RPC providers and fails closed if they disagree. Theirs is a good fit if you just want generic Base reads (balances, `eth_call`) in the same server; ours only does verification.
+
 Free previews: `GET /crypto/prices/preview`, `/crypto/funding/preview`, `/defi/yields/preview`, `/chain/block-number/preview`, `/chain/gas-price/preview` (full live data, not truncated), `/scan/mcp/preview?url=`. **Zero-egress MCP scan** (for private/OAuth-gated servers): `POST /scan/mcp/preview` with `{"tools":[…]}` is the free counts-only preview; `POST /scan/mcp` with the same body is the paid itemized scan — nothing leaves your side. One-liner: [`examples/mcp-scan-preview.sh`](examples/mcp-scan-preview.sh).
 
 ---
