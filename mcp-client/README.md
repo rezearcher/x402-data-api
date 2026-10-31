@@ -52,11 +52,7 @@ x402-data-api-mcp
 X402_WALLET_PRIVATE_KEY=0x... x402-data-api-mcp
 ```
 
-Install straight from source (always current):
-
-```bash
-npm install -g "github:rezearcher/x402-data-api#main:mcp-client"
-```
+The client is a thin live proxy, so the published package always exposes the Worker's current tool set (fetched via `tools/list` at connect time).
 
 ## Configuration
 
