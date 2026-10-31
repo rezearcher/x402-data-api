@@ -31,7 +31,7 @@ const manifest = await (await app.request("/.well-known/x402", {}, env)).json();
 ok(manifest.integrations && Array.isArray(manifest.integrations.installable_tools),
   "x402 manifest exposes integrations.installable_tools[]");
 const tools = manifest.integrations.installable_tools;
-ok(tools.length === 3, `3 installable framework packages published (got ${tools.length})`);
+ok(tools.length >= 3, `at least the 3 framework SDK packages published (got ${tools.length})`);
 
 // The set of paid routes the manifest actually serves (so claims can't drift).
 const liveRoutes = new Set(manifest.resources.map((r) => new URL(r.resource).pathname));
@@ -47,8 +47,9 @@ for (const t of tools) {
     `${t.framework}: repository is a rezearcher public mirror (${t.repository})`);
   // Install command is runnable: npm git-install for TS, pip git-install for Python.
   if (t.language === "Python") {
-    ok(/^pip install git\+https:\/\/github\.com\/rezearcher\//.test(t.install),
-      `${t.framework}: pip git-install command (${t.install})`);
+    // Either a git-install from a rezearcher mirror OR a published PyPI name.
+    ok(/^pip install (git\+https:\/\/github\.com\/rezearcher\/|greyridge-x402-tools)/.test(t.install),
+      `${t.framework}: pip install command (${t.install})`);
   } else {
     ok(/^npm i github:rezearcher\//.test(t.install),
       `${t.framework}: npm git-install command (${t.install})`);
@@ -66,7 +67,7 @@ for (const t of tools) {
 
 // --- /.well-known/agent-capabilities.json ------------------------------------
 const caps = await (await app.request("/.well-known/agent-capabilities.json", {}, env)).json();
-ok(Array.isArray(caps.installable_tools) && caps.installable_tools.length === 3,
+ok(Array.isArray(caps.installable_tools) && caps.installable_tools.length === tools.length,
   "agent-capabilities.json carries the same installable_tools index");
 ok(JSON.stringify(caps.installable_tools) === JSON.stringify(tools),
   "both discovery surfaces publish an identical installable_tools index (no drift)");

@@ -279,7 +279,7 @@ export const ROUTE_CATALOG_BASE: Array<[string, string, string, string, string, 
   ["/chain/block", "GET", "0.002", "2000", "Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.", ["rpc", "base", "onchain", "blockchain", "data"]],
   ["/chain/wallet", "GET", "0.003", "3000", "Wallet screening bundle (balance, activity, contract vs EOA check): ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]],
   ["/chain/wallet-screen", "GET", "0.004", "4000", "Is this wallet sanctioned OR a known scammer? Pre-trade screen for a counterparty / recipient / token-spender address before an agent sends, swaps or approves: exact match against the U.S. Treasury OFAC SDN crypto-address list AND community scam/phishing/wallet-drainer threat-intel (ScamSniffer + MEW darklist). Returns sanctioned (bool) + malicious (bool) + verdict (blocked/clear) + lists + the list sources and snapshot dates. 'clear' means not on these lists, not a safety guarantee. Use alongside /gate/swap and /chain/token-security to avoid sanctioned-or-scammer-counterparty liability.", ["security", "sanctions", "ofac", "compliance", "scam", "phishing", "drainer", "wallet", "base", "onchain", "screening", "data"]],
-  ["/x402/preflight", "GET", "0.001", "1000", "x402 pre-payment endpoint check — before an agent pays an unknown x402 URL, fetch it once (never pays): (1) validate the 402 challenge + accepts[] (will it settle), (2) scan the resource + advertised MCP tools for LLM01/LLM08 injection and screen payTo vs OFAC/scam lists (safe to pay), (3) optional &samples=N (1-5) reliability/payability burst (settle-consistency + latency). Returns PAY|CAUTION|AVOID + fix hints. Read-only, not a settlement guarantee. ?url=<endpoint>.", ["x402", "preflight", "security", "verify", "payment", "safe-to-pay", "reliability", "uptime", "data"]],
+  ["/x402/preflight", "GET", "0.001", "1000", "x402 pre-payment endpoint check — before an agent pays an unknown x402 URL, fetch it once (never pays): (1) validate the 402 challenge + accepts[] (will it settle), (2) scan the resource + advertised MCP tools for LLM01/LLM08 injection and screen payTo vs OFAC/scam lists (safe to pay), (3) PRICE ACCURACY — does the live accepts[].amount match the advertised price? pass &advertised=<usdc> or it self-checks the endpoint's /.well-known/x402: MATCH|OVERCHARGE|UNDERCHARGE, (4) optional &samples=N (1-5) reliability burst. Returns PAY|CAUTION|AVOID + fix hints. Read-only, not a settlement guarantee. ?url=<endpoint>.", ["x402", "preflight", "security", "verify", "payment", "safe-to-pay", "price-accuracy", "overcharge", "reliability", "uptime", "data"]],
   ["/dns", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH. Pass ?domain=stripe.com.", ["dns", "domain", "data", "recon"]],
   ["/whois", "GET", "0.01", "10000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain. Pass ?domain=cloudflare.com.", ["whois", "rdap", "domain", "data", "recon"]],
 ];
@@ -2898,7 +2898,7 @@ app.get("/openapi.json", (c) => {
       "/gate/swap/preview": { get: { summary: "FREE live sample of /gate/swap (no payment).", description: "Free go/hold/block sample for a demo token (?token=degen) OR any real Base 0x address, 3 free real-token checks per IP per day. Paid /gate/swap accepts ANY Base ERC-20 ($0.008). Honors side and notional_usd.", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-report/preview": { get: { summary: "FREE live sample of /chain/token-report (no payment).", description: "Free full trade-safety report for a demo token. Try ?token=aero. Paid /chain/token-report accepts ANY Base ERC-20 ($0.01).", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-security": paid("Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, contract source-verification (Sourcify), live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.", "0.009", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
-      "/x402/preflight": paid("x402 pre-payment endpoint check: fetch an unknown x402 URL once (never pays), validate the 402 challenge + accepts[] (will it settle), scan the resource + advertised MCP tools for LLM01/LLM08 prompt-injection and screen payTo against OFAC/scam lists (safe to pay). Returns PAY|CAUTION|AVOID + fix hints. Read-only, not a settlement guarantee.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to pre-check before paying", required: true, example: "https://api.greyridgesignals.ai/crypto/prices" }]),
+      "/x402/preflight": paid("x402 pre-payment check: fetch an unknown URL once (never pays), validate the 402 + accepts[] (will it settle), scan resource + MCP tools for LLM01/LLM08 and screen payTo vs OFAC/scam (safe to pay), and verify live accepts[].amount vs advertised price (&advertised=<usdc> or self-check): MATCH|OVERCHARGE|UNDERCHARGE. Returns PAY|CAUTION|AVOID. Not a settlement guarantee.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to pre-check before paying", required: true, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "advertised", desc: "optional USDC-dollars price your catalog quoted (e.g. 0.001) to verify against the live charge", required: false, example: "0.001" }]),
       "/dns": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "query", required: true, example: "stripe.com" }]),
       "/whois": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.01", [{ name: "domain", desc: "domain name to look up", in: "query", required: true, example: "cloudflare.com" }]),
     })),
@@ -4335,7 +4335,7 @@ export function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Should an agent pay this x402 endpoint? One call fetches the URL once (never pays), validates the 402 challenge + accepts[] (scheme/network/payTo/amount/asset/resource = will it settle), scans the resource + any advertised MCP tools for LLM01/LLM08 prompt-injection, and screens payTo against the OFAC + community scam lists (safe to pay). Returns PAY | CAUTION | AVOID with per-check results + fix hints + latency. Read-only, never a settlement guarantee.",
+        "Should an agent pay this x402 endpoint? One read-only call fetches it once (never pays): validates the 402 + accepts[] (will it settle), scans the resource + advertised MCP tools for LLM01/LLM08 injection and screens payTo vs OFAC/scam lists (safe to pay), and VERIFIES THE PRICE — live accepts[].amount vs advertised (pass &advertised=<usdc> or self-check /.well-known/x402): MATCH | OVERCHARGE | UNDERCHARGE. Returns PAY | CAUTION | AVOID + fix hints. Not a settlement guarantee.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -4345,6 +4345,7 @@ export function makeRoutes(payTo: string) {
           required: ["url"],
           properties: {
             url: { type: "string", description: "the x402 endpoint URL to pre-check before paying" },
+            advertised: { type: "string", description: "optional: the price (USDC dollars, e.g. 0.001) your catalog/listing quoted — the check returns MATCH/OVERCHARGE/UNDERCHARGE vs the live accepts[].amount. If omitted, the endpoint's own /.well-known/x402 manifest is used for a self-consistency check." },
             samples: { type: "integer", minimum: 1, maximum: 5, description: "optional reliability burst: sample the 402 challenge N times (1-5) and return settle-consistency + latency distribution; a flapping endpoint is downgraded PAY->CAUTION" },
           },
         },
@@ -4358,12 +4359,14 @@ export function makeRoutes(payTo: string) {
               { name: "accepts", ok: true, detail: "scheme=exact network=eip155:8453 asset=USDC payTo=0x… amount set", fix: null },
               { name: "payTo_safety", ok: true, detail: "payTo not on OFAC SDN nor community scam lists", fix: null },
               { name: "resource_scan", ok: true, detail: "no LLM01/LLM08 prompt-injection patterns in resource/tools", fix: null },
+              { name: "price_accuracy", ok: true, detail: "charged 0.001 USDC == advertised (source: self-manifest)", fix: null },
               { name: "reliability", ok: true, detail: "3/3 probes payable; latency median 210ms (max 240ms)", fix: null },
             ],
             findings: [],
             latency_ms: 142,
+            price_accuracy: { verdict: "MATCH", charged_atomic: 1000, charged_usdc: "0.001", advertised_atomic: 1000, advertised_usdc: "0.001", advertised_source: "self-manifest", ratio: 1, delta_atomic: 0, decimals: 6, note: "wire price matches the price in the endpoint's own /.well-known/x402 manifest (within rounding tolerance)" },
             reliability: { samples: 3, settle_consistency: "3/3", settle_rate: 1, reachable_rate: 1, stable: true, latency_ms: { min: 190, median: 210, max: 240 }, note: "point-in-time burst sampled now (not historical uptime); a stable burst is not a durability guarantee" },
-            scope_note: "static 402 wire-format + liveness + LLM01/LLM08 description scan + payTo flag; read-only, never pays; not a settlement guarantee.",
+            scope_note: "static 402 wire-format + liveness + LLM01/LLM08 description scan + payTo flag + advertised-vs-charged price-accuracy check; read-only, never pays; not a settlement guarantee.",
           },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
@@ -9218,14 +9221,15 @@ interface PreflightResult {
   findings: ScanFinding[];
   latency_ms: number;
   reliability?: PreflightReliability;
+  price_accuracy?: PriceAccuracyVerdict;
   scope_note: string;
   checked_at: string;
 }
 const PREFLIGHT_SCOPE_NOTE =
-  "static 402 wire-format + liveness + LLM01/LLM08 description scan + payTo OFAC/scam flag; read-only, never pays; not a settlement guarantee.";
+  "static 402 wire-format + liveness + LLM01/LLM08 description scan + payTo OFAC/scam flag + advertised-vs-charged price-accuracy check; read-only, never pays; not a settlement guarantee.";
 
-function preflightResult(url: string, started: number, verdict: PreflightResult["verdict"], will_settle: boolean, checks: PreflightCheck[], findings: ScanFinding[], reliability?: PreflightReliability): PreflightResult {
-  return { url, verdict, will_settle, checks, findings, latency_ms: Date.now() - started, ...(reliability ? { reliability } : {}), scope_note: PREFLIGHT_SCOPE_NOTE, checked_at: new Date().toISOString() };
+function preflightResult(url: string, started: number, verdict: PreflightResult["verdict"], will_settle: boolean, checks: PreflightCheck[], findings: ScanFinding[], reliability?: PreflightReliability, priceAccuracy?: PriceAccuracyVerdict): PreflightResult {
+  return { url, verdict, will_settle, checks, findings, latency_ms: Date.now() - started, ...(reliability ? { reliability } : {}), ...(priceAccuracy ? { price_accuracy: priceAccuracy } : {}), scope_note: PREFLIGHT_SCOPE_NOTE, checked_at: new Date().toISOString() };
 }
 
 // One lightweight 402-handshake probe (fetch-only, no LLM scan) used to sample
@@ -9277,10 +9281,160 @@ function buildReliability(probes: Array<{ reachable: boolean; http_402: boolean;
   };
 }
 
-export async function x402Preflight(url: string, samples = 1): Promise<PreflightResult> {
+// ── PRICE-ACCURACY VERIFICATION ────────────────────────────────────────────
+// The one axis no top-50 x402 seller checks (per two independent Base
+// chain-data surveys of the top sellers): does the price the endpoint ACTUALLY
+// charges at the wire (the live 402 accepts[].amount) match the price it
+// ADVERTISES? ~28% of a sampled service set mismatched; one charged 2x its
+// advertised rate. An autonomous buyer that trusts a directory/catalog price
+// can silently overpay every call. We compare the live atomic amount against an
+// advertised amount from two keyless, read-only sources — degrade-open: no
+// advertised figure => UNKNOWN, never a block: (a) caller-supplied
+// &advertised=<usdc dollars> (the price the agent believed it was paying, e.g.
+// from the listing it found), and (b) the endpoint's OWN /.well-known/x402
+// manifest entry for the same resource (self-consistency: advertised-in-catalog
+// vs charged-at-wire). Verdict: MATCH | OVERCHARGE (charges MORE than advertised
+// — the dangerous case) | UNDERCHARGE | UNKNOWN. OVERCHARGE downgrades
+// PAY->CAUTION; it is never AVOID (overcharging is not illegal, just not what
+// you agreed to pay).
+export interface PriceAccuracyVerdict {
+  verdict: "MATCH" | "OVERCHARGE" | "UNDERCHARGE" | "UNKNOWN";
+  charged_atomic: number | null;
+  charged_usdc: string | null;
+  advertised_atomic: number | null;
+  advertised_usdc: string | null;
+  advertised_source: "caller" | "self-manifest" | null;
+  ratio: number | null;        // charged / advertised
+  delta_atomic: number | null; // charged - advertised (positive = overcharge)
+  decimals: number;
+  note: string;
+}
+
+const PRICE_ASSET_DECIMALS = 6; // USDC-on-Base
+
+function atomicToUsdcStr(atomic: number | null, decimals = PRICE_ASSET_DECIMALS): string | null {
+  if (atomic === null || !isFinite(atomic)) return null;
+  const s = (atomic / Math.pow(10, decimals)).toFixed(decimals);
+  return s.replace(/\.?0+$/, "") || "0";
+}
+
+// Parse a human USDC-dollars string ("0.002", "0.0010", "1") into atomic units
+// at the given decimals. Rejects negatives / NaN / absurd magnitudes.
+export function usdcDollarsToAtomic(v: string | number | null | undefined, decimals = PRICE_ASSET_DECIMALS): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[_,$ ]/g, ""));
+  if (!isFinite(n) || n < 0 || n > 1e9) return null;
+  return Math.round(n * Math.pow(10, decimals));
+}
+
+// Parse a raw atomic amount string/number ("1000") into an integer.
+function parseAtomicAmount(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : parseInt(String(v).replace(/[_, ]/g, ""), 10);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.floor(n);
+}
+
+// Pure verdict: compare charged vs advertised atomic amounts. Tolerance to call
+// MATCH is max(1 atomic unit, 1% of advertised) to absorb dollar->atomic
+// rounding. Exported for unit tests.
+export function computePriceAccuracy(
+  chargedAtomic: number | null,
+  advertisedAtomic: number | null,
+  advertisedSource: "caller" | "self-manifest" | null,
+  decimals = PRICE_ASSET_DECIMALS,
+): PriceAccuracyVerdict {
+  const base = {
+    charged_atomic: chargedAtomic,
+    charged_usdc: atomicToUsdcStr(chargedAtomic, decimals),
+    advertised_atomic: advertisedAtomic,
+    advertised_usdc: atomicToUsdcStr(advertisedAtomic, decimals),
+    advertised_source: advertisedSource,
+    decimals,
+  };
+  if (chargedAtomic === null || advertisedAtomic === null || advertisedSource === null) {
+    return { ...base, verdict: "UNKNOWN", ratio: null, delta_atomic: null,
+      note: advertisedAtomic === null
+        ? "no advertised price to compare against — pass &advertised=<usdc> (the price your catalog/listing showed) or the endpoint publishes no /.well-known/x402 entry for this resource; price NOT verified"
+        : "endpoint did not present a chargeable amount — price NOT verified" };
+  }
+  const delta = chargedAtomic - advertisedAtomic;
+  const ratio = advertisedAtomic > 0 ? +(chargedAtomic / advertisedAtomic).toFixed(4) : null;
+  const tol = Math.max(1, Math.round(advertisedAtomic * 0.01));
+  const src = advertisedSource === "caller" ? "the price you supplied" : "the price in the endpoint's own /.well-known/x402 manifest";
+  if (Math.abs(delta) <= tol) {
+    return { ...base, verdict: "MATCH", ratio, delta_atomic: delta,
+      note: `wire price matches ${src} (within rounding tolerance)` };
+  }
+  if (delta > 0) {
+    const x = ratio ? `${ratio}x` : "more than";
+    return { ...base, verdict: "OVERCHARGE", ratio, delta_atomic: delta,
+      note: `the live 402 charges ${x} ${src} (${atomicToUsdcStr(chargedAtomic, decimals)} vs ${atomicToUsdcStr(advertisedAtomic, decimals)} USDC) — confirm you accept the REAL price before paying` };
+  }
+  return { ...base, verdict: "UNDERCHARGE", ratio, delta_atomic: delta,
+    note: `the live 402 charges LESS than ${src} (${atomicToUsdcStr(chargedAtomic, decimals)} vs ${atomicToUsdcStr(advertisedAtomic, decimals)} USDC) — benign, but the advertised figure is stale` };
+}
+
+// Walk a parsed /.well-known/x402 manifest for the advertised atomic price of a
+// specific resource URL. Handles the de-facto Bazaar shape (resources[] with
+// resource + accepts[].maxAmountRequired/amount + price_usdc) and common
+// variants (items[], bare accepts[], array root, routes[]/endpoints[]). Matches
+// by host + pathname (trailing slash / query ignored). Degrade-open: returns
+// null on any shape it doesn't recognize. Exported for unit tests.
+export function findManifestAdvertisedAtomic(manifest: unknown, targetUrl: string): number | null {
+  let target: URL; try { target = new URL(targetUrl); } catch { return null; }
+  const norm = (p: string) => p.replace(/\/+$/, "") || "/";
+  const samePath = (res: unknown): boolean => {
+    if (typeof res !== "string") return false;
+    try { const r = new URL(res, target.origin); return r.hostname === target.hostname && norm(r.pathname) === norm(target.pathname); } catch { return false; }
+  };
+  const priceOf = (entry: Record<string, unknown>): number | null => {
+    const acc = entry.accepts as unknown;
+    if (Array.isArray(acc) && acc.length) {
+      const a = acc[0] as Record<string, unknown>;
+      const atomic = parseAtomicAmount(a.maxAmountRequired ?? a.amount);
+      if (atomic !== null) return atomic;
+    }
+    // Fall back to a dollars field published alongside the entry.
+    return usdcDollarsToAtomic((entry.price_usdc ?? entry.price ?? entry.priceUsdc) as string | number | undefined);
+  };
+  const candidates: unknown[] = [];
+  if (manifest && typeof manifest === "object") {
+    const m = manifest as Record<string, unknown>;
+    for (const k of ["resources", "items", "accepts", "paymentRequirements", "endpoints", "routes"]) {
+      if (Array.isArray(m[k])) candidates.push(...(m[k] as unknown[]));
+    }
+  }
+  if (Array.isArray(manifest)) candidates.push(...manifest);
+  for (const e of candidates) {
+    if (!e || typeof e !== "object") continue;
+    const entry = e as Record<string, unknown>;
+    const res = entry.resource ?? entry.url ?? entry.endpoint;
+    if (samePath(res)) { const p = priceOf(entry); if (p !== null) return p; }
+  }
+  return null;
+}
+
+// Fetch + parse the endpoint's own /.well-known/x402 manifest and look up the
+// advertised atomic price for this exact resource URL. One bounded fetch,
+// degrade-open (any error => null — e.g. a CF->CF subrequest to our own zone
+// returns 522, which correctly yields UNKNOWN rather than a false result).
+async function fetchSelfManifestAdvertised(targetUrl: string): Promise<number | null> {
+  let u: URL; try { u = new URL(targetUrl); } catch { return null; }
+  const manifestUrl = `${u.protocol}//${u.host}/.well-known/x402`;
+  try {
+    const res = await fetch(manifestUrl, { headers: { "User-Agent": "greyridge-x402-preflight/1", accept: "application/json" }, signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return null;
+    const j = await res.json();
+    return findManifestAdvertisedAtomic(j, targetUrl);
+  } catch { return null; }
+}
+
+export async function x402Preflight(url: string, samples = 1, advertisedUsdc: string | null = null): Promise<PreflightResult> {
   const started = Date.now();
   const checks: PreflightCheck[] = [];
   const findings: ScanFinding[] = [];
+  let chargedAtomic: number | null = null;
 
   // SSRF guard — only pre-check a public https(s) hostname (never a proxy into
   // private infra, same guard as /scan/mcp).
@@ -9338,6 +9492,7 @@ export async function x402Preflight(url: string, samples = 1): Promise<Preflight
   } else {
     const a = accepts[0];
     const amount = a.maxAmountRequired ?? a.amount;
+    chargedAtomic = parseAtomicAmount(amount);
     payTo = typeof a.payTo === "string" ? a.payTo : null;
     // The settle-critical fields are scheme/network/asset/payTo/amount. `resource`
     // is handled separately below: real x402 servers (ours, x402-doctor) carry it
@@ -9428,17 +9583,43 @@ export async function x402Preflight(url: string, samples = 1): Promise<Preflight
     }
   }
 
+  // (6) PRICE ACCURACY — does the live wire price match the advertised one?
+  // Prefer the caller's &advertised= (zero extra fetch, the real use case);
+  // else fall back to the endpoint's own /.well-known/x402 manifest for a
+  // self-consistency check. Degrade-open: no advertised figure => UNKNOWN
+  // (no check pushed, verdict unaffected). OVERCHARGE is a soft CAUTION issue.
+  let priceAccuracy: PriceAccuracyVerdict | undefined;
+  let overcharge = false;
+  {
+    let advertisedAtomic = usdcDollarsToAtomic(advertisedUsdc);
+    let advSource: "caller" | "self-manifest" | null = advertisedAtomic !== null ? "caller" : null;
+    if (advertisedAtomic === null && chargedAtomic !== null) {
+      const self = await fetchSelfManifestAdvertised(url);
+      if (self !== null) { advertisedAtomic = self; advSource = "self-manifest"; }
+    }
+    priceAccuracy = computePriceAccuracy(chargedAtomic, advertisedAtomic, advSource);
+    if (priceAccuracy.verdict === "OVERCHARGE") {
+      overcharge = true;
+      checks.push({ name: "price_accuracy", ok: false, detail: priceAccuracy.note, fix: "decide against the live accepts[].amount (the REAL price), not the advertised figure — or do not pay" });
+    } else if (priceAccuracy.verdict === "MATCH") {
+      checks.push({ name: "price_accuracy", ok: true, detail: `charged ${priceAccuracy.charged_usdc} USDC == advertised (source: ${priceAccuracy.advertised_source})`, fix: null });
+    } else if (priceAccuracy.verdict === "UNDERCHARGE") {
+      checks.push({ name: "price_accuracy", ok: true, detail: priceAccuracy.note, fix: null });
+    }
+    // UNKNOWN => no check pushed (degrade-open, never penalizes the verdict).
+  }
+
   // Verdict. AVOID on a hard problem (won't settle, a critical/high finding, or
   // a sanctioned/flagged payTo); CAUTION on any soft issue (incl. a flapping
-  // reliability burst); else PAY.
+  // reliability burst or an advertised-vs-charged OVERCHARGE); else PAY.
   const hasCritHigh = findings.some((f) => f.severity === "critical" || f.severity === "high");
   const flapping = reliability !== undefined && !reliability.stable;
-  const anySoftIssue = checks.some((c) => !c.ok) || findings.length > 0 || nonUsdcAsset || flapping;
+  const anySoftIssue = checks.some((c) => !c.ok) || findings.length > 0 || nonUsdcAsset || flapping || overcharge;
   let verdict: PreflightResult["verdict"];
   if (!will_settle || hasCritHigh || payToBad) verdict = "AVOID";
   else if (anySoftIssue) verdict = "CAUTION";
   else verdict = "PAY";
-  return preflightResult(url, started, verdict, will_settle, checks, findings, reliability);
+  return preflightResult(url, started, verdict, will_settle, checks, findings, reliability, priceAccuracy);
 }
 
 app.get("/x402/preflight", async (c) => {
@@ -9450,8 +9631,9 @@ app.get("/x402/preflight", async (c) => {
   // times and returns settle-consistency + latency distribution. Default 1
   // (single probe, backward-compatible).
   const samples = Math.max(1, Math.min(5, parseInt(c.req.query("samples") ?? "1", 10) || 1));
-  const result = await x402Preflight(url, samples);
-  console.log(JSON.stringify({ event: "paid_request", endpoint: "/x402/preflight", url, verdict: result.verdict, will_settle: result.will_settle, samples, settle_consistency: result.reliability?.settle_consistency, findings: result.findings.length, ts: result.checked_at }));
+  const advertised = c.req.query("advertised") ?? null;
+  const result = await x402Preflight(url, samples, advertised);
+  console.log(JSON.stringify({ event: "paid_request", endpoint: "/x402/preflight", url, verdict: result.verdict, will_settle: result.will_settle, samples, settle_consistency: result.reliability?.settle_consistency, price_accuracy: result.price_accuracy?.verdict, findings: result.findings.length, ts: result.checked_at }));
   const rail = c.get("rail") ?? "x402-paid";
   fireAndForget(c, trackPaidRequest("GET /x402/preflight", rail, makeUsageCounter(c.env)));
   return c.json(result);
@@ -9476,9 +9658,22 @@ function preflightSample(): PreflightResult {
       { name: "resource", ok: true, detail: "resource=https://seller.example/data", fix: null },
       { name: "payTo_safety", ok: true, detail: "payTo not on the OFAC SDN nor community scam/drainer lists", fix: null },
       { name: "reliability", ok: true, detail: "3/3 probes payable; latency median 210ms (max 240ms)", fix: null },
+      { name: "price_accuracy", ok: true, detail: "charged 0.004 USDC == advertised (source: self-manifest)", fix: null },
     ],
     findings: [],
     latency_ms: 0,
+    price_accuracy: {
+      verdict: "MATCH",
+      charged_atomic: 4000,
+      charged_usdc: "0.004",
+      advertised_atomic: 4000,
+      advertised_usdc: "0.004",
+      advertised_source: "self-manifest",
+      ratio: 1,
+      delta_atomic: 0,
+      decimals: 6,
+      note: "wire price matches the price in the endpoint's own /.well-known/x402 manifest (within rounding tolerance)",
+    },
     reliability: {
       samples: 3,
       settle_consistency: "3/3",
@@ -9507,17 +9702,18 @@ app.get("/x402/preflight/preview", async (c) => {
     return c.json({
       ...preflightSample(),
       sample: true,
-      note: "Representative sample output (the shape of a PAY verdict on a well-formed USDC-on-Base endpoint, with a 3-sample reliability burst). Pass ?url=<endpoint> to pre-check YOUR real target free (3/IP/day), add &samples=N (1-5) for a reliability/payability burst, or GET /x402/preflight?url=<endpoint>&samples=N ($0.001) for unmetered live checks.",
+      note: "Representative sample output (the shape of a PAY verdict on a well-formed USDC-on-Base endpoint, with a 3-sample reliability burst and an advertised-vs-charged price-accuracy MATCH). Pass ?url=<endpoint> to pre-check YOUR real target free (3/IP/day), add &advertised=<usdc> to verify the live price matches what your catalog quoted (MATCH/OVERCHARGE/UNDERCHARGE), &samples=N (1-5) for a reliability burst, or GET /x402/preflight?url=<endpoint> ($0.001) for unmetered live checks.",
       upgrade: upgradeCTA(paidUrlFrom(c), "0.001", "Unmetered, any endpoint (this free preview is capped at 3 real URLs/IP/day)."),
     });
   }
   const samples = Math.max(1, Math.min(5, parseInt(c.req.query("samples") ?? "1", 10) || 1));
+  const advertised = c.req.query("advertised") ?? null;
   const t = await trialToken(c, q);
   if (t.exhausted) {
     const pu = paidUrlFrom(c);
     return c.json({ error: "free preflight trial exhausted (3/day/IP) - this is NOT a result for the URL you asked about", trial: { real_checks_left_today: 0 }, paid: pu, paid_url: pu, price_usdc: "0.001", pay_with: `x402: npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f("${pu}") - pays USDC on Base automatically. Docs: https://api.greyridgesignals.ai/llms.txt` }, { status: 429 });
   }
-  return c.json({ ...(await x402Preflight(q, samples)), trial: { real_checks_left_today: t.left } });
+  return c.json({ ...(await x402Preflight(q, samples, advertised)), trial: { real_checks_left_today: t.left } });
 });
 
 // ---------------------------------------------------------------------------
@@ -16953,18 +17149,19 @@ const mcpHandler = createMcpHandler(() => {
     "x402_preflight",
     {
       description:
-        "Should an agent pay this x402 endpoint? Pre-payment check of an UNKNOWN x402 URL: fetch it once (never pays) to validate the 402 challenge + accepts[] (scheme/network/payTo/amount/asset/resource = will it settle) AND scan the resource + any advertised MCP tools for LLM01/LLM08 prompt-injection and screen payTo against the OFAC SDN + community scam lists (safe to pay). Optional samples=N (1-5) runs a reliability/payability burst (settle-consistency + latency distribution; a flapping endpoint downgrades PAY to CAUTION). Returns verdict PAY | CAUTION | AVOID + per-check fix hints + latency. Read-only, never a settlement guarantee. Cost: $0.001 USDC per call via x402.",
+        "Should an agent pay this x402 endpoint? Pre-payment check of an UNKNOWN x402 URL: fetch it once (never pays) to validate the 402 challenge + accepts[] (scheme/network/payTo/amount/asset/resource = will it settle) AND scan the resource + any advertised MCP tools for LLM01/LLM08 prompt-injection and screen payTo against the OFAC SDN + community scam lists (safe to pay) AND verify the PRICE — does the live accepts[].amount match the advertised price? pass advertised=<usdc> (the figure your catalog quoted) or it self-checks the endpoint's /.well-known/x402: MATCH | OVERCHARGE | UNDERCHARGE. Optional samples=N (1-5) runs a reliability/payability burst (settle-consistency + latency; a flapping endpoint downgrades PAY to CAUTION). Returns verdict PAY | CAUTION | AVOID + per-check fix hints + latency. Read-only, never a settlement guarantee. Cost: $0.001 USDC per call via x402.",
       inputSchema: {
         url: z.string().describe("the x402 endpoint URL to pre-check before paying"),
+        advertised: z.string().optional().describe("optional: the price (USDC dollars, e.g. 0.001) your catalog/listing quoted — returns MATCH/OVERCHARGE/UNDERCHARGE vs the live accepts[].amount; omit to self-check against the endpoint's own /.well-known/x402"),
         samples: z.number().int().min(1).max(5).optional().describe("optional reliability burst: sample the 402 challenge N times (1-5) for settle-consistency + latency; default 1"),
       },
     },
-    async ({ url, samples }) => {
+    async ({ url, advertised, samples }) => {
       if (!/^https?:\/\//i.test(url)) {
         return { content: [{ type: "text" as const, text: "Error: url must be an absolute http(s) x402 endpoint URL" }] };
       }
       try {
-        const result = await x402Preflight(url, samples ?? 1);
+        const result = await x402Preflight(url, samples ?? 1, advertised ?? null);
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };

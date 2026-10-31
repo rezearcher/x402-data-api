@@ -17,7 +17,7 @@ import { register } from "node:module";
 
 register(new URL("./cfw-hooks.mjs", import.meta.url));
 
-const { x402Preflight, makeRoutes, ROUTE_CATALOG } = await import("../src/index.ts");
+const { x402Preflight, makeRoutes, ROUTE_CATALOG, computePriceAccuracy, findManifestAdvertisedAtomic, usdcDollarsToAtomic } = await import("../src/index.ts");
 
 let pass = 0;
 function check(name, fn) { return Promise.resolve(fn()).then(() => { pass++; console.log(`ok - ${name}`); }); }
@@ -192,6 +192,103 @@ await check("samples clamp: samples=99 -> 5 probes max", async () => {
   const r = await x402Preflight("https://seller.example/data", 99);
   restoreFetch();
   assert.strictEqual(r.reliability.samples, 5, "clamped to 5");
+});
+
+// ── PRICE-ACCURACY VERIFICATION (the moat: no top-50 x402 seller offers it) ──
+
+// 15. Pure verdict: charged == advertised -> MATCH.
+await check("price: charged==advertised -> MATCH", async () => {
+  const v = computePriceAccuracy(1000, 1000, "caller");
+  assert.strictEqual(v.verdict, "MATCH", `verdict ${v.verdict}`);
+  assert.strictEqual(v.ratio, 1, "ratio 1");
+  assert.strictEqual(v.charged_usdc, "0.001", "charged_usdc rendered");
+});
+
+// 16. Pure verdict: the scout's live 2x case -> OVERCHARGE.
+await check("price: charged 2x advertised -> OVERCHARGE (ratio 2)", async () => {
+  const v = computePriceAccuracy(2000, 1000, "caller");
+  assert.strictEqual(v.verdict, "OVERCHARGE", `verdict ${v.verdict}`);
+  assert.strictEqual(v.ratio, 2, "ratio 2");
+  assert.strictEqual(v.delta_atomic, 1000, "delta positive");
+  assert.ok(/REAL price/i.test(v.note), "note warns about the real price");
+});
+
+// 17. Pure verdict: charged < advertised -> UNDERCHARGE (benign).
+await check("price: charged<advertised -> UNDERCHARGE", async () => {
+  const v = computePriceAccuracy(500, 1000, "self-manifest");
+  assert.strictEqual(v.verdict, "UNDERCHARGE", `verdict ${v.verdict}`);
+  assert.ok(v.delta_atomic < 0, "delta negative");
+});
+
+// 18. Degrade-open: no advertised price -> UNKNOWN (never a block).
+await check("price: no advertised source -> UNKNOWN (degrade-open)", async () => {
+  const v = computePriceAccuracy(1000, null, null);
+  assert.strictEqual(v.verdict, "UNKNOWN", `verdict ${v.verdict}`);
+  assert.strictEqual(v.ratio, null, "ratio null");
+  assert.ok(/not verified/i.test(v.note), "note says not verified");
+});
+
+// 19. 1% rounding tolerance absorbs dollar->atomic jitter -> MATCH.
+await check("price: within 1% tolerance -> MATCH", async () => {
+  const v = computePriceAccuracy(1005, 1000, "caller"); // +0.5% = within tol
+  assert.strictEqual(v.verdict, "MATCH", `verdict ${v.verdict}`);
+});
+
+// 20. usdcDollarsToAtomic: dollars -> atomic micros; rejects junk.
+await check("usdcDollarsToAtomic: 0.001 -> 1000, junk -> null", async () => {
+  assert.strictEqual(usdcDollarsToAtomic("0.001"), 1000, "0.001 -> 1000");
+  assert.strictEqual(usdcDollarsToAtomic("1"), 1000000, "1 USDC -> 1e6");
+  assert.strictEqual(usdcDollarsToAtomic("$0.004"), 4000, "strips $");
+  assert.strictEqual(usdcDollarsToAtomic("-5"), null, "negative -> null");
+  assert.strictEqual(usdcDollarsToAtomic("abc"), null, "nan -> null");
+  assert.strictEqual(usdcDollarsToAtomic(null), null, "null -> null");
+});
+
+// 21. Manifest walker: finds the atomic price for the matching resource (Bazaar shape).
+await check("findManifestAdvertisedAtomic: matches resource by path (accepts.maxAmountRequired)", async () => {
+  const manifest = { resources: [
+    { resource: "https://seller.example/other", price_usdc: "0.01", accepts: [{ maxAmountRequired: "10000" }] },
+    { resource: "https://seller.example/data", price_usdc: "0.004", accepts: [{ maxAmountRequired: "4000" }] },
+  ] };
+  assert.strictEqual(findManifestAdvertisedAtomic(manifest, "https://seller.example/data"), 4000, "picks the right entry, atomic");
+  assert.strictEqual(findManifestAdvertisedAtomic(manifest, "https://seller.example/data?x=1"), 4000, "query ignored");
+  assert.strictEqual(findManifestAdvertisedAtomic(manifest, "https://seller.example/missing"), null, "unknown resource -> null");
+});
+
+// 22. Manifest walker: falls back to price_usdc dollars when accepts[] absent.
+await check("findManifestAdvertisedAtomic: price_usdc fallback when no accepts[]", async () => {
+  const manifest = { resources: [{ resource: "https://seller.example/data", price_usdc: "0.002" }] };
+  assert.strictEqual(findManifestAdvertisedAtomic(manifest, "https://seller.example/data"), 2000, "price_usdc -> atomic");
+});
+
+// 23. END-TO-END: caller advertised price mismatches the live wire -> OVERCHARGE downgrades PAY->CAUTION.
+await check("e2e: advertised 0.001 but wire charges 0.004 -> CAUTION + OVERCHARGE check", async () => {
+  stubFetch(() => fakeRes(402, GOOD_402)); // GOOD_402 charges 4000 atomic = 0.004
+  const r = await x402Preflight("https://seller.example/data", 1, "0.001");
+  restoreFetch();
+  assert.ok(r.price_accuracy, "price_accuracy present");
+  assert.strictEqual(r.price_accuracy.verdict, "OVERCHARGE", `pa ${r.price_accuracy.verdict}`);
+  assert.strictEqual(r.price_accuracy.advertised_source, "caller", "source caller");
+  assert.strictEqual(r.verdict, "CAUTION", `verdict ${r.verdict} (overcharge downgrades)`);
+  assert.ok(r.checks.find((c) => c.name === "price_accuracy" && !c.ok), "price_accuracy check flagged");
+});
+
+// 24. END-TO-END: advertised matches the wire -> stays PAY + MATCH check.
+await check("e2e: advertised 0.004 == wire 0.004 -> PAY + MATCH", async () => {
+  stubFetch(() => fakeRes(402, GOOD_402));
+  const r = await x402Preflight("https://seller.example/data", 1, "0.004");
+  restoreFetch();
+  assert.strictEqual(r.price_accuracy.verdict, "MATCH", `pa ${r.price_accuracy.verdict}`);
+  assert.strictEqual(r.verdict, "PAY", `verdict ${r.verdict}`);
+});
+
+// 25. END-TO-END: no advertised + manifest unreadable -> UNKNOWN, verdict unaffected (degrade-open).
+await check("e2e: no advertised, manifest unreadable -> UNKNOWN, still PAY", async () => {
+  stubFetch(() => fakeRes(402, GOOD_402)); // fakeRes has no .ok/.json -> self-manifest returns null
+  const r = await x402Preflight("https://seller.example/data", 1);
+  restoreFetch();
+  assert.strictEqual(r.price_accuracy.verdict, "UNKNOWN", `pa ${r.price_accuracy.verdict}`);
+  assert.strictEqual(r.verdict, "PAY", `verdict ${r.verdict} (UNKNOWN never penalizes)`);
 });
 
 console.log(`\n${pass} checks passed`);
