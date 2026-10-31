@@ -68,14 +68,17 @@ ok(typeof info.name === "string" && info.name.length > 0, "serverInfo.name prese
 ok(info.name !== "x402-data-api", "serverInfo.name is rebranded (not generic x402-data-api)");
 ok(/grey ?ridge/i.test(info.name), "serverInfo.name carries the Grey Ridge security brand");
 
-// 2. Version aligned with the official registry isLatest (0.1.4).
-ok(info.version === "0.1.4", "serverInfo.version === 0.1.4 (registry isLatest aligned)");
+// 2. Version aligned with the official registry isLatest (0.1.6).
+ok(info.version === "0.1.6", "serverInfo.version === 0.1.6 (registry isLatest aligned)");
 
 // 3. Honest, funnel-routing instructions string (Claims Law: not a guarantee).
 const instr = result.instructions;
 ok(typeof instr === "string" && instr.trim().length > 0, "result.instructions is a non-empty string");
-ok(instr.includes("/pricing"), "instructions route to the /pricing funnel");
-ok(/not a guarantee|not .*safe/i.test(instr), "instructions carry the Claims-Law honesty caveat (not a guarantee of safety)");
+ok(instr.includes("api.greyridgesignals.ai"), "instructions route to the Grey Ridge funnel URL");
+// Leads with the x402 payment-verification differentiator (the axis price-only
+// x402 checkers cannot match) — the repositioned storefront headline.
+ok(/x402_preflight|payment verification|receipt_verify/i.test(instr), "instructions lead with the x402 payment-verification capability");
+ok(/not a .*guarantee|not .*safe/i.test(instr), "instructions carry the Claims-Law honesty caveat (not a guarantee of safety)");
 ok(/LLM01|LLM08|prompt-injection|tool-poisoning/i.test(instr), "instructions name the static-detection scope");
 // 4. No agent-steering / self-incriminating hidden directives (we are a scanner
 //    that flags exactly this).

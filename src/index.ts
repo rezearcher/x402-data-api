@@ -2226,7 +2226,8 @@ app.get("/.well-known/mcp/server-card.json", (c) =>
     name: "grey-ridge-x402",
     title: "Grey Ridge Signals — x402 Data & Security MCP",
     description:
-      "Agent-native, pay-per-call Base on-chain / crypto / DeFi data and MCP-security + x402-preflight tools. " +
+      "x402 payment verification for AI agents that pay: safe-to-pay/will-settle/price-accuracy preflight, " +
+      "on-chain USDC receipt proof, and OFAC/scam wallet screening — plus Base pre-trade swap safety and free MCP-security scanning. " +
       "Keyless; each paid tool settles inline in USDC on Base via x402 (network eip155:8453). Free previews available. " +
       "Call tools/list for the live tool set.",
     version: "0.1.0",
@@ -17204,16 +17205,23 @@ app.post("/scan/mcp/preview", async (c) => {
 const mcpHandler = createMcpHandler(() => {
   const server = new McpServer(
     {
-      name: "Grey Ridge MCP Security + Base Trade-Safety",
-      version: "0.1.4", // mirror root package.json (canonical) + registry isLatest
+      name: "Grey Ridge x402 — Payment Verification & Agent Safety",
+      version: "0.1.6", // mirror root package.json (canonical) + registry isLatest
     },
     {
       // Connect-time identity rendered by every MCP client (Claude/Cursor/Cline)
-      // and aggregator (official registry isLatest, Glama). Honest capability +
-      // pricing description — Claims Law: static detection + monitoring, never
-      // a guarantee of safety. No agent-steering directives.
+      // and aggregator (official registry isLatest, Glama, Smithery). Leads with
+      // the x402 payment-verification suite — the axis no price-only checker
+      // (x402station Guard et al.) matches. Honest capability + pricing —
+      // Claims Law: pre-pay readiness ≠ post-pay guarantee; "clear" ≠ safe.
+      // No agent-steering directives.
       instructions:
-        "Grey Ridge x402 — two capabilities. (1) FREE MCP security scanning: static tool-poisoning and prompt-injection audit (OWASP LLM01/LLM08) of any MCP server's advertised tools; no tool invocation. A 'clear' result means no static red flags were found — NOT a guarantee the server is safe. (2) Base-chain pre-trade safety for autonomous trading agents: a GO/HOLD/BLOCK swap gate with honeypot, rug, buy/sell-tax and position-sizing checks. Every route has a free preview; full verdicts are x402 pay-per-call (~$0.005-0.01 USDC). Keep a public 'verified · monitored' trust badge live with continuous re-scanning + drift alerts via subscription: https://api.greyridgesignals.ai/pricing",
+        "Grey Ridge x402 — payment verification and safety for AI agents that pay. " +
+        "PAYMENT VERIFICATION: before paying an x402 endpoint, x402_preflight returns PAY | CAUTION | AVOID from will-it-settle, safe-to-pay (OFAC/scam address + prompt-injection), price-accuracy (does it charge what it advertises) and delivery-readiness (leaking paywall / output spec) checks; after paying, x402_receipt_verify reconciles the on-chain USDC settlement against the endpoint's advertised payTo and amount (SETTLED | UNDERPAID | WRONG_RECIPIENT | NOT_FOUND). " +
+        "WALLET SCREENING: chain_wallet_screen flags OFAC-sanctioned and known scam/drainer addresses before you send. " +
+        "BASE TRADE SAFETY: a GO/HOLD/BLOCK pre-trade swap gate (honeypot, rug, buy/sell-tax, position sizing) and SAFE/CAUTION/AVOID token reports for any Base ERC-20. " +
+        "MCP SECURITY: free static tool-poisoning / prompt-injection scanning of any MCP server (OWASP LLM01/LLM08). " +
+        "Pre-payment checks are readiness, not a post-payment guarantee; a 'clear' scan is not proof of safety. Every route has a free preview; full verdicts are x402 pay-per-call (~$0.001-0.01 USDC on Base). Docs: https://api.greyridgesignals.ai/x402/preflight",
     },
   );
 

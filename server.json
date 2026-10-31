@@ -1,13 +1,13 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "ai.greyridgesignals/tech-risk",
-  "description": "Free MCP security scan: tool-poisoning & prompt-injection audit (OWASP LLM01/08) + trust badge",
-  "version": "0.1.5",
+  "description": "x402 payment verification for AI agents: safe-to-pay preflight, on-chain USDC receipt proof, OFAC/scam wallet screen",
+  "version": "0.1.6",
   "repository": {
     "url": "https://github.com/rezearcher/x402-data-api",
     "source": "github"
   },
-  "websiteUrl": "https://api.greyridgesignals.ai/scan/directory",
+  "websiteUrl": "https://api.greyridgesignals.ai/x402/preflight",
   "remotes": [
     {
       "type": "streamable-http",

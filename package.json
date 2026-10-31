@@ -1,6 +1,6 @@
 {
   "name": "x402-data-api",
-  "version": "0.1.4",
+  "version": "0.1.6",
   "$comment": "Canonical version — server.json, mcp-client/package.json, and src/index.ts must mirror this.",
   "private": true,
   "license": "MIT",
