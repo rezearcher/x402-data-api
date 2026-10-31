@@ -82,13 +82,13 @@ LISTINGS = [
     },
     {
         "id": "d9a8d4c4-19e",
-        "name": "Funding rates data feed — 5-venue perp funding (Binance+Bybit+OKX+Hyperliquid+dYdX) + CEX↔DEX arb",
+        "name": "Funding rates data feed — 6-venue perp funding (Binance+Bybit+OKX+Hyperliquid+dYdX+Gate) + CEX↔DEX arb",
         "description": (
             "Funding rates data feed for derivatives / perp trading agents: one keyless "
-            "x402 call returns live perpetual funding rates across 5 venues — Binance, "
-            "Bybit, OKX, Hyperliquid and dYdX — for the top coins by 24h notional. Per coin "
+            "x402 call returns live perpetual funding rates across 6 venues — Binance, "
+            "Bybit, OKX, Hyperliquid, dYdX and Gate.io — for the top coins by 24h notional. Per coin "
             "you get each venue's funding, the annualized rate per venue (annualized_binance "
-            "/ bybit / okx / hl), the cross-venue funding spread in bps, the cheapest-long "
+            "/ bybit / okx / hl / gate), the cross-venue funding spread in bps, the cheapest-long "
             "and richest-short venue for a CEX↔DEX funding-arb, premium/basis, mark/oracle "
             "prices, open interest, next_funding_ts, and a LONGS_PAY / SHORTS_PAY / NEUTRAL "
             "directional signal. $0.004/call — Base-native USDC, no account, no key, pay "
