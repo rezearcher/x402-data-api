@@ -134,11 +134,11 @@
     <div id="atomlist"></div>
   </div>
 
+  <div class="grid" id="agents"></div>
   <div class="sentinel" id="sentinelbox">
-    <div class="shead">🛡 SENTINEL · sovereignty auditor <span class="ssub">agent-4, audits every pass on both chains — protect-from-others, not lockdown</span><span class="sadv" id="sadv"></span></div>
+    <div class="shead">🛡 SENTINEL · sovereignty auditor <span class="ssub">agent-4 (runs last, before the pass commits) — audits every pass on both chains; protect-from-others, not lockdown</span><span class="sadv" id="sadv"></span></div>
     <div class="srow" id="sentinelrows"></div>
   </div>
-  <div class="grid" id="agents"></div>
 
   <div class="btm">
     <div class="box">
@@ -277,7 +277,8 @@ function render(top){
   // chain (no scroll — safe to replace)
   document.getElementById('chain').innerHTML = AG.map((a,i)=>
     `<span class="node ${d.engine.stage===a?'active':''}">${a}</span>${i<2?'<span class="arrow">▸</span>':''}`
-  ).join('') + `<span class="arrow">▸</span><span class="node rest ${d.engine.stage==='rest'?'active':''}">rest ∿</span>`
+  ).join('') + `<span class="arrow">▸</span><span class="node ${d.engine.stage==='sentinel'?'active':''}">🛡 sentinel</span>`
+    + `<span class="arrow">▸</span><span class="node rest ${d.engine.stage==='rest'?'active':''}">rest ∿</span>`
     + ` <span style="color:var(--muted);font-size:11px" class="mono">pass ${d.engine.pass??'—'}</span>`;
   const h=d.health||{};
   const lamp=(id,el)=>`<div class="lamp ${h[id]&&h[id].ok?'on':''}" title="${esc(h[id]&&h[id].why)}">${el}</div>`;
