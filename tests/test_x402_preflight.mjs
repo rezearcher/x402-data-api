@@ -17,7 +17,7 @@ import { register } from "node:module";
 
 register(new URL("./cfw-hooks.mjs", import.meta.url));
 
-const { x402Preflight, makeRoutes, ROUTE_CATALOG, computePriceAccuracy, findManifestAdvertisedAtomic, usdcDollarsToAtomic } = await import("../src/index.ts");
+const { x402Preflight, makeRoutes, ROUTE_CATALOG, computePriceAccuracy, findManifestAdvertisedAtomic, usdcDollarsToAtomic, computeDelivery } = await import("../src/index.ts");
 
 let pass = 0;
 function check(name, fn) { return Promise.resolve(fn()).then(() => { pass++; console.log(`ok - ${name}`); }); }
@@ -289,6 +289,74 @@ await check("e2e: no advertised, manifest unreadable -> UNKNOWN, still PAY", asy
   restoreFetch();
   assert.strictEqual(r.price_accuracy.verdict, "UNKNOWN", `pa ${r.price_accuracy.verdict}`);
   assert.strictEqual(r.verdict, "PAY", `verdict ${r.verdict} (UNKNOWN never penalizes)`);
+});
+
+// ── DELIVERY READINESS (the axis price-only x402 checkers cannot answer) ─────
+
+// A richer fake: route the manifest fetch to a .ok/.json() response so the LEAK
+// path (which reads the endpoint's own /.well-known/x402 price) can resolve.
+function manifestRes(manifestObj) {
+  return { status: 200, ok: true, async text() { return JSON.stringify(manifestObj); }, async json() { return manifestObj; } };
+}
+
+// 26. Pure: served-unpaid-data + a paid manifest price -> LEAK.
+await check("delivery: unpaid data + paid manifest -> LEAK", async () => {
+  const d = computeDelivery(true, 4000, false);
+  assert.strictEqual(d.verdict, "LEAK", `verdict ${d.verdict}`);
+  assert.strictEqual(d.served_without_payment, true, "served flag");
+  assert.ok(/paywall is open or broken/i.test(d.note), "note explains leak");
+});
+
+// 27. Pure: served unpaid but NO manifest price (or price 0) -> NOT a leak
+//     (a legitimately-free API is never mislabelled).
+await check("delivery: unpaid data but no/zero manifest price -> not LEAK", async () => {
+  assert.strictEqual(computeDelivery(true, null, false).verdict, "UNVERIFIED", "null price -> not leak");
+  assert.strictEqual(computeDelivery(true, 0, true).verdict, "SPECIFIED", "zero price -> not leak");
+});
+
+// 28. Pure: output shape declared -> SPECIFIED; none -> UNVERIFIED.
+await check("delivery: output spec -> SPECIFIED, none -> UNVERIFIED", async () => {
+  assert.strictEqual(computeDelivery(false, null, true).verdict, "SPECIFIED", "schema -> SPECIFIED");
+  const u = computeDelivery(false, null, false);
+  assert.strictEqual(u.verdict, "UNVERIFIED", "no schema -> UNVERIFIED");
+  assert.ok(/settlement receipt/i.test(u.note), "UNVERIFIED points at the receipt");
+});
+
+// 29. END-TO-END: a well-formed 402 with NO output schema -> delivery UNVERIFIED,
+//     verdict unaffected (UNVERIFIED is informational, never a block).
+await check("e2e: 402 w/ no output schema -> delivery UNVERIFIED, still PAY", async () => {
+  stubFetch(() => fakeRes(402, GOOD_402));
+  const r = await x402Preflight("https://seller.example/data", 1, "0.004");
+  restoreFetch();
+  assert.ok(r.delivery, "delivery present");
+  assert.strictEqual(r.delivery.verdict, "UNVERIFIED", `delivery ${r.delivery.verdict}`);
+  assert.strictEqual(r.verdict, "PAY", `verdict ${r.verdict} (UNVERIFIED never penalizes)`);
+  assert.ok(r.checks.find((c) => c.name === "delivery" && c.ok), "delivery check present & ok");
+});
+
+// 30. END-TO-END: a 402 that declares an outputSchema -> delivery SPECIFIED.
+await check("e2e: 402 with outputSchema -> delivery SPECIFIED", async () => {
+  const withSchema = { ...GOOD_402, accepts: [{ ...GOOD_402.accepts[0], outputSchema: { type: "object", properties: { price: { type: "number" } } } }] };
+  stubFetch(() => fakeRes(402, withSchema));
+  const r = await x402Preflight("https://seller.example/data", 1, "0.004");
+  restoreFetch();
+  assert.strictEqual(r.delivery.verdict, "SPECIFIED", `delivery ${r.delivery.verdict}`);
+  assert.strictEqual(r.delivery.output_specified, true, "output_specified true");
+});
+
+// 31. END-TO-END: a LEAKING paywall — the resource returns 200+data on an UNPAID
+//     request while its own manifest advertises a paid price. There is no 402 to
+//     pay, so the verdict is AVOID (don't attempt payment) and delivery=LEAK
+//     explains WHY (the paywall is open/broken; the data is already free).
+await check("e2e: open paywall (200 data) + paid manifest -> LEAK + AVOID", async () => {
+  const manifest = { resources: [{ resource: "https://seller.example/data", price_usdc: "0.004", accepts: [{ maxAmountRequired: "4000" }] }] };
+  stubFetch((u) => u.includes("/.well-known/x402") ? manifestRes(manifest) : fakeRes(200, { price: 1234.5, symbol: "ETH", ts: 1 }));
+  const r = await x402Preflight("https://seller.example/data", 1);
+  restoreFetch();
+  assert.ok(r.delivery, "delivery present");
+  assert.strictEqual(r.delivery.verdict, "LEAK", `delivery ${r.delivery.verdict}`);
+  assert.strictEqual(r.verdict, "AVOID", `verdict ${r.verdict} (no 402 to pay)`);
+  assert.ok(r.checks.find((c) => c.name === "delivery" && !c.ok), "delivery check flagged");
 });
 
 console.log(`\n${pass} checks passed`);
