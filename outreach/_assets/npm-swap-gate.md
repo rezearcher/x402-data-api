@@ -10,21 +10,23 @@ of safety checks.
 admin controls let the deployer rug it, and is your order too big for the pool?
 Your model gets the full verdict plus a single `proceed` boolean to branch on —
 in one call. It ships as a native **Vercel AI SDK** tool and a native
-**LangChain.js** tool, and as of now you install it straight from npm.
+**LangChain.js** tool, and you install it with one `npm install` line.
 
 ## Install
 
 ```bash
 # Vercel AI SDK
-npm install @grey-ridge/vercel-ai-swap-gate ai zod
+npm install github:rezearcher/vercel-ai-swap-gate ai zod
 
 # LangChain.js
-npm install @grey-ridge/langchain-swap-gate @langchain/core zod
+npm install github:rezearcher/langchain-swap-gate @langchain/core zod
 ```
 
-Both packages are live on npm at `0.1.0`. The x402 payment client (`viem`,
-`@x402/*`) is bundled — you only add the SDK you already build your agent with
-(`ai` + `zod`, or `@langchain/core` + `zod`) as peer dependencies.
+Each installs under its real package name (`@grey-ridge/vercel-ai-swap-gate`,
+`@grey-ridge/langchain-swap-gate`) and builds on install, so `import` works with
+no extra step. The x402 payment client (`viem`, `@x402/*`) is bundled — you only
+add the SDK you already build your agent with (`ai` + `zod`, or `@langchain/core`
++ `zod`) as peer dependencies.
 
 ## Use
 
@@ -112,8 +114,8 @@ position limits.
 
 **Links**
 
-- Vercel AI SDK tool: `npm i @grey-ridge/vercel-ai-swap-gate`
-- LangChain.js tool: `npm i @grey-ridge/langchain-swap-gate`
+- Vercel AI SDK tool: `npm i github:rezearcher/vercel-ai-swap-gate`
+- LangChain.js tool: `npm i github:rezearcher/langchain-swap-gate`
 - Try the free preview: https://api.greyridgesignals.ai/gate/swap/preview?token=0x4200000000000000000000000000000000000006&notional_usd=100
 - The paid route: https://api.greyridgesignals.ai/gate/swap
 - Agent discovery hub: https://api.greyridgesignals.ai/for-agents
