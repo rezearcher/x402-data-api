@@ -72,6 +72,8 @@ Free in MCP: `x402_receipt_verify_preview` (tx + payto, no payment).
 
 Python agents, no key or wallet: `uvx --from greyridge-x402-tools greyridge-x402-verify` runs a local stdio MCP server (PyPI 0.6.0) with free `x402_preflight` and `x402_receipt_verify` tools. Add it to Claude Desktop/Cursor as command `uvx`, args `--from greyridge-x402-tools greyridge-x402-verify`.
 
+Try it now, no key: `curl "https://api.greyridgesignals.ai/x402/preflight/preview?url=https://api.greyridgesignals.ai/defi/yields"` returns `verdict: PAY, will_settle: true` with the per-check detail (reachability, challenge, accepts, price accuracy, delivery).
+
 Drop-in safe pay wrapper (free preflight, refuses AVOID, then dual-RPC receipt check on the settlement tx):
 
 - Python: `pip install greyridge-x402-tools` (0.7.0), `from greyridge_x402.safe_fetch import safe_fetch`
