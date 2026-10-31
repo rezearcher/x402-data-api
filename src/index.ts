@@ -847,6 +847,24 @@ type AppEnv = {
 
 const app = new Hono<AppEnv>();
 
+// Own-zone self-dispatch. A Worker subrequest to another Cloudflare-fronted host
+// (including our own zone) returns 522, so pre-checking OUR OWN endpoints through
+// our own preflight read "AVOID" — a credibility bug. For our own hostnames we run
+// the request through this app's router in-process instead of the public network.
+// The unpaid GET still hits the real x402 middleware, so the 402 challenge is real.
+const OWN_PREFLIGHT_HOSTS = new Set(["api.greyridgesignals.ai", "x402-data-api.sigrunner.workers.dev"]);
+let SELF_DISPATCH: ((req: Request) => Promise<Response>) | null = null;
+export function preflightFetch(url: string, init: RequestInit): Promise<Response> {
+  try {
+    if (SELF_DISPATCH && OWN_PREFLIGHT_HOSTS.has(new URL(url).hostname)) return SELF_DISPATCH(new Request(url, init));
+  } catch { /* fall through to the network fetch */ }
+  return fetch(url, init);
+}
+app.use("*", async (c, next) => {
+  SELF_DISPATCH = (req) => Promise.resolve(app.fetch(req, c.env, c.executionCtx));
+  await next();
+});
+
 // ---------------------------------------------------------------------------
 // Baseline security headers on every response (additive — no CSP, so inline
 // scripts on /check, /miniapp etc. are unaffected). Closes the self-assessment
@@ -9632,7 +9650,7 @@ function challengeDeclaresOutput(parsed: Record<string, unknown> | null, accepts
 async function probeSettleOnce(url: string): Promise<{ reachable: boolean; http_402: boolean; will_settle: boolean; latency_ms: number }> {
   const t = Date.now();
   try {
-    const res = await fetch(url, { headers: { "User-Agent": "greyridge-x402-preflight/1", accept: "application/json" }, signal: AbortSignal.timeout(4000) });
+    const res = await preflightFetch(url, { headers: { "User-Agent": "greyridge-x402-preflight/1", accept: "application/json" }, signal: AbortSignal.timeout(4000) });
     const http_402 = res.status === 402;
     let will_settle = false;
     if (http_402) {
@@ -9955,7 +9973,7 @@ export async function x402Preflight(url: string, samples = 1, advertisedUsdc: st
   // (1) Reachability + the 402 challenge. An UNPAID GET must answer HTTP 402.
   let res: Response;
   try {
-    res = await fetch(url, { headers: { "User-Agent": "greyridge-x402-preflight/1", accept: "application/json" }, signal: AbortSignal.timeout(6000) });
+    res = await preflightFetch(url, { headers: { "User-Agent": "greyridge-x402-preflight/1", accept: "application/json" }, signal: AbortSignal.timeout(6000) });
   } catch (e) {
     checks.push({ name: "reachability", ok: false, detail: `endpoint unreachable or timed out: ${(e as Error).message}`, fix: "confirm the URL is live and publicly reachable" });
     // Degrade-open: we could not observe a challenge, so we cannot say it will
