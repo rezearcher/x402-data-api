@@ -301,3 +301,6 @@ kzmttkc/vet402-delivery#1
 MikeyPetrillo/Agent402#1694
 parkyucheol-del/alphapipeline#4
 joshuaswarren/sovereign-inference#56
+payapi-market/awesome-x402-apis PR#4 already open (token-security)
+Dragon0003/awesome-x402 0-star skip
+teddiesloco/awesome-x402 0-star skip
