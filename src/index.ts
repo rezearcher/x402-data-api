@@ -1187,8 +1187,55 @@ app.get("/api-key", async (c) => {
 // webhook, scanner probe UA, x402 facilitator) deliberately stay on their own hosts.
 const CANONICAL_ORIGIN = "https://api.greyridgesignals.ai";
 
+// Root discovery Link header (RFC 8288). Agent-readiness scanners (e.g.
+// Cloudflare's isitagentready.com) and agent clients read these typed rels on
+// the first GET to locate our machine-readable surfaces WITHOUT guessing paths.
+// `rel="service"` -> /.well-known/x402 is the signal that classifies us as an
+// x402 commerce endpoint; the rest point at the real files we already serve.
+const DISCOVERY_LINK_HEADER = [
+  '</.well-known/x402>; rel="service"; type="application/json"',
+  '</.well-known/x402>; rel="payment"; type="application/json"',
+  '</openapi.json>; rel="service-desc"; type="application/json"',
+  '</.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"',
+  '</.well-known/agent-card.json>; rel="agent-card"; type="application/json"',
+  '</.well-known/mcp/server-card.json>; rel="mcp-server"; type="application/json"',
+  '</.well-known/agent-skills/index.json>; rel="agent-skills"; type="application/json"',
+  '</.well-known/oauth-protected-resource>; rel="oauth-protected-resource"; type="application/json"',
+  '</.well-known/erc-8004.json>; rel="agent-registration"; type="application/json"',
+  '</llms.txt>; rel="describedby"; type="text/plain"',
+  '</.well-known/security.txt>; rel="security-txt"; type="text/plain"',
+].join(", ");
+
 app.get("/", async (c) => {
   const BASE = "https://x402-data-api.sigrunner.workers.dev";
+  // Advertise every machine-readable discovery surface in a typed Link header, and
+  // support Markdown content negotiation for agents (Accept: text/markdown) so the
+  // landing route is agent-native, not human-HTML-only.
+  c.header("Link", DISCOVERY_LINK_HEADER);
+  const accept = c.req.header("accept") || "";
+  if (/text\/markdown/i.test(accept)) {
+    c.header("Content-Type", "text/markdown; charset=utf-8");
+    c.header("Vary", "Accept");
+    return c.body(
+      `# Grey Ridge Signals — x402 Data & Security API\n\n` +
+        `Agent-native, pay-per-call data on Base mainnet (USDC via x402). No account, no API key.\n` +
+        `Every paid route returns HTTP 402 with an x402 v2 challenge (network eip155:8453, asset USDC) until a valid X-PAYMENT header is supplied.\n\n` +
+        `## Discovery\n` +
+        `- Payment manifest: ${CANONICAL_ORIGIN}/.well-known/x402\n` +
+        `- OpenAPI: ${CANONICAL_ORIGIN}/openapi.json\n` +
+        `- Agent catalog (llms.txt): ${CANONICAL_ORIGIN}/llms.txt\n` +
+        `- A2A agent card: ${CANONICAL_ORIGIN}/.well-known/agent-card.json\n` +
+        `- MCP server card: ${CANONICAL_ORIGIN}/.well-known/mcp/server-card.json\n` +
+        `- MCP endpoint: ${CANONICAL_ORIGIN}/mcp\n` +
+        `- Auth: ${CANONICAL_ORIGIN}/auth.md\n\n` +
+        `## Endpoint groups\n` +
+        `- Base on-chain reads — $0.002–$0.005 — /chain/gas-price, /chain/balance, /chain/tx, /chain/wallet, …\n` +
+        `- Crypto / DeFi / prediction markets — $0.001–$0.005 — /crypto/prices, /crypto/funding, /defi/yields, /pm/markets\n` +
+        `- Security — $0.009–$0.05 — /chain/token-report, /chain/token-security, /scan/mcp, /x402/preflight\n\n` +
+        `Try free: curl -s ${CANONICAL_ORIGIN}/chain/gas-price/preview\n\n` +
+        `Grey Ridge Signals Group LLC · Base mainnet (eip155:8453), USDC via x402\n`,
+    );
+  }
   const mcpConfig = JSON.stringify(
     { mcpServers: { "grey-ridge-x402": { type: "streamable-http", url: `${BASE}/mcp` } } },
     null,
@@ -2135,6 +2182,141 @@ app.get("/.well-known/erc-8004.json", (c) => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Agent-readiness discovery surfaces — the machine-readable entrypoints an agent
+// (or an agent-readiness scanner like Cloudflare's isitagentready.com) expects to
+// find by convention. Each points at real capabilities we already serve; none is
+// fabricated. Advertised collectively in the root Link header (DISCOVERY_LINK_HEADER).
+// ---------------------------------------------------------------------------
+
+// RFC 9727 API Catalog — a linkset that points agents at the OpenAPI description,
+// the x402 payment manifest, and the human/agent docs. One hop to every contract.
+app.get("/.well-known/api-catalog", (c) => {
+  c.header("Content-Type", "application/linkset+json");
+  return c.body(
+    JSON.stringify({
+      linkset: [
+        {
+          anchor: CANONICAL_ORIGIN + "/",
+          "service-desc": [
+            { href: CANONICAL_ORIGIN + "/openapi.json", type: "application/json", title: "OpenAPI 3 description" },
+          ],
+          service: [
+            { href: CANONICAL_ORIGIN + "/.well-known/x402", type: "application/json", title: "x402 payment manifest" },
+            { href: CANONICAL_ORIGIN + "/mcp", type: "application/json", title: "MCP streamable-HTTP endpoint" },
+          ],
+          describedby: [
+            { href: CANONICAL_ORIGIN + "/llms.txt", type: "text/plain", title: "Agent catalog (llms.txt)" },
+            { href: CANONICAL_ORIGIN + "/.well-known/agent-card.json", type: "application/json", title: "A2A agent card" },
+          ],
+        },
+      ],
+    }),
+  );
+});
+
+// MCP Server Card — lets an MCP-aware agent discover the server endpoint,
+// transport, and that it is x402-paid, without first opening a session.
+app.get("/.well-known/mcp/server-card.json", (c) =>
+  c.json({
+    schemaVersion: "2025-06-18",
+    name: "grey-ridge-x402",
+    title: "Grey Ridge Signals — x402 Data & Security MCP",
+    description:
+      "Agent-native, pay-per-call Base on-chain / crypto / DeFi data and MCP-security + x402-preflight tools. " +
+      "Keyless; each paid tool settles inline in USDC on Base via x402 (network eip155:8453). Free previews available. " +
+      "Call tools/list for the live tool set.",
+    version: "0.1.0",
+    url: CANONICAL_ORIGIN + "/mcp",
+    transport: "streamable-http",
+    capabilities: { tools: { listChanged: false }, resources: {}, prompts: {} },
+    payments: {
+      protocol: "x402",
+      version: 2,
+      network: "eip155:8453",
+      asset: "USDC",
+      manifest: CANONICAL_ORIGIN + "/.well-known/x402",
+    },
+    provider: { name: "Grey Ridge Signals Group LLC", url: CANONICAL_ORIGIN },
+    documentationUrl: CANONICAL_ORIGIN + "/llms.txt",
+  }),
+);
+
+// Agent Skills index (v0.2.0) — each billable route surfaced as a discrete skill
+// with its real price + free preview, derived from ROUTE_CATALOG so it never drifts.
+app.get("/.well-known/agent-skills/index.json", (c) => {
+  const skills = ROUTE_CATALOG.filter(([, method]) => method === "GET").map(
+    ([path, , price, , desc, tags]) => ({
+      id: path.replace(/^\//, "").replace(/\//g, "-"),
+      name: path,
+      description: String(desc).slice(0, 300),
+      href: CANONICAL_ORIGIN + path,
+      preview: CANONICAL_ORIGIN + path + "/preview",
+      tags: Array.isArray(tags) ? tags : [],
+      pricing: { amount_usdc: price, protocol: "x402", network: "eip155:8453", asset: "USDC" },
+    }),
+  );
+  return c.json({
+    schemaVersion: "0.2.0",
+    provider: { name: "Grey Ridge Signals Group LLC", url: CANONICAL_ORIGIN },
+    manifest: CANONICAL_ORIGIN + "/.well-known/x402",
+    count: skills.length,
+    skills,
+  });
+});
+
+// OAuth 2.0 Protected Resource Metadata (RFC 9728). This resource is NOT protected
+// by OAuth bearer tokens — it is protected by x402 micropayment. We publish the
+// metadata honestly: no authorization servers, and the x402 scheme documented so a
+// client that probes for auth metadata learns the real payment mechanism.
+app.get("/.well-known/oauth-protected-resource", (c) =>
+  c.json({
+    resource: CANONICAL_ORIGIN + "/",
+    authorization_servers: [],
+    bearer_methods_supported: [],
+    resource_documentation: CANONICAL_ORIGIN + "/llms.txt",
+    // Non-standard but honest: this resource authenticates payment, not identity.
+    payment: {
+      protocol: "x402",
+      version: 2,
+      network: "eip155:8453",
+      asset: "USDC",
+      header: "X-PAYMENT",
+      manifest: CANONICAL_ORIGIN + "/.well-known/x402",
+    },
+  }),
+);
+
+// auth.md — human/agent-readable description of how to authenticate (i.e. pay).
+app.get("/auth.md", (c) => {
+  c.header("Content-Type", "text/markdown; charset=utf-8");
+  return c.body(
+    `# Authentication — Grey Ridge Signals x402 API\n\n` +
+      `This API uses **x402 micropayment**, not API keys or OAuth. There is no account to create.\n\n` +
+      "Each paid route returns `HTTP 402 Payment Required` with an x402 v2 challenge until the request\n" +
+      "carries a valid `X-PAYMENT` header: an EIP-3009 gasless USDC authorization on Base (network\n" +
+      "`eip155:8453`, asset USDC, 6 decimals). The [x402-fetch](https://www.npmjs.com/package/x402-fetch)\n" +
+      "client constructs and retries it automatically.\n\n" +
+      `- Payment manifest: ${CANONICAL_ORIGIN}/.well-known/x402\n` +
+      `- Free previews: append \`/preview\` to a paid route (no payment)\n` +
+      `- Spec: https://x402.org\n\n` +
+      `Grey Ridge Signals Group LLC\n`,
+  );
+});
+
+// security.txt (RFC 9116) — standard disclosure channel for security researchers.
+app.get("/.well-known/security.txt", (c) => {
+  c.header("Content-Type", "text/plain; charset=utf-8");
+  const expires = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString();
+  return c.body(
+    `Contact: mailto:security@greyridgesignals.ai\n` +
+      `Expires: ${expires}\n` +
+      `Preferred-Languages: en\n` +
+      `Canonical: ${CANONICAL_ORIGIN}/.well-known/security.txt\n` +
+      `Policy: ${CANONICAL_ORIGIN}/terms\n`,
+  );
+});
+
 // A2A Agent Card — RFC-8615 well-known URI for Agent-to-Agent protocol
 // discovery (https://a2a-protocol.org/latest/topics/agent-discovery).
 // Lists every skill this service provides as an A2A-discoverable agent.
@@ -2177,6 +2359,17 @@ app.get("/.well-known/agent-card.json", (c) => {
     version: "0.1.0", // mirror root package.json (canonical)
     protocolVersion: "0.3.0",
     preferredTransport: "HTTP+JSON",
+    // A2A transport interfaces an agent can use to reach this service. Required by
+    // the A2A AgentCard schema (agent-readiness scanners reject a card without it).
+    // We expose the plain HTTP+JSON data routes and the streamable-HTTP MCP endpoint.
+    supportedInterfaces: [
+      { transport: "HTTP+JSON", url: CANONICAL_ORIGIN },
+      { transport: "JSONRPC", url: CANONICAL_ORIGIN + "/mcp" },
+    ],
+    additionalInterfaces: [
+      { transport: "HTTP+JSON", url: CANONICAL_ORIGIN },
+      { transport: "JSONRPC", url: CANONICAL_ORIGIN + "/mcp" },
+    ],
     documentationUrl: BASE,
     capabilities: {
       streaming: false,
@@ -2553,7 +2746,12 @@ These third-party x402 buyer tools let agents discover and purchase pay-per-call
 // robots.txt — Instruct crawlers how to index the site. Allow everything; sitemap
 // tells them where the canonical discovery/documentation routes are.
 app.get("/robots.txt", (c) => {
+  // Content Signals (contentsignals.org / Cloudflare): declare how AI systems may
+  // use this content. We WANT agents to read our data at request time (ai-input=yes)
+  // and to be found (search=yes), but our paid data is not for model training
+  // (ai-train=no). Honest preference, machine-readable in the crawler's first fetch.
   return c.text(`User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=no
 Allow: /
 
 Sitemap: ${CANONICAL_ORIGIN}/sitemap.xml
