@@ -280,6 +280,7 @@ export const ROUTE_CATALOG_BASE: Array<[string, string, string, string, string, 
   ["/chain/wallet", "GET", "0.003", "3000", "Wallet screening bundle (balance, activity, contract vs EOA check): ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]],
   ["/chain/wallet-screen", "GET", "0.004", "4000", "Is this wallet sanctioned OR a known scammer? Pre-trade screen for a counterparty / recipient / token-spender address before an agent sends, swaps or approves: exact match against the U.S. Treasury OFAC SDN crypto-address list AND community scam/phishing/wallet-drainer threat-intel (ScamSniffer + MEW darklist). Returns sanctioned (bool) + malicious (bool) + verdict (blocked/clear) + lists + the list sources and snapshot dates. 'clear' means not on these lists, not a safety guarantee. Use alongside /gate/swap and /chain/token-security to avoid sanctioned-or-scammer-counterparty liability.", ["security", "sanctions", "ofac", "compliance", "scam", "phishing", "drainer", "wallet", "base", "onchain", "screening", "data"]],
   ["/x402/preflight", "GET", "0.001", "1000", "x402 pre-payment endpoint check — before an agent pays an unknown x402 URL, fetch it once (never pays): (1) validate the 402 challenge + accepts[] (will it settle), (2) scan the resource + advertised MCP tools for LLM01/LLM08 injection and screen payTo vs OFAC/scam lists (safe to pay), (3) PRICE ACCURACY — does the live accepts[].amount match the advertised price? pass &advertised=<usdc> or it self-checks the endpoint's /.well-known/x402: MATCH|OVERCHARGE|UNDERCHARGE, (4) optional &samples=N (1-5) reliability burst, (5) DELIVERY readiness — flags a leaking paywall (resource served to an UNPAID request while the manifest advertises a paid price) and whether the output shape is specified. Returns PAY|CAUTION|AVOID + fix hints. Read-only, not a settlement guarantee. ?url=<endpoint>.", ["x402", "preflight", "security", "verify", "payment", "safe-to-pay", "price-accuracy", "overcharge", "reliability", "uptime", "delivery", "data"]],
+  ["/x402/receipt-verify", "GET", "0.004", "4000", "x402 POST-payment settlement proof. After you pay an x402 endpoint, bring your Base settlement ?tx=<0x hash> + ?url=<resource paid> for on-chain proof it settled: reads the tx receipt, decodes its USDC Transfer events, reconciles them against the endpoint's advertised payTo + amount (from its live 402, or &payto=/&expect= to bind). Verdict SETTLED|UNDERPAID|WRONG_RECIPIENT|NO_TRANSFER|REVERTED|NOT_FOUND|UNVERIFIED. Confirms settlement, not off-chain delivery.", ["x402", "receipt", "settlement", "verify", "payment", "proof", "post-payment", "onchain", "base", "usdc", "data"]],
   ["/dns", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH. Pass ?domain=stripe.com.", ["dns", "domain", "data", "recon"]],
   ["/whois", "GET", "0.01", "10000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain. Pass ?domain=cloudflare.com.", ["whois", "rdap", "domain", "data", "recon"]],
 ];
@@ -3156,6 +3157,7 @@ app.get("/openapi.json", (c) => {
       "/chain/token-report/preview": { get: { summary: "FREE live sample of /chain/token-report (no payment).", description: "Free full trade-safety report for a demo token. Try ?token=aero. Paid /chain/token-report accepts ANY Base ERC-20 ($0.01).", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-security": paid("Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, contract source-verification (Sourcify), live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.", "0.009", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
       "/x402/preflight": paid("x402 pre-payment check: fetch an unknown URL once (never pays) and return PAY|CAUTION|AVOID — validate the 402+accepts[] (will it settle), scan resource+MCP tools for LLM01/LLM08 and screen payTo vs OFAC/scam (safe to pay), verify live amount vs advertised price (MATCH|OVERCHARGE|UNDERCHARGE), and flag delivery readiness (leak/output-spec). Not a settlement guarantee.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to pre-check before paying", required: true, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "advertised", desc: "optional USDC-dollars price your catalog quoted (e.g. 0.001) to verify against the live charge", required: false, example: "0.001" }]),
+      "/x402/receipt-verify": paid("x402 POST-payment settlement proof (the other half of /x402/preflight): bring your Base settlement tx + the resource URL you paid, get on-chain proof it settled — reads the receipt, decodes USDC Transfer events, reconciles vs the endpoint's advertised payTo + amount. SETTLED|UNDERPAID|WRONG_RECIPIENT|NO_TRANSFER|REVERTED|NOT_FOUND|UNVERIFIED. Read-only.", "0.004", [{ name: "tx", desc: "0x-prefixed 32-byte Base-mainnet settlement transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }, { name: "url", desc: "the x402 resource URL you paid (its live 402 supplies the advertised payTo+amount)", required: false, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "payto", desc: "optional 0x payTo to reconcile against (bind without fetching the endpoint)", required: false, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "expect", desc: "optional advertised amount in USDC dollars to verify the settled amount against", required: false, example: "0.004" }]),
       "/dns": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "query", required: true, example: "stripe.com" }]),
       "/whois": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.01", [{ name: "domain", desc: "domain name to look up", in: "query", required: true, example: "cloudflare.com" }]),
     })),
@@ -4626,6 +4628,48 @@ export function makeRoutes(payTo: string) {
             reliability: { samples: 3, settle_consistency: "3/3", settle_rate: 1, reachable_rate: 1, stable: true, latency_ms: { min: 190, median: 210, max: 240 }, note: "point-in-time burst sampled now (not historical uptime); a stable burst is not a durability guarantee" },
             delivery: { verdict: "SPECIFIED", output_specified: true, served_without_payment: false, note: "the challenge declares the output shape (schema/example) so you know what the payment buys; post-payment delivery is still only provable from your on-chain settlement receipt after you pay" },
             scope_note: "static 402 wire-format + liveness + LLM01/LLM08 description scan + payTo flag + advertised-vs-charged price-accuracy + delivery-readiness check; read-only, never pays; not a settlement guarantee.",
+          },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /x402/receipt-verify": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.004",
+        network: NETWORK,
+        payTo,
+      },
+      description:
+        "Did my x402 payment actually settle? POST-payment on-chain proof (the other half of /x402/preflight): bring your Base settlement tx + the resource URL you paid, and this reads the tx receipt, decodes its USDC Transfer events, and reconciles them against the endpoint's advertised payTo + amount (from its live 402, or pass payto/expect). Verdict SETTLED | UNDERPAID | WRONG_RECIPIENT | NO_TRANSFER | REVERTED | NOT_FOUND | UNVERIFIED. Read-only; confirms settlement, not off-chain delivery.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { tx: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba", url: "https://api.greyridgesignals.ai/crypto/prices" },
+        inputSchema: {
+          type: "object",
+          required: ["tx"],
+          properties: {
+            tx: { type: "string", description: "0x-prefixed 32-byte Base-mainnet settlement transaction hash" },
+            url: { type: "string", description: "the x402 resource URL you paid; its live 402 challenge supplies the advertised payTo + amount to reconcile against" },
+            payto: { type: "string", description: "optional 0x payTo to reconcile against directly (binds the check without fetching the endpoint — useful if it is unreachable)" },
+            expect: { type: "string", description: "optional advertised amount in USDC dollars (e.g. 0.004) to verify the settled amount against" },
+          },
+        },
+        output: {
+          example: {
+            tx: "0x65484d…48ba",
+            url: "https://api.greyridgesignals.ai/crypto/prices",
+            verdict: "SETTLED",
+            settled: true,
+            network: "eip155:8453",
+            tx_status: "success",
+            advertised: { payTo: "0x…", amount_atomic: 4000, amount_usdc: "0.004", source: "live-402" },
+            matched_transfer: { token: USDC_BASE.toLowerCase(), from: "0x…", to: "0x…", amount_atomic: 4000, amount_usdc: "0.004" },
+            usdc_transfers: [{ token: USDC_BASE.toLowerCase(), from: "0x…", to: "0x…", amount_atomic: 4000, amount_usdc: "0.004" }],
+            block: 50830000,
+            basescan: "https://basescan.org/tx/0x65484d…48ba",
+            note: "confirmed on-chain: 0.004 USDC settled to the advertised payTo 0x… (>= the advertised 0.004 USDC) in this tx",
+            scope_note: "reconciles a Base settlement tx against an x402 endpoint's advertised payTo + amount (on-chain USDC Transfer proof); read-only, confirms what settled, not off-chain delivery.",
           },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
@@ -10065,6 +10109,273 @@ app.get("/x402/preflight/preview", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// x402 POST-PAYMENT RECEIPT VERIFY (/x402/receipt-verify) — the OTHER half of
+// /x402/preflight. Preflight answers "should I pay?" BEFORE paying (read-only,
+// pre-payment readiness). This answers "did my payment ACTUALLY settle to the
+// right place?" AFTER paying, from on-chain ground truth: the buyer brings
+// their settlement tx hash + the resource URL they paid for, and we PROVE from
+// Base mainnet that a USDC Transfer of >= the advertised amount reached the
+// endpoint's advertised payTo inside that tx. No price-only / wire-format
+// checker (x402-doctor, settled.tools, the Apify Delivery Score) does this —
+// they stop at the 402 challenge; none reconciles a REAL settlement against the
+// advertised recipient and amount. Zero-capital (read-only RPC), degrade-open.
+// It is also the atomic per-dependency primitive for continuous settlement
+// monitoring: "has every x402 endpoint I depend on kept honoring the payments I
+// send it, to the address it claims?".
+// ---------------------------------------------------------------------------
+const USDC_TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+export interface ReceiptTransfer {
+  token: string;
+  from: string;
+  to: string;
+  amount_atomic: number;
+  amount_usdc: string;
+}
+export interface ReceiptVerifyResult {
+  tx: string;
+  url: string | null;
+  verdict: "SETTLED" | "UNDERPAID" | "WRONG_RECIPIENT" | "NO_TRANSFER" | "REVERTED" | "NOT_FOUND" | "UNVERIFIED";
+  settled: boolean;
+  network: string;
+  tx_status: "success" | "reverted" | "unknown";
+  advertised: {
+    payTo: string | null;
+    amount_atomic: number | null;
+    amount_usdc: string | null;
+    source: "live-402" | "self-manifest" | "caller" | null;
+  };
+  matched_transfer: ReceiptTransfer | null;
+  usdc_transfers: ReceiptTransfer[];
+  block: number | null;
+  basescan: string;
+  note: string;
+  scope_note: string;
+  checked_at: string;
+}
+
+const RECEIPT_VERIFY_SCOPE_NOTE =
+  "reconciles a Base-mainnet settlement tx against an x402 endpoint's advertised payTo + amount (on-chain USDC Transfer proof); read-only, confirms what already settled — it does not move funds, re-run a payment, or guarantee the resource was delivered off-chain.";
+
+// Pure verdict core (no I/O) — exported for unit tests. Given the tx status, the
+// USDC transfers decoded from the receipt, and the advertised payTo + amount,
+// decide whether the payment settled as advertised. Amounts are summed across
+// logs because a single payment can split into multiple Transfer events.
+export function computeReceiptVerdict(
+  txStatus: "success" | "reverted" | "unknown" | null,
+  usdcTransfers: ReceiptTransfer[],
+  advertisedPayTo: string | null,
+  advertisedAtomic: number | null,
+  decimals = PRICE_ASSET_DECIMALS,
+): { verdict: ReceiptVerifyResult["verdict"]; settled: boolean; matched: ReceiptTransfer | null; note: string } {
+  if (txStatus === null) {
+    return { verdict: "NOT_FOUND", settled: false, matched: null,
+      note: "no transaction receipt for this hash on Base mainnet — the tx is unknown, not yet mined, or on a different chain; nothing to verify" };
+  }
+  if (txStatus === "reverted") {
+    return { verdict: "REVERTED", settled: false, matched: null,
+      note: "the transaction reverted on-chain — no payment moved, so nothing settled regardless of the advertised recipient" };
+  }
+  if (!advertisedPayTo) {
+    return { verdict: "UNVERIFIED", settled: false, matched: null,
+      note: usdcTransfers.length
+        ? `found ${usdcTransfers.length} USDC transfer(s) in this tx but no advertised payTo to reconcile against — pass &url=<the resource you paid> (its live 402 supplies the payTo) or &payto=<0x address> to bind the check`
+        : "no advertised payTo to reconcile against and no USDC transfer decoded — pass &url= or &payto= to bind the check" };
+  }
+  const want = advertisedPayTo.toLowerCase();
+  const toPayTo = usdcTransfers.filter((t) => t.to.toLowerCase() === want);
+  if (toPayTo.length === 0) {
+    const others = [...new Set(usdcTransfers.map((t) => t.to))].slice(0, 3).join(", ");
+    return { verdict: usdcTransfers.length ? "WRONG_RECIPIENT" : "NO_TRANSFER", settled: false, matched: null,
+      note: usdcTransfers.length
+        ? `this tx moved USDC but NONE to the advertised payTo ${advertisedPayTo} — the receipt does not prove payment to this endpoint (recipients in tx: ${others})`
+        : `this tx contains no USDC Transfer to ${advertisedPayTo} (no ERC-20 USDC Transfer events decoded) — it is not a USDC settlement to this endpoint` };
+  }
+  const paidAtomic = toPayTo.reduce((s, t) => s + t.amount_atomic, 0);
+  const best = toPayTo.reduce((a, b) => (b.amount_atomic > a.amount_atomic ? b : a));
+  const matched: ReceiptTransfer = { ...best, amount_atomic: paidAtomic, amount_usdc: atomicToUsdcStr(paidAtomic, decimals) ?? best.amount_usdc };
+  if (advertisedAtomic === null) {
+    return { verdict: "SETTLED", settled: true, matched,
+      note: `confirmed on-chain: ${matched.amount_usdc} USDC settled to the advertised payTo ${advertisedPayTo} in this tx (no advertised amount supplied, so the amount was not checked — pass &expect=<usdc> to also verify the amount)` };
+  }
+  const tol = Math.max(1, Math.round(advertisedAtomic * 0.01));
+  if (paidAtomic + tol < advertisedAtomic) {
+    return { verdict: "UNDERPAID", settled: false, matched,
+      note: `the advertised payTo received only ${matched.amount_usdc} USDC but the endpoint advertises ${atomicToUsdcStr(advertisedAtomic, decimals)} — the settlement is short; a compliant facilitator would not treat this as paid` };
+  }
+  return { verdict: "SETTLED", settled: true, matched,
+    note: `confirmed on-chain: ${matched.amount_usdc} USDC settled to the advertised payTo ${advertisedPayTo} (>= the advertised ${atomicToUsdcStr(advertisedAtomic, decimals)} USDC) in this tx` };
+}
+
+// Decode USDC Transfer events out of a Base tx receipt's logs. Degrade-open: a
+// malformed log is skipped, never thrown. Exported for unit tests.
+export function decodeUsdcTransfers(logs: unknown[], token = USDC_BASE.toLowerCase(), decimals = PRICE_ASSET_DECIMALS): ReceiptTransfer[] {
+  const out: ReceiptTransfer[] = [];
+  for (const raw of logs ?? []) {
+    try {
+      const lg = raw as { address?: string; topics?: string[]; data?: string };
+      if (String(lg.address ?? "").toLowerCase() !== token) continue;
+      const topics = lg.topics ?? [];
+      if ((topics[0] ?? "").toLowerCase() !== USDC_TRANSFER_TOPIC) continue;
+      if (topics.length < 3) continue;
+      const from = "0x" + String(topics[1]).slice(26);
+      const to = "0x" + String(topics[2]).slice(26);
+      const atomic = Number(BigInt(lg.data && lg.data !== "0x" ? lg.data : "0x0"));
+      if (!Number.isFinite(atomic)) continue;
+      out.push({ token, from, to, amount_atomic: atomic, amount_usdc: atomicToUsdcStr(atomic, decimals) ?? String(atomic) });
+    } catch { /* skip malformed log */ }
+  }
+  return out;
+}
+
+// Resolve the endpoint's advertised payTo + amount from its LIVE 402 challenge
+// (the exact requirement a buyer would have paid against). One bounded fetch,
+// degrade-open (any error / non-402 => nulls). Same accepts[] shape as preflight.
+async function fetchLive402PayTo(targetUrl: string): Promise<{ payTo: string | null; atomic: number | null }> {
+  try {
+    const res = await fetch(targetUrl, { headers: { "User-Agent": "greyridge-x402-receipt/1", accept: "application/json" }, signal: AbortSignal.timeout(4000) });
+    if (res.status !== 402) return { payTo: null, atomic: null };
+    let raw = ""; try { raw = await res.text(); } catch { /* body optional */ }
+    let parsed: Record<string, unknown> | null = null; try { parsed = JSON.parse(raw) as Record<string, unknown>; } catch { parsed = null; }
+    if (!parsed) return { payTo: null, atomic: null };
+    const acc = (parsed.accepts as unknown[]) ?? (parsed.paymentRequirements as unknown[]);
+    const a0 = Array.isArray(acc) && acc.length ? (acc[0] as Record<string, unknown>) : null;
+    if (!a0) return { payTo: null, atomic: null };
+    const payToRaw = String(a0.payTo ?? a0.payto ?? a0.pay_to ?? "");
+    const payTo = ADDR_RE.test(payToRaw) ? payToRaw : null;
+    const atomic = parseAtomicAmount(a0.maxAmountRequired ?? a0.amount);
+    return { payTo, atomic };
+  } catch { return { payTo: null, atomic: null }; }
+}
+
+// I/O wrapper: read the receipt from Base mainnet and reconcile it against the
+// advertised payTo + amount. Degrade-open throughout — an RPC failure yields
+// UNVERIFIED (the tx is NOT proven absent), distinct from NOT_FOUND (the RPC
+// positively returned null for this hash).
+export async function x402ReceiptVerify(
+  tx: string,
+  url: string | null,
+  callerPayTo: string | null = null,
+  callerExpectUsdc: string | null = null,
+): Promise<ReceiptVerifyResult> {
+  const checked_at = new Date().toISOString();
+  const base = { tx, url, network: "eip155:8453", basescan: `https://basescan.org/tx/${tx}`, scope_note: RECEIPT_VERIFY_SCOPE_NOTE, checked_at };
+
+  // 1. Resolve advertised payTo + amount. Caller override wins (lets a buyer
+  //    verify even when the endpoint is unreachable / a CF->CF subrequest 522s);
+  //    otherwise the resource's own live 402 challenge supplies them.
+  let advPayTo: string | null = callerPayTo && ADDR_RE.test(callerPayTo) ? callerPayTo : null;
+  let advAtomic: number | null = usdcDollarsToAtomic(callerExpectUsdc);
+  let advSource: ReceiptVerifyResult["advertised"]["source"] = advPayTo ? "caller" : (advAtomic !== null ? "caller" : null);
+  if (!advPayTo && url) {
+    const live = await fetchLive402PayTo(url);
+    if (live.payTo) { advPayTo = live.payTo; advSource = "live-402"; if (advAtomic === null) advAtomic = live.atomic; }
+  }
+
+  // 2. Fetch the receipt. Distinguish a hard RPC error from a genuine null.
+  let receipt: unknown = undefined;
+  let rpcError: string | null = null;
+  try { receipt = await baseRpc("eth_getTransactionReceipt", [tx]); }
+  catch (e) { rpcError = e instanceof Error ? e.message : String(e); }
+
+  const advertised = { payTo: advPayTo, amount_atomic: advAtomic, amount_usdc: atomicToUsdcStr(advAtomic), source: advSource };
+
+  if (rpcError) {
+    return { ...base, verdict: "UNVERIFIED", settled: false, tx_status: "unknown", advertised,
+      matched_transfer: null, usdc_transfers: [], block: null,
+      note: `could not read the transaction receipt from Base mainnet (${rpcError}) — the tx was NOT proven absent; retry shortly` };
+  }
+  if (receipt === null || receipt === undefined) {
+    const core = computeReceiptVerdict(null, [], advPayTo, advAtomic);
+    return { ...base, verdict: core.verdict, settled: core.settled, tx_status: "unknown", advertised,
+      matched_transfer: null, usdc_transfers: [], block: null, note: core.note };
+  }
+
+  const r = receipt as { status?: string; logs?: unknown[]; blockNumber?: string };
+  const txStatus: "success" | "reverted" | "unknown" =
+    r.status === "0x1" ? "success" : r.status === "0x0" ? "reverted" : "unknown";
+  const transfers = decodeUsdcTransfers(r.logs ?? []);
+  const block = r.blockNumber ? parseInt(String(r.blockNumber), 16) : null;
+  const core = computeReceiptVerdict(txStatus, transfers, advPayTo, advAtomic);
+  return { ...base, verdict: core.verdict, settled: core.settled, tx_status: txStatus, advertised,
+    matched_transfer: core.matched, usdc_transfers: transfers, block, note: core.note };
+}
+
+app.get("/x402/receipt-verify", async (c) => {
+  const tx = c.req.query("tx") ?? "";
+  if (!HASH_RE.test(tx)) {
+    return c.json({ error: "tx query param must be a 0x-prefixed 32-byte Base-mainnet transaction hash" }, { status: 400 });
+  }
+  const url = c.req.query("url") ?? null;
+  if (url !== null && !/^https?:\/\//i.test(url)) {
+    return c.json({ error: "url (optional) must be an absolute http(s) x402 endpoint URL" }, { status: 400 });
+  }
+  const payto = c.req.query("payto") ?? null;
+  if (payto !== null && !ADDR_RE.test(payto)) {
+    return c.json({ error: "payto (optional) must be a 0x-prefixed 20-byte address" }, { status: 400 });
+  }
+  const expect = c.req.query("expect") ?? null;
+  const result = await x402ReceiptVerify(tx, url, payto, expect);
+  console.log(JSON.stringify({ event: "paid_request", endpoint: "/x402/receipt-verify", tx, url, verdict: result.verdict, settled: result.settled, tx_status: result.tx_status, adv_source: result.advertised.source, ts: result.checked_at }));
+  const rail = c.get("rail") ?? "x402-paid";
+  fireAndForget(c, trackPaidRequest("GET /x402/receipt-verify", rail, makeUsageCounter(c.env)));
+  return c.json(result);
+});
+
+// Free preview — NO ?tx= returns a DETERMINISTIC representative sample (the
+// shape of a SETTLED verdict); with a real ?tx= it verifies the caller's real
+// settlement under the shared 3-real-checks/IP/day trial (same gate as the
+// preflight preview).
+function receiptVerifySample(): ReceiptVerifyResult {
+  const payTo = "0x2222222222222222222222222222222222222222";
+  return {
+    tx: "0x<your-settlement-tx-hash>",
+    url: "https://seller.example/x402/data",
+    verdict: "SETTLED",
+    settled: true,
+    network: "eip155:8453",
+    tx_status: "success",
+    advertised: { payTo, amount_atomic: 4000, amount_usdc: "0.004", source: "live-402" },
+    matched_transfer: { token: USDC_BASE.toLowerCase(), from: "0x1111111111111111111111111111111111111111", to: payTo, amount_atomic: 4000, amount_usdc: "0.004" },
+    usdc_transfers: [{ token: USDC_BASE.toLowerCase(), from: "0x1111111111111111111111111111111111111111", to: payTo, amount_atomic: 4000, amount_usdc: "0.004" }],
+    block: 50830000,
+    basescan: "https://basescan.org/tx/0x<your-settlement-tx-hash>",
+    note: "confirmed on-chain: 0.004 USDC settled to the advertised payTo 0x2222…2222 (>= the advertised 0.004 USDC) in this tx",
+    scope_note: RECEIPT_VERIFY_SCOPE_NOTE,
+    checked_at: new Date().toISOString(),
+  };
+}
+app.get("/x402/receipt-verify/preview", async (c) => {
+  const tx = c.req.query("tx");
+  if (tx === undefined) {
+    console.log(JSON.stringify({ event: "free_preview", endpoint: "/x402/receipt-verify/preview", verdict: "SETTLED", sample: true }));
+    return c.json({
+      ...receiptVerifySample(),
+      sample: true,
+      note: "Representative sample output (the shape of a SETTLED verdict: a USDC settlement reconciled against the endpoint's advertised payTo + amount). Pass ?tx=<0x hash>&url=<resource you paid> to verify YOUR real settlement free (3/IP/day), add &expect=<usdc> or &payto=<0x> to bind the amount/recipient, or GET /x402/receipt-verify?tx=…&url=… ($0.004) for unmetered verification.",
+      upgrade: upgradeCTA(paidUrlFrom(c), "0.004", "Unmetered settlement verification for any tx (this free preview is capped at 3 real checks/IP/day)."),
+    });
+  }
+  if (!HASH_RE.test(tx)) {
+    return c.json({ error: "tx must be a 0x-prefixed 32-byte Base-mainnet transaction hash" }, { status: 400 });
+  }
+  const url = c.req.query("url") ?? null;
+  if (url !== null && !/^https?:\/\//i.test(url)) {
+    return c.json({ error: "url (optional) must be an absolute http(s) x402 endpoint URL" }, { status: 400 });
+  }
+  const payto = c.req.query("payto") ?? null;
+  if (payto !== null && !ADDR_RE.test(payto)) {
+    return c.json({ error: "payto (optional) must be a 0x-prefixed 20-byte address" }, { status: 400 });
+  }
+  const t = await trialToken(c, "receipt:" + tx);
+  if (t.exhausted) {
+    const pu = paidUrlFrom(c);
+    return c.json({ error: "free receipt-verify trial exhausted (3/day/IP) - this is NOT a result for the tx you asked about", trial: { real_checks_left_today: 0 }, paid: pu, paid_url: pu, price_usdc: "0.004", pay_with: `x402: npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f("${pu}") - pays USDC on Base automatically. Docs: https://api.greyridgesignals.ai/llms.txt` }, { status: 429 });
+  }
+  return c.json({ ...(await x402ReceiptVerify(tx, url, payto, c.req.query("expect") ?? null)), trial: { real_checks_left_today: t.left } });
+});
+
+// ---------------------------------------------------------------------------
 // TOKEN SECURITY / HONEYPOT DETECTOR — the flagship moat product. Every other
 // endpoint here is a thin wrapper on data anyone could fetch themselves; this
 // one does real compute an agent can't trivially self-serve: EIP-1967/1822
@@ -11730,7 +12041,7 @@ app.get("/gate/swap", async (c) => {
 // scripted agent client can satisfy. Self-verifying (reads the receipt from the
 // public chain), so it is intentionally NOT an x402-gated route.
 const UNLOCK_PRICE_USDC = 0.01;
-const USDC_TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+// (USDC_TRANSFER_TOPIC is declared once, module-scoped, near the receipt-verify code above.)
 // Verify a Base USDC Transfer to PAY_TO of >= minUsdc inside a mined tx. Returns
 // the payer + amount on success, a reason on failure, or pending if not yet mined.
 async function verifyUsdcPaymentToPayTo(
@@ -17513,6 +17824,37 @@ const mcpHandler = createMcpHandler(() => {
       }
       try {
         const result = await x402Preflight(url, samples ?? 1, advertised ?? null);
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "x402_receipt_verify",
+    {
+      description:
+        "Did my x402 payment actually settle? POST-payment on-chain proof — the other half of x402_preflight (which checks BEFORE paying). Bring your Base settlement tx hash + the resource URL you paid, and this reads the tx receipt from Base mainnet, decodes its USDC Transfer events, and reconciles them against the endpoint's advertised payTo + amount (resolved from the resource's live 402, or pass payto/expect to bind it directly). Returns verdict SETTLED | UNDERPAID | WRONG_RECIPIENT | NO_TRANSFER | REVERTED | NOT_FOUND | UNVERIFIED, the matched transfer, and all USDC transfers in the tx. Read-only ground truth; confirms settlement to the right address + amount, not off-chain resource delivery. Cost: $0.004 USDC per call via x402.",
+      inputSchema: {
+        tx: z.string().describe("0x-prefixed 32-byte Base-mainnet settlement transaction hash"),
+        url: z.string().optional().describe("the x402 resource URL you paid — its live 402 challenge supplies the advertised payTo + amount to reconcile against"),
+        payto: z.string().optional().describe("optional: 0x payTo to reconcile against directly (binds the check without fetching the endpoint)"),
+        expect: z.string().optional().describe("optional: advertised amount in USDC dollars (e.g. 0.004) to verify the settled amount against"),
+      },
+    },
+    async ({ tx, url, payto, expect }) => {
+      if (!HASH_RE.test(tx)) {
+        return { content: [{ type: "text" as const, text: "Error: tx must be a 0x-prefixed 32-byte Base-mainnet transaction hash" }] };
+      }
+      if (url !== undefined && !/^https?:\/\//i.test(url)) {
+        return { content: [{ type: "text" as const, text: "Error: url must be an absolute http(s) x402 endpoint URL" }] };
+      }
+      if (payto !== undefined && !ADDR_RE.test(payto)) {
+        return { content: [{ type: "text" as const, text: "Error: payto must be a 0x-prefixed 20-byte address" }] };
+      }
+      try {
+        const result = await x402ReceiptVerify(tx, url ?? null, payto ?? null, expect ?? null);
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
