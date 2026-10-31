@@ -1758,6 +1758,16 @@ const INSTALLABLE_TOOLS: Array<{
     wraps: ["/crypto/prices", "/defi/yields", "/crypto/funding", "/chain/token-report", "/gate/swap"],
     note: "Published on PyPI — one `pip install`, no git. Named functions with pycoingecko-style ergonomics: token_prices(coins) (get_price(ids=) alias), defi_yields(project=), funding_rates(symbol=), plus token_report() and swap_gate(). Keyless free preview by default; x402 paid rail via the [pay] extra (reads X402_PRIVATE_KEY). langchain_tools()/crewai_tools() return all 5; CLIs greyridge-data / greyridge-gate / greyridge-report.",
   },
+  {
+    framework: "Node / TypeScript — safeFetch preflight-pay-receipt wrapper (git install)",
+    language: "TypeScript",
+    package: "greyridge-x402-tools",
+    install: "npm i github:rezearcher/greyridge-x402-tools",
+    repository: "https://github.com/rezearcher/greyridge-x402-tools",
+    tool_count: 2,
+    wraps: ["/x402/preflight", "/x402/receipt-verify"],
+    note: "Dependency-free ESM safeFetch(): runs the free x402 preflight and throws PreflightBlocked on AVOID, enforces a per-call USD cap (maxPerCallUsd, fails closed if the price is unreadable), pays through your own x402 fetch (e.g. wrapFetchWithPayment), dedupes retries by intentId, then runs a dual-RPC on-chain receipt check on the settlement tx. Python twin: pip install greyridge-x402-tools (0.7.0, safe_fetch).",
+  },
 ];
 
 // ─── Machine-readable call contracts for the discovery manifest ──────────────
