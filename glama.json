@@ -27,10 +27,11 @@
     "data-access",
     "payment-aware"
   ],
-  "tools": 33,
+  "tools": 34,
   "toolList": [
     "x402_preflight",
     "x402_receipt_verify",
+    "x402_receipt_verify_preview",
     "chain_wallet_screen",
     "gate_swap",
     "gate_swap_preview",
