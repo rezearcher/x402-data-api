@@ -2920,6 +2920,22 @@ app.get("/crypto/prices/preview", async (c) => {
   }
 });
 app.get("/crypto/funding/preview", async (c) => {
+  // Honest-gate: `?debug=venues` runs a live reachability probe FROM the Worker
+  // edge against the candidate CEX perp upstreams, so we can confirm a venue is
+  // reachable (not datacenter-geo-blocked) before advertising it. Free, opt-in.
+  if (c.req.query("debug") === "venues") {
+    const [gate, bitget, okx, dydx] = await Promise.all([
+      probeVenue("https://api.gateio.ws/api/v4/futures/usdt/contracts/BTC_USDT"),
+      probeVenue("https://api.bitget.com/api/v2/mix/market/current-fund-rate?symbol=BTCUSDT&productType=usdt-futures"),
+      probeVenue("https://www.okx.com/api/v5/public/funding-rate?instId=BTC-USDT-SWAP"),
+      probeVenue("https://indexer.dydx.trade/v4/historicalFunding/BTC-USD?limit=1"),
+    ]);
+    return c.json({
+      debug: "venue_reachability_from_worker_edge",
+      note: "ok=true means this upstream is reachable from the Cloudflare datacenter IP (not geo-blocked). Diagnostic only — not part of the paid feed.",
+      venues: { gate, bitget, okx, dydx },
+    });
+  }
   try {
     const all = await fetchFundingRates(20);
     return c.json({
@@ -6477,6 +6493,57 @@ async function fetchOkxFunding(coin: string): Promise<OkxFundingResult> {
     };
   } catch {
     return { rate: null, nextFundingTs: null };
+  }
+}
+
+// Gate.io USDT-margined perp (api.gateio.ws, keyless). Contract id is `{coin}_USDT`
+// (e.g. BTC_USDT); `funding_rate` is the current period as a native fraction string.
+// Gate funds every 8h. Best-effort + degrade-open.
+async function fetchGateFunding(coin: string): Promise<number | null> {
+  try {
+    const res = await fetch(`https://api.gateio.ws/api/v4/futures/usdt/contracts/${coin}_USDT`, {
+      headers: { accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    const j = (await res.json()) as { funding_rate?: string };
+    const rate = parseFloat(String(j.funding_rate));
+    return Number.isFinite(rate) ? rate : null;
+  } catch {
+    return null;
+  }
+}
+
+// Bitget USDT-M perp (api.bitget.com/v2, keyless). Symbol is `{coin}USDT`;
+// `data[0].fundingRate` is the current period as a native fraction string.
+// Bitget funds every 8h. Best-effort + degrade-open.
+async function fetchBitgetFunding(coin: string): Promise<number | null> {
+  try {
+    const res = await fetch(
+      `https://api.bitget.com/api/v2/mix/market/current-fund-rate?symbol=${coin}USDT&productType=usdt-futures`,
+      { headers: { accept: "application/json" } },
+    );
+    if (!res.ok) return null;
+    const j = (await res.json()) as { code?: string; data?: { fundingRate?: string }[] };
+    if (j.code !== "00000" || !j.data?.[0]) return null;
+    const rate = parseFloat(String(j.data[0].fundingRate));
+    return Number.isFinite(rate) ? rate : null;
+  } catch {
+    return null;
+  }
+}
+
+// Edge-reachability probe for the candidate venues. Run FROM the Worker (via the
+// free preview `?debug=venues`) to learn whether a datacenter-egress upstream is
+// geo-blocked (403) before we advertise it as a covered venue — some CEX perp
+// APIs country-block Cloudflare IPs (Binance/Bybit do; hence the HL bridge).
+// Honest-gate only: never shipped to paying callers, never changes the feed.
+async function probeVenue(url: string): Promise<{ ok: boolean; status: number | string; sample: string }> {
+  try {
+    const res = await fetch(url, { headers: { accept: "application/json" } });
+    const text = await res.text();
+    return { ok: res.ok, status: res.status, sample: text.slice(0, 180) };
+  } catch (e) {
+    return { ok: false, status: "fetch_error", sample: String((e as Error).message).slice(0, 180) };
   }
 }
 
