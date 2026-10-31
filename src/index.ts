@@ -220,7 +220,7 @@ export const ROUTE_CATALOG_BASE: Array<[string, string, string, string, string, 
   ["/chain/token-report", "GET", "0.01", "10000", "Is this Base token safe to buy? One call returns a trade-safety verdict — SAFE | CAUTION | AVOID — with risk_score (0-100) and reasons: honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, measured transfer tax, symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade before an agent buys a Base ERC-20.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "verdict", "trading", "token-security", "data"]],
   ["/chain/token-security", "GET", "0.009", "9000", "Is this Base token a scam or rug pull? Honeypot detector for a Base ERC-20: EIP-1967 proxy + upgradeability check, bytecode scan for mint/pause/blacklist/fee-setter/ownership, owner() renouncement, contract source-verification (Sourcify), and a live eth_call state-override sim proving a real wallet can transfer() it. Returns risk_score (0-100) + verdict (clear/review/block) + honeypot/scam/rug flags. Use before an agent buys, holds or approves a token.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "token-security", "data", "scam", "rug", "rug-detection", "scam-detection"]],
   ["/pm/markets", "GET", "0.005", "5000", "Live Polymarket prediction markets — question, outcomes, bestBid/bestAsk/spread, volume24hr/volume1wk, oneDayPriceChange, clobTokenIds, conditionId, category tags, liquidity, end date. Ranked by volume24hr; filter by keyword.", ["prediction-markets", "polymarket", "markets", "crypto", "data"]],
-  ["/crypto/funding", "GET", "0.004", "4000", "6-venue perp funding rates — Binance+Bybit+OKX+Hyperliquid+dYdX+Gate — top coins by 24h notional volume, per-venue funding + CEX↔DEX arb spread (bps) + cheapest-long/richest-short venue, premium/basis, annualized_hl/okx/binance/bybit/gate, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices, open interest.", ["crypto", "funding", "perps", "binance", "bybit", "hyperliquid", "okx", "dydx", "gate", "arbitrage", "defi", "market-data", "data"]],
+  ["/crypto/funding", "GET", "0.004", "4000", "6-venue perp funding rates — Binance+Bybit+OKX+Hyperliquid+dYdX+Gate — top coins by 24h volume, per-venue funding + per-venue open interest (USD) + OI-weighted CEX↔DEX arb verdict (thin-book venues excluded so cheapest-long/richest-short is executable, not a mirage), premium/basis, annualized_hl/okx/binance/bybit/gate, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices.", ["crypto", "funding", "perps", "open-interest", "binance", "bybit", "hyperliquid", "okx", "dydx", "gate", "arbitrage", "defi", "market-data", "data"]],
   ["/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, pool id, APY breakdown + 1d/7d/30d APY trend, IL risk (incl. il7d), exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL. Filter by project (family name like aave/uniswap/curve resolves all versions, or an exact slug like aave-v3), chain (short names like eth/arb/op/avax/matic/sol/bnb resolve to the DefiLlama canonical name), or stablecoin-only; sort by TVL or risk-adjusted APY.", ["defi", "yield", "lending", "apy", "tvl", "defi-yields", "data"]],
   ["/crypto/prices", "GET", "0.001", "1000", "Spot token prices from DefiLlama — pass comma-separated ticker symbols or CoinGecko ids, get price/change_24h/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "market-data", "defi", "data"]],
   ["/scan/mcp", "GET", "0.05", "50000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score + verdict (clear/review/block).", ["security", "mcp", "audit", "prompt-injection"]],
@@ -1752,7 +1752,7 @@ const MANIFEST_IO: Record<string, ManifestIO> = {
     { name: "coins", example: "bitcoin,ethereum,solana", desc: "Comma-separated CoinGecko ids (or use symbols)." },
     { name: "symbols", example: "BTC,ETH,SOL", desc: "Comma-separated ticker symbols; resolved to ids." },
   ] },
-  "/crypto/funding": { name: "6-venue perp funding rates and CEX↔DEX arbitrage spread (Binance, Bybit, OKX, Hyperliquid, dYdX, Gate.io)", category: "crypto", params: [] },
+  "/crypto/funding": { name: "6-venue perp funding rates + per-venue open interest and an OI-weighted CEX↔DEX arbitrage verdict (Binance, Bybit, OKX, Hyperliquid, dYdX, Gate.io)", category: "crypto", params: [] },
   "/pm/markets": { name: "Live Polymarket prediction markets: odds, spread, volume", category: "prediction-markets", params: [
     { name: "q", desc: "Keyword filter (optional)." },
   ] },
@@ -2941,7 +2941,7 @@ app.get("/crypto/funding/preview", async (c) => {
     return c.json({
       preview: all.slice(0, 1),
       total_available: all.length,
-      note: "Free top-1 sample. Full: GET /crypto/funding?limit=20 ($0.004) — ranked 6-venue Binance+Bybit+OKX+Hyperliquid+dYdX+Gate funding + CEX↔DEX arb spread, keyless x402 on Base.",
+      note: "Free top-1 sample. Full: GET /crypto/funding?limit=20 ($0.004) — ranked 6-venue Binance+Bybit+OKX+Hyperliquid+dYdX+Gate funding + per-venue open interest + an OI-weighted CEX↔DEX arb verdict (thin-book venues screened out so the best long/short is executable), keyless x402 on Base.",
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -3458,7 +3458,7 @@ export function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "6-venue perp funding rates — Binance+Bybit+OKX+Hyperliquid+dYdX+Gate — top coins by 24h notional volume, per-venue funding + CEX↔DEX arb spread (bps) + cheapest-long/richest-short venue, premium/basis, annualized_hl, annualized_okx, annualized_binance, annualized_bybit, annualized_gate, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices, open interest.",
+        "6-venue perp funding rates — Binance+Bybit+OKX+Hyperliquid+dYdX+Gate — top coins by 24h volume, per-venue funding + per-venue open interest (USD) + an OI-WEIGHTED CEX↔DEX arb verdict: thin-book venues are screened out of the spread so the cheapest-long/richest-short venue is executable size, not a near-empty-book mirage. Plus premium/basis, annualized_hl/okx/binance/bybit/gate, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -3473,9 +3473,12 @@ export function makeRoutes(payTo: string) {
           example: {
             coin: "BTC",
             funding: { hyperliquid: 0.0000125, okx: 0.0000492, dydx: -0.00000875, binance: 0.00003034, bybit: 0.00004855, gate: 0.00003 },
-            funding_spread_bps: 0.57,
+            open_interest_usd: { hyperliquid: 2904318000, okx: 2697309051, dydx: 17736000, binance: null, bybit: null, gate: 2283000000 },
+            funding_spread_bps: 0.58,
             best_long_venue: "dydx",
-            best_short_venue: "bybit",
+            best_short_venue: "okx",
+            excluded_thin_venues: [],
+            oi_weighted: true,
             premium: 0.00012,
             annualized_hl: 0.1095,
             annualized_okx: 0.05387,
@@ -6451,15 +6454,90 @@ interface VenueFunding {
   gate: number | null;
 }
 
+// Per-venue open interest in USD — the depth behind each venue's funding print.
+// Used to screen thin-book outliers out of the arb verdict. null = unmeasured
+// (Binance/Bybit geo-block the Worker edge, so their OI is unknown and is never
+// used to exclude them — they are major CEXes presumed liquid).
+interface VenueOi {
+  hyperliquid: number | null;
+  okx: number | null;
+  dydx: number | null;
+  binance: number | null;
+  bybit: number | null;
+  gate: number | null;
+}
+
+// Thin-book OI floor (USD). Below this a venue's funding print is not an
+// executable arb: a near-empty book printing an extreme rate counts the same as
+// a deep one in a naive cross-venue min/max, overstating the spread and naming a
+// venue you cannot get size on as the best long/short. Config constant,
+// degrade-open — a venue is excluded only when its OI is KNOWN and below this.
+const THIN_OI_FLOOR_USD = 1_000_000;
+
+interface ArbVerdict {
+  funding_spread_bps: number | null;
+  best_long_venue: string | null;
+  best_short_venue: string | null;
+  // Venues dropped from the verdict because measured OI is below the floor.
+  excluded_thin_venues: { venue: string; open_interest_usd: number }[];
+  // true when the verdict was computed over an OI-screened set (>=2 venues
+  // survived the floor); false when we fell back to the raw set (degrade-open).
+  oi_weighted: boolean;
+}
+
+// Pure: compute the CEX<->DEX arb verdict over an OI-SCREENED venue set. A venue
+// is excluded from the min/max only when its OI is KNOWN and below the floor;
+// venues with unknown OI are kept (degrade-open). Needs >=2 venues to form a
+// spread — if screening leaves fewer, falls back to the raw set and flags
+// oi_weighted=false so the caller knows the verdict is not OI-screened.
+// Exported for unit tests.
+export function computeArbVerdict(
+  funding: VenueFunding,
+  oiUsd: VenueOi,
+  floorUsd: number = THIN_OI_FLOOR_USD,
+): ArbVerdict {
+  const available = (Object.entries(funding) as [string, number | null][]).filter(
+    (e): e is [string, number] => e[1] !== null,
+  );
+  const excluded_thin_venues: { venue: string; open_interest_usd: number }[] = [];
+  const screened = available.filter(([venue]) => {
+    const oi = (oiUsd as unknown as Record<string, number | null>)[venue];
+    if (typeof oi === "number" && Number.isFinite(oi) && oi < floorUsd) {
+      excluded_thin_venues.push({ venue, open_interest_usd: Math.round(oi) });
+      return false;
+    }
+    return true;
+  });
+  const oi_weighted = screened.length >= 2;
+  const verdictSet = oi_weighted ? screened : available;
+  let funding_spread_bps: number | null = null;
+  let best_long_venue: string | null = null;
+  let best_short_venue: string | null = null;
+  if (verdictSet.length >= 2) {
+    const min = verdictSet.reduce((a, b) => (b[1] < a[1] ? b : a));
+    const max = verdictSet.reduce((a, b) => (b[1] > a[1] ? b : a));
+    funding_spread_bps = Math.round((max[1] - min[1]) * 10000 * 100) / 100;
+    best_long_venue = min[0];
+    best_short_venue = max[0];
+  }
+  return { funding_spread_bps, best_long_venue, best_short_venue, excluded_thin_venues, oi_weighted };
+}
+
 interface FundingRate {
   coin: string;
   // Each venue's current-period rate at its own native funding interval
   // (Hyperliquid + dYdX = hourly, OKX is typically 8h) — intervals are NOT
   // normalized, this is each venue's rate as-quoted right now.
   funding: VenueFunding;
+  // Per-venue open interest in USD (depth behind each funding print).
+  open_interest_usd: VenueOi;
   funding_spread_bps: number | null;
   best_long_venue: string | null;
   best_short_venue: string | null;
+  // Venues excluded from the arb verdict for a thin (sub-floor) book, and
+  // whether the verdict was computed over the OI-screened set.
+  excluded_thin_venues: { venue: string; open_interest_usd: number }[];
+  oi_weighted: boolean;
   premium: number | null;
   annualized_hl: number | null;
   annualized_okx: number | null;
@@ -6500,17 +6578,63 @@ async function fetchOkxFunding(coin: string): Promise<OkxFundingResult> {
 }
 
 // Gate.io USDT-margined perp (api.gateio.ws, keyless). Contract id is `{coin}_USDT`
-// (e.g. BTC_USDT); `funding_rate` is the current period as a native fraction string.
-// Gate funds every 8h. Best-effort + degrade-open.
-async function fetchGateFunding(coin: string): Promise<number | null> {
+// (e.g. BTC_USDT); `funding_rate` is the current period as a native fraction
+// string, and open interest in USD = position_size (contracts) * quanto_multiplier
+// (base per contract) * mark_price (USD per base) — all three live in the one
+// contract payload, so funding + OI come from a single fetch. Gate funds every
+// 8h. Best-effort + degrade-open.
+async function fetchGateContract(coin: string): Promise<{ rate: number | null; oiUsd: number | null }> {
   try {
     const res = await fetch(`https://api.gateio.ws/api/v4/futures/usdt/contracts/${coin}_USDT`, {
       headers: { accept: "application/json" },
     });
-    if (!res.ok) return null;
-    const j = (await res.json()) as { funding_rate?: string };
+    if (!res.ok) return { rate: null, oiUsd: null };
+    const j = (await res.json()) as {
+      funding_rate?: string;
+      position_size?: number;
+      quanto_multiplier?: string;
+      mark_price?: string;
+    };
     const rate = parseFloat(String(j.funding_rate));
-    return Number.isFinite(rate) ? rate : null;
+    const size = Number(j.position_size);
+    const mult = parseFloat(String(j.quanto_multiplier));
+    const mark = parseFloat(String(j.mark_price));
+    const oiUsd =
+      Number.isFinite(size) && Number.isFinite(mult) && Number.isFinite(mark) ? size * mult * mark : null;
+    return { rate: Number.isFinite(rate) ? rate : null, oiUsd };
+  } catch {
+    return { rate: null, oiUsd: null };
+  }
+}
+
+// OKX open interest in USD (keyless; `oiUsd` is published directly).
+async function fetchOkxOpenInterestUsd(coin: string): Promise<number | null> {
+  try {
+    const res = await fetch(`https://www.okx.com/api/v5/public/open-interest?instId=${coin}-USDT-SWAP`);
+    if (!res.ok) return null;
+    const j = (await res.json()) as { code: string; data?: { oiUsd?: string }[] };
+    if (j.code !== "0" || !j.data?.[0]) return null;
+    const usd = parseFloat(String(j.data[0].oiUsd));
+    return Number.isFinite(usd) ? usd : null;
+  } catch {
+    return null;
+  }
+}
+
+// dYdX v4 open interest in USD = openInterest (base) * oraclePrice (the indexer
+// does not publish a USD figure; openInterestUsd is null).
+async function fetchDydxOpenInterestUsd(coin: string): Promise<number | null> {
+  try {
+    const res = await fetch(`https://indexer.dydx.trade/v4/perpetualMarkets?ticker=${coin}-USD`);
+    if (!res.ok) return null;
+    const j = (await res.json()) as {
+      markets?: Record<string, { openInterest?: string; oraclePrice?: string }>;
+    };
+    const m = j.markets?.[`${coin}-USD`];
+    if (!m) return null;
+    const oi = parseFloat(String(m.openInterest));
+    const px = parseFloat(String(m.oraclePrice));
+    return Number.isFinite(oi) && Number.isFinite(px) ? oi * px : null;
   } catch {
     return null;
   }
@@ -6680,12 +6804,15 @@ async function fetchFundingRates(limit: number): Promise<FundingRate[]> {
   // upstream error or an unlisted coin on any venue never fails the request.
   const rates: FundingRate[] = await Promise.all(
     top.map(async (r) => {
-      const [okxRes, dydxRes, gateRes] = await Promise.allSettled([
+      const [okxRes, dydxRes, gateRes, okxOiRes, dydxOiRes] = await Promise.allSettled([
         fetchOkxFunding(r.coin),
         fetchDydxFunding(r.coin),
-        fetchGateFunding(r.coin),
+        fetchGateContract(r.coin),
+        fetchOkxOpenInterestUsd(r.coin),
+        fetchDydxOpenInterestUsd(r.coin),
       ]);
       const okx: OkxFundingResult = okxRes.status === "fulfilled" ? okxRes.value : { rate: null, nextFundingTs: null };
+      const gate = gateRes.status === "fulfilled" ? gateRes.value : { rate: null, oiUsd: null };
       const cx = cex.get(r.coin);
       const funding: VenueFunding = {
         hyperliquid: r.hlFunding,
@@ -6693,29 +6820,35 @@ async function fetchFundingRates(limit: number): Promise<FundingRate[]> {
         dydx: dydxRes.status === "fulfilled" ? dydxRes.value : null,
         binance: cx?.binance ?? null,
         bybit: cx?.bybit ?? null,
-        gate: gateRes.status === "fulfilled" ? gateRes.value : null,
+        gate: gate.rate,
       };
 
-      const available = (Object.entries(funding) as [string, number | null][]).filter(
-        (entry): entry is [string, number] => entry[1] !== null,
-      );
-      let funding_spread_bps: number | null = null;
-      let best_long_venue: string | null = null;
-      let best_short_venue: string | null = null;
-      if (available.length >= 2) {
-        const min = available.reduce((a, b) => (b[1] < a[1] ? b : a));
-        const max = available.reduce((a, b) => (b[1] > a[1] ? b : a));
-        funding_spread_bps = Math.round((max[1] - min[1]) * 10000 * 100) / 100;
-        best_long_venue = min[0];
-        best_short_venue = max[0];
-      }
+      // Per-venue open interest (USD). Hyperliquid comes from the assetCtx we
+      // already hold (base OI * oracle price); OKX/dYdX/Gate are fetched above;
+      // Binance/Bybit geo-block the edge so their OI is unmeasured (null).
+      const hlOiUsd = r.openInterest * r.oraclePx;
+      const oiUsd: VenueOi = {
+        hyperliquid: Number.isFinite(hlOiUsd) ? Math.round(hlOiUsd) : null,
+        okx: okxOiRes.status === "fulfilled" && okxOiRes.value !== null ? Math.round(okxOiRes.value) : null,
+        dydx: dydxOiRes.status === "fulfilled" && dydxOiRes.value !== null ? Math.round(dydxOiRes.value) : null,
+        binance: null,
+        bybit: null,
+        gate: gate.oiUsd !== null ? Math.round(gate.oiUsd) : null,
+      };
+
+      // Arb verdict over the OI-screened venue set — a thin-book funding outlier
+      // never names an unexecutable best long/short or inflates the spread.
+      const verdict = computeArbVerdict(funding, oiUsd);
 
       return {
         coin: r.coin,
         funding,
-        funding_spread_bps,
-        best_long_venue,
-        best_short_venue,
+        open_interest_usd: oiUsd,
+        funding_spread_bps: verdict.funding_spread_bps,
+        best_long_venue: verdict.best_long_venue,
+        best_short_venue: verdict.best_short_venue,
+        excluded_thin_venues: verdict.excluded_thin_venues,
+        oi_weighted: verdict.oi_weighted,
         premium: r.premium,
         annualized_hl: funding.hyperliquid !== null ? funding.hyperliquid * 24 * 365 : null,
         annualized_okx: funding.okx !== null ? funding.okx * 3 * 365 : null,
@@ -16345,7 +16478,7 @@ const mcpHandler = createMcpHandler(() => {
     "crypto_funding",
     {
       description:
-        "Live 6-venue perpetual-futures funding rates from Binance+Bybit+OKX+Hyperliquid+dYdX+Gate (per-venue rate, CEX↔DEX arb spread in bps, cheapest-long/richest-short venue, premium/basis, annualized_hl, annualized_okx, annualized_binance, annualized_bybit, annualized_gate, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle price, open interest, day volume), ranked by volume. Venues that are unreachable or don't list a given coin are omitted per-coin — Hyperliquid is always present. Cost: $0.004 USDC per call via x402.",
+        "Live 6-venue perpetual-futures funding rates from Binance+Bybit+OKX+Hyperliquid+dYdX+Gate (per-venue rate, per-venue open interest in USD, an OI-WEIGHTED CEX↔DEX arb verdict — funding_spread_bps + cheapest-long/richest-short venue computed over an OI-screened set so a thin-book outlier never names an unexecutable venue; excluded_thin_venues + oi_weighted flag report what was screened — premium/basis, annualized_hl/okx/binance/bybit/gate, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle price, day volume), ranked by volume. Venues unreachable or not listing a coin are omitted per-coin — Hyperliquid is always present. Cost: $0.004 USDC per call via x402.",
       inputSchema: {
         limit: z.number().optional().describe("Number of results, default 20, max 100"),
       },
