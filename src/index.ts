@@ -15384,8 +15384,11 @@ const AGENT_TOPICS: Record<
 // Registered BEFORE /for-agents/:topic so the specific slug wins the match.
 // The install command, package name and codeExample below are the SAME values
 // submitted to the registry entry, kept in one place so the listing and the
-// docs can never drift. codeExample verified to build a valid AI SDK tool
-// against the published @grey-ridge/vercel-ai-swap-gate@0.1.0.
+// docs can never drift. Install is git-sourced (github:rezearcher/vercel-ai-swap-gate):
+// it installs under the real name @grey-ridge/vercel-ai-swap-gate and builds on
+// install via the package's prepare script, serving the current 0.1.3 (brand host,
+// degrade-open) — the npm-registry copy lags at a stale 0.1.0 until trusted
+// publishing is live. codeExample verified to build a valid AI SDK tool.
 app.get("/for-agents/vercel-ai-swap-gate", (c) => {
   const esc = (s: string) =>
     String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m] as string);
@@ -15421,8 +15424,8 @@ console.log(text);`;
     applicationCategory: "DeveloperApplication",
     operatingSystem: "Node.js",
     url: canon,
-    softwareVersion: "0.1.0",
-    downloadUrl: "https://www.npmjs.com/package/@grey-ridge/vercel-ai-swap-gate",
+    softwareVersion: "0.1.3",
+    downloadUrl: "https://github.com/rezearcher/vercel-ai-swap-gate",
     offers: { "@type": "Offer", price: "0.008", priceCurrency: "USD", availability: "https://schema.org/InStock" },
     provider: { "@type": "Organization", name: "Grey Ridge Signals Group LLC" },
     isPartOf: { "@type": "WebAPI", name: "Grey Ridge x402 Data API", url: `${CANONICAL_ORIGIN}/for-agents` },
@@ -15464,9 +15467,9 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
 
 <h2>Install</h2>
 <div class=card>
-<pre>npm install @grey-ridge/vercel-ai-swap-gate
-# pnpm add / yarn add / bun add also work</pre>
-<p class=muted style="margin:.7rem 0 0">Peer deps: <code>ai</code> and <code>zod</code> (the SDK you already have). The x402 payment client (viem + @x402/*) ships inside the package.</p>
+<pre>npm install github:rezearcher/vercel-ai-swap-gate
+# pnpm add / yarn add / bun add github:rezearcher/vercel-ai-swap-gate also work</pre>
+<p class=muted style="margin:.7rem 0 0">Installs under its real name <code>@grey-ridge/vercel-ai-swap-gate</code> and builds on install (no extra step). Peer deps: <code>ai</code> and <code>zod</code> (the SDK you already have). The x402 payment client (viem + @x402/*) ships inside the package.</p>
 </div>
 
 <h2>Use it with the AI SDK</h2>
@@ -15488,7 +15491,7 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
 
 <p style="margin-top:1.4rem">Companion tool in the same package: <code>createTokenReport()</code> wraps <code>/chain/token-report</code> ($0.01) for watchlist screening — a SAFE / CAUTION / AVOID report with a 0-100 risk score. See the <a href="/for-agents/token-safety">token-safety routes</a>, the <a href="/.well-known/x402">x402 catalog</a> and the <a href="/openapi.json">OpenAPI spec</a>.</p>
 
-<footer>Grey Ridge Signals Group LLC &middot; <a href="/for-agents">all data routes for agents</a> &middot; <a href="https://www.npmjs.com/package/@grey-ridge/vercel-ai-swap-gate">npm</a> &middot; <a href="/openapi.json">OpenAPI</a> &middot; <a href="/.well-known/x402">x402 catalog</a> &middot; <a href="/pricing">Pricing</a> &middot; <a href="/">greyridgesignals.ai</a></footer>`;
+<footer>Grey Ridge Signals Group LLC &middot; <a href="/for-agents">all data routes for agents</a> &middot; <a href="https://github.com/rezearcher/vercel-ai-swap-gate">source</a> &middot; <a href="/openapi.json">OpenAPI</a> &middot; <a href="/.well-known/x402">x402 catalog</a> &middot; <a href="/pricing">Pricing</a> &middot; <a href="/">greyridgesignals.ai</a></footer>`;
   return c.html(html);
 });
 
