@@ -29,7 +29,7 @@ import {
 let authedFetch: typeof globalThis.fetch = globalThis.fetch;
 
 const WALLET_KEY = process.env.X402_WALLET_PRIVATE_KEY;
-const WORKER_URL = (process.env.WORKER_BASE_URL ?? "https://x402-data-api.sigrunner.workers.dev").replace(/\/$/, "");
+const WORKER_URL = (process.env.WORKER_BASE_URL ?? "https://api.greyridgesignals.ai").replace(/\/$/, "");
 
 if (WALLET_KEY) {
   try {
