@@ -280,7 +280,7 @@ export const ROUTE_CATALOG_BASE: Array<[string, string, string, string, string, 
   ["/chain/wallet", "GET", "0.003", "3000", "Wallet screening bundle (balance, activity, contract vs EOA check): ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]],
   ["/chain/wallet-screen", "GET", "0.004", "4000", "Is this wallet sanctioned OR a known scammer? Pre-trade screen for a counterparty / recipient / token-spender address before an agent sends, swaps or approves: exact match against the U.S. Treasury OFAC SDN crypto-address list AND community scam/phishing/wallet-drainer threat-intel (ScamSniffer + MEW darklist). Returns sanctioned (bool) + malicious (bool) + verdict (blocked/clear) + lists + the list sources and snapshot dates. 'clear' means not on these lists, not a safety guarantee. Use alongside /gate/swap and /chain/token-security to avoid sanctioned-or-scammer-counterparty liability.", ["security", "sanctions", "ofac", "compliance", "scam", "phishing", "drainer", "wallet", "base", "onchain", "screening", "data"]],
   ["/x402/preflight", "GET", "0.001", "1000", "x402 pre-payment endpoint check — before an agent pays an unknown x402 URL, fetch it once (never pays): (1) validate the 402 challenge + accepts[] (will it settle), (2) LIVENESS label LIVE|ZOMBIE|DEAD (is it a working payable endpoint now or listed-active-but-broken), (3) absolute PRICE-TRAP flag — a honeypot charging >=$1000/call trips AVOID even when its advertised==live price looks self-consistent; pass &max=<usdc> for your own budget ceiling, (4) scan the resource + advertised MCP tools for LLM01/LLM08 injection and screen payTo vs OFAC/scam lists (safe to pay), (5) PRICE ACCURACY — does the live accepts[].amount match the advertised price? pass &advertised=<usdc> or it self-checks /.well-known/x402: MATCH|OVERCHARGE|UNDERCHARGE, (6) optional &samples=N (1-5) reliability burst, (7) DELIVERY readiness — flags a leaking paywall and whether the output shape is specified. Returns PAY|CAUTION|AVOID + fix hints. Read-only, not a settlement guarantee. ?url=<endpoint>.", ["x402", "preflight", "security", "verify", "payment", "safe-to-pay", "liveness", "zombie", "honeypot", "price-trap", "price-accuracy", "overcharge", "reliability", "uptime", "delivery", "data"]],
-  ["/x402/receipt-verify", "GET", "0.004", "4000", "x402 POST-payment settlement proof. After you pay an x402 endpoint, bring your Base settlement ?tx=<0x hash> + ?url=<resource paid> for on-chain proof it settled: reads the tx receipt, decodes its USDC Transfer events, reconciles them against the endpoint's advertised payTo + amount (from its live 402, or &payto=/&expect= to bind). Verdict SETTLED|UNDERPAID|WRONG_RECIPIENT|NO_TRANSFER|REVERTED|NOT_FOUND|UNVERIFIED. Confirms settlement, not off-chain delivery.", ["x402", "receipt", "settlement", "verify", "payment", "proof", "post-payment", "onchain", "base", "usdc", "data"]],
+  ["/x402/receipt-verify", "GET", "0.004", "4000", "x402 POST-payment settlement proof. After you pay an x402 endpoint, bring your Base settlement ?tx=<0x hash> + ?url=<resource paid> for on-chain proof it settled: reads the tx receipt, decodes its USDC Transfer events, reconciles them against the endpoint's advertised payTo + amount (from its live 402, or &payto=/&expect= to bind). Verdict SETTLED|UNDERPAID|WRONG_RECIPIENT|NO_TRANSFER|REVERTED|NOT_FOUND|UNVERIFIED, 2-RPC cross-confirmed. Confirms settlement, not off-chain delivery.", ["x402", "receipt", "settlement", "verify", "payment", "proof", "post-payment", "onchain", "base", "usdc", "data"]],
   ["/dns", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH. Pass ?domain=stripe.com.", ["dns", "domain", "data", "recon"]],
   ["/whois", "GET", "0.01", "10000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain. Pass ?domain=cloudflare.com.", ["whois", "rdap", "domain", "data", "recon"]],
 ];
@@ -804,6 +804,23 @@ async function baseRpc(method: string, params: unknown[]): Promise<any> {
     }
   }
   throw new Error(`Base RPC unavailable (all providers): ${lastErr}`);
+}
+
+// Call ONE specific provider — no rotation, no fallback. Used where we need two
+// INDEPENDENT answers to cross-confirm (payment-proof must not trust a single
+// RPC, which could be stale or adversarial). Throws on any error so the caller
+// can score each provider ok/err separately.
+async function baseRpcAt(url: string, method: string, params: unknown[]): Promise<unknown> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const j = (await res.json()) as { result?: unknown; error?: { message?: string } };
+  if (j.error) throw new Error(j.error.message ?? "rpc error");
+  return j.result ?? null;
 }
 
 function parseBlockNumber(value: unknown): number {
@@ -3157,8 +3174,8 @@ app.get("/openapi.json", (c) => {
       "/gate/swap/preview": { get: { summary: "FREE live sample of /gate/swap (no payment).", description: "Free go/hold/block sample for a demo token (?token=degen) OR any real Base 0x address, 3 free real-token checks per IP per day. Paid /gate/swap accepts ANY Base ERC-20 ($0.008). Honors side and notional_usd.", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-report/preview": { get: { summary: "FREE live sample of /chain/token-report (no payment).", description: "Free full trade-safety report for a demo token. Try ?token=aero. Paid /chain/token-report accepts ANY Base ERC-20 ($0.01).", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-security": paid("Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, contract source-verification (Sourcify), live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.", "0.009", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
-      "/x402/preflight": paid("x402 pre-payment check: fetch an unknown URL once (never pays) and return PAY|CAUTION|AVOID — validate the 402+accepts[] (will it settle), label liveness LIVE|ZOMBIE|DEAD, flag an absolute price-trap (>=$1000/call honeypot => AVOID even when advertised==live), scan resource+MCP tools for LLM01/LLM08 and screen payTo vs OFAC/scam (safe to pay), verify live amount vs advertised price (MATCH|OVERCHARGE|UNDERCHARGE), and flag delivery readiness (leak/output-spec). Not a settlement guarantee.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to pre-check before paying", required: true, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "advertised", desc: "optional USDC-dollars price your catalog quoted (e.g. 0.001) to verify against the live charge", required: false, example: "0.001" }, { name: "max", desc: "optional per-call budget ceiling in USDC dollars; flags the live charge if it exceeds this", required: false, example: "0.05" }]),
-      "/x402/receipt-verify": paid("x402 POST-payment settlement proof (the other half of /x402/preflight): bring your Base settlement tx + the resource URL you paid, get on-chain proof it settled — reads the receipt, decodes USDC Transfer events, reconciles vs the endpoint's advertised payTo + amount. SETTLED|UNDERPAID|WRONG_RECIPIENT|NO_TRANSFER|REVERTED|NOT_FOUND|UNVERIFIED. Read-only.", "0.004", [{ name: "tx", desc: "0x-prefixed 32-byte Base-mainnet settlement transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }, { name: "url", desc: "the x402 resource URL you paid (its live 402 supplies the advertised payTo+amount)", required: false, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "payto", desc: "optional 0x payTo to reconcile against (bind without fetching the endpoint)", required: false, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "expect", desc: "optional advertised amount in USDC dollars to verify the settled amount against", required: false, example: "0.004" }]),
+      "/x402/preflight": paid("x402 pre-payment check: fetch an unknown URL once (never pays) and return PAY|CAUTION|AVOID — validates the 402+accepts[] (will it settle), liveness LIVE|ZOMBIE|DEAD, absolute price-trap (>=$1000 honeypot), LLM01/LLM08 scan + OFAC/scam payTo screen, live-vs-advertised price (MATCH|OVERCHARGE|UNDERCHARGE) and delivery readiness. Not a settlement guarantee.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to pre-check before paying", required: true, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "advertised", desc: "optional USDC-dollars price your catalog quoted (e.g. 0.001) to verify against the live charge", required: false, example: "0.001" }, { name: "max", desc: "optional per-call budget ceiling in USDC dollars; flags the live charge if it exceeds this", required: false, example: "0.05" }]),
+      "/x402/receipt-verify": paid("x402 POST-payment settlement proof: bring your Base settlement tx + the resource URL you paid for on-chain proof it settled — reads the receipt, reconciles its USDC Transfers vs the endpoint's advertised payTo + amount, cross-confirmed on 2 independent RPCs (fails closed on disagreement). SETTLED|UNDERPAID|WRONG_RECIPIENT|NO_TRANSFER|REVERTED|NOT_FOUND|UNVERIFIED. Read-only.", "0.004", [{ name: "tx", desc: "0x-prefixed 32-byte Base-mainnet settlement transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }, { name: "url", desc: "the x402 resource URL you paid (its live 402 supplies the advertised payTo+amount)", required: false, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "payto", desc: "optional 0x payTo to reconcile against (bind without fetching the endpoint)", required: false, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "expect", desc: "optional advertised amount in USDC dollars to verify the settled amount against", required: false, example: "0.004" }]),
       "/dns": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "query", required: true, example: "stripe.com" }]),
       "/whois": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.01", [{ name: "domain", desc: "domain name to look up", in: "query", required: true, example: "cloudflare.com" }]),
     })),
@@ -4595,7 +4612,7 @@ export function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Should an agent pay this x402 endpoint? One read-only call fetches it once (never pays): validates the 402 + accepts[] (will it settle), labels LIVENESS (LIVE | ZOMBIE | DEAD), flags an absolute PRICE-TRAP (a honeypot charging >=$1000/call => AVOID even when advertised==live is self-consistent; pass &max=<usdc> for your budget ceiling), scans the resource + advertised MCP tools for LLM01/LLM08 injection and screens payTo vs OFAC/scam lists (safe to pay), and VERIFIES THE PRICE — live accepts[].amount vs advertised (pass &advertised=<usdc> or self-check /.well-known/x402): MATCH | OVERCHARGE | UNDERCHARGE. Returns PAY | CAUTION | AVOID + fix hints. Not a settlement guarantee.",
+        "Should an agent pay this x402 endpoint? One read-only call (never pays): validates the 402 + accepts[] (will it settle), labels liveness LIVE|ZOMBIE|DEAD, flags an absolute price-trap (>=$1000 honeypot => AVOID), scans resource + MCP tools for LLM01/LLM08 injection, screens payTo vs OFAC/scam, and verifies price (live vs advertised: MATCH|OVERCHARGE|UNDERCHARGE). Returns PAY|CAUTION|AVOID + fix hints. Not a settlement guarantee.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -10294,6 +10311,12 @@ export interface ReceiptVerifyResult {
   matched_transfer: ReceiptTransfer | null;
   usdc_transfers: ReceiptTransfer[];
   block: number | null;
+  // Cross-confirmation across independent Base RPC providers. "dual-confirmed" =
+  // two independent providers returned identical settlement content;
+  // "single-source" = only one provider was reachable (degrade-open, disclosed);
+  // "rpc-disagreement" = two providers disagreed and we failed CLOSED (UNVERIFIED).
+  confirmation: "dual-confirmed" | "single-source" | "rpc-disagreement";
+  rpc_sources: string[];
   basescan: string;
   note: string;
   scope_note: string;
@@ -10301,7 +10324,7 @@ export interface ReceiptVerifyResult {
 }
 
 const RECEIPT_VERIFY_SCOPE_NOTE =
-  "reconciles a Base-mainnet settlement tx against an x402 endpoint's advertised payTo + amount (on-chain USDC Transfer proof); read-only, confirms what already settled — it does not move funds, re-run a payment, or guarantee the resource was delivered off-chain.";
+  "reconciles a Base-mainnet settlement tx against an x402 endpoint's advertised payTo + amount (on-chain USDC Transfer proof), cross-confirmed across two independent RPC providers and failing closed if they disagree; read-only, confirms what already settled — it does not move funds, re-run a payment, or guarantee the resource was delivered off-chain.";
 
 // Pure verdict core (no I/O) — exported for unit tests. Given the tx status, the
 // USDC transfers decoded from the receipt, and the advertised payTo + amount,
@@ -10351,6 +10374,33 @@ export function computeReceiptVerdict(
   }
   return { verdict: "SETTLED", settled: true, matched,
     note: `confirmed on-chain: ${matched.amount_usdc} USDC settled to the advertised payTo ${advertisedPayTo} (>= the advertised ${atomicToUsdcStr(advertisedAtomic, decimals)} USDC) in this tx` };
+}
+
+// Canonical settlement fingerprint of a receipt: its tx status plus the full
+// set of USDC Transfers (from>to:atomic), order-independent. Two INDEPENDENT RPC
+// providers must produce the same fingerprint for a tx or we refuse to call it
+// settled — this is the dual-source integrity check (a single RPC returning a
+// forged/stale receipt cannot by itself move the verdict). Exported for tests.
+export function receiptSettlementFingerprint(
+  txStatus: "success" | "reverted" | "unknown" | null,
+  transfers: ReceiptTransfer[],
+): string {
+  const norm = transfers
+    .map((t) => `${t.from.toLowerCase()}>${t.to.toLowerCase()}:${t.amount_atomic}`)
+    .sort()
+    .join("|");
+  return `${txStatus ?? "null"}#${norm}`;
+}
+
+// Normalize a raw receipt (object | null) into (status, logs) for fingerprinting.
+function receiptStatusOf(rec: unknown): "success" | "reverted" | "unknown" | null {
+  if (rec === null || rec === undefined) return null;
+  const s = (rec as { status?: string }).status;
+  return s === "0x1" ? "success" : s === "0x0" ? "reverted" : "unknown";
+}
+function receiptLogsOf(rec: unknown): unknown[] {
+  if (rec === null || rec === undefined) return [];
+  return (rec as { logs?: unknown[] }).logs ?? [];
 }
 
 // Decode USDC Transfer events out of a Base tx receipt's logs. Degrade-open: a
@@ -10418,23 +10468,68 @@ export async function x402ReceiptVerify(
     if (live.payTo) { advPayTo = live.payTo; advSource = "live-402"; if (advAtomic === null) advAtomic = live.atomic; }
   }
 
-  // 2. Fetch the receipt. Distinguish a hard RPC error from a genuine null.
+  const advertised = { payTo: advPayTo, amount_atomic: advAtomic, amount_usdc: atomicToUsdcStr(advAtomic), source: advSource };
+  const host = (u: string) => { try { return new URL(u).host; } catch { return u; } };
+
+  // 2. Read the receipt from TWO independent providers and cross-confirm. A
+  //    single RPC is a single point of trust: a buggy or adversarial endpoint
+  //    could return a forged/stale receipt (hide a Transfer, flip the status).
+  //    When two independent providers DISAGREE on the settlement content we fail
+  //    CLOSED (UNVERIFIED) — we never call a payment settled on one source's word.
+  //    When only one provider is reachable we degrade open but DISCLOSE it
+  //    (confirmation=single-source).
+  const providers = rpcOrder();
+  const urlA = providers[0];
+  const urlB = providers.find((u) => u !== urlA) ?? null;
+  const getRec = async (u: string): Promise<{ ok: true; rec: unknown } | { ok: false; err: string }> => {
+    try { return { ok: true, rec: await baseRpcAt(u, "eth_getTransactionReceipt", [tx]) }; }
+    catch (e) { return { ok: false, err: e instanceof Error ? e.message : String(e) }; }
+  };
+  const [ra, rb] = await Promise.all([
+    getRec(urlA),
+    urlB ? getRec(urlB) : Promise.resolve({ ok: false as const, err: "only one provider available" }),
+  ]);
+
   let receipt: unknown = undefined;
   let rpcError: string | null = null;
-  try { receipt = await baseRpc("eth_getTransactionReceipt", [tx]); }
-  catch (e) { rpcError = e instanceof Error ? e.message : String(e); }
+  let confirmation: ReceiptVerifyResult["confirmation"] = "single-source";
+  let rpc_sources: string[] = [];
 
-  const advertised = { payTo: advPayTo, amount_atomic: advAtomic, amount_usdc: atomicToUsdcStr(advAtomic), source: advSource };
+  if (ra.ok && rb.ok && urlB) {
+    const fpA = receiptSettlementFingerprint(receiptStatusOf(ra.rec), decodeUsdcTransfers(receiptLogsOf(ra.rec)));
+    const fpB = receiptSettlementFingerprint(receiptStatusOf(rb.rec), decodeUsdcTransfers(receiptLogsOf(rb.rec)));
+    rpc_sources = [host(urlA), host(urlB)];
+    if (fpA === fpB) {
+      receipt = ra.rec;
+      confirmation = "dual-confirmed";
+    } else {
+      // Two independent providers disagree about what this tx did — refuse to
+      // vouch for it. This is the integrity guarantee competitors advertise.
+      return { ...base, verdict: "UNVERIFIED", settled: false, tx_status: "unknown", advertised,
+        matched_transfer: null, usdc_transfers: [], block: null, confirmation: "rpc-disagreement", rpc_sources,
+        note: `two independent Base RPC providers returned DIFFERENT settlement content for this tx (${host(urlA)} vs ${host(urlB)}) — failing closed; do not treat this as settled until the providers agree. Retry shortly.` };
+    }
+  } else if (ra.ok || rb.ok) {
+    const good = ra.ok ? ra : (rb as { ok: true; rec: unknown });
+    receipt = good.rec;
+    confirmation = "single-source";
+    rpc_sources = [host(ra.ok ? urlA : (urlB as string))];
+  } else {
+    // Both chosen providers failed — fall back to the full rotation so a
+    // transient double-miss doesn't blind us (degrade-open, single-source).
+    try { receipt = await baseRpc("eth_getTransactionReceipt", [tx]); confirmation = "single-source"; rpc_sources = ["rotation-fallback"]; }
+    catch (e) { rpcError = e instanceof Error ? e.message : String(e); confirmation = "single-source"; rpc_sources = []; }
+  }
 
   if (rpcError) {
     return { ...base, verdict: "UNVERIFIED", settled: false, tx_status: "unknown", advertised,
-      matched_transfer: null, usdc_transfers: [], block: null,
+      matched_transfer: null, usdc_transfers: [], block: null, confirmation, rpc_sources,
       note: `could not read the transaction receipt from Base mainnet (${rpcError}) — the tx was NOT proven absent; retry shortly` };
   }
   if (receipt === null || receipt === undefined) {
     const core = computeReceiptVerdict(null, [], advPayTo, advAtomic);
     return { ...base, verdict: core.verdict, settled: core.settled, tx_status: "unknown", advertised,
-      matched_transfer: null, usdc_transfers: [], block: null, note: core.note };
+      matched_transfer: null, usdc_transfers: [], block: null, confirmation, rpc_sources, note: core.note };
   }
 
   const r = receipt as { status?: string; logs?: unknown[]; blockNumber?: string };
@@ -10444,7 +10539,7 @@ export async function x402ReceiptVerify(
   const block = r.blockNumber ? parseInt(String(r.blockNumber), 16) : null;
   const core = computeReceiptVerdict(txStatus, transfers, advPayTo, advAtomic);
   return { ...base, verdict: core.verdict, settled: core.settled, tx_status: txStatus, advertised,
-    matched_transfer: core.matched, usdc_transfers: transfers, block, note: core.note };
+    matched_transfer: core.matched, usdc_transfers: transfers, block, confirmation, rpc_sources, note: core.note };
 }
 
 app.get("/x402/receipt-verify", async (c) => {
@@ -10462,7 +10557,7 @@ app.get("/x402/receipt-verify", async (c) => {
   }
   const expect = c.req.query("expect") ?? null;
   const result = await x402ReceiptVerify(tx, url, payto, expect);
-  console.log(JSON.stringify({ event: "paid_request", endpoint: "/x402/receipt-verify", tx, url, verdict: result.verdict, settled: result.settled, tx_status: result.tx_status, adv_source: result.advertised.source, ts: result.checked_at }));
+  console.log(JSON.stringify({ event: "paid_request", endpoint: "/x402/receipt-verify", tx, url, verdict: result.verdict, settled: result.settled, tx_status: result.tx_status, adv_source: result.advertised.source, confirmation: result.confirmation, ts: result.checked_at }));
   const rail = c.get("rail") ?? "x402-paid";
   fireAndForget(c, trackPaidRequest("GET /x402/receipt-verify", rail, makeUsageCounter(c.env)));
   return c.json(result);
@@ -10485,6 +10580,8 @@ function receiptVerifySample(): ReceiptVerifyResult {
     matched_transfer: { token: USDC_BASE.toLowerCase(), from: "0x1111111111111111111111111111111111111111", to: payTo, amount_atomic: 4000, amount_usdc: "0.004" },
     usdc_transfers: [{ token: USDC_BASE.toLowerCase(), from: "0x1111111111111111111111111111111111111111", to: payTo, amount_atomic: 4000, amount_usdc: "0.004" }],
     block: 50830000,
+    confirmation: "dual-confirmed",
+    rpc_sources: ["mainnet.base.org", "base-rpc.publicnode.com"],
     basescan: "https://basescan.org/tx/0x<your-settlement-tx-hash>",
     note: "confirmed on-chain: 0.004 USDC settled to the advertised payTo 0x2222…2222 (>= the advertised 0.004 USDC) in this tx",
     scope_note: RECEIPT_VERIFY_SCOPE_NOTE,

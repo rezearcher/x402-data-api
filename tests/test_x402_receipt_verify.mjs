@@ -21,6 +21,7 @@ register(new URL("./cfw-hooks.mjs", import.meta.url));
 const {
   computeReceiptVerdict,
   decodeUsdcTransfers,
+  receiptSettlementFingerprint,
   x402ReceiptVerify,
   makeRoutes,
   ROUTE_CATALOG,
@@ -202,6 +203,83 @@ await check("x402ReceiptVerify RPC error -> UNVERIFIED (not falsely NOT_FOUND)",
   assert.strictEqual(r.verdict, "UNVERIFIED");
   assert.strictEqual(r.settled, false);
   assert.ok(/NOT proven absent/i.test(r.note), "note distinguishes RPC-failure from genuine absence");
+});
+
+// ---- dual-RPC cross-confirmation -------------------------------------------
+
+// 15a. fingerprint: order-independent, status-sensitive.
+await check("receiptSettlementFingerprint is order-independent and status-sensitive", () => {
+  const t1 = { token: USDC, from: PAYER, to: PAYTO, amount_atomic: 4000, amount_usdc: "0.004" };
+  const t2 = { token: USDC, from: PAYER, to: OTHER, amount_atomic: 1, amount_usdc: "0.000001" };
+  assert.strictEqual(
+    receiptSettlementFingerprint("success", [t1, t2]),
+    receiptSettlementFingerprint("success", [t2, t1]),
+    "same transfers in any order fingerprint identically",
+  );
+  assert.notStrictEqual(
+    receiptSettlementFingerprint("success", [t1]),
+    receiptSettlementFingerprint("reverted", [t1]),
+    "status flip changes the fingerprint",
+  );
+});
+
+// 15b. Two independent providers AGREE -> SETTLED, confirmation=dual-confirmed,
+//      two rpc_sources reported.
+await check("x402ReceiptVerify dual providers agree -> SETTLED dual-confirmed", async () => {
+  let rpcCall = 0;
+  globalThis.fetch = async (url, opts) => {
+    if (opts && opts.method === "POST" && String(opts.body).includes("eth_getTransactionReceipt")) {
+      rpcCall++;
+      return { ok: true, status: 200, async json() { return { result: { status: "0x1", blockNumber: "0x3077a30", logs: [transferLog(PAYER, PAYTO, 4000)] } }; } };
+    }
+    throw new Error("no endpoint fetch when payto supplied");
+  };
+  const r = await x402ReceiptVerify(TX, null, PAYTO, "0.004");
+  restore();
+  assert.strictEqual(r.verdict, "SETTLED", `verdict ${r.verdict}`);
+  assert.strictEqual(r.confirmation, "dual-confirmed", `confirmation ${r.confirmation}`);
+  assert.strictEqual(r.rpc_sources.length, 2, "two independent RPC sources listed");
+  assert.ok(rpcCall >= 2, "queried at least two providers");
+});
+
+// 15c. Two independent providers DISAGREE -> UNVERIFIED, fail CLOSED
+//      (confirmation=rpc-disagreement). This is the integrity guarantee.
+await check("x402ReceiptVerify dual providers disagree -> UNVERIFIED (fail closed)", async () => {
+  let rpcCall = 0;
+  globalThis.fetch = async (url, opts) => {
+    if (opts && opts.method === "POST" && String(opts.body).includes("eth_getTransactionReceipt")) {
+      rpcCall++;
+      // provider A sees a USDC settlement to payTo; provider B sees none.
+      if (rpcCall === 1) return { ok: true, status: 200, async json() { return { result: { status: "0x1", blockNumber: "0x3077a30", logs: [transferLog(PAYER, PAYTO, 4000)] } }; } };
+      return { ok: true, status: 200, async json() { return { result: { status: "0x1", blockNumber: "0x3077a30", logs: [] } }; } };
+    }
+    throw new Error("no endpoint fetch when payto supplied");
+  };
+  const r = await x402ReceiptVerify(TX, null, PAYTO, "0.004");
+  restore();
+  assert.strictEqual(r.verdict, "UNVERIFIED", `verdict ${r.verdict}`);
+  assert.strictEqual(r.settled, false);
+  assert.strictEqual(r.confirmation, "rpc-disagreement", `confirmation ${r.confirmation}`);
+  assert.ok(/fail/i.test(r.note) && /disagree|different/i.test(r.note), "note explains the fail-closed");
+});
+
+// 15d. Only ONE provider reachable -> degrade open but DISCLOSE
+//      (confirmation=single-source), still returns the verdict.
+await check("x402ReceiptVerify one provider down -> single-source (degrade-open, disclosed)", async () => {
+  let rpcCall = 0;
+  globalThis.fetch = async (url, opts) => {
+    if (opts && opts.method === "POST" && String(opts.body).includes("eth_getTransactionReceipt")) {
+      rpcCall++;
+      if (rpcCall === 1) throw new Error("provider A 429");
+      return { ok: true, status: 200, async json() { return { result: { status: "0x1", blockNumber: "0x3077a30", logs: [transferLog(PAYER, PAYTO, 4000)] } }; } };
+    }
+    throw new Error("no endpoint fetch when payto supplied");
+  };
+  const r = await x402ReceiptVerify(TX, null, PAYTO, "0.004");
+  restore();
+  assert.strictEqual(r.verdict, "SETTLED", `verdict ${r.verdict}`);
+  assert.strictEqual(r.confirmation, "single-source", `confirmation ${r.confirmation}`);
+  assert.strictEqual(r.rpc_sources.length, 1, "one source listed when only one reachable");
 });
 
 // ---- registration ----------------------------------------------------------
