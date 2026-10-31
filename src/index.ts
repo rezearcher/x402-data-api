@@ -5721,6 +5721,7 @@ app.use(async (c, next) => {
       "gate_swap_preview",
       "yield_entry_verdict_preview",
       "simulate_preview",
+      "x402_receipt_verify_preview",
     ]);
     // Batch bodies: evaluate EVERY element; any non-free tools/call requires payment.
     const requiresPayment = items.some((it) => {
@@ -18107,6 +18108,29 @@ const mcpHandler = createMcpHandler(() => {
       try {
         const result = await x402ReceiptVerify(tx, url ?? null, payto ?? null, expect ?? null);
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "x402_receipt_verify_preview",
+    {
+      description:
+        "FREE keyless x402 settlement check on Base: pass a tx hash plus payto (and optionally expect, in USDC). Dual-RPC reads the receipt, decodes USDC Transfers and returns SETTLED | UNDERPAID | WRONG_RECIPIENT | NO_TRANSFER | REVERTED | NOT_FOUND. Binds to the payTo you supply; resolving the payTo from a live 402 url is the paid x402_receipt_verify.",
+      inputSchema: {
+        tx: z.string().describe("0x-prefixed 32-byte Base-mainnet settlement transaction hash"),
+        payto: z.string().describe("0x payTo address the payment should have reached"),
+        expect: z.string().optional().describe("optional: advertised amount in USDC dollars (e.g. 0.004)"),
+      },
+    },
+    async ({ tx, payto, expect }) => {
+      if (!HASH_RE.test(tx)) return { content: [{ type: "text" as const, text: "Error: tx must be a 0x-prefixed 32-byte Base-mainnet transaction hash" }] };
+      if (!ADDR_RE.test(payto)) return { content: [{ type: "text" as const, text: "Error: payto must be a 0x-prefixed 20-byte address" }] };
+      try {
+        const result = await x402ReceiptVerify(tx, null, payto, expect ?? null);
+        return { content: [{ type: "text" as const, text: JSON.stringify({ ...result, note_free_tier: "Free tier binds to the payto you supply. x402_receipt_verify ($0.004) resolves payTo + amount from the endpoint's live 402." }, null, 2) }] };
       } catch (e) {
         return { content: [{ type: "text" as const, text: `Error: ${(e as Error).message}` }] };
       }
