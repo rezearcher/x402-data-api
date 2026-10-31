@@ -70,6 +70,8 @@ Base-native, multi-provider RPC with automatic failover (never fails a paid call
 
 Free in MCP: `x402_receipt_verify_preview` (tx + payto, no payment).
 
+Python agents, no key or wallet: `uvx --from greyridge-x402-tools greyridge-x402-verify` runs a local stdio MCP server (PyPI 0.6.0) with free `x402_preflight` and `x402_receipt_verify` tools. Add it to Claude Desktop/Cursor as command `uvx`, args `--from greyridge-x402-tools greyridge-x402-verify`.
+
 How `x402_receipt_verify` differs from the read-only verifier [`@tensorfeed/x402-base-mcp`](https://www.npmjs.com/package/@tensorfeed/x402-base-mcp) (`verify_x402_settlement`, checked against its 0.2.1 README): theirs matches a Transfer against a recipient and amount the caller types in. Ours can pull `payTo` and amount from the endpoint's live 402 (`?url=`), so a wrong or stale expectation doesn't pass, and it compares two RPC providers and fails closed if they disagree. Theirs is a good fit if you just want generic Base reads (balances, `eth_call`) in the same server; ours only does verification.
 
 Free previews: `GET /crypto/prices/preview`, `/crypto/funding/preview`, `/defi/yields/preview`, `/chain/block-number/preview`, `/chain/gas-price/preview` (full live data, not truncated), `/scan/mcp/preview?url=`. **Zero-egress MCP scan** (for private/OAuth-gated servers): `POST /scan/mcp/preview` with `{"tools":[…]}` is the free counts-only preview; `POST /scan/mcp` with the same body is the paid itemized scan — nothing leaves your side. One-liner: [`examples/mcp-scan-preview.sh`](examples/mcp-scan-preview.sh).
