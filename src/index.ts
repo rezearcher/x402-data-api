@@ -10458,7 +10458,7 @@ export function decodeUsdcTransfers(logs: unknown[], token = USDC_BASE.toLowerCa
 // degrade-open (any error / non-402 => nulls). Same accepts[] shape as preflight.
 async function fetchLive402PayTo(targetUrl: string): Promise<{ payTo: string | null; atomic: number | null }> {
   try {
-    const res = await fetch(targetUrl, { headers: { "User-Agent": "greyridge-x402-receipt/1", accept: "application/json" }, signal: AbortSignal.timeout(4000) });
+    const res = await preflightFetch(targetUrl, { headers: { "User-Agent": "greyridge-x402-receipt/1", accept: "application/json" }, signal: AbortSignal.timeout(4000) });
     if (res.status !== 402) return { payTo: null, atomic: null };
     let raw = ""; try { raw = await res.text(); } catch { /* body optional */ }
     let parsed: Record<string, unknown> | null = null; try { parsed = JSON.parse(raw) as Record<string, unknown>; } catch { parsed = null; }
