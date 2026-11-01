@@ -1397,6 +1397,8 @@ ${provisionMeta}
 
   <h2>Try it free</h2>
   <pre>curl -s ${BASE}/chain/gas-price/preview</pre>
+  <p>Check an x402 endpoint before your agent pays it (no key, returns PAY / CAUTION / AVOID):</p>
+  <pre>curl -s "${BASE}/x402/preflight/preview?url=${BASE}/defi/yields"</pre>
 
   <h2>Add the MCP server</h2>
   <pre>${mcpConfig}</pre>
