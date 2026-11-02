@@ -12,7 +12,8 @@ UNIT_DIR="${HOME}/.config/systemd/user"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_DIR="${HERE}/systemd"
 UNITS=(x402-revenue-reconcile.service x402-revenue-reconcile.timer \
-       x402-nohumans-resync.service x402-nohumans-resync.timer)
+       x402-nohumans-resync.service x402-nohumans-resync.timer \
+       x402-cdp-index-watch.service x402-cdp-index-watch.timer)
 
 if [ "${1:-}" = "--uninstall" ]; then
     systemctl --user disable --now x402-revenue-reconcile.timer 2>/dev/null || true
@@ -46,6 +47,9 @@ systemctl --user restart x402-revenue-reconcile.timer
 
 systemctl --user enable x402-nohumans-resync.timer
 systemctl --user restart x402-nohumans-resync.timer
+
+systemctl --user enable x402-cdp-index-watch.timer
+systemctl --user restart x402-cdp-index-watch.timer
 
 echo
 echo "--- smoke test (synchronous run) ---"

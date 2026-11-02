@@ -1,0 +1,11 @@
+[Unit]
+Description=CDP Bazaar index watch (free /x402/validate over every paid route)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/rez/projects/x402-data-api
+ExecStart=/usr/bin/python3 scripts/cdp_index_watch.py
+TimeoutStartSec=240
+SyslogIdentifier=x402-cdp-index-watch

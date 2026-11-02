@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily CDP Bazaar index watch
+
+[Timer]
+OnCalendar=*-*-* 10:41:00
+Persistent=true
+RandomizedDelaySec=2min
+
+[Install]
+WantedBy=timers.target
