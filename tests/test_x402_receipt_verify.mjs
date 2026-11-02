@@ -301,4 +301,13 @@ await check("present in ROUTE_CATALOG at 4000 atomic (advertised == charged)", (
   assert.ok(row[4].length <= 500, `catalog desc <= 500 (was ${row[4].length})`);
 });
 
+await check("non-exact scheme (upto): lower settled amount is SETTLED, not UNDERPAID", () => {
+  const t = [{ token: USDC, from: PAYER, to: PAYTO, amount_atomic: 2000, amount_usdc: "0.002" }];
+  const capped = computeReceiptVerdict("success", t, PAYTO, 10000, 6, true);
+  assert.strictEqual(capped.verdict, "SETTLED");
+  assert.strictEqual(capped.settled, true);
+  const exact = computeReceiptVerdict("success", t, PAYTO, 10000, 6, false);
+  assert.strictEqual(exact.verdict, "UNDERPAID");
+});
+
 console.log(`\n${pass} passed`);

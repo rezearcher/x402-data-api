@@ -10367,6 +10367,7 @@ export function computeReceiptVerdict(
   advertisedPayTo: string | null,
   advertisedAtomic: number | null,
   decimals = PRICE_ASSET_DECIMALS,
+  amountIsCap = false,
 ): { verdict: ReceiptVerifyResult["verdict"]; settled: boolean; matched: ReceiptTransfer | null; note: string } {
   if (txStatus === null) {
     return { verdict: "NOT_FOUND", settled: false, matched: null,
@@ -10399,6 +10400,12 @@ export function computeReceiptVerdict(
       note: `confirmed on-chain: ${matched.amount_usdc} USDC settled to the advertised payTo ${advertisedPayTo} in this tx (no advertised amount supplied, so the amount was not checked — pass &expect=<usdc> to also verify the amount)` };
   }
   const tol = Math.max(1, Math.round(advertisedAtomic * 0.01));
+  if (amountIsCap && paidAtomic > 0) {
+    // upto / batch-settlement / non-exact schemes: the advertised amount is a
+    // MAXIMUM, so a smaller settled amount is legitimate, not a short payment.
+    return { verdict: "SETTLED", settled: true, matched,
+      note: `confirmed on-chain: ${matched.amount_usdc} USDC settled to the advertised payTo ${advertisedPayTo}; the endpoint's scheme is not 'exact', so its advertised ${atomicToUsdcStr(advertisedAtomic, decimals)} USDC is a ceiling and a lower settled amount is not flagged UNDERPAID${paidAtomic > advertisedAtomic + tol ? " (note: settled amount EXCEEDS the advertised ceiling)" : ""}` };
+  }
   if (paidAtomic + tol < advertisedAtomic) {
     return { verdict: "UNDERPAID", settled: false, matched,
       note: `the advertised payTo received only ${matched.amount_usdc} USDC but the endpoint advertises ${atomicToUsdcStr(advertisedAtomic, decimals)} — the settlement is short; a compliant facilitator would not treat this as paid` };
@@ -10458,7 +10465,7 @@ export function decodeUsdcTransfers(logs: unknown[], token = USDC_BASE.toLowerCa
 // Resolve the endpoint's advertised payTo + amount from its LIVE 402 challenge
 // (the exact requirement a buyer would have paid against). One bounded fetch,
 // degrade-open (any error / non-402 => nulls). Same accepts[] shape as preflight.
-async function fetchLive402PayTo(targetUrl: string): Promise<{ payTo: string | null; atomic: number | null }> {
+async function fetchLive402PayTo(targetUrl: string): Promise<{ payTo: string | null; atomic: number | null; scheme?: string | null }> {
   try {
     const res = await preflightFetch(targetUrl, { headers: { "User-Agent": "greyridge-x402-receipt/1", accept: "application/json" }, signal: AbortSignal.timeout(4000) });
     if (res.status !== 402) return { payTo: null, atomic: null };
@@ -10471,7 +10478,8 @@ async function fetchLive402PayTo(targetUrl: string): Promise<{ payTo: string | n
     const payToRaw = String(a0.payTo ?? a0.payto ?? a0.pay_to ?? "");
     const payTo = ADDR_RE.test(payToRaw) ? payToRaw : null;
     const atomic = parseAtomicAmount(a0.maxAmountRequired ?? a0.amount);
-    return { payTo, atomic };
+    const scheme = typeof a0.scheme === "string" ? a0.scheme.toLowerCase() : null;
+    return { payTo, atomic, scheme };
   } catch { return { payTo: null, atomic: null }; }
 }
 
@@ -10494,9 +10502,13 @@ export async function x402ReceiptVerify(
   let advPayTo: string | null = callerPayTo && ADDR_RE.test(callerPayTo) ? callerPayTo : null;
   let advAtomic: number | null = usdcDollarsToAtomic(callerExpectUsdc);
   let advSource: ReceiptVerifyResult["advertised"]["source"] = advPayTo ? "caller" : (advAtomic !== null ? "caller" : null);
+  let amountIsCap = false;
   if (!advPayTo && url) {
     const live = await fetchLive402PayTo(url);
-    if (live.payTo) { advPayTo = live.payTo; advSource = "live-402"; if (advAtomic === null) advAtomic = live.atomic; }
+    if (live.payTo) {
+      advPayTo = live.payTo; advSource = "live-402";
+      if (advAtomic === null) { advAtomic = live.atomic; amountIsCap = !!live.scheme && live.scheme !== "exact"; }
+    }
   }
 
   const advertised = { payTo: advPayTo, amount_atomic: advAtomic, amount_usdc: atomicToUsdcStr(advAtomic), source: advSource };
@@ -10568,7 +10580,7 @@ export async function x402ReceiptVerify(
     r.status === "0x1" ? "success" : r.status === "0x0" ? "reverted" : "unknown";
   const transfers = decodeUsdcTransfers(r.logs ?? []);
   const block = r.blockNumber ? parseInt(String(r.blockNumber), 16) : null;
-  const core = computeReceiptVerdict(txStatus, transfers, advPayTo, advAtomic);
+  const core = computeReceiptVerdict(txStatus, transfers, advPayTo, advAtomic, PRICE_ASSET_DECIMALS, amountIsCap);
   return { ...base, verdict: core.verdict, settled: core.settled, tx_status: txStatus, advertised,
     matched_transfer: core.matched, usdc_transfers: transfers, block, confirmation, rpc_sources, note: core.note };
 }
