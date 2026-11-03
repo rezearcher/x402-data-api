@@ -29014,3 +29014,11 @@
 {"t": "2026-11-03T22:40:01.855899Z", "ep": "/defi/yields/preview", "ok": true, "code": 200, "ms": 433}
 {"t": "2026-11-03T22:40:01.855899Z", "ep": "/crypto/funding/preview", "ok": true, "code": 200, "ms": 3092}
 {"t": "2026-11-03T22:40:01.855899Z", "ep": "/scan/mcp/preview", "ok": true, "code": 200, "ms": 220}
+{"t": "2026-11-03T22:45:01.671237Z", "ep": "/gate/swap/preview", "ok": true, "code": 200, "ms": 2286}
+{"t": "2026-11-03T22:45:01.671237Z", "ep": "/chain/token-report/preview", "ok": true, "code": 200, "ms": 2154}
+{"t": "2026-11-03T22:45:01.671237Z", "ep": "/chain/token-security/preview", "ok": true, "code": 200, "ms": 1069}
+{"t": "2026-11-03T22:45:01.671237Z", "ep": "/chain/gas-price/preview", "ok": true, "code": 200, "ms": 288}
+{"t": "2026-11-03T22:45:01.671237Z", "ep": "/crypto/prices/preview", "ok": true, "code": 200, "ms": 398}
+{"t": "2026-11-03T22:45:01.671237Z", "ep": "/defi/yields/preview", "ok": true, "code": 200, "ms": 202}
+{"t": "2026-11-03T22:45:01.671237Z", "ep": "/crypto/funding/preview", "ok": true, "code": 200, "ms": 3463}
+{"t": "2026-11-03T22:45:01.671237Z", "ep": "/scan/mcp/preview", "ok": true, "code": 200, "ms": 109}
