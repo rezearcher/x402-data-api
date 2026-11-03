@@ -74,7 +74,7 @@ LISTINGS = [
             "also exposes a pre-trade swap gate, honeypot / token-safety verdicts, prices "
             "and DeFi data."
         ),
-        "sample_query": None,
+        "sample_query": "https://api.greyridgesignals.ai/chain/wallet-screen/preview",
         "queries": [
             "check if a wallet address is sanctioned or a scammer",
             "is this wallet a scammer or sanctioned before I pay it",
