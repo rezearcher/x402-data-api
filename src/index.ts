@@ -10607,9 +10607,13 @@ export function certBadgeShields(cert: X402Cert | null, live: PreflightResult | 
   const until = cert.expires_at.slice(0, 10);
   // Lead with the settlement proof when we have it — the claim a liveness-only
   // badge cannot make: this endpoint provably settled USDC to its advertised
-  // payTo on-chain. Depth grade follows as the secondary signal.
+  // payTo on-chain. Surface the Base BLOCK NUMBER inline so the proof is
+  // checkable (a reader can look up the block/tx on basescan) — a rival that
+  // merely asserts a "settlement layer" without a chain read cannot show this.
+  // Depth grade follows as the secondary signal.
   if (cert.settlement?.proven) {
-    return { schemaVersion: 1, label, message: `settlement-proven ✓ · to ${until}`, color: "brightgreen", cacheSeconds: 600 };
+    const blk = typeof cert.settlement.block === "number" && cert.settlement.block > 0 ? ` · Base blk ${cert.settlement.block}` : "";
+    return { schemaVersion: 1, label, message: `settlement-proven ✓${blk} · to ${until}`, color: "brightgreen", cacheSeconds: 600 };
   }
   const msg = cert.grade === "deep-verified" ? `deep-verified ✓ · to ${until}` : `${cert.grade} · to ${until}`;
   return { schemaVersion: 1, label, message: msg, color: "brightgreen", cacheSeconds: 600 };
@@ -10693,13 +10697,24 @@ app.get("/x402/cert", async (c) => {
   }
   console.log(JSON.stringify({ event: "x402_cert_issued", cert_id, host, url, grade, depth_passed, expires_at, ts: issued_at }));
   const enc = encodeURIComponent(url);
+  // When the settlement is PROVEN on-chain, the embeddable badge becomes
+  // CLICKABLE — wrap the shields image in the basescan receipt link so a reader
+  // clicks the public badge straight through to the real Base tx. This is the
+  // thing a rival that only asserts a "settlement layer" cannot ship: we render
+  // the receipt, they describe it. basescan_url is also surfaced as a first-class
+  // field so the on-chain proof is machine-readable, not buried in the canonical.
+  const basescan_url = settlement ? `https://basescan.org/tx/${settlement.tx}` : null;
+  const badgeImg = `![x402 deep-certified](https://img.shields.io/endpoint?url=${CANONICAL_ORIGIN}/x402/cert/badge%3Furl%3D${enc})`;
+  const badge_embed_markdown = basescan_url ? `[${badgeImg}](${basescan_url})` : badgeImg;
   return c.json({
     issued: true,
     certificate: cert,
     settlement_proven: !!settlement,
+    ...(settlement ? { onchain_proof: { tx: settlement.tx, block: settlement.block, amount_usdc: settlement.amount_usdc, payTo: settlement.payTo, confirmation: settlement.confirmation, rpc_sources: settlement.rpc_sources, basescan_url } } : {}),
     ...(settlement_check ? { settlement_check } : {}),
     ...(txParam && !settlement ? { settlement_note: "a &tx= was supplied but it did NOT reconcile as a SETTLED USDC payment to this endpoint's advertised payTo (see settlement_check) — the depth certificate was still issued, but without the on-chain settlement proof. Supply a real settlement tx for your endpoint to earn the 'settlement-proven' badge." } : {}),
-    badge_embed_markdown: `![x402 deep-certified](https://img.shields.io/endpoint?url=${CANONICAL_ORIGIN}/x402/cert/badge%3Furl%3D${enc})`,
+    badge_embed_markdown,
+    ...(basescan_url ? { badge_links_to: basescan_url, badge_note: "this badge is CLICKABLE — it links to the on-chain Base settlement receipt on basescan (the proof a liveness-only badge cannot show)" } : {}),
     verify_url: `${CANONICAL_ORIGIN}/x402/cert/verify?id=${cert_id}`,
     valid_days: CERT_VALID_DAYS,
     differentiator: settlement
@@ -10761,6 +10776,7 @@ app.get("/x402/cert/verify", async (c) => {
     status,
     certificate: cert,
     settlement_proven: !!(signature_valid && cert.settlement?.proven),
+    ...(signature_valid && cert.settlement?.proven ? { onchain_proof: { tx: cert.settlement.tx, block: cert.settlement.block, amount_usdc: cert.settlement.amount_usdc, payTo: cert.settlement.payTo, confirmation: cert.settlement.confirmation, basescan_url: `https://basescan.org/tx/${cert.settlement.tx}` } } : {}),
     note:
       !signature_valid ? "signature does not match — this certificate was not issued by us or has been altered" :
       expired ? "certificate signature is authentic but past its 30-day validity window — the seller must re-certify at /x402/cert" :

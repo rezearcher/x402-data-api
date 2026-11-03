@@ -81,6 +81,12 @@ const settledCert = { ...validCert, settlement: provenSettlement };
 b = certBadgeShields(settledCert, { verdict: "PAY" }, now);
 assert.equal(b.color, "brightgreen", "settlement-proven cert is green");
 assert.ok(/settlement-proven ✓/.test(b.message), `settlement-proven leads the badge, got "${b.message}"`);
+// the Base BLOCK NUMBER is rendered INLINE on the public badge so the on-chain
+// proof is checkable at a glance — the receipt a liveness-only rival can't show
+assert.ok(b.message.includes(String(provenSettlement.block)), `proven badge renders the Base block inline, got "${b.message}"`);
+// a proven settlement whose block is unknown must NOT fabricate a block on the badge
+const noBlk = certBadgeShields({ ...validCert, settlement: { ...provenSettlement, block: null } }, { verdict: "PAY" }, now);
+assert.ok(/settlement-proven ✓/.test(noBlk.message) && !/blk/.test(noBlk.message), "no block -> still proven, but no fabricated block label");
 
 // a cert whose settlement.proven is false does NOT claim settlement-proven
 b = certBadgeShields({ ...validCert, settlement: { ...provenSettlement, proven: false } }, { verdict: "PAY" }, now);
