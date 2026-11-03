@@ -78,3 +78,74 @@ discovered 3 trending Base tokens from GeckoTerminal
 PUT docs/sitemap.xml (179 urls)
 IndexNow: submitted 6 URLs -> HTTP 200
 PUBLISHED 5 token scorecards + index
+        WETH  GO     token-weth-420000-honeypot-check
+        USDC  GO     token-usdc-833589-honeypot-check
+       cbBTC  GO     token-cbbtc-cbb7c0-honeypot-check
+        AERO  GO     token-aero-940181-honeypot-check
+       DEGEN  GO     token-degen-4ed4e8-honeypot-check
+discovered 3 trending Base tokens from GeckoTerminal
+  scan failed 0x5be75e3b0aff5d1a042a5363ae36acb1d6d755ea: HTTP Error 429: Too Many Requests
+  scan failed 0x3ec2156d4c0a9cbdab4a016633b7bcf6a8d68ea2: HTTP Error 429: Too Many Requests
+  scan failed 0xacfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf: HTTP Error 429: Too Many Requests
+PUT docs/sitemap.xml (179 urls)
+IndexNow: submitted 6 URLs -> HTTP 200
+PUBLISHED 5 token scorecards + index
+        WETH  GO     token-weth-420000-honeypot-check
+        USDC  GO     token-usdc-833589-honeypot-check
+       cbBTC  GO     token-cbbtc-cbb7c0-honeypot-check
+        AERO  GO     token-aero-940181-honeypot-check
+       DEGEN  GO     token-degen-4ed4e8-honeypot-check
+discovered 3 trending Base tokens from GeckoTerminal
+        RSGP  HOLD   token-rsgp-44b63a-honeypot-check
+        AXIS  HOLD   token-axis-5be75e-honeypot-check
+         DRB  GO     token-drb-3ec215-honeypot-check
+PUT docs/sitemap.xml (193 urls)
+IndexNow: submitted 9 URLs -> HTTP 200
+PUBLISHED 8 token scorecards + index
+        WETH  GO     token-weth-420000-honeypot-check
+        USDC  GO     token-usdc-833589-honeypot-check
+       cbBTC  GO     token-cbbtc-cbb7c0-honeypot-check
+        AERO  GO     token-aero-940181-honeypot-check
+       DEGEN  GO     token-degen-4ed4e8-honeypot-check
+discovered 3 trending Base tokens from GeckoTerminal
+        RSGP  HOLD   token-rsgp-44b63a-honeypot-check
+         DRB  GO     token-drb-3ec215-honeypot-check
+         XDP  HOLD   token-xdp-07b3d9-honeypot-check
+PUT docs/sitemap.xml (194 urls)
+IndexNow: submitted 9 URLs -> HTTP 200
+PUBLISHED 8 token scorecards + index
+        WETH  GO     token-weth-420000-honeypot-check
+        USDC  GO     token-usdc-833589-honeypot-check
+       cbBTC  GO     token-cbbtc-cbb7c0-honeypot-check
+        AERO  HOLD   token-aero-940181-honeypot-check
+       DEGEN  GO     token-degen-4ed4e8-honeypot-check
+discovered 3 trending Base tokens from GeckoTerminal
+         DRB  HOLD   token-drb-3ec215-honeypot-check
+         XDP  HOLD   token-xdp-07b3d9-honeypot-check
+        RSGP  HOLD   token-rsgp-44b63a-honeypot-check
+PUT docs/sitemap.xml (194 urls)
+IndexNow: submitted 9 URLs -> HTTP 200
+PUBLISHED 8 token scorecards + index
+        WETH  GO     token-weth-420000-honeypot-check
+        USDC  GO     token-usdc-833589-honeypot-check
+       cbBTC  GO     token-cbbtc-cbb7c0-honeypot-check
+        AERO  GO     token-aero-940181-honeypot-check
+       DEGEN  GO     token-degen-4ed4e8-honeypot-check
+discovered 3 trending Base tokens from GeckoTerminal
+        RSGP  HOLD   token-rsgp-44b63a-honeypot-check
+        TRUE  GO     token-true-21cfcf-honeypot-check
+         XDP  HOLD   token-xdp-07b3d9-honeypot-check
+PUT docs/sitemap.xml (195 urls)
+IndexNow: submitted 9 URLs -> HTTP 200
+PUBLISHED 8 token scorecards + index
+        WETH  GO     token-weth-420000-honeypot-check
+        USDC  GO     token-usdc-833589-honeypot-check
+       cbBTC  GO     token-cbbtc-cbb7c0-honeypot-check
+        AERO  BLOCK  token-aero-940181-honeypot-check
+  skip 0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed: no symbol (metadata read failed)
+discovered 3 trending Base tokens from GeckoTerminal
+         XDP  HOLD   token-xdp-07b3d9-honeypot-check
+        RSGP  HOLD   token-rsgp-44b63a-honeypot-check
+PUT docs/sitemap.xml (215 urls)
+IndexNow: submitted 7 URLs -> HTTP 200
+PUBLISHED 6 token scorecards + index

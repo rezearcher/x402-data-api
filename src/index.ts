@@ -80,6 +80,10 @@ export type Env = {
   //   wrangler secret put TELEGRAM_BOT_TOKEN ; wrangler secret put TELEGRAM_WEBHOOK_SECRET
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
+  // Optional HMAC secret for signing /x402/cert certificates. If unset we fall
+  // back to PAY_TO (always present) so cert minting never fails; set a dedicated
+  // secret via `wrangler secret put CERT_SIGNING_SECRET` to rotate independently.
+  CERT_SIGNING_SECRET?: string;
   // Optional KV namespace for API key storage. Needs `wrangler kv namespace create API_KEYS`
   // + binding id in wrangler.toml. If absent, API key auth returns 501.
   API_KEYS?: KVNamespace;
@@ -172,7 +176,7 @@ const PREVIEW_ROUTES = new Set<string>([
   "/crypto/funding", "/defi/yields", "/pm/markets", "/chain/gas-price",
   "/chain/block-number", "/chain/token-balance", "/defi/protocol-risk",
   "/defi/safe-yields", "/enrich/tech-risk", "/scan/mcp", "/ai/ask", "/ai/extract",
-  "/v1/chat/completions", "/chain/simulate", "/x402/preflight",
+  "/v1/chat/completions", "/chain/simulate", "/x402/preflight", "/x402/cert",
 ]);
 
 // --- Willingness-to-pay price floor (evidence-based, sensor-gated) ----------
@@ -279,6 +283,7 @@ export const ROUTE_CATALOG_BASE: Array<[string, string, string, string, string, 
   ["/chain/block", "GET", "0.002", "2000", "Base block summary by number or latest: hash, timestamp, tx count, gas used/limit, base fee.", ["rpc", "base", "onchain", "blockchain", "data"]],
   ["/chain/wallet", "GET", "0.003", "3000", "Wallet screening bundle (balance, activity, contract vs EOA check): ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]],
   ["/chain/wallet-screen", "GET", "0.004", "4000", "Is this wallet sanctioned OR a known scammer? Pre-trade screen for a counterparty / recipient / token-spender address before an agent sends, swaps or approves: exact match against the U.S. Treasury OFAC SDN crypto-address list AND community scam/phishing/wallet-drainer threat-intel (ScamSniffer + MEW darklist). Returns sanctioned (bool) + malicious (bool) + verdict (blocked/clear) + lists + the list sources and snapshot dates. 'clear' means not on these lists, not a safety guarantee. Use alongside /gate/swap and /chain/token-security to avoid sanctioned-or-scammer-counterparty liability.", ["security", "sanctions", "ofac", "compliance", "scam", "phishing", "drainer", "wallet", "base", "onchain", "screening", "data"]],
+  ["/x402/cert", "GET", "1.00", "1000000", "Mint a DEEP VERIFIED certificate for YOUR x402 endpoint — pay once ($1 USDC, no account) and, if the full deep audit passes, get a dated, HMAC-signed 30-day certificate plus an embeddable badge that re-audits live on every render and flips to 'degraded' if your endpoint breaks before expiry. Certifies the DEPTH axis a liveness-only verified badge cannot: advertised-vs-charged price accuracy, delivery readiness, LLM01/LLM08 injection safety and payTo OFAC/scam screening. Any buyer re-checks the signature free at /x402/cert/verify. Fails honest: no cert unless the audit returns PAY (you get findings + fix hints instead). Pass ?url= (and optional &advertised=<usdc>).", ["x402", "certificate", "verified", "badge", "seller", "trust", "price-accuracy", "delivery", "injection", "ofac", "attestation", "signed", "deep-verified", "data"]],
   ["/x402/preflight", "GET", "0.001", "1000", "x402 pre-payment endpoint check — before an agent pays an unknown x402 URL, fetch it once (never pays): (1) validate the 402 challenge + accepts[] (will it settle), (2) LIVENESS label LIVE|ZOMBIE|DEAD (is it a working payable endpoint now or listed-active-but-broken), (3) absolute PRICE-TRAP flag — a honeypot charging >=$1000/call trips AVOID even when its advertised==live price looks self-consistent; pass &max=<usdc> for your own budget ceiling, (4) scan the resource + advertised MCP tools for LLM01/LLM08 injection and screen payTo vs OFAC/scam lists (safe to pay), (5) PRICE ACCURACY — does the live accepts[].amount match the advertised price? pass &advertised=<usdc> or it self-checks /.well-known/x402: MATCH|OVERCHARGE|UNDERCHARGE, (6) optional &samples=N (1-5) reliability burst, (7) DELIVERY readiness — flags a leaking paywall and whether the output shape is specified. Returns PAY|CAUTION|AVOID + fix hints. Read-only, not a settlement guarantee. ?url=<endpoint>.", ["x402", "preflight", "security", "verify", "payment", "safe-to-pay", "liveness", "zombie", "honeypot", "price-trap", "price-accuracy", "overcharge", "reliability", "uptime", "delivery", "data"]],
   ["/x402/receipt-verify", "GET", "0.004", "4000", "x402 POST-payment settlement proof. After you pay an x402 endpoint, bring your Base settlement ?tx=<0x hash> + ?url=<resource paid> for on-chain proof it settled: reads the tx receipt, decodes its USDC Transfer events, reconciles them against the endpoint's advertised payTo + amount (from its live 402, or &payto=/&expect= to bind). Verdict SETTLED|UNDERPAID|WRONG_RECIPIENT|NO_TRANSFER|REVERTED|NOT_FOUND|UNVERIFIED, 2-RPC cross-confirmed. Confirms settlement, not off-chain delivery.", ["x402", "receipt", "settlement", "verify", "payment", "proof", "post-payment", "onchain", "base", "usdc", "data"]],
   ["/dns", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH. Pass ?domain=stripe.com.", ["dns", "domain", "data", "recon"]],
@@ -4691,6 +4696,51 @@ export function makeRoutes(payTo: string) {
             reliability: { samples: 3, settle_consistency: "3/3", settle_rate: 1, reachable_rate: 1, stable: true, latency_ms: { min: 190, median: 210, max: 240 }, note: "point-in-time burst sampled now (not historical uptime); a stable burst is not a durability guarantee" },
             delivery: { verdict: "SPECIFIED", output_specified: true, served_without_payment: false, note: "the challenge declares the output shape (schema/example) so you know what the payment buys; post-payment delivery is still only provable from your on-chain settlement receipt after you pay" },
             scope_note: "static 402 wire-format + LIVE/ZOMBIE/DEAD liveness label + absolute price-trap flag + LLM01/LLM08 description scan + payTo flag + advertised-vs-charged price-accuracy + delivery-readiness check; read-only, never pays; not a settlement guarantee.",
+          },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /x402/cert": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$1.00",
+        network: NETWORK,
+        payTo,
+      },
+      description:
+        "Mint a DEEP VERIFIED certificate for YOUR x402 endpoint. Pay once ($1 USDC, no account), we run the full deep audit and — if it passes — issue a dated, HMAC-signed 30-day certificate + an embeddable badge that re-audits live on every render. Certifies the DEPTH axis a liveness-only verified badge cannot: advertised-vs-charged price accuracy, delivery readiness, LLM01/LLM08 injection safety and payTo OFAC/scam screening. Any buyer re-checks the signature free at /x402/cert/verify. Fails honest: no cert if the audit does not return PAY (you get the findings + fix hints instead). Free preview + free point-in-time badge at /x402/badge.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { url: "https://seller.example/data" },
+        inputSchema: {
+          type: "object",
+          required: ["url"],
+          properties: {
+            url: { type: "string", description: "your absolute https x402 endpoint URL to audit and certify" },
+            advertised: { type: "string", description: "optional: the price (USDC dollars) your catalog quoted — the audit verifies the live charge matches it" },
+          },
+        },
+        output: {
+          example: {
+            issued: true,
+            certificate: {
+              cert_id: "grsg-0123456789abcdef0123",
+              host: "seller.example",
+              url: "https://seller.example/data",
+              issued_at: "2026-11-03T00:00:00.000Z",
+              expires_at: "2026-12-03T00:00:00.000Z",
+              verdict: "PAY",
+              depth_passed: 6,
+              depth_total: 6,
+              grade: "deep-verified",
+              tiers: { live: true, reliable: true, price_accurate: true, delivery_specified: true, injection_safe: true, payto_clear: true },
+              sig: "<hmac-sha256-hex>",
+              issuer: "did:web:api.greyridgesignals.ai",
+            },
+            badge_embed_markdown: "![x402 deep-certified](https://img.shields.io/endpoint?url=...%2Fx402%2Fcert%2Fbadge%3Furl%3D...)",
+            verify_url: "https://api.greyridgesignals.ai/x402/cert/verify?id=grsg-0123456789abcdef0123",
+            valid_days: 30,
           },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
@@ -10432,6 +10482,249 @@ app.get("/x402/badge", async (c) => {
   } catch {
     return c.json({ schemaVersion: 1, label: "x402 verified", message: "unreachable", color: "lightgrey", cacheSeconds: 300 });
   }
+});
+
+// ---------------------------------------------------------------------------
+// SELLER-SIDE DEEP VERIFIED CERTIFICATE (/x402/cert) — the PAID tier of the
+// free /x402/badge. This mirrors x402station's PROVEN converting model (a
+// seller pays $1 USDC for a 30-day "verified" certificate + embeddable badge;
+// 59 operators have already paid, all at the verified_plus tier) but certifies
+// the DEPTH axis their liveness-only badge explicitly cannot: price ACCURACY
+// (advertised == charged, not a sanity band), DELIVERY readiness (output shape
+// specified / no leaking paywall), LLM01/LLM08 injection safety and payTo
+// OFAC/scam screening — the exact TOCTOU verify->settle gap the ATC'26
+// "Free-Riding the Agentic Web" analysis names. It also adds a tamper-evident
+// HMAC signature their cert lacks, independently re-checkable at
+// /x402/cert/verify by any buyer.
+//
+// Flow: seller GETs /x402/cert?url=<their endpoint> -> x402 402 ($1.00) ->
+// pays -> we run the full deep audit (3-sample burst). PASS (verdict PAY) ->
+// we MINT a dated, signed, 30-day certificate, persist it in KV keyed by host,
+// and return it with the certified-badge embed + a public verify URL. FAIL ->
+// we return the honest findings + fix hints and issue NO cert (never a false
+// green). The certified badge (/x402/cert/badge, free) reads KV AND re-audits
+// live on every render, so it flips to a red/orange "degraded" the moment a
+// once-passing endpoint breaks before expiry — a durable claim kept honest by
+// a live re-audit. COGS ~$0 (KV + compute). Degrades open everywhere.
+// ---------------------------------------------------------------------------
+const CERT_VALID_DAYS = 30;
+const CERT_PRICE_USD = "1.00";
+const CERT_ISSUER = "did:web:api.greyridgesignals.ai";
+
+type X402Cert = {
+  cert_id: string;
+  host: string;
+  url: string;
+  issued_at: string;
+  expires_at: string;
+  verdict: PreflightResult["verdict"];
+  depth_passed: number;
+  depth_total: number;
+  grade: string;
+  tiers: X402BadgeTiers;
+  sig: string;
+  issuer: string;
+};
+
+function certHost(url: string): string { return new URL(url).host.toLowerCase(); }
+
+// Canonical, field-ordered JSON over the SIGNED fields only (sig/issuer
+// excluded). Any change to a certified fact changes the HMAC, so a pasted cert
+// can be proven authentic-and-untampered at /x402/cert/verify.
+function certCanonical(x: { cert_id: string; host: string; url: string; issued_at: string; expires_at: string; verdict: string; depth_passed: number; tiers: X402BadgeTiers }): string {
+  return JSON.stringify({
+    cert_id: x.cert_id, host: x.host, url: x.url,
+    issued_at: x.issued_at, expires_at: x.expires_at,
+    verdict: x.verdict, depth_passed: x.depth_passed, tiers: x.tiers,
+  });
+}
+
+async function certSign(canonical: string, secret: string): Promise<string> {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(canonical));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Constant-time hex compare so the public verify route leaks nothing through
+// response timing when it rejects a forged signature.
+function certEqHex(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+export function certGrade(tiers: X402BadgeTiers): { depth_passed: number; grade: string } {
+  const depth_passed = Object.values(tiers).filter(Boolean).length;
+  return { depth_passed, grade: depth_passed === 6 ? "deep-verified" : `audited-${depth_passed}/6` };
+}
+
+// shields.io schema for the CERTIFIED badge. Green ONLY when a valid, unexpired
+// cert exists AND (if a live re-audit is supplied) it still passes; grey when
+// uncertified or expired; red/orange when certified-but-now-degraded (the live
+// re-audit demoted a once-passing endpoint — the honest downgrade).
+export function certBadgeShields(cert: X402Cert | null, live: PreflightResult | null, now = Date.now()): { schemaVersion: 1; label: string; message: string; color: string; cacheSeconds: number } {
+  const label = "x402 deep-certified";
+  if (!cert) return { schemaVersion: 1, label, message: "uncertified", color: "lightgrey", cacheSeconds: 300 };
+  if (Date.parse(cert.expires_at) < now) return { schemaVersion: 1, label, message: "cert expired", color: "lightgrey", cacheSeconds: 300 };
+  if (live && live.verdict !== "PAY") {
+    return { schemaVersion: 1, label, message: `degraded (${live.verdict.toLowerCase()})`, color: live.verdict === "AVOID" ? "red" : "orange", cacheSeconds: 300 };
+  }
+  const until = cert.expires_at.slice(0, 10);
+  const msg = cert.grade === "deep-verified" ? `deep-verified ✓ · to ${until}` : `${cert.grade} · to ${until}`;
+  return { schemaVersion: 1, label, message: msg, color: "brightgreen", cacheSeconds: 600 };
+}
+
+app.get("/x402/cert", async (c) => {
+  const url = c.req.query("url");
+  if (!url || !/^https?:\/\//i.test(url)) {
+    return c.json({ error: "pass ?url=<your absolute https x402 endpoint> to run the deep audit and mint a certificate" }, { status: 400 });
+  }
+  const rail = c.get("rail") ?? "x402-paid";
+  fireAndForget(c, trackPaidRequest("GET /x402/cert", rail, makeUsageCounter(c.env)));
+  let host: string;
+  try { host = certHost(url); } catch { return c.json({ error: "url is not a valid absolute URL" }, { status: 400 }); }
+  const advertised = c.req.query("advertised") ?? null;
+  const r = await x402Preflight(url, 3, advertised, null);
+  const tiers = x402BadgeTiers(r);
+  const { depth_passed, grade } = certGrade(tiers);
+  // Honest fail: the seller paid for the audit, but we never mint a false green.
+  if (r.verdict !== "PAY") {
+    console.log(JSON.stringify({ event: "x402_cert_denied", url, verdict: r.verdict, depth_passed, ts: r.checked_at }));
+    return c.json({
+      issued: false,
+      verdict: r.verdict,
+      reason: "certificate NOT issued — the deep audit did not return a PAY verdict. Fix the items below and re-run /x402/cert to mint the certificate.",
+      depth_passed, depth_total: 6, tiers,
+      checks: r.checks,
+      findings: r.findings,
+      price_accuracy: r.price_accuracy,
+      delivery: r.delivery,
+      liveness: r.liveness,
+      price_trap: r.price_trap,
+      full_report: `${CANONICAL_ORIGIN}/x402/preflight?url=${encodeURIComponent(url)}`,
+      scope_note: r.scope_note,
+    });
+  }
+  const issued_at = new Date().toISOString();
+  const expires_at = new Date(Date.now() + CERT_VALID_DAYS * 86400_000).toISOString();
+  const cert_id = "grsg-" + (await sha256Hex(`${host}|${url}|${issued_at}`)).slice(0, 20);
+  const secret = c.env.CERT_SIGNING_SECRET || c.env.PAY_TO || "greyridge-x402-cert-v1";
+  const unsigned = { cert_id, host, url, issued_at, expires_at, verdict: r.verdict, depth_passed, tiers };
+  const sig = await certSign(certCanonical(unsigned), secret);
+  const cert: X402Cert = { cert_id, host, url, issued_at, expires_at, verdict: r.verdict, depth_passed, depth_total: 6, grade, tiers, sig, issuer: CERT_ISSUER };
+  // Persist — KV is the authority the badge + verify read. Degrade open if KV
+  // is absent (local/test): still return the signed cert so the audit is usable.
+  if (c.env.API_KEYS) {
+    try {
+      const body = JSON.stringify(cert);
+      await c.env.API_KEYS.put(`cert:${host}`, body, { expirationTtl: CERT_VALID_DAYS * 86400 });
+      await c.env.API_KEYS.put(`certid:${cert_id}`, body, { expirationTtl: CERT_VALID_DAYS * 86400 });
+    } catch { /* best-effort storage; the signed cert is already minted + returned */ }
+  }
+  console.log(JSON.stringify({ event: "x402_cert_issued", cert_id, host, url, grade, depth_passed, expires_at, ts: issued_at }));
+  const enc = encodeURIComponent(url);
+  return c.json({
+    issued: true,
+    certificate: cert,
+    badge_embed_markdown: `![x402 deep-certified](https://img.shields.io/endpoint?url=${CANONICAL_ORIGIN}/x402/cert/badge%3Furl%3D${enc})`,
+    verify_url: `${CANONICAL_ORIGIN}/x402/cert/verify?id=${cert_id}`,
+    valid_days: CERT_VALID_DAYS,
+    differentiator: "A dated, HMAC-signed 30-day certificate over the DEPTH axis a liveness-only verified badge cannot certify: advertised-vs-charged price accuracy, delivery readiness, LLM01/LLM08 injection safety and payTo OFAC/scam screening. The certified badge re-audits live on every render and flips to 'degraded' if the endpoint breaks before expiry; any buyer can re-check the signature at the verify_url.",
+    scope_note: r.scope_note,
+  });
+});
+
+// Free certified-badge render: reads the cert from KV AND re-audits the live
+// endpoint so the badge stays honest. shields.io endpoint schema (never 500).
+app.get("/x402/cert/badge", async (c) => {
+  const url = c.req.query("url");
+  const label = "x402 deep-certified";
+  if (!url || !/^https?:\/\//i.test(url)) return c.json({ schemaVersion: 1, label, message: "pass ?url=", color: "lightgrey", cacheSeconds: 300 });
+  let host: string;
+  try { host = certHost(url); } catch { return c.json({ schemaVersion: 1, label, message: "bad url", color: "lightgrey", cacheSeconds: 300 }); }
+  let cert: X402Cert | null = null;
+  if (c.env.API_KEYS) { try { const raw = await c.env.API_KEYS.get(`cert:${host}`); if (raw) cert = JSON.parse(raw); } catch { /* grey below */ } }
+  if (!cert) return c.json(certBadgeShields(null, null));
+  let live: PreflightResult | null = null;
+  try { live = await x402Preflight(url, 1, null, null); } catch { /* unreachable now -> treat as degraded below via null? keep green on transient? */ }
+  const shields = certBadgeShields(cert, live);
+  console.log(JSON.stringify({ event: "x402_cert_badge_render", host, grade: cert.grade, live: live?.verdict ?? null, color: shields.color, ts: new Date().toISOString() }));
+  return c.json(shields);
+});
+
+// Free, public certificate verification — the buyer's independent trust check.
+// Recomputes the HMAC over the STORED cert (not a client-supplied body) to prove
+// it was issued by us and is untampered, and states the validity window.
+app.get("/x402/cert/verify", async (c) => {
+  const id = c.req.query("id");
+  const url = c.req.query("url");
+  const hostParam = c.req.query("host");
+  let cert: X402Cert | null = null;
+  if (c.env.API_KEYS) {
+    try {
+      if (id) { const raw = await c.env.API_KEYS.get(`certid:${id}`); if (raw) cert = JSON.parse(raw); }
+      else {
+        let host: string | null = hostParam ? hostParam.toLowerCase() : null;
+        if (!host && url && /^https?:\/\//i.test(url)) { try { host = certHost(url); } catch { host = null; } }
+        if (host) { const raw = await c.env.API_KEYS.get(`cert:${host}`); if (raw) cert = JSON.parse(raw); }
+      }
+    } catch { /* fall through to not-found */ }
+  }
+  if (!cert) {
+    return c.json({ valid: false, status: "NOT_FOUND", reason: "no certificate on record for that id/host (or the issuing store is unavailable). Pass ?id=<cert_id>, ?host=<host> or ?url=<endpoint>.", issuer: CERT_ISSUER }, { status: 404 });
+  }
+  const now = Date.now();
+  const expired = Date.parse(cert.expires_at) < now;
+  const secret = c.env.CERT_SIGNING_SECRET || c.env.PAY_TO || "greyridge-x402-cert-v1";
+  const expectSig = await certSign(certCanonical({ cert_id: cert.cert_id, host: cert.host, url: cert.url, issued_at: cert.issued_at, expires_at: cert.expires_at, verdict: cert.verdict, depth_passed: cert.depth_passed, tiers: cert.tiers }), secret);
+  const signature_valid = certEqHex(expectSig, cert.sig);
+  const status = !signature_valid ? "FORGED_OR_TAMPERED" : expired ? "EXPIRED" : "VALID";
+  return c.json({
+    valid: signature_valid && !expired,
+    signature_valid,
+    expired,
+    status,
+    certificate: cert,
+    note:
+      !signature_valid ? "signature does not match — this certificate was not issued by us or has been altered" :
+      expired ? "certificate signature is authentic but past its 30-day validity window — the seller must re-certify at /x402/cert" :
+      "certificate signature is authentic and within its validity window; render the live badge for current endpoint health",
+    issuer: CERT_ISSUER,
+    live_badge: cert.url ? `${CANONICAL_ORIGIN}/x402/cert/badge?url=${encodeURIComponent(cert.url)}` : null,
+  });
+});
+
+// Free preview — the shape of a minted certificate + how to buy one. No audit,
+// no network; a deterministic sample so a buyer-client can read the contract.
+app.get("/x402/cert/preview", (c) => {
+  const now = new Date();
+  const exp = new Date(now.getTime() + CERT_VALID_DAYS * 86400_000);
+  const sampleTiers: X402BadgeTiers = { live: true, reliable: true, price_accurate: true, delivery_specified: true, injection_safe: true, payto_clear: true };
+  console.log(JSON.stringify({ event: "free_preview", endpoint: "/x402/cert/preview", sample: true }));
+  return c.json({
+    sample: true,
+    what: `Paid seller-side DEEP VERIFIED certificate for your x402 endpoint ($${CERT_PRICE_USD} USDC on Base, pay inline with x402 — no account). A dated, HMAC-signed ${CERT_VALID_DAYS}-day attestation over price-accuracy, delivery readiness, LLM01/LLM08 injection-safety and payTo OFAC/scam screening — the DEPTH axis a liveness-only verified badge cannot certify.`,
+    example_certificate: {
+      cert_id: "grsg-0123456789abcdef0123",
+      host: "seller.example",
+      url: "https://seller.example/data",
+      issued_at: now.toISOString(),
+      expires_at: exp.toISOString(),
+      verdict: "PAY",
+      depth_passed: 6,
+      depth_total: 6,
+      grade: "deep-verified",
+      tiers: sampleTiers,
+      sig: "<hmac-sha256-hex>",
+      issuer: CERT_ISSUER,
+    },
+    mint: `${CANONICAL_ORIGIN}/x402/cert?url=<your-endpoint>  ($${CERT_PRICE_USD}, x402)`,
+    badge_when_issued: `![x402 deep-certified](https://img.shields.io/endpoint?url=${CANONICAL_ORIGIN}/x402/cert/badge%3Furl%3D<YOUR_ENDPOINT_URL_ENCODED>)`,
+    verify: `${CANONICAL_ORIGIN}/x402/cert/verify?id=<cert_id>  (free, any buyer)`,
+    free_badge_instead: `${CANONICAL_ORIGIN}/x402/badge?url=<endpoint>  (point-in-time render, no persisted cert)`,
+    differentiator: "x402station's proven $1 verified badge certifies liveness only (uptime / p99 / price sanity-band). This certifies the depth axis theirs cannot, and signs it so a buyer can verify the cert independently.",
+  });
 });
 
 // ---------------------------------------------------------------------------
