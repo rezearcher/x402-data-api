@@ -57,19 +57,22 @@ OUT = os.path.expanduser("~/.hermes/data/nohumans/discover_rank.json")
 LISTINGS = [
     {
         "id": "177510e0-40c",
-        "name": "Grey Ridge: wallet sanctions + scam screen, swap-gate & token-safety (MCP)",
+        "name": "Wallet screen: sanctioned OR scammer — OFAC SDN sanctions check + scam/drainer/phishing, before you pay (x402 MCP)",
         "description": (
-            "Is this wallet address sanctioned OR a scammer? Pre-trade counterparty / "
-            "recipient / spender screen for any Base or crypto address before an agent "
-            "pays, swaps or approves — one call checks BOTH the U.S. Treasury OFAC SDN "
-            "sanctions list AND community scam / phishing / wallet-drainer threat-intel "
-            "(ScamSniffer + MEW darklist), returning sanctioned + malicious + a "
-            "blocked/clear verdict with the list sources and snapshot dates. We match the "
-            "FULL 'sanctioned OR scammer' query where sanctions-only screens miss the scam "
-            "half. 'clear' = not on these blocklists, not a safety guarantee. The same "
-            "keyless remote MCP server also returns a GO/HOLD/BLOCK pre-trade swap gate, "
-            "honeypot / token-safety verdicts, DeFi yields, funding rates, prices, "
-            "Polymarket and RPC data. Pay-per-call over x402."
+            "Screen a counterparty, recipient or token-spender wallet for scam AND OFAC "
+            "sanctions before you pay, send, swap or approve it. One keyless call checks if "
+            "a crypto wallet address is sanctioned or a scammer: it runs an OFAC sanctions "
+            "check for the crypto wallet address against the U.S. Treasury OFAC SDN "
+            "(Specially Designated Nationals) list AND a scam / phishing / wallet-drainer "
+            "threat-intel check (ScamSniffer + MyEtherWallet darklist), returning "
+            "sanctioned, malicious (is this address a known drainer or phishing scam), and "
+            "a blocked / clear verdict with the list sources and snapshot dates. It matches "
+            "the full 'sanctioned OR scammer' query where sanctions-only screens miss the "
+            "scam half and scam-only screens miss the sanctions half. 'clear' means not on "
+            "these blocklists — a blocklist match, never a safety guarantee. Pay-per-call "
+            "over x402, Base-native USDC, no account, no key. The same remote MCP server "
+            "also exposes a pre-trade swap gate, honeypot / token-safety verdicts, prices "
+            "and DeFi data."
         ),
         "sample_query": None,
         "queries": [
