@@ -1,0 +1,62 @@
+{
+  "name": "@grey-ridge/x402-verified-fetch",
+  "version": "0.1.0",
+  "description": "Drop-in fetch wrapper for x402-paying agents that independently reconciles the on-chain settlement (payTo + amount) after paying — SETTLED | UNDERPAID | WRONG_RECIPIENT | NO_TRANSFER | REVERTED. Composes @x402/fetch; reads the Base chain itself (the one thing no other x402 wrapper does).",
+  "keywords": [
+    "x402",
+    "x402-fetch",
+    "wrapFetchWithPayment",
+    "receipt-verify",
+    "settlement",
+    "onchain",
+    "base",
+    "usdc",
+    "ai-agent",
+    "agent-payments",
+    "micropayments"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.mjs",
+    "prepare": "tsup"
+  },
+  "dependencies": {
+    "@x402/core": "^2.19.0",
+    "@x402/fetch": "^2.19.0"
+  },
+  "peerDependencies": {
+    "@x402/evm": ">=2.15.0"
+  },
+  "peerDependenciesMeta": {
+    "@x402/evm": {
+      "optional": true
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rezearcher/x402-data-api.git",
+    "directory": "integrations/x402-verified-fetch"
+  },
+  "homepage": "https://api.greyridgesignals.ai/x402/receipt-verify/preview",
+  "devDependencies": {
+    "tsup": "^8.3.0",
+    "typescript": "^5.7.3"
+  }
+}
