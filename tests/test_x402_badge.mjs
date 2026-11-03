@@ -85,13 +85,22 @@ b = x402BadgeShields(avoidDead);
 assert.equal(b.color, "red");
 assert.equal(b.message, "dead", `dead surfaced, got "${b.message}"`);
 
-// AVOID with injection finding and no trap/dead -> unsafe payTo path not hit; reason falls to generic
+// AVOID, payable challenge present but payTo failed OFAC/scam screen -> "unsafe payTo"
 const avoidUnsafePayto = result({
   verdict: "AVOID", will_settle: true,
   liveness: { label: "LIVE" },
   checks: [{ name: "payTo_safety", ok: false, detail: "sanctioned", fix: null }],
 });
 assert.equal(x402BadgeShields(avoidUnsafePayto).message, "unsafe payTo");
+
+// AVOID, NOT an x402 endpoint (no valid 402 challenge, payTo absent) -> must say
+// "no valid 402", NOT falsely accuse the payTo. Regression for the live example.com case.
+const avoidNo402 = result({
+  verdict: "AVOID", will_settle: false,
+  liveness: { label: "ZOMBIE" },
+  checks: [{ name: "payTo_safety", ok: false, detail: "no payTo in challenge", fix: null }],
+});
+assert.equal(x402BadgeShields(avoidNo402).message, "no valid 402", "missing challenge must not read 'unsafe payTo'");
 
 // ---- live contract: no url is a valid shields badge, never 500 -----------
 let res = await app.request("/x402/badge", {}, {});

@@ -10359,9 +10359,14 @@ export function x402BadgeShields(r: PreflightResult): { schemaVersion: 1; label:
   const t = x402BadgeTiers(r);
   const passed = Object.values(t).filter(Boolean).length;
   if (r.verdict === "AVOID") {
+    // Order matters: a missing/dead challenge (no payTo exists) must NOT be
+    // reported as "unsafe payTo" — that falsely accuses a seller whose paywall
+    // is simply down. Only claim an unsafe payTo when a payable challenge was
+    // actually present (will_settle) yet the address failed the OFAC/scam screen.
     const reason =
       r.price_trap?.flagged ? "price trap" :
       r.liveness?.label === "DEAD" ? "dead" :
+      !r.will_settle ? "no valid 402" :
       !t.payto_clear ? "unsafe payTo" :
       r.price_accuracy?.verdict === "OVERCHARGE" ? "overcharge" :
       r.delivery?.verdict === "LEAK" ? "paywall leak" :
