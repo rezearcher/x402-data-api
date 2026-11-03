@@ -4709,7 +4709,7 @@ export function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Mint a DEEP VERIFIED certificate for YOUR x402 endpoint. Pay once ($1 USDC, no account), we run the full deep audit and — if it passes — issue a dated, HMAC-signed 30-day certificate + an embeddable badge that re-audits live on every render. Certifies the DEPTH axis a liveness-only verified badge cannot: advertised-vs-charged price accuracy, delivery readiness, LLM01/LLM08 injection safety and payTo OFAC/scam screening. Any buyer re-checks the signature free at /x402/cert/verify. Fails honest: no cert if the audit does not return PAY (you get the findings + fix hints instead). Free preview + free point-in-time badge at /x402/badge.",
+        "Mint a DEEP VERIFIED certificate for YOUR x402 endpoint ($1 USDC, no account). Certifies the depth axis a liveness-only verified badge cannot: price accuracy, delivery readiness, LLM01/LLM08 injection safety, payTo OFAC/scam screening. Pass &tx=<a Base settlement hash> to also PROVE it settled USDC to its advertised payTo on-chain, dual-RPC confirmed. HMAC-signed 30-day cert + embeddable badge that re-audits live. Fails honest: no cert unless the audit returns PAY. Free preview + /x402/badge.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -4720,6 +4720,7 @@ export function makeRoutes(payTo: string) {
           properties: {
             url: { type: "string", description: "your absolute https x402 endpoint URL to audit and certify" },
             advertised: { type: "string", description: "optional: the price (USDC dollars) your catalog quoted — the audit verifies the live charge matches it" },
+            tx: { type: "string", description: "optional: a real Base settlement tx hash for a paid call to this endpoint — reconciled dual-RPC against your live-advertised payTo to earn the on-chain 'settlement-proven' badge a liveness-only cert cannot" },
           },
         },
         output: {
@@ -10512,6 +10513,22 @@ const CERT_VALID_DAYS = 30;
 const CERT_PRICE_USD = "1.00";
 const CERT_ISSUER = "did:web:api.greyridgesignals.ai";
 
+// Optional on-chain settlement proof folded into a cert. Present ONLY when the
+// seller supplied a real Base settlement tx (&tx=) that our independent dual-RPC
+// receipt reconcile confirmed SETTLED to the endpoint's advertised payTo. This is
+// the depth axis a liveness-only verified badge (x402station et al.) structurally
+// cannot match: not "the endpoint is up" but "it PROVABLY settled USDC to the
+// address it advertises, confirmed across two independent RPC providers".
+type CertSettlement = {
+  proven: boolean;
+  tx: string;
+  block: number | null;
+  confirmation: ReceiptVerifyResult["confirmation"];
+  amount_usdc: string | null;
+  payTo: string | null;
+  rpc_sources: string[];
+};
+
 type X402Cert = {
   cert_id: string;
   host: string;
@@ -10523,6 +10540,10 @@ type X402Cert = {
   depth_total: number;
   grade: string;
   tiers: X402BadgeTiers;
+  // Optional — only present when a real settlement tx was reconciled at mint.
+  // Omitted (undefined) on depth-only certs, which keeps their canonical/sig
+  // byte-identical to pre-settlement certs (backward compatible).
+  settlement?: CertSettlement;
   sig: string;
   issuer: string;
 };
@@ -10532,12 +10553,24 @@ function certHost(url: string): string { return new URL(url).host.toLowerCase();
 // Canonical, field-ordered JSON over the SIGNED fields only (sig/issuer
 // excluded). Any change to a certified fact changes the HMAC, so a pasted cert
 // can be proven authentic-and-untampered at /x402/cert/verify.
-function certCanonical(x: { cert_id: string; host: string; url: string; issued_at: string; expires_at: string; verdict: string; depth_passed: number; tiers: X402BadgeTiers }): string {
-  return JSON.stringify({
+export function certCanonical(x: { cert_id: string; host: string; url: string; issued_at: string; expires_at: string; verdict: string; depth_passed: number; tiers: X402BadgeTiers; settlement?: CertSettlement | null }): string {
+  const base: Record<string, unknown> = {
     cert_id: x.cert_id, host: x.host, url: x.url,
     issued_at: x.issued_at, expires_at: x.expires_at,
     verdict: x.verdict, depth_passed: x.depth_passed, tiers: x.tiers,
-  });
+  };
+  // Append settlement to the SIGNED payload only when present, so the on-chain
+  // proof is tamper-evident too. Depth-only certs omit the key entirely, so
+  // their canonical string (and HMAC) is unchanged from before this field existed.
+  if (x.settlement) {
+    const s = x.settlement;
+    base.settlement = {
+      proven: s.proven, tx: s.tx, block: s.block,
+      confirmation: s.confirmation, amount_usdc: s.amount_usdc,
+      payTo: s.payTo, rpc_sources: s.rpc_sources,
+    };
+  }
+  return JSON.stringify(base);
 }
 
 async function certSign(canonical: string, secret: string): Promise<string> {
@@ -10572,6 +10605,12 @@ export function certBadgeShields(cert: X402Cert | null, live: PreflightResult | 
     return { schemaVersion: 1, label, message: `degraded (${live.verdict.toLowerCase()})`, color: live.verdict === "AVOID" ? "red" : "orange", cacheSeconds: 300 };
   }
   const until = cert.expires_at.slice(0, 10);
+  // Lead with the settlement proof when we have it — the claim a liveness-only
+  // badge cannot make: this endpoint provably settled USDC to its advertised
+  // payTo on-chain. Depth grade follows as the secondary signal.
+  if (cert.settlement?.proven) {
+    return { schemaVersion: 1, label, message: `settlement-proven ✓ · to ${until}`, color: "brightgreen", cacheSeconds: 600 };
+  }
   const msg = cert.grade === "deep-verified" ? `deep-verified ✓ · to ${until}` : `${cert.grade} · to ${until}`;
   return { schemaVersion: 1, label, message: msg, color: "brightgreen", cacheSeconds: 600 };
 }
@@ -10607,13 +10646,42 @@ app.get("/x402/cert", async (c) => {
       scope_note: r.scope_note,
     });
   }
+  // OPTIONAL on-chain settlement proof. If the seller passes &tx=<a real Base
+  // settlement hash for a paid call to this endpoint>, we independently read that
+  // receipt from TWO Base RPC providers and reconcile it against the endpoint's
+  // LIVE-advertised payTo (dual-RPC, fail-closed on disagreement). Only a genuine
+  // SETTLED verdict mints the settlement proof — this is the depth axis a
+  // liveness/uptime badge structurally cannot certify. Degrade-open: a missing /
+  // bad / unsettled tx never blocks the depth cert; it is surfaced honestly.
+  const txParam = c.req.query("tx");
+  let settlement: CertSettlement | undefined;
+  let settlement_check: { verdict: string; note: string; confirmation: string } | undefined;
+  if (txParam && HASH_RE.test(txParam)) {
+    try {
+      const rv = await x402ReceiptVerify(txParam, url);
+      const proven = rv.settled === true && rv.verdict === "SETTLED" && rv.confirmation !== "rpc-disagreement";
+      settlement_check = { verdict: rv.verdict, note: rv.note, confirmation: rv.confirmation };
+      if (proven) {
+        settlement = {
+          proven: true,
+          tx: rv.tx,
+          block: rv.block,
+          confirmation: rv.confirmation,
+          amount_usdc: rv.matched_transfer?.amount_usdc ?? rv.advertised.amount_usdc,
+          payTo: rv.advertised.payTo,
+          rpc_sources: rv.rpc_sources,
+        };
+      }
+    } catch { /* degrade-open: settlement stays undefined, depth cert still issues */ }
+  }
+
   const issued_at = new Date().toISOString();
   const expires_at = new Date(Date.now() + CERT_VALID_DAYS * 86400_000).toISOString();
   const cert_id = "grsg-" + (await sha256Hex(`${host}|${url}|${issued_at}`)).slice(0, 20);
   const secret = c.env.CERT_SIGNING_SECRET || c.env.PAY_TO || "greyridge-x402-cert-v1";
-  const unsigned = { cert_id, host, url, issued_at, expires_at, verdict: r.verdict, depth_passed, tiers };
+  const unsigned = { cert_id, host, url, issued_at, expires_at, verdict: r.verdict, depth_passed, tiers, settlement };
   const sig = await certSign(certCanonical(unsigned), secret);
-  const cert: X402Cert = { cert_id, host, url, issued_at, expires_at, verdict: r.verdict, depth_passed, depth_total: 6, grade, tiers, sig, issuer: CERT_ISSUER };
+  const cert: X402Cert = { cert_id, host, url, issued_at, expires_at, verdict: r.verdict, depth_passed, depth_total: 6, grade, tiers, ...(settlement ? { settlement } : {}), sig, issuer: CERT_ISSUER };
   // Persist — KV is the authority the badge + verify read. Degrade open if KV
   // is absent (local/test): still return the signed cert so the audit is usable.
   if (c.env.API_KEYS) {
@@ -10628,10 +10696,15 @@ app.get("/x402/cert", async (c) => {
   return c.json({
     issued: true,
     certificate: cert,
+    settlement_proven: !!settlement,
+    ...(settlement_check ? { settlement_check } : {}),
+    ...(txParam && !settlement ? { settlement_note: "a &tx= was supplied but it did NOT reconcile as a SETTLED USDC payment to this endpoint's advertised payTo (see settlement_check) — the depth certificate was still issued, but without the on-chain settlement proof. Supply a real settlement tx for your endpoint to earn the 'settlement-proven' badge." } : {}),
     badge_embed_markdown: `![x402 deep-certified](https://img.shields.io/endpoint?url=${CANONICAL_ORIGIN}/x402/cert/badge%3Furl%3D${enc})`,
     verify_url: `${CANONICAL_ORIGIN}/x402/cert/verify?id=${cert_id}`,
     valid_days: CERT_VALID_DAYS,
-    differentiator: "A dated, HMAC-signed 30-day certificate over the DEPTH axis a liveness-only verified badge cannot certify: advertised-vs-charged price accuracy, delivery readiness, LLM01/LLM08 injection safety and payTo OFAC/scam screening. The certified badge re-audits live on every render and flips to 'degraded' if the endpoint breaks before expiry; any buyer can re-check the signature at the verify_url.",
+    differentiator: settlement
+      ? "Proven to actually SETTLE USDC to its advertised payTo on Base, confirmed across two independent RPC providers (fail-closed if they disagree) — not merely 'the endpoint is up'. A liveness/uptime verified badge structurally cannot make this claim. The cert also certifies the depth axis (price accuracy, delivery readiness, LLM01/LLM08 injection safety, payTo OFAC/scam screening), is HMAC-signed and re-audits live on every badge render; any buyer re-checks the signature free at the verify_url."
+      : "A dated, HMAC-signed 30-day certificate over the DEPTH axis a liveness-only verified badge cannot certify: advertised-vs-charged price accuracy, delivery readiness, LLM01/LLM08 injection safety and payTo OFAC/scam screening. Add on-chain settlement PROOF — pass &tx=<a real Base settlement hash for a paid call to this endpoint> — and the cert certifies it provably settled USDC to its advertised payTo, dual-RPC confirmed. The certified badge re-audits live on every render and flips to 'degraded' if the endpoint breaks before expiry; any buyer can re-check the signature at the verify_url.",
     scope_note: r.scope_note,
   });
 });
@@ -10678,7 +10751,7 @@ app.get("/x402/cert/verify", async (c) => {
   const now = Date.now();
   const expired = Date.parse(cert.expires_at) < now;
   const secret = c.env.CERT_SIGNING_SECRET || c.env.PAY_TO || "greyridge-x402-cert-v1";
-  const expectSig = await certSign(certCanonical({ cert_id: cert.cert_id, host: cert.host, url: cert.url, issued_at: cert.issued_at, expires_at: cert.expires_at, verdict: cert.verdict, depth_passed: cert.depth_passed, tiers: cert.tiers }), secret);
+  const expectSig = await certSign(certCanonical({ cert_id: cert.cert_id, host: cert.host, url: cert.url, issued_at: cert.issued_at, expires_at: cert.expires_at, verdict: cert.verdict, depth_passed: cert.depth_passed, tiers: cert.tiers, settlement: cert.settlement }), secret);
   const signature_valid = certEqHex(expectSig, cert.sig);
   const status = !signature_valid ? "FORGED_OR_TAMPERED" : expired ? "EXPIRED" : "VALID";
   return c.json({
@@ -10687,9 +10760,11 @@ app.get("/x402/cert/verify", async (c) => {
     expired,
     status,
     certificate: cert,
+    settlement_proven: !!(signature_valid && cert.settlement?.proven),
     note:
       !signature_valid ? "signature does not match — this certificate was not issued by us or has been altered" :
       expired ? "certificate signature is authentic but past its 30-day validity window — the seller must re-certify at /x402/cert" :
+      cert.settlement?.proven ? `certificate signature is authentic and within its validity window, and it carries on-chain settlement proof: this endpoint settled ${cert.settlement.amount_usdc ?? "USDC"} to its advertised payTo ${cert.settlement.payTo ?? ""} on Base (tx ${cert.settlement.tx}, ${cert.settlement.confirmation}). Render the live badge for current endpoint health.` :
       "certificate signature is authentic and within its validity window; render the live badge for current endpoint health",
     issuer: CERT_ISSUER,
     live_badge: cert.url ? `${CANONICAL_ORIGIN}/x402/cert/badge?url=${encodeURIComponent(cert.url)}` : null,
@@ -10721,10 +10796,11 @@ app.get("/x402/cert/preview", (c) => {
       issuer: CERT_ISSUER,
     },
     mint: `${CANONICAL_ORIGIN}/x402/cert?url=<your-endpoint>  ($${CERT_PRICE_USD}, x402)`,
+    settlement_proof: `Pass &tx=<a real Base settlement hash for a paid call to your endpoint> to also earn the 'settlement-proven' badge — we read that receipt from two independent Base RPC providers and reconcile it against your LIVE-advertised payTo (dual-RPC, fail-closed on disagreement). A genuine SETTLED verdict proves your endpoint actually moves USDC to the address it advertises — the depth axis a liveness/uptime badge cannot certify. Example: ${CANONICAL_ORIGIN}/x402/cert?url=<your-endpoint>&tx=0x<64-hex>`,
     badge_when_issued: `![x402 deep-certified](https://img.shields.io/endpoint?url=${CANONICAL_ORIGIN}/x402/cert/badge%3Furl%3D<YOUR_ENDPOINT_URL_ENCODED>)`,
     verify: `${CANONICAL_ORIGIN}/x402/cert/verify?id=<cert_id>  (free, any buyer)`,
     free_badge_instead: `${CANONICAL_ORIGIN}/x402/badge?url=<endpoint>  (point-in-time render, no persisted cert)`,
-    differentiator: "x402station's proven $1 verified badge certifies liveness only (uptime / p99 / price sanity-band). This certifies the depth axis theirs cannot, and signs it so a buyer can verify the cert independently.",
+    differentiator: "x402station's proven $1 verified badge certifies liveness only (uptime / p99 / price sanity-band) — no on-chain settlement proof. This certifies the depth axis theirs cannot, signs it so a buyer can verify the cert independently, and — when you supply a settlement tx — PROVES your endpoint actually settled USDC to its advertised payTo on Base, confirmed across two independent RPC providers.",
   });
 });
 

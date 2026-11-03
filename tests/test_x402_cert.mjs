@@ -22,7 +22,7 @@ import { register } from "node:module";
 register(new URL("./cfw-hooks.mjs", import.meta.url));
 
 const mod = await import("../src/index.ts");
-const { default: app, certGrade, certBadgeShields } = mod;
+const { default: app, certGrade, certBadgeShields, certCanonical } = mod;
 
 // ---- certGrade -------------------------------------------------------------
 const full = { live: true, reliable: true, price_accurate: true, delivery_specified: true, injection_safe: true, payto_clear: true };
@@ -72,6 +72,37 @@ assert.ok(/degraded/.test(b.message));
 b = certBadgeShields({ ...validCert, grade: "audited-4/6" }, { verdict: "PAY" }, now);
 assert.equal(b.color, "brightgreen");
 assert.ok(!/deep-verified/.test(b.message), "partial cert must not claim deep-verified");
+
+// ---- on-chain SETTLEMENT PROOF (the depth axis a liveness badge cannot make) --
+const provenSettlement = { proven: true, tx: "0x" + "a".repeat(64), block: 48783946, confirmation: "dual-confirmed", amount_usdc: "0.005000", payTo: "0x1234567890123456789012345678901234567890", rpc_sources: ["mainnet.base.org", "base-rpc.publicnode.com"] };
+const settledCert = { ...validCert, settlement: provenSettlement };
+
+// a settlement-proven cert leads the badge with "settlement-proven ✓" (not just a depth grade)
+b = certBadgeShields(settledCert, { verdict: "PAY" }, now);
+assert.equal(b.color, "brightgreen", "settlement-proven cert is green");
+assert.ok(/settlement-proven ✓/.test(b.message), `settlement-proven leads the badge, got "${b.message}"`);
+
+// a cert whose settlement.proven is false does NOT claim settlement-proven
+b = certBadgeShields({ ...validCert, settlement: { ...provenSettlement, proven: false } }, { verdict: "PAY" }, now);
+assert.ok(!/settlement-proven/.test(b.message), "proven:false must not claim settlement-proven");
+
+// an endpoint that breaks AFTER a settlement-proven cert still degrades honestly
+b = certBadgeShields(settledCert, { verdict: "AVOID" }, now);
+assert.equal(b.color, "red", "settlement-proven but now AVOID -> honest red downgrade");
+assert.ok(/degraded/.test(b.message), "live re-audit still downgrades a settlement-proven cert");
+
+// ---- certCanonical: settlement is signed, and depth-only certs are unchanged --
+// a depth-only cert's canonical must be byte-identical whether settlement is
+// undefined or explicitly absent (backward compat: pre-settlement certs verify).
+const depthOnly = { cert_id: "grsg-x", host: "seller.example", url: "https://seller.example/data", issued_at: "2026-11-03T00:00:00.000Z", expires_at: futureExp, verdict: "PAY", depth_passed: 6, tiers: full };
+assert.equal(certCanonical(depthOnly), certCanonical({ ...depthOnly, settlement: null }), "settlement:null canonical == omitted (backward compat)");
+assert.ok(!certCanonical(depthOnly).includes("settlement"), "depth-only canonical omits the settlement key entirely");
+
+// a settlement-bearing canonical DOES include the proof, so tampering with it
+// changes the signed string (tamper-evidence extends to the on-chain proof).
+const withSettle = certCanonical({ ...depthOnly, settlement: provenSettlement });
+assert.ok(withSettle.includes("settlement") && withSettle.includes(provenSettlement.tx), "settlement canonical carries the tx");
+assert.notEqual(withSettle, certCanonical({ ...depthOnly, settlement: { ...provenSettlement, tx: "0x" + "b".repeat(64) } }), "changing the settlement tx changes the canonical (tamper-evident)");
 
 // ---- live contract (no network; KV absent in test env) --------------------
 // cert mint is the PAID route -> x402-gated (payment required before the audit)
