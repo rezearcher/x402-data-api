@@ -10313,6 +10313,122 @@ app.get("/x402/preflight/preview", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// SELLER-SIDE DEEP VERIFIED BADGE (/x402/badge) — an embeddable, continuously
+// re-auditing trust badge an x402 SELLER puts on their README/listing so BUYERS
+// see a live third-party verdict before paying. Returns the shields.io endpoint
+// JSON schema (schemaVersion/label/message/color), so shields.io renders it as
+// an SVG and RE-FETCHES on every page impression — the badge re-audits the live
+// endpoint each render and flips colour the moment the endpoint degrades.
+//
+// The proven converting model (x402station's $1 "verified badge", 59 paying
+// operators) certifies LIVENESS ONLY (uptime / p99 / price-sanity-band). This
+// badge certifies the DEPTH axis their badge explicitly cannot: price ACCURACY
+// (advertised == charged, not just a band), DELIVERY readiness (output shape
+// specified / no leaking paywall), INJECTION safety (LLM01/LLM08 scan of the
+// resource + advertised MCP tools) and payTo OFAC/scam screening — the exact
+// TOCTOU verify→settle gap the ATC'26 "Free-Riding the Agentic Web" analysis
+// names. Free to render (adoption surface, like their badge); the full
+// machine-readable report stays paid at /x402/preflight. Degrades open: any
+// error renders a grey "unreachable" badge, never a 500.
+// ---------------------------------------------------------------------------
+type X402BadgeTiers = {
+  live: boolean;
+  reliable: boolean;
+  price_accurate: boolean;
+  delivery_specified: boolean;
+  injection_safe: boolean;
+  payto_clear: boolean;
+};
+export function x402BadgeTiers(r: PreflightResult): X402BadgeTiers {
+  const payToCheck = r.checks.find((c) => c.name === "payTo_safety");
+  return {
+    live: r.liveness?.label === "LIVE",
+    reliable: r.reliability ? r.reliability.stable === true : true,
+    price_accurate: r.price_accuracy?.verdict === "MATCH",
+    delivery_specified: r.delivery?.verdict === "SPECIFIED",
+    injection_safe: r.findings.length === 0,
+    payto_clear: payToCheck ? payToCheck.ok === true : false,
+  };
+}
+// Map a deep-audit result onto a shields.io endpoint badge. Colour follows the
+// PAY/CAUTION/AVOID verdict; the message surfaces the DEPTH signal (how many of
+// the 6 depth tiers pass, or the single most-important failing reason) so the
+// badge communicates more than "up/down".
+export function x402BadgeShields(r: PreflightResult): { schemaVersion: 1; label: string; message: string; color: string; cacheSeconds: number } {
+  const label = "x402 verified";
+  const t = x402BadgeTiers(r);
+  const passed = Object.values(t).filter(Boolean).length;
+  if (r.verdict === "AVOID") {
+    const reason =
+      r.price_trap?.flagged ? "price trap" :
+      r.liveness?.label === "DEAD" ? "dead" :
+      !t.payto_clear ? "unsafe payTo" :
+      r.price_accuracy?.verdict === "OVERCHARGE" ? "overcharge" :
+      r.delivery?.verdict === "LEAK" ? "paywall leak" :
+      "avoid";
+    return { schemaVersion: 1, label, message: reason, color: "red", cacheSeconds: 600 };
+  }
+  if (r.verdict === "CAUTION") {
+    const reason =
+      r.liveness?.label === "ZOMBIE" ? "zombie" :
+      r.delivery?.verdict === "LEAK" ? "paywall leak" :
+      r.price_accuracy && r.price_accuracy.verdict !== "MATCH" ? r.price_accuracy.verdict.toLowerCase() :
+      r.delivery?.verdict === "UNVERIFIED" ? "delivery unverified" :
+      !t.injection_safe ? "injection risk" :
+      "caution";
+    return { schemaVersion: 1, label, message: reason, color: "yellow", cacheSeconds: 600 };
+  }
+  // PAY — green. 6/6 depth tiers => the full "deep-verified" signal; otherwise
+  // show the depth score so a buyer sees it is more than a liveness ping.
+  const msg = passed === 6 ? "deep-verified ✓" : `audited · ${passed}/6 depth`;
+  return { schemaVersion: 1, label, message: msg, color: "brightgreen", cacheSeconds: 900 };
+}
+app.get("/x402/badge", async (c) => {
+  const url = c.req.query("url");
+  const detail = c.req.query("detail") === "1" || c.req.query("format") === "json";
+  // No url => a grey placeholder badge + (in detail mode) the embed recipe. Keeps
+  // the shields.io contract intact for a mis-configured embed instead of erroring.
+  if (!url || !/^https?:\/\//i.test(url)) {
+    if (detail) {
+      return c.json({
+        error: "pass ?url=<your absolute https x402 endpoint> to audit it",
+        what: "A live, re-auditing, embeddable trust badge for an x402 endpoint — certifies the DEPTH axis (price-accuracy, delivery, injection-safety, payTo screen), not just liveness.",
+        embed_markdown: `![x402 verified](https://img.shields.io/endpoint?url=${CANONICAL_ORIGIN}/x402/badge%3Furl%3D<YOUR_ENDPOINT_URL_ENCODED>)`,
+        full_report: `${CANONICAL_ORIGIN}/x402/preflight?url=<endpoint> ($0.001, machine-readable, unmetered)`,
+        tiers: ["live", "reliable", "price_accurate", "delivery_specified", "injection_safe", "payto_clear"],
+      });
+    }
+    return c.json({ schemaVersion: 1, label: "x402 verified", message: "pass ?url=", color: "lightgrey", cacheSeconds: 300 });
+  }
+  const samples = Math.max(1, Math.min(3, parseInt(c.req.query("samples") ?? "1", 10) || 1));
+  const advertised = c.req.query("advertised") ?? null;
+  try {
+    const r = await x402Preflight(url, samples, advertised, null);
+    const shields = x402BadgeShields(r);
+    console.log(JSON.stringify({ event: "x402_badge_render", url, verdict: r.verdict, liveness: r.liveness?.label, color: shields.color, ts: r.checked_at }));
+    if (detail) {
+      const tiers = x402BadgeTiers(r);
+      return c.json({
+        url,
+        verdict: r.verdict,
+        badge: shields,
+        tiers,
+        depth_passed: Object.values(tiers).filter(Boolean).length,
+        depth_total: 6,
+        differentiator: "Certifies the DEPTH axis a liveness-only x402 badge cannot: advertised-vs-charged price accuracy (not a sanity band), delivery readiness (output-spec / no leaking paywall), LLM01/LLM08 injection safety and payTo OFAC/scam screening.",
+        embed_markdown: `![x402 verified](https://img.shields.io/endpoint?url=${CANONICAL_ORIGIN}/x402/badge%3Furl%3D${encodeURIComponent(url)})`,
+        full_report: `${CANONICAL_ORIGIN}/x402/preflight?url=${encodeURIComponent(url)}`,
+        scope_note: r.scope_note,
+        checked_at: r.checked_at,
+      });
+    }
+    return c.json(shields);
+  } catch {
+    return c.json({ schemaVersion: 1, label: "x402 verified", message: "unreachable", color: "lightgrey", cacheSeconds: 300 });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // x402 POST-PAYMENT RECEIPT VERIFY (/x402/receipt-verify) — the OTHER half of
 // /x402/preflight. Preflight answers "should I pay?" BEFORE paying (read-only,
 // pre-payment readiness). This answers "did my payment ACTUALLY settle to the

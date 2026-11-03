@@ -41,3 +41,4 @@ integrations/*/package-lock.json
 # dirty and every metrics-touching branch gets a guaranteed merge conflict on a file
 # nobody should hand-edit. The file stays on disk, so milestone.sh's fallback still works.
 .metrics/revenue_usd_corrected
+.work/
