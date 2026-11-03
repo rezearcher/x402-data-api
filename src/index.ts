@@ -1788,6 +1788,16 @@ const INSTALLABLE_TOOLS: Array<{
     wraps: ["/x402/preflight", "/x402/receipt-verify"],
     note: "Dependency-free ESM safeFetch(): runs the free x402 preflight and throws PreflightBlocked on AVOID, enforces a per-call USD cap (maxPerCallUsd, fails closed if the price is unreadable), pays through your own x402 fetch (e.g. wrapFetchWithPayment), dedupes retries by intentId, then runs a dual-RPC on-chain receipt check on the settlement tx. Python twin: pip install greyridge-x402-tools (0.7.0, safe_fetch).",
   },
+  {
+    framework: "Node / TypeScript — drop-in @x402/fetch wrapper (git install)",
+    language: "TypeScript",
+    package: "@grey-ridge/x402-verified-fetch",
+    install: "npm i github:rezearcher/x402-verified-fetch",
+    repository: "https://github.com/rezearcher/x402-verified-fetch",
+    tool_count: 1,
+    wraps: ["/x402/receipt-verify"],
+    note: "wrapFetchWithVerifiedPayment(fetch, client): same signature as @x402/fetch's wrapFetchWithPayment, so it drops straight into an existing x402-paying agent. After the payment settles it decodes the PAYMENT-RESPONSE tx hash, reads that Base receipt from two independent public RPCs (cross-confirmed, fails closed on disagreement), decodes USDC Transfers and reconciles them against the endpoint's advertised payTo+amount -> SETTLED | UNDERPAID | WRONG_RECIPIENT | NO_TRANSFER | REVERTED. The only x402 fetch wrapper that reads the chain (no viem/ethers; plain JSON-RPC). onMismatch:'throw' aborts a mis-settled call; verdict core mirrors the hosted /x402/receipt-verify.",
+  },
 ];
 
 // ─── Machine-readable call contracts for the discovery manifest ──────────────
