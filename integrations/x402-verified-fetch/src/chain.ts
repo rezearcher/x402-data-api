@@ -160,6 +160,62 @@ export async function readSettlementReceipt(
   };
 }
 
+/** One eth_getBlockByNumber timestamp read on a single provider (seconds, or null). */
+async function rpcGetBlockTs(
+  rpcUrl: string,
+  blockNumHex: string,
+  fetchImpl: typeof globalThis.fetch,
+  timeoutMs: number,
+): Promise<number | null> {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), timeoutMs);
+  try {
+    const res = await fetchImpl(rpcUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getBlockByNumber", params: [blockNumHex, false] }),
+      signal: ctl.signal,
+    });
+    if (!res.ok) return null;
+    const j = (await res.json()) as { result?: { timestamp?: string } | null; error?: unknown };
+    if (j.error || !j.result || !j.result.timestamp) return null;
+    const ts = Number(BigInt(j.result.timestamp));
+    return Number.isFinite(ts) ? ts : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/**
+ * Read a Base block's timestamp (unix seconds) and cross-confirm across up to two
+ * providers — the input to the 4-check standard's check #4 (validity window).
+ * - both read + agree  => { ts, "dual-confirmed" }
+ * - both read + differ => { null, "rpc-disagreement" }  (fail closed)
+ * - one read           => { ts, "single-source" }
+ * - none               => { null, "not-found" }
+ */
+export async function readBlockTimestamp(
+  blockNumber: number,
+  opts: { rpcUrls?: string[]; fetchImpl?: typeof globalThis.fetch; timeoutMs?: number } = {},
+): Promise<{ timestamp: number | null; confirmation: "dual-confirmed" | "single-source" | "rpc-disagreement" | "not-found" }> {
+  if (!Number.isFinite(blockNumber) || blockNumber < 0) return { timestamp: null, confirmation: "not-found" };
+  const rpcUrls = (opts.rpcUrls && opts.rpcUrls.length ? opts.rpcUrls : DEFAULT_BASE_RPCS).slice(0, 2);
+  const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
+  const timeoutMs = opts.timeoutMs ?? 7000;
+  const blockNumHex = "0x" + Math.trunc(blockNumber).toString(16);
+  const reads = await Promise.all(rpcUrls.map((u) => rpcGetBlockTs(u, blockNumHex, fetchImpl, timeoutMs)));
+  const a = reads[0] ?? null;
+  const b = reads.length > 1 ? reads[1] : null;
+  if (a !== null && b !== null) {
+    if (a === b) return { timestamp: a, confirmation: "dual-confirmed" };
+    return { timestamp: null, confirmation: "rpc-disagreement" };
+  }
+  if (a !== null || b !== null) return { timestamp: a !== null ? a : b, confirmation: "single-source" };
+  return { timestamp: null, confirmation: "not-found" };
+}
+
 /** One USDC authorizationState(authorizer, nonce) eth_call on a single provider. */
 async function rpcAuthorizationState(
   rpcUrl: string,

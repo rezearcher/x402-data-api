@@ -10,11 +10,25 @@ The verdict is on-chain ground truth, not a claim the server made about itself:
 SETTLED | UNDERPAID | WRONG_RECIPIENT | NO_TRANSFER | REVERTED | NOT_FOUND | UNVERIFIED
 ```
 
-### Two on-chain checks, not one (the EIP-3009 depth)
+### The full 4-check settlement standard — and the two checks only the payer can make
 
-A matching `Transfer` to the right `payTo` for the right amount (**check #3** of the market's 4-check settlement standard) is necessary but not sufficient: it cannot catch a `PAYMENT-RESPONSE` that points at an **unrelated or replayed** USDC transfer which happens to hit the same `payTo` for the same amount. So this wrapper also runs **check #2 — the EIP-3009 authorization nonce**: it decodes the USDC `AuthorizationUsed(authorizer, nonce)` event from the receipt and cross-confirms, over the same two independent RPCs, that the live USDC contract's `authorizationState(authorizer, nonce)` reads **consumed**. That cryptographically binds the settlement to a spent transfer authorization.
+A matching `Transfer` to the right `payTo` for the right amount (**check #3**) is necessary but not sufficient. This wrapper runs all four checks of the x402 settlement-verification standard:
 
-If the amount matches but the authorization is **not** consumed on-chain (dual-confirmed), that is a forgery/replay signal and the verdict **fails closed to `UNVERIFIED`** — a strict agent is never told a replayed receipt `SETTLED`. A direct (non-EIP-3009) transfer degrades open: the `Transfer` reconcile still stands and `authorization.status` reports `not-eip3009`. Every verdict carries an `authorization` field with its own cross-confirmed provenance. No other x402 fetch wrapper does this; the hosted Grey Ridge endpoint makes the same binding.
+| # | check | what it proves | who can run it |
+|---|-------|----------------|----------------|
+| **3** | **Transfer reconcile** | a USDC transfer to the advertised `payTo` for ≥ the advertised amount exists in the tx | anyone reading the chain |
+| **2** | **EIP-3009 nonce consumed** | the USDC `AuthorizationUsed(authorizer, nonce)` log cross-confirms against live `authorizationState() == consumed` — binds the settlement to a *spent* transfer authorization, catching a replayed/unrelated transfer to the same `payTo` | anyone reading the chain |
+| **1** | **signed-payload bind** | the nonce consumed on-chain is **exactly the one THIS client signed** in its `X-PAYMENT` — the settlement is of *our* payment, not a coincidentally-matching one | **only the payer** |
+| **4** | **validity window** | the settlement block's timestamp falls within the authorization's `[validAfter, validBefore]` — the authorization had not expired / was already valid when it settled | **only the payer** |
+
+Checks #1 and #4 are the depth **no hosted verifier can offer**, including Grey Ridge's own `/x402/receipt-verify`: they require the signed EIP-3009 authorization, which only the paying client holds. This wrapper *is* the payer, so it captures the `X-PAYMENT` payload `@x402/fetch` sends and binds it to the on-chain settlement.
+
+**Fail-closed signals** (verdict → `UNVERIFIED`, a strict agent is never told a bad settlement `SETTLED`):
+- amount matches but the authorization is **not** consumed on-chain, dual-confirmed (check #2 forgery/replay);
+- the consumed nonce is **not the one we signed** (check #1 — `payloadBind.status: "mismatch"`);
+- the settlement mined **outside** the signed validity window, dual-confirmed block time (check #4 — `payloadBind.status: "window-violation"`).
+
+A direct (non-EIP-3009) transfer degrades open and discloses it (`authorization.status: "not-eip3009"`, `payloadBind.status: "unbound"`). Every verdict carries `authorization` and `payloadBind` fields with their own cross-confirmed provenance. The nonce bind is the authoritative link; it is **not** a full secp256k1 signature recovery (that would need a crypto dependency this dep-free wrapper avoids), because a consumed EIP-3009 nonce is unforgeable and unique to the authorization that produced it.
 
 It **composes** the official Coinbase payer client (`@x402/fetch` → `wrapFetchWithPayment`, 670k+ downloads/mo) rather than replacing it. You keep your existing payment flow; you gain an independent audit of what actually moved.
 
@@ -78,11 +92,20 @@ const verdict = JSON.parse(res.headers.get(SETTLEMENT_HEADER));
 Everything is exported pure and I/O-free so you can reconcile a receipt you already have:
 
 ```ts
-import { readSettlementReceipt, reconcileSettlement, decodeUsdcTransfers } from "@grey-ridge/x402-verified-fetch";
+import {
+  readSettlementReceipt, reconcileSettlement, decodeUsdcTransfers,
+  readBlockTimestamp, decodeSignedAuthorization, computePayloadBind,
+} from "@grey-ridge/x402-verified-fetch";
 
 const read = await readSettlementReceipt(txHash);                 // dual-RPC, cross-confirmed
-const verdict = reconcileSettlement(read.status, read.transfers,  // pure
+const verdict = reconcileSettlement(read.status, read.transfers,  // pure (check #3)
   advertisedPayTo, advertisedAmountAtomic);
+
+// payer-only checks (#1 + #4): bind the X-PAYMENT you signed to the settlement
+const signed = decodeSignedAuthorization(xPaymentHeader);         // pure
+const { timestamp } = await readBlockTimestamp(read.block);       // dual-RPC, cross-confirmed
+const bind = computePayloadBind(signed, matchedTo, matchedAtomic, // pure
+  consumedNonce, timestamp, "dual-confirmed");
 ```
 
 ## Cross-confirmation (fail closed)

@@ -6,6 +6,9 @@ import {
   decodeUsdcTransfers,
   decodeAuthorizationUsed,
   computeAuthorizationProof,
+  computePayloadBind,
+  decodeSignedAuthorization,
+  readBlockTimestamp,
   usdcToAtomic,
   atomicToUsdcStr,
   readSettlementReceipt,
@@ -17,7 +20,7 @@ import {
   USDC_TRANSFER_TOPIC,
   USDC_AUTH_USED_TOPIC,
 } from "../dist/index.js";
-import { encodePaymentResponseHeader } from "@x402/core/http";
+import { encodePaymentResponseHeader, encodePaymentSignatureHeader } from "@x402/core/http";
 import { x402Client } from "@x402/fetch";
 
 const PAYTO = "0x5765ae06a52dc7a0bb71c36a11db512c7ea9ed10";
@@ -284,6 +287,144 @@ test("wrapper FAILS CLOSED when Transfer matches but authorization is NOT consum
   assert.equal(verdict.settled, false);
   assert.equal(verdict.authorization.status, "state-mismatch");
   assert.match(verdict.note, /Failing closed/);
+});
+
+// ---- signed-payload bind (4-check #4 + the on-chain half of #1) ----
+const BLOCK_TS = 1_700_000_300;
+function signedHeader({ to = PAYTO, value = "4000", nonce = NONCE, validAfter = "1700000000", validBefore = "1700000600" } = {}) {
+  return encodePaymentSignatureHeader({
+    x402Version: 1,
+    scheme: "exact",
+    network: "base",
+    payload: {
+      signature: "0x" + "ab".repeat(65),
+      authorization: { from: BUYER, to, value, validAfter, validBefore, nonce },
+    },
+  });
+}
+
+test("decodeSignedAuthorization pulls the signed EIP-3009 authorization out of X-PAYMENT", () => {
+  const s = decodeSignedAuthorization(signedHeader());
+  assert.equal(s.to, PAYTO.toLowerCase());
+  assert.equal(s.valueAtomic, 4000);
+  assert.equal(s.nonce, NONCE.toLowerCase());
+  assert.equal(s.validAfter, 1700000000);
+  assert.equal(s.validBefore, 1700000600);
+});
+
+test("decodeSignedAuthorization returns null on a missing/garbage header (degrade-open)", () => {
+  assert.equal(decodeSignedAuthorization(null), null);
+  assert.equal(decodeSignedAuthorization("not-base64-$$"), null);
+});
+
+test("computePayloadBind: BOUND when signed nonce == consumed nonce and block in window", () => {
+  const s = decodeSignedAuthorization(signedHeader());
+  const b = computePayloadBind(s, PAYTO.toLowerCase(), 4000, NONCE.toLowerCase(), BLOCK_TS, "dual-confirmed");
+  assert.equal(b.status, "bound");
+  assert.equal(b.checks.nonceMatch, true);
+  assert.equal(b.checks.windowOk, true);
+});
+
+test("computePayloadBind: MISMATCH when the consumed nonce is NOT the one we signed", () => {
+  const s = decodeSignedAuthorization(signedHeader());
+  const otherNonce = "0x" + "cd".repeat(32);
+  const b = computePayloadBind(s, PAYTO.toLowerCase(), 4000, otherNonce, BLOCK_TS, "dual-confirmed");
+  assert.equal(b.status, "mismatch");
+  assert.equal(b.checks.nonceMatch, false);
+});
+
+test("computePayloadBind: WINDOW-VIOLATION when block time is past validBefore", () => {
+  const s = decodeSignedAuthorization(signedHeader({ validBefore: "1700000100" }));
+  const b = computePayloadBind(s, PAYTO.toLowerCase(), 4000, NONCE.toLowerCase(), BLOCK_TS, "dual-confirmed");
+  assert.equal(b.status, "window-violation");
+  assert.equal(b.checks.windowOk, false);
+});
+
+test("computePayloadBind: UNBOUND when there is no consumed nonce to bind (direct transfer)", () => {
+  const s = decodeSignedAuthorization(signedHeader());
+  const b = computePayloadBind(s, PAYTO.toLowerCase(), 4000, null, BLOCK_TS, "n/a");
+  assert.equal(b.status, "unbound");
+});
+
+test("computePayloadBind: NO-PAYLOAD when nothing was captured", () => {
+  const b = computePayloadBind(null, PAYTO.toLowerCase(), 4000, NONCE.toLowerCase(), BLOCK_TS, "n/a");
+  assert.equal(b.status, "no-payload");
+});
+
+test("readBlockTimestamp dual-confirmed when both RPCs agree", async () => {
+  const tsHex = "0x" + BLOCK_TS.toString(16);
+  const fetchImpl = async () => new Response(JSON.stringify({ result: { timestamp: tsHex } }), { status: 200 });
+  const r = await readBlockTimestamp(0x2e8f4a2, { fetchImpl });
+  assert.equal(r.timestamp, BLOCK_TS);
+  assert.equal(r.confirmation, "dual-confirmed");
+});
+
+test("readBlockTimestamp fails closed when RPCs disagree", async () => {
+  let i = 0;
+  const fetchImpl = async () =>
+    new Response(JSON.stringify({ result: { timestamp: "0x" + (BLOCK_TS + i++).toString(16) } }), { status: 200 });
+  const r = await readBlockTimestamp(0x2e8f4a2, { fetchImpl });
+  assert.equal(r.timestamp, null);
+  assert.equal(r.confirmation, "rpc-disagreement");
+});
+
+// ---- end-to-end: the payer-only checks wired through the wrapper ----
+// Build a fetchImpl that serves the unpaid 402 probe, the receipt read, the
+// authorizationState eth_call, and the block-timestamp read.
+function fullRpcImpl({ receipt, consumed = CONSUMED, blockTs = BLOCK_TS } = {}) {
+  return async (url, init) => {
+    if (init && init.method === "POST") {
+      const m = rpcMethod(init);
+      if (m === "eth_call") return new Response(JSON.stringify({ result: consumed }), { status: 200 });
+      if (m === "eth_getBlockByNumber")
+        return new Response(JSON.stringify({ result: { timestamp: "0x" + blockTs.toString(16) } }), { status: 200 });
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: receipt }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ accepts: [{ scheme: "exact", payTo: PAYTO, amount: "4000" }] }), { status: 402 });
+  };
+}
+
+test("wrapper BINDS the signed payload end-to-end (nonce + window) when X-PAYMENT is present", async () => {
+  const tx = "0x6e9643e4f7a1c8e6b4d2f0a1b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1d3";
+  const receipt = { status: "0x1", blockNumber: "0x2e8f4a2", logs: [usdcLog(BUYER, PAYTO, 4000), authUsedLog(BUYER)] };
+  // baseFetch echoes a settled 200; capturingFetch records the x-payment we pass in init.
+  const baseFetch = async () => makeSettledResponse(tx);
+  const vf = wrapFetchWithVerifiedPayment(baseFetch, new x402Client(), { fetchImpl: fullRpcImpl({ receipt }) });
+  const res = await vf("https://seller.example/x402/data", { headers: { "x-payment": signedHeader() } });
+  const verdict = JSON.parse(res.headers.get(SETTLEMENT_HEADER));
+  assert.equal(verdict.verdict, "SETTLED");
+  assert.equal(verdict.payloadBind.status, "bound");
+  assert.equal(verdict.payloadBind.checks.nonceMatch, true);
+  assert.equal(verdict.payloadBind.checks.windowOk, true);
+  assert.match(verdict.note, /signed-payload bound/);
+});
+
+test("wrapper FAILS CLOSED when the consumed nonce is not the one we signed", async () => {
+  const tx = "0x7e9643e4f7a1c8e6b4d2f0a1b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1e4";
+  // receipt's AuthorizationUsed carries a DIFFERENT nonce than the signed one
+  const otherNonce = "0x" + "cd".repeat(32);
+  const receipt = { status: "0x1", blockNumber: "0x2e8f4a2", logs: [usdcLog(BUYER, PAYTO, 4000), authUsedLog(BUYER, otherNonce)] };
+  const baseFetch = async () => makeSettledResponse(tx);
+  const vf = wrapFetchWithVerifiedPayment(baseFetch, new x402Client(), { fetchImpl: fullRpcImpl({ receipt }) });
+  const res = await vf("https://seller.example/x402/data", { headers: { "x-payment": signedHeader() } });
+  const verdict = JSON.parse(res.headers.get(SETTLEMENT_HEADER));
+  assert.equal(verdict.verdict, "UNVERIFIED");
+  assert.equal(verdict.settled, false);
+  assert.equal(verdict.payloadBind.status, "mismatch");
+  assert.match(verdict.note, /SIGNED-PAYLOAD MISMATCH/);
+});
+
+test("wrapper FAILS CLOSED on a validity-window violation (dual-confirmed block time)", async () => {
+  const tx = "0x8e9643e4f7a1c8e6b4d2f0a1b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1f5";
+  const receipt = { status: "0x1", blockNumber: "0x2e8f4a2", logs: [usdcLog(BUYER, PAYTO, 4000), authUsedLog(BUYER)] };
+  const baseFetch = async () => makeSettledResponse(tx);
+  const vf = wrapFetchWithVerifiedPayment(baseFetch, new x402Client(), { fetchImpl: fullRpcImpl({ receipt }) });
+  // signed window ends BEFORE the settlement block time
+  const res = await vf("https://seller.example/x402/data", { headers: { "x-payment": signedHeader({ validBefore: "1700000100" }) } });
+  const verdict = JSON.parse(res.headers.get(SETTLEMENT_HEADER));
+  assert.equal(verdict.verdict, "UNVERIFIED");
+  assert.equal(verdict.payloadBind.status, "window-violation");
+  assert.match(verdict.note, /VALIDITY-WINDOW VIOLATION/);
 });
 
 test("reconcile:off is a pure pass-through payer", async () => {

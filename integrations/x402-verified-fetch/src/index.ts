@@ -34,7 +34,8 @@ import {
   type ReceiptTransfer,
   type AuthorizationProof,
 } from "./reconcile.js";
-import { readSettlementReceipt, confirmAuthorizationState, type ReceiptRead } from "./chain.js";
+import { readSettlementReceipt, confirmAuthorizationState, readBlockTimestamp, type ReceiptRead } from "./chain.js";
+import { decodeSignedAuthorization, computePayloadBind, type SignedAuthorization, type PayloadBind } from "./authz.js";
 
 export {
   reconcileSettlement,
@@ -53,8 +54,10 @@ export {
   USDC_AUTH_STATE_SELECTOR,
 } from "./reconcile.js";
 export type { ReconcileResult, SettlementVerdict, ReceiptTransfer, AuthorizationProof, AuthorizationUsedEvent } from "./reconcile.js";
-export { readSettlementReceipt, confirmAuthorizationState, DEFAULT_BASE_RPCS } from "./chain.js";
+export { readSettlementReceipt, confirmAuthorizationState, readBlockTimestamp, DEFAULT_BASE_RPCS } from "./chain.js";
 export type { ReceiptRead } from "./chain.js";
+export { decodeSignedAuthorization, computePayloadBind } from "./authz.js";
+export type { SignedAuthorization, PayloadBind, PayloadBindChecks } from "./authz.js";
 
 /** The advertised requirement a buyer pays against (payTo + amount). */
 export interface AdvertisedRequirement {
@@ -86,6 +89,16 @@ export interface VerifiedSettlement {
    * bind). null on reconcile:"off" or an UNVERIFIED/NOT_FOUND early-out.
    */
   authorization: AuthorizationProof | null;
+  /**
+   * Signed-payload binding (4-check standard, check #4 + the on-chain half of
+   * #1) — the two checks only the payer can make. "bound" means the EIP-3009
+   * nonce consumed on-chain is exactly the one THIS client signed, and it
+   * settled inside its [validAfter, validBefore] window. "mismatch" /
+   * "window-violation" are fail-closed forgery/anomaly signals. "unbound" = a
+   * direct transfer with no nonce to bind; "no-payload" = reconcile-only path.
+   * null on reconcile:"off" or an early-out before a settlement tx was read.
+   */
+  payloadBind: PayloadBind | null;
   note: string;
 }
 
@@ -144,6 +157,29 @@ function methodOf(input: RequestInfo | URL, init?: RequestInit): string {
   if (init?.method) return init.method.toUpperCase();
   if (typeof input !== "string" && !(input instanceof URL)) return (input as Request).method.toUpperCase();
   return "GET";
+}
+
+/** Read a request header off whichever of (init.headers, Request) carries it. */
+function requestHeader(input: RequestInfo | URL, init: RequestInit | undefined, name: string): string | null {
+  const lower = name.toLowerCase();
+  try {
+    if (init?.headers) {
+      const h = new Headers(init.headers as HeadersInit);
+      const v = h.get(lower);
+      if (v) return v;
+    }
+  } catch {
+    /* non-standard headers shape — fall through */
+  }
+  try {
+    if (typeof input !== "string" && !(input instanceof URL)) {
+      const v = (input as Request).headers?.get(lower);
+      if (v) return v;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
 }
 
 /** Parse the first `accepts[]` entry from a live 402 body into an advertised requirement. */
@@ -211,11 +247,22 @@ export function wrapFetchWithVerifiedPayment(
   const resolveMode = options.resolveAdvertised ?? "probe";
   const fetchImpl = options.fetchImpl ?? baseFetch;
   const timeoutMs = options.timeoutMs ?? 7000;
-  const payFetch = wrapFetchWithPayment(baseFetch, client);
 
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const targetUrl = urlOf(input);
     const method = methodOf(input, init);
+
+    // Capture the X-PAYMENT header the official payer attaches on the paid retry
+    // — this is the EIP-3009 authorization WE signed, held only by the payer.
+    // Per-call capture (isolated under concurrency); the capturing fetch is only
+    // used inside @x402/fetch's pay loop, never for the unpaid probe.
+    let capturedXPayment: string | null = null;
+    const capturingFetch: typeof globalThis.fetch = (ci: RequestInfo | URL, cinit?: RequestInit) => {
+      const h = requestHeader(ci, cinit, "x-payment");
+      if (h) capturedXPayment = h;
+      return baseFetch(ci, cinit);
+    };
+    const payFetch = wrapFetchWithPayment(capturingFetch, client);
 
     // Pre-resolve the advertised requirement (so we can detect WRONG_RECIPIENT),
     // unless the caller bound it or disabled reconcile.
@@ -261,9 +308,14 @@ export function wrapFetchWithVerifiedPayment(
       /* unparseable header — leave nulls, verdict UNVERIFIED below */
     }
 
+    // The signed EIP-3009 authorization we sent (payer-only; decoded from the
+    // captured X-PAYMENT header). Drives check #4 + the signed-payload bind.
+    const signed: SignedAuthorization | null = decodeSignedAuthorization(capturedXPayment);
+
     let read: ReceiptRead = { found: false, status: null, transfers: [], authEvents: [], block: null, confirmation: "not-found", sources: [] };
     let core: ReconcileResult;
     let authorization: AuthorizationProof | null = null;
+    let payloadBind: PayloadBind | null = null;
     if (!tx) {
       core = {
         verdict: "UNVERIFIED",
@@ -314,6 +366,54 @@ export function wrapFetchWithVerifiedPayment(
             note: `${core.note}; EIP-3009 authorization consumed on-chain (nonce cross-confirmed), binding this settlement to a spent transfer authorization`,
           };
         }
+
+        // 4-check standard: check #4 (validity window) + the signed-payload bind
+        // (the on-chain half of check #1) — the two checks ONLY the payer can
+        // make, because only this client holds the authorization it signed. Read
+        // the settlement block's timestamp (cross-confirmed) and bind the signed
+        // nonce / recipient / amount to the consumed on-chain authorization.
+        const consumedNonce = authorization.status === "consumed" ? authorization.nonce : null;
+        let blockTime: number | null = null;
+        let blockConf: PayloadBind["confirmation"] = "n/a";
+        if (signed && read.block != null) {
+          const bt = await readBlockTimestamp(read.block, { rpcUrls: options.rpcUrls, fetchImpl, timeoutMs });
+          blockTime = bt.timestamp;
+          blockConf = bt.confirmation === "not-found" ? "n/a" : bt.confirmation;
+        }
+        payloadBind = computePayloadBind(
+          signed,
+          core.matched?.to ?? advertised.payTo ?? null,
+          core.matched?.amount_atomic ?? null,
+          consumedNonce,
+          blockTime,
+          blockConf,
+        );
+
+        // Fail closed on a payer-side forgery/anomaly signal:
+        //  - "mismatch": the consumed nonce is NOT the one we signed (the nonce
+        //    comes from the already dual-confirmed receipt, so no extra trust).
+        //  - "window-violation": the settlement mined outside the signed validity
+        //    window, confirmed by a dual-confirmed block-time read.
+        if (core.settled && payloadBind.status === "mismatch") {
+          core = {
+            verdict: "UNVERIFIED",
+            settled: false,
+            matched: core.matched,
+            note: `${core.note} — BUT ${payloadBind.note}. Failing closed: the on-chain settlement is not of the authorization this client signed.`,
+          };
+        } else if (core.settled && payloadBind.status === "window-violation" && payloadBind.confirmation === "dual-confirmed") {
+          core = {
+            verdict: "UNVERIFIED",
+            settled: false,
+            matched: core.matched,
+            note: `${core.note} — BUT ${payloadBind.note}. Failing closed: the settlement did not occur within the authorized validity window.`,
+          };
+        } else if (payloadBind.status === "bound") {
+          core = {
+            ...core,
+            note: `${core.note}; signed-payload bound (the EIP-3009 nonce consumed on-chain is exactly the one this client signed${payloadBind.checks.windowOk === true ? ", settled within the authorized validity window" : ""})`,
+          };
+        }
       }
     }
 
@@ -329,6 +429,7 @@ export function wrapFetchWithVerifiedPayment(
       advertised,
       matched: core.matched,
       authorization,
+      payloadBind,
       note: core.note,
     };
     // keep a trace of the header-claimed amount for callers who want it
