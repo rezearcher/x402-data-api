@@ -121,9 +121,23 @@ check("402 gate price == floored catalog price (advertise == charge)", () => {
   }
   assert.ok(compared >= 50, "most catalog routes are reconciled at the gate");
   assert.ok(raisedSeen >= 1, "at least one floored route is reflected at the gate");
-  // concrete: a known cold 2000-base route now charges the 4000 floor at the gate
-  const erc20 = gate.get("GET /chain/erc20-meta");
-  if (erc20 !== undefined) assert.strictEqual(erc20, "$0.004", "cold route charges the floor at the gate");
+  // concrete: DERIVE a still-cold raisable route (base strictly between the magnet
+  // ceiling and the floor, absent from the live DEMAND_SNAPSHOT) and assert it
+  // charges the 4000 floor at the gate. Derived, not a hardcoded route name, so it
+  // stays correct as demand shifts a route into the protected set (CLAUDE.md
+  // no-hardcoded-list law). If every such route now has a proven payer, the
+  // invariant checks above already cover the raise logic, so this concrete probe
+  // is simply skipped.
+  const paid = DEMAND_SNAPSHOT?.external_by_route || {};
+  const coldRaisable = ROUTE_CATALOG_BASE.find((r) => {
+    const m = Number(r[3]);
+    return m > 1000 && m < FLOOR && !(Number(paid[r[0]]) >= 1) && gate.has(`${r[1]} ${r[0]}`);
+  });
+  if (coldRaisable) {
+    assert.strictEqual(
+      gate.get(`${coldRaisable[1]} ${coldRaisable[0]}`), "$0.004",
+      `cold route ${coldRaisable[0]} charges the floor at the gate`);
+  }
 });
 
 console.log(`\n${pass} checks passed`);
