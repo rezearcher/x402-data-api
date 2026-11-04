@@ -64,6 +64,10 @@ import { makeUsageCounter, type UsageCounter } from "./usage_counter.ts";
 
 export type Env = {
   PAY_TO: string;
+  // Solana (SVM) USDC receive address — OPTIONAL. When set (and the facilitator reports a
+  // solana `exact` kind), /x402/networks reports Solana as settleable and the challenge can
+  // offer a Solana accepts[] option. Absent => Base-only, byte-identical behaviour.
+  SOLANA_PAY_TO?: string;
   // CDP facilitator credentials (Worker secrets) — enable Bazaar discovery/settlement.
   CDP_API_KEY_ID?: string;
   CDP_API_KEY_SECRET?: string;
@@ -1528,6 +1532,98 @@ app.get("/internal/cdp-probe", async (c) => {
   } catch (e) {
     return c.json({ ok: false, jwt_generated: false, error: (e as Error).message }, 500);
   }
+});
+
+// Public, read-only settlement-capability discovery (FREE). Surfaces WHICH networks +
+// schemes this service can actually settle a payment on — read live from the facilitator
+// we run (CDP) and intersected with the receive addresses we actually hold. Honest,
+// machine-discoverable capability (an agent filtering a catalog by network can confirm
+// coverage without guessing from one accepts[] sample); returns ONLY non-secret fields
+// {network, scheme, x402Version}. Cached 1h via the Cloudflare cache so repeat hits never
+// hammer the authed upstream, and degrades OPEN to the known-good Base entry so it never
+// 5xxs. This is also our own verification of whether a non-Base network (e.g. Solana) is
+// settleable before we ever advertise it in a challenge (Claims Law: never advertise a
+// settlement path we cannot honor).
+export function settlementFamily(net: string): "evm" | "svm" | "other" {
+  if (net.startsWith("eip155:")) return "evm";
+  if (net.startsWith("solana:")) return "svm";
+  return "other";
+}
+app.get("/x402/networks", async (c) => {
+  const cache = caches.default;
+  const cacheKey = new Request(new URL("/x402/networks", c.req.url).toString(), { method: "GET" });
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+
+  const env = c.env;
+  const baseKind = { network: "eip155:8453", scheme: "exact", x402Version: 2 };
+  let kinds: Array<{ network: string; scheme: string; x402Version: number }> = [baseKind];
+  let source = "static-fallback";
+  try {
+    if (env.FACILITATOR_MODE === "cdp" && env.CDP_API_KEY_ID && env.CDP_API_KEY_SECRET) {
+      const jwt = await generateJwt({
+        apiKeyId: env.CDP_API_KEY_ID,
+        apiKeySecret: env.CDP_API_KEY_SECRET,
+        requestMethod: "GET",
+        requestHost: CDP_HOST,
+        requestPath: "/platform/v2/x402/supported",
+      });
+      const res = await fetch(`${CDP_FACILITATOR_URL}/supported`, {
+        headers: { Authorization: `Bearer ${jwt}`, accept: "application/json" },
+      });
+      if (res.ok) {
+        const j = (await res.json()) as { kinds?: Array<Record<string, unknown>> };
+        if (Array.isArray(j.kinds) && j.kinds.length) {
+          kinds = j.kinds
+            .map((k) => ({
+              network: String(k.network ?? ""),
+              scheme: String(k.scheme ?? ""),
+              x402Version: Number(k.x402Version ?? 2),
+            }))
+            .filter((k) => k.network && k.scheme);
+          source = "cdp-facilitator-live";
+        }
+      }
+    }
+  } catch {
+    // degrade open — keep the static Base entry
+  }
+
+  // A network is settleable BY US only if the facilitator supports it AND we hold a receive
+  // address for that family. We advertise nothing we cannot honor.
+  const haveReceive: Record<string, boolean> = {
+    evm: !!env.PAY_TO,
+    svm: !!env.SOLANA_PAY_TO,
+    other: false,
+  };
+  const settleable = kinds.filter((k) => haveReceive[settlementFamily(k.network)]);
+  const settlementNetworks = [...new Set(settleable.map((k) => k.network))];
+  const byFamily = (fam: string) => [...new Set(kinds.filter((k) => settlementFamily(k.network) === fam).map((k) => k.network))];
+
+  const body = {
+    service: "Grey Ridge Signals — x402 data API",
+    facilitator: env.FACILITATOR_MODE === "cdp" ? "cdp" : "xpay",
+    source,
+    // What WE can settle right now (facilitator support ∩ receive-address coverage).
+    settlement_networks: settlementNetworks,
+    can_settle: {
+      base: settleable.some((k) => k.network === "eip155:8453"),
+      solana: settleable.some((k) => settlementFamily(k.network) === "svm"),
+    },
+    // What the FACILITATOR supports (superset; may exceed our receive-address coverage).
+    facilitator_supports: { evm: byFamily("evm"), svm: byFamily("svm"), other: byFamily("other") },
+    receive_addresses: { base: !!env.PAY_TO, solana: !!env.SOLANA_PAY_TO },
+    note: "settlement_networks = facilitator-supported networks intersected with networks we hold a receive address for. We never advertise a settlement path we cannot honor. Base USDC is always available.",
+    as_of: new Date().toISOString(),
+  };
+  const resp = c.json(body);
+  resp.headers.set("Cache-Control", "public, max-age=3600");
+  try {
+    c.executionCtx.waitUntil(cache.put(cacheKey, resp.clone()));
+  } catch {
+    /* executionCtx may be absent in some test harnesses — cache best-effort */
+  }
+  return resp;
 });
 
 // Raw CDP verify+settle proxy (temporary seed tool): bypasses the @x402 resource
@@ -6174,7 +6270,7 @@ app.use(async (c, next) => {
   }
 
   // Toll-free routes — never check API key or x402
-  const FREE_PATHS = new Set(["/", "/health", "/status", "/terms", "/token-safety", "/stripe/webhook", "/metrics", "/ev"]);
+  const FREE_PATHS = new Set(["/", "/health", "/status", "/terms", "/token-safety", "/stripe/webhook", "/metrics", "/ev", "/x402/networks"]);
   if (FREE_PATHS.has(c.req.path)) return next();
   if (c.req.path.startsWith("/.well-known/")) return next();
 
