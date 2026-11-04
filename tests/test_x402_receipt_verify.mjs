@@ -25,6 +25,9 @@ const {
   decodeAuthorizationUsed,
   computeAuthorizationProof,
   x402ReceiptVerify,
+  jcsCanonicalize,
+  settlementResultOf,
+  buildSettlementAttestation,
   makeRoutes,
   ROUTE_CATALOG,
 } = await import("../src/index.ts");
@@ -431,6 +434,71 @@ await check("x402ReceiptVerify direct transfer (no auth event) -> SETTLED + not-
   assert.strictEqual(r.verdict, "SETTLED", `verdict ${r.verdict}`);
   assert.strictEqual(r.authorization.status, "not-eip3009", `auth ${r.authorization.status}`);
   assert.strictEqual(ethCalls, 0, "no authorizationState eth_call when there is no AuthorizationUsed event");
+});
+
+// ---- settlement attestation (draft-hopley JCS/RFC8785) --------------------
+
+import crypto from "node:crypto";
+const sha256hex = (s) => crypto.createHash("sha256").update(s, "utf8").digest("hex");
+
+// 27. JCS canonicalization: keys sorted by code unit, no whitespace, integers plain.
+await check("jcsCanonicalize sorts keys by code unit and emits compact form", () => {
+  const out = jcsCanonicalize({ b: 1, a: "x", c: [3, 2], nested: { z: true, y: null } });
+  assert.strictEqual(out, '{"a":"x","b":1,"c":[3,2],"nested":{"y":null,"z":true}}', out);
+});
+
+// 28. JCS is deterministic regardless of insertion order.
+await check("jcsCanonicalize is insertion-order independent", () => {
+  const a = jcsCanonicalize({ settlement_result: "SETTLED", canon_version: "jcs-rfc8785-v1", amount: 4000 });
+  const b = jcsCanonicalize({ amount: 4000, canon_version: "jcs-rfc8785-v1", settlement_result: "SETTLED" });
+  assert.strictEqual(a, b, "same object, any key order -> identical canonical string");
+});
+
+// 29. JCS refuses non-integer numbers (a float would break the hash silently).
+await check("jcsCanonicalize throws on a non-integer number", () => {
+  assert.throws(() => jcsCanonicalize({ x: 1.5 }), /integer/i);
+});
+
+// 30. settlementResultOf maps verdicts to the draft enum (or null for non-settlements).
+await check("settlementResultOf maps verdicts correctly", () => {
+  assert.strictEqual(settlementResultOf({ verdict: "SETTLED", settled: true, confirmation: "dual-confirmed" }), "SETTLED");
+  assert.strictEqual(settlementResultOf({ verdict: "SETTLED", settled: true, confirmation: "single-source" }), "PENDING_FINALITY");
+  assert.strictEqual(settlementResultOf({ verdict: "REVERTED", settled: false, confirmation: "single-source" }), "REVERSED");
+  for (const v of ["UNDERPAID", "WRONG_RECIPIENT", "NO_TRANSFER", "NOT_FOUND", "UNVERIFIED"]) {
+    assert.strictEqual(settlementResultOf({ verdict: v, settled: false, confirmation: "dual-confirmed" }), null, `${v} is not attestable`);
+  }
+});
+
+// 31. buildSettlementAttestation produces a conformant, self-verifying envelope.
+await check("buildSettlementAttestation emits a verifiable draft-hopley envelope", async () => {
+  const r = {
+    tx: "0x" + "ab".repeat(32),
+    verdict: "SETTLED", settled: true, confirmation: "dual-confirmed",
+    advertised: { payTo: PAYTO, amount_atomic: 4000, amount_usdc: "0.004", source: "live-402" },
+    matched_transfer: { token: USDC, from: PAYER, to: PAYTO, amount_atomic: 4000, amount_usdc: "0.004" },
+    authorization: { status: "consumed", authorizer: PAYER, nonce: "0x" + "cd".repeat(32), events: 1, confirmation: "dual-confirmed", note: "" },
+  };
+  const att = await buildSettlementAttestation(r, 1730000000000);
+  assert.ok(att, "attestation built for SETTLED");
+  assert.strictEqual(att.settlement_result, "SETTLED");
+  assert.strictEqual(att.canon_version, "jcs-rfc8785-v1");
+  assert.strictEqual(att.settlement_chain, "ethereum:8453");
+  assert.strictEqual(att.settlement_amount.amount_minor, "4000");
+  assert.strictEqual(att.settlement_amount.asset_id, "USDC.6");
+  assert.ok(/^sha256:[0-9a-f]{64}$/.test(att.settled_payment_ref), "settled_payment_ref is sha256:<hex64>");
+  assert.ok(/^sha256:[0-9a-f]{64}$/.test(att.content_hash), "content_hash is sha256:<hex64>");
+  assert.deepStrictEqual(att.jurisdiction_flags, []);
+  // Independently re-derive content_hash exactly as a consumer (ERC-8004/Vouch) would:
+  // drop content_hash, JCS-canonicalize, SHA-256.
+  const { content_hash, ...envelope } = att;
+  const recomputed = "sha256:" + sha256hex(jcsCanonicalize(envelope));
+  assert.strictEqual(recomputed, content_hash, "content_hash reproduces from JCS(envelope) — standards-conformant");
+});
+
+// 32. Non-settlement verdicts produce NO attestation (never a false attestation).
+await check("buildSettlementAttestation returns null for a non-settlement", async () => {
+  const att = await buildSettlementAttestation({ verdict: "UNVERIFIED", settled: false, confirmation: "rpc-disagreement", tx: "0x" + "00".repeat(32), advertised: { payTo: null, amount_atomic: null }, matched_transfer: null, authorization: { nonce: null } }, 1730000000000);
+  assert.strictEqual(att, null);
 });
 
 console.log(`\n${pass} passed`);

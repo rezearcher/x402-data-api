@@ -1445,6 +1445,7 @@ ${provisionMeta}
     <li><a href="/.well-known/x402">/.well-known/x402</a></li>
     <li><a href="/.well-known/agent-card.json">A2A Agent Card</a></li>
     <li><a href="/.well-known/erc-8004.json">ERC-8004 agent registration (x402-payable)</a></li>
+    <li><a href="/.well-known/x402-settlement-attestation.json">x402 settlement attestation format (draft-hopley, JCS/RFC8785)</a></li>
     <li><a href="/mcp">/mcp</a></li>
     <li><a href="/miniapp">Base Token Gate &mdash; free GO/HOLD/BLOCK honeypot check (Farcaster Mini App)</a></li>
     <li><a href="https://t.me/GreyRidgeGateBot">Telegram bot &mdash; paste a Base token, get GO/HOLD/BLOCK in-chat (@GreyRidgeGateBot)</a></li>
@@ -2307,6 +2308,46 @@ app.get("/.well-known/api-catalog", (c) => {
     }),
   );
 });
+
+// x402 settlement attestation descriptor (free, public). Publishes the contract
+// a reputation registry / trust aggregator (ERC-8004, Vouch, TrustGate) uses to
+// CONSUME our settlement attestations: the draft-hopley-x402-settlement-
+// attestation-01 envelope (JCS/RFC8785, content_hash = SHA256(JCS)), where the
+// cryptographic settlement proof the draft punts to "a mechanism specified
+// elsewhere" is our dual-RPC 4-check on-chain reconcile. This is the surface that
+// makes our output their input instead of a private sixth reputation score.
+app.get("/.well-known/x402-settlement-attestation.json", (c) =>
+  c.json({
+    format: "draft-hopley-x402-settlement-attestation-01",
+    canon_version: "jcs-rfc8785-v1",
+    canonicalization: "RFC 8785 (JSON Canonicalization Scheme); content_hash = 'sha256:' + hex(SHA256(JCS(envelope without content_hash)))",
+    issuer_did: CERT_ISSUER,
+    network: "ethereum:8453",
+    asset: "USDC.6",
+    description:
+      "Grey Ridge emits x402 settlement attestations in the standard draft-hopley envelope, carrying a settlement proof produced by an independent dual-RPC, 4-check on-chain reconcile (Transfer-log match + EIP-3009 authorization-consumed cross-confirm, fail-closed on RPC disagreement or an unconsumed nonce). The draft defines the envelope and explicitly defers the crypto settlement proof to 'a mechanism specified elsewhere'; this is that mechanism.",
+    required_fields: [
+      "settlement_result (SETTLED | PENDING_FINALITY | REVERSED)",
+      "settled_payment_ref (sha256:<hex64> of the reconciled on-chain payment record)",
+      "settlement_amount { amount_minor, asset_id }",
+      "settlement_chain (ethereum:8453)",
+      "settlement_provider_did",
+      "settlement_timestamp_ms",
+      "jurisdiction_flags []",
+      "canon_version (jcs-rfc8785-v1)",
+      "content_hash (sha256:<hex64>)",
+    ],
+    obtain: {
+      endpoint: CANONICAL_ORIGIN + "/x402/receipt-verify?tx=<base-settlement-tx>&url=<x402-endpoint>",
+      field: "attestation",
+      note: "Any SETTLED or REVERTED verdict returns a conformant `attestation` object. A single-source (one reachable RPC) SETTLED downgrades to PENDING_FINALITY. Non-settlements (UNDERPAID/WRONG_RECIPIENT/NO_TRANSFER/NOT_FOUND/UNVERIFIED) return attestation:null — no false attestation is ever minted.",
+      certificate: CANONICAL_ORIGIN + "/x402/cert?url=<x402-endpoint>&tx=<base-settlement-tx>",
+      certificate_field: "settlement_attestation",
+    },
+    verify: "Re-canonicalize the envelope (drop content_hash) per RFC 8785 and recompute SHA-256 — it must equal content_hash. settled_payment_ref is derived from JCS({chain,tx,payTo,amount_minor,from,nonce,result}).",
+    reference: "https://datatracker.ietf.org/doc/draft-hopley-x402-settlement-attestation/",
+  }),
+);
 
 // MCP Server Card — lets an MCP-aware agent discover the server endpoint,
 // transport, and that it is x402-paid, without first opening a session.
@@ -3253,9 +3294,9 @@ app.get("/openapi.json", (c) => {
       "/gate/swap/preview": { get: { summary: "FREE live sample of /gate/swap (no payment).", description: "Free go/hold/block sample for a demo token (?token=degen) OR any real Base 0x address, 3 free real-token checks per IP per day. Paid /gate/swap accepts ANY Base ERC-20 ($0.008). Honors side and notional_usd.", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-report/preview": { get: { summary: "FREE live sample of /chain/token-report (no payment).", description: "Free full trade-safety report for a demo token. Try ?token=aero. Paid /chain/token-report accepts ANY Base ERC-20 ($0.01).", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-security": paid("Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, contract source-verification (Sourcify), live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.", "0.009", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
-      "/x402/preflight": paid("x402 pre-payment check: fetch an unknown URL once (never pays) and return PAY|CAUTION|AVOID — validates the 402+accepts[] (will it settle), liveness LIVE|ZOMBIE|DEAD, absolute price-trap (>=$1000 honeypot), LLM01/LLM08 scan + OFAC/scam payTo screen, live-vs-advertised price (MATCH|OVERCHARGE|UNDERCHARGE), delivery readiness, and Attack-III cache-leakage posture (is the paid route non-cacheable or does a shared cache leak the paid body: NO_STORE|CACHEABLE|OBSERVED_CACHED). Not a settlement guarantee.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to pre-check before paying", required: true, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "advertised", desc: "optional USDC-dollars price your catalog quoted (e.g. 0.001) to verify against the live charge", required: false, example: "0.001" }, { name: "max", desc: "optional per-call budget ceiling in USDC dollars; flags the live charge if it exceeds this", required: false, example: "0.05" }]),
+      "/x402/preflight": paid("x402 pre-payment check: fetch an unknown URL once (never pays) -> PAY|CAUTION|AVOID. Validates 402+accepts[] (will it settle), liveness LIVE|ZOMBIE|DEAD, >=$1000 price-trap, LLM01/LLM08 + OFAC/scam payTo screen, live-vs-advertised price, delivery readiness, Attack-III cache-leakage posture. Not a settlement guarantee.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to pre-check before paying", required: true, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "advertised", desc: "optional USDC-dollars price your catalog quoted (e.g. 0.001) to verify against the live charge", required: false, example: "0.001" }, { name: "max", desc: "optional per-call budget ceiling in USDC dollars; flags the live charge if it exceeds this", required: false, example: "0.05" }]),
       "/x402/receipt-verify": paid("x402 POST-payment settlement proof: bring your Base settlement tx + the resource URL you paid for on-chain proof it settled — reads the receipt, reconciles its USDC Transfers vs the endpoint's advertised payTo + amount, cross-confirmed on 2 independent RPCs (fails closed on disagreement). SETTLED|UNDERPAID|WRONG_RECIPIENT|NO_TRANSFER|REVERTED|NOT_FOUND|UNVERIFIED. Read-only.", "0.004", [{ name: "tx", desc: "0x-prefixed 32-byte Base-mainnet settlement transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }, { name: "url", desc: "the x402 resource URL you paid (its live 402 supplies the advertised payTo+amount)", required: false, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "payto", desc: "optional 0x payTo to reconcile against (bind without fetching the endpoint)", required: false, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "expect", desc: "optional advertised amount in USDC dollars to verify the settled amount against", required: false, example: "0.004" }]),
-      "/x402/repeat-demand": paid("Do this x402 endpoint's payers come BACK? The only on-chain signal a paid resource was WORTH paying for (liveness/price/OFAC say SAFE; this says DELIVERED). Pass url=<x402 endpoint> (its live 402 supplies the payTo) or payto=<0x>: scans incoming USDC settlements to that payTo on Base, grouped by payer -> distinct_payers + repeat_payers + repeat_rate + gross + first/last seen. REPEAT_DEMAND|SINGLE_USE|NO_SETTLEMENTS|UNRESOLVED. Read-only, lower bound.", "0.004", [{ name: "url", desc: "the x402 endpoint URL to measure (its live 402 supplies the payTo)", required: false, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "payto", desc: "optional 0x payTo to scan directly (bind without fetching the endpoint)", required: false, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "pages", desc: "optional scan depth 1-10 (default 4, ~50 settlements/page)", required: false, example: "4" }]),
+      "/x402/repeat-demand": paid("Do this x402 endpoint's payers come BACK? WORTH-paying signal (liveness/price/OFAC say SAFE; this says DELIVERED). Pass url=<x402 endpoint> or payto=<0x>: scans incoming USDC settlements to that payTo on Base by payer -> distinct + repeat payers + repeat_rate + gross + first/last. REPEAT_DEMAND|SINGLE_USE|NO_SETTLEMENTS|UNRESOLVED. Read-only.", "0.004", [{ name: "url", desc: "the x402 endpoint URL to measure (its live 402 supplies the payTo)", required: false, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "payto", desc: "optional 0x payTo to scan directly (bind without fetching the endpoint)", required: false, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "pages", desc: "optional scan depth 1-10 (default 4, ~50 settlements/page)", required: false, example: "4" }]),
       "/dns": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "query", required: true, example: "stripe.com" }]),
       "/whois": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.01", [{ name: "domain", desc: "domain name to look up", in: "query", required: true, example: "cloudflare.com" }]),
     })),
@@ -4694,7 +4735,7 @@ export function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Should an agent pay this x402 endpoint? One read-only call (never pays): validates the 402 + accepts[] (will it settle), labels liveness LIVE|ZOMBIE|DEAD, flags an absolute price-trap (>=$1000 honeypot => AVOID), scans resource + MCP tools for LLM01/LLM08 injection, screens payTo vs OFAC/scam, verifies price (live vs advertised: MATCH|OVERCHARGE|UNDERCHARGE), and flags Attack-III cache-leakage posture (is the paid route non-cacheable or does a shared cache leak the paid body). Returns PAY|CAUTION|AVOID + fix hints. Not a settlement guarantee.",
+        "Should an agent pay this x402 endpoint? One read-only call (never pays): validates the 402 + accepts[] (will it settle), labels liveness LIVE|ZOMBIE|DEAD, flags a >=$1000 price-trap honeypot (=> AVOID), scans resource + MCP tools for LLM01/LLM08 injection, screens payTo vs OFAC/scam, checks price (live vs advertised: MATCH|OVERCHARGE|UNDERCHARGE) and Attack-III cache-leakage posture. Returns PAY|CAUTION|AVOID + fix hints. Not a settlement guarantee.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -4834,7 +4875,7 @@ export function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Do this x402 endpoint's payers come BACK? Liveness, price-accuracy and OFAC tell you an endpoint is SAFE to pay — none tell you it was WORTH paying. This reads the only on-chain repeat-value signal: pass ?url=<x402 endpoint> (its live 402 supplies the payTo) or &payto=<0x>, and it scans every incoming USDC settlement to that payTo on Base, grouped by payer, returning distinct vs repeat payers + repeat_rate + gross + first/last seen. Verdict REPEAT_DEMAND | SINGLE_USE | NO_SETTLEMENTS | UNRESOLVED. For a dedicated x402 payTo the inflow == its paying agents (a shared/treasury wallet overcounts, disclosed). Lower bound. Read-only.",
+        "Do this x402 endpoint's payers come BACK? Liveness, price and OFAC say an endpoint is SAFE to pay — not that it was WORTH paying. Pass ?url=<x402 endpoint> (its 402 supplies the payTo) or &payto=<0x>: scans incoming USDC settlements to that payTo on Base, by payer -> distinct vs repeat payers + repeat_rate + gross + first/last. REPEAT_DEMAND|SINGLE_USE|NO_SETTLEMENTS|UNRESOLVED. Dedicated payTo => inflow == paying agents (shared wallet overcounts, disclosed). Read-only.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -10690,6 +10731,10 @@ type CertSettlement = {
   // EIP-3009 authorization proof status for the settlement tx (4-check #2):
   // "consumed" = the nonce is confirmed spent in live USDC contract state.
   authorization?: AuthorizationProof["status"];
+  // Standards-conformant settlement attestation (draft-hopley JCS/RFC8785 envelope)
+  // carrying this cert's dual-RPC 4-check proof — the format ERC-8004/Vouch/
+  // TrustGate consume. Present only when the settlement was proven at mint.
+  attestation?: SettlementAttestation | null;
 };
 
 type X402Cert = {
@@ -10731,6 +10776,11 @@ export function certCanonical(x: { cert_id: string; host: string; url: string; i
       proven: s.proven, tx: s.tx, block: s.block,
       confirmation: s.confirmation, amount_usdc: s.amount_usdc,
       payTo: s.payTo, rpc_sources: s.rpc_sources,
+      // Bind the standards-conformant attestation's content_hash into the signed
+      // payload when present, so the published attestation is tamper-evident under
+      // the same HMAC. Omitted when absent → depth/settlement certs minted before
+      // this field stay byte-identical.
+      ...(s.attestation?.content_hash ? { attestation_content_hash: s.attestation.content_hash } : {}),
     };
   }
   return JSON.stringify(base);
@@ -10838,6 +10888,10 @@ app.get("/x402/cert", async (c) => {
           payTo: rv.advertised.payTo,
           rpc_sources: rv.rpc_sources,
           authorization: rv.authorization.status,
+          // Carry the standards-conformant settlement attestation (draft-hopley
+          // JCS/RFC8785) so the cert publishes the exact envelope ERC-8004/Vouch/
+          // TrustGate can consume — our proof as their input.
+          attestation: rv.attestation ?? null,
         };
       }
     } catch { /* degrade-open: settlement stays undefined, depth cert still issues */ }
@@ -10875,6 +10929,7 @@ app.get("/x402/cert", async (c) => {
     certificate: cert,
     settlement_proven: !!settlement,
     ...(settlement ? { onchain_proof: { tx: settlement.tx, block: settlement.block, amount_usdc: settlement.amount_usdc, payTo: settlement.payTo, confirmation: settlement.confirmation, rpc_sources: settlement.rpc_sources, basescan_url } } : {}),
+    ...(settlement?.attestation ? { settlement_attestation: settlement.attestation, settlement_attestation_note: "draft-hopley-x402-settlement-attestation-01 conformant envelope (JCS/RFC8785, content_hash = SHA256(JCS)) carrying our dual-RPC 4-check settlement proof — the standardized format an ERC-8004 reputation registry / Vouch / TrustGate can consume directly. Re-derive content_hash over canon_version jcs-rfc8785-v1 to independently verify." } : {}),
     ...(settlement_check ? { settlement_check } : {}),
     ...(txParam && !settlement ? { settlement_note: "a &tx= was supplied but it did NOT reconcile as a SETTLED USDC payment to this endpoint's advertised payTo (see settlement_check) — the depth certificate was still issued, but without the on-chain settlement proof. Supply a real settlement tx for your endpoint to earn the 'settlement-proven' badge." } : {}),
     badge_embed_markdown,
@@ -11036,6 +11091,10 @@ export interface ReceiptVerifyResult {
   // a &tx pointing at an unrelated/replayed USDC Transfer to the same payTo that
   // the amount-match alone would wave through.
   authorization: AuthorizationProof;
+  // Standards-conformant settlement attestation (draft-hopley JCS/RFC8785 envelope)
+  // — present ONLY when the verdict is an attestable settlement (SETTLED/REVERTED);
+  // null otherwise. This is the field ERC-8004/Vouch/TrustGate can consume.
+  attestation?: SettlementAttestation | null;
   basescan: string;
   note: string;
   scope_note: string;
@@ -11044,6 +11103,118 @@ export interface ReceiptVerifyResult {
 
 const RECEIPT_VERIFY_SCOPE_NOTE =
   "reconciles a Base-mainnet settlement tx against an x402 endpoint's advertised payTo + amount (on-chain USDC Transfer proof) AND cross-confirms the EIP-3009 transfer authorization as consumed in live USDC contract state, across two independent RPC providers and failing closed if they disagree or if a matched Transfer's authorization is not actually consumed on-chain; read-only, confirms what already settled — it does not move funds, re-run a payment, or guarantee the resource was delivered off-chain.";
+
+// ── Settlement attestation envelope (draft-hopley-x402-settlement-attestation-01) ──
+// The IETF draft defines the standard ENVELOPE a settlement attestation travels
+// in (JCS/RFC8785-canonical, 8 required fields, content_hash = SHA256(JCS)), but
+// explicitly PUNTS the actual cryptographic settlement proof to "a mechanism
+// specified elsewhere". Our dual-RPC 4-check reconcile IS that mechanism. Emitting
+// our UNIQUE proof inside the standard envelope makes our output the
+// standards-conformant attestation that ERC-8004 reputation registries, Vouch,
+// TrustGate et al. can CONSUME — our output becomes their input, instead of being
+// a sixth private reputation score nobody reads. Reference: the draft's §4 field
+// set and §5 canonicalization (JCS, RFC 8785).
+export interface SettlementAttestation {
+  settlement_result: "SETTLED" | "PENDING_FINALITY" | "REVERSED";
+  settled_payment_ref: string;        // sha256:<hex64> of the reconciled on-chain payment record
+  settlement_amount: { amount_minor: string; asset_id: string };
+  settlement_chain: string;           // CAIP-2-style, "ethereum:8453" (Base mainnet)
+  settlement_provider_did: string;    // the attesting provider (us)
+  settlement_timestamp_ms: number;    // settlement block time (ms) when readable, else attest time
+  jurisdiction_flags: string[];       // we assert none — honest empty
+  canon_version: "jcs-rfc8785-v1";
+  content_hash: string;               // sha256:<hex64> over JCS(envelope sans content_hash)
+}
+
+// RFC 8785 JSON Canonicalization Scheme, restricted to the JSON value types we
+// ever put in an attestation (string, safe-integer, boolean, null, array,
+// object). Object keys are sorted by UTF-16 code unit; strings reuse
+// JSON.stringify (its escaping already matches RFC 8785 for the BMP); integers
+// serialize as plain decimals. Throws on a non-integer number so a float can
+// never silently produce a non-canonical (and thus unverifiable) hash. Exported
+// for unit tests (determinism + key-ordering).
+export function jcsCanonicalize(value: unknown): string {
+  if (value === null) return "null";
+  const t = typeof value;
+  if (t === "string") return JSON.stringify(value);
+  if (t === "boolean") return value ? "true" : "false";
+  if (t === "number") {
+    if (!Number.isInteger(value as number) || !Number.isSafeInteger(value as number)) {
+      throw new Error("jcsCanonicalize: only safe-integer numbers are supported in attestation envelopes");
+    }
+    return String(value);
+  }
+  if (Array.isArray(value)) return "[" + value.map((v) => jcsCanonicalize(v)).join(",") + "]";
+  if (t === "object") {
+    const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj).filter((k) => obj[k] !== undefined).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    return "{" + keys.map((k) => JSON.stringify(k) + ":" + jcsCanonicalize(obj[k])).join(",") + "}";
+  }
+  throw new Error(`jcsCanonicalize: unsupported type ${t}`);
+}
+
+// Map a reconciled receipt verdict to the draft's settlement_result enum, or null
+// when the verdict is not an attestable settlement outcome. We attest ONLY the two
+// clean terminal states — a confirmed settlement and an on-chain revert — never a
+// partial/ambiguous one (UNDERPAID / WRONG_RECIPIENT / NO_TRANSFER / NOT_FOUND /
+// UNVERIFIED): those are non-settlements and get no conformant attestation (the
+// honest refusal). A SETTLED seen on only ONE reachable RPC provider downgrades to
+// PENDING_FINALITY — observed, but below our dual-confirmed assurance bar.
+export function settlementResultOf(r: ReceiptVerifyResult): SettlementAttestation["settlement_result"] | null {
+  if (r.verdict === "REVERTED") return "REVERSED";
+  if (r.verdict === "SETTLED" && r.settled) {
+    return r.confirmation === "dual-confirmed" ? "SETTLED" : "PENDING_FINALITY";
+  }
+  return null;
+}
+
+// Build the standards-conformant settlement attestation from a reconciled receipt
+// result. Async (two SHA-256 digests). Returns null when the verdict is not an
+// attestable settlement (settlementResultOf → null). settled_payment_ref binds the
+// reference to the actual on-chain facts (chain|tx|payTo|amount|from|nonce), and
+// content_hash seals the whole 8-field envelope over its JCS canonical form.
+export async function buildSettlementAttestation(
+  r: ReceiptVerifyResult,
+  settlementTimestampMs: number,
+): Promise<SettlementAttestation | null> {
+  const result = settlementResultOf(r);
+  if (!result) return null;
+  const amountMinor = String(r.matched_transfer?.amount_atomic ?? r.advertised.amount_atomic ?? 0);
+  const payTo = (r.matched_transfer?.to ?? r.advertised.payTo ?? "").toLowerCase();
+  const from = (r.matched_transfer?.from ?? "").toLowerCase();
+  const nonce = r.authorization?.nonce ?? "";
+  // Canonical reconciled-payment record → opaque sha256 reference. Deterministic
+  // over the on-chain facts, so the same settlement always yields the same ref.
+  const recordCanonical = jcsCanonicalize({
+    chain: "ethereum:8453", tx: r.tx.toLowerCase(), payTo, amount_minor: amountMinor, from, nonce, result,
+  });
+  const settled_payment_ref = "sha256:" + (await sha256Hex(recordCanonical));
+  const envelope: Omit<SettlementAttestation, "content_hash"> = {
+    settlement_result: result,
+    settled_payment_ref,
+    settlement_amount: { amount_minor: amountMinor, asset_id: "USDC.6" },
+    settlement_chain: "ethereum:8453",
+    settlement_provider_did: CERT_ISSUER,
+    settlement_timestamp_ms: settlementTimestampMs,
+    jurisdiction_flags: [],
+    canon_version: "jcs-rfc8785-v1",
+  };
+  const content_hash = "sha256:" + (await sha256Hex(jcsCanonicalize(envelope)));
+  return { ...envelope, content_hash };
+}
+
+// Read a Base block's timestamp (ms). Degrade-open: any error → null, caller then
+// falls back to attestation time. Single rotation RPC (only called on an
+// attestable settled/reverted receipt, so not in the common hot path).
+async function readBlockTimestampMs(blockNumberHex: string | null): Promise<number | null> {
+  if (!blockNumberHex) return null;
+  try {
+    const blk = (await baseRpc("eth_getBlockByNumber", [blockNumberHex, false])) as { timestamp?: string } | null;
+    if (!blk || typeof blk.timestamp !== "string") return null;
+    const secs = parseInt(blk.timestamp, 16);
+    return Number.isFinite(secs) ? secs * 1000 : null;
+  } catch { return null; }
+}
 
 // Pure verdict core (no I/O) — exported for unit tests. Given the tx status, the
 // USDC transfers decoded from the receipt, and the advertised payTo + amount,
@@ -11417,8 +11588,17 @@ export async function x402ReceiptVerify(
   const note = authorization.status === "consumed"
     ? `${core.note}; EIP-3009 authorization consumed on-chain (nonce cross-confirmed), binding this settlement to a spent transfer authorization`
     : core.note;
-  return { ...base, verdict: core.verdict, settled: core.settled, tx_status: txStatus, advertised,
+  const result0: ReceiptVerifyResult = { ...base, verdict: core.verdict, settled: core.settled, tx_status: txStatus, advertised,
     matched_transfer: core.matched, usdc_transfers: transfers, block, confirmation, rpc_sources, authorization, note };
+  // Standards-conformant settlement attestation (draft-hopley JCS/RFC8785). Built
+  // only for an attestable terminal verdict; reads the settlement block time
+  // (degrade-open → attest time) so a consumer gets the standard envelope inline.
+  let attestation: SettlementAttestation | null = null;
+  if (settlementResultOf(result0)) {
+    const tsMs = (await readBlockTimestampMs(r.blockNumber ?? null)) ?? Date.parse(checked_at);
+    try { attestation = await buildSettlementAttestation(result0, tsMs); } catch { attestation = null; }
+  }
+  return { ...result0, attestation };
 }
 
 app.get("/x402/receipt-verify", async (c) => {
@@ -11469,8 +11649,19 @@ function receiptVerifySample(): ReceiptVerifyResult {
       confirmation: "dual-confirmed",
       note: "EIP-3009 authorization CONSUMED: USDC authorizationState(0x1111…1111, nonce) is true on Base mainnet, cross-confirming the receipt's AuthorizationUsed log against live contract state",
     },
+    attestation: {
+      settlement_result: "SETTLED",
+      settled_payment_ref: "sha256:<computed over the reconciled on-chain payment record on a real ?tx=>",
+      settlement_amount: { amount_minor: "4000", asset_id: "USDC.6" },
+      settlement_chain: "ethereum:8453",
+      settlement_provider_did: CERT_ISSUER,
+      settlement_timestamp_ms: 1730000000000,
+      jurisdiction_flags: [],
+      canon_version: "jcs-rfc8785-v1",
+      content_hash: "sha256:<computed over the JCS-canonical envelope on a real ?tx=>",
+    },
     basescan: "https://basescan.org/tx/0x<your-settlement-tx-hash>",
-    note: "confirmed on-chain: 0.004 USDC settled to the advertised payTo 0x2222…2222 (>= the advertised 0.004 USDC) in this tx; EIP-3009 authorization consumed on-chain (nonce cross-confirmed)",
+    note: "confirmed on-chain: 0.004 USDC settled to the advertised payTo 0x2222…2222 (>= the advertised 0.004 USDC) in this tx; EIP-3009 authorization consumed on-chain (nonce cross-confirmed). attestation = the standards-conformant draft-hopley JCS/RFC8785 settlement attestation envelope ERC-8004/Vouch/TrustGate can consume — the 'mechanism specified elsewhere' the draft punts to, carrying our unique dual-RPC 4-check proof.",
     scope_note: RECEIPT_VERIFY_SCOPE_NOTE,
     checked_at: new Date().toISOString(),
   };
