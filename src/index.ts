@@ -871,6 +871,32 @@ app.use("*", async (c, next) => {
 });
 
 // ---------------------------------------------------------------------------
+// M5 (arXiv 2605.11781 "Five Attacks on x402", Attack III — HTTP/proxy
+// cache-leakage): a PAID x402 response carries the facilitator's
+// `PAYMENT-RESPONSE` settlement header. That header's PRESENCE is the
+// ground-truth signal that a body was paid for (no hardcoded route list, no
+// drift) — on it, force `Cache-Control: no-store` so no shared/proxy/browser
+// cache can store and replay the paid body to a later unpaid client, and add
+// `X-PAYMENT` to `Vary` so any intermediary keys on the payment header. This
+// OVERRIDES the x402 library's weaker `private` (set only on its failure/
+// skip-handler paths; the normal success path sets no Cache-Control at all).
+// Free /preview, /metrics and catalog routes never carry PAYMENT-RESPONSE, so
+// they are left cacheable and untouched — the mitigation is scoped to exactly
+// the paid data bodies Attack III targets. ~0 COGS, closes the one M5 gap so
+// the rail answers all of M1–M6 on the Five-Attacks axis.
+// ---------------------------------------------------------------------------
+export function applyPaidNoStore(h: Headers): void {
+  if (!h.has("PAYMENT-RESPONSE")) return; // free/unpaid response — leave as-is
+  h.set("Cache-Control", "no-store");
+  const vary = h.get("Vary");
+  if (!vary) {
+    h.set("Vary", "X-PAYMENT");
+  } else if (!/\bx-payment\b/i.test(vary)) {
+    h.set("Vary", `${vary}, X-PAYMENT`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Baseline security headers on every response (additive — no CSP, so inline
 // scripts on /check, /miniapp etc. are unaffected). Closes the self-assessment
 // finding: product surfaces served zero standard security headers. HSTS +
@@ -893,9 +919,11 @@ app.use("*", async (c, next) => {
   try {
     const h = c.res.headers;
     for (const [k, v] of SEC) if (!h.has(k)) h.set(k, v);
+    applyPaidNoStore(h);
   } catch {
     const nh = new Headers(c.res.headers);
     for (const [k, v] of SEC) if (!nh.has(k)) nh.set(k, v);
+    applyPaidNoStore(nh);
     c.res = new Response(c.res.body, { status: c.res.status, statusText: c.res.statusText, headers: nh });
   }
 });
@@ -2773,6 +2801,7 @@ Raw honeypot-flag APIs make your agent interpret the flags; this returns ONE dec
 
 Measured uptime/latency of these (not an SLA): GET ${BASE}/status (live machine-readable JSON) or https://github.com/rezearcher/x402-data-api/blob/main/docs/STATUS.md
 Proof pack for integrators (a real settled Base-mainnet x402 tx + decoded receipt, measured reliability, and accuracy stated honestly incl. what we have NOT yet benchmarked): https://github.com/rezearcher/x402-data-api/blob/main/docs/EVIDENCE.md
+Our own payment hardening (the posture we hold to, and screen others for): every PAID response is returned non-cacheable — \`Cache-Control: no-store\` + \`Vary: X-PAYMENT\` keyed on the settlement header — so no shared/proxy/browser cache can replay a paid body to an unpaid client. That closes Attack III (HTTP/proxy cache-leakage) of the "Five Attacks on x402" taxonomy (arXiv 2605.11781); combined with on-chain receipt verification (/x402/receipt-verify), payment-identifier idempotency, pre-payment safety (/x402/preflight), and payTo OFAC screening, the rail answers all of M1–M6. Verify it yourself: a paid route's 200 carries \`cache-control: no-store\`, while a free /preview stays cacheable.
 
 ## Endpoints
 - Human/agent try-it page: ${BASE}/check?token=<0x… Base ERC-20> — free verdict card (3/day/IP).
