@@ -11636,6 +11636,19 @@ export interface ResourceBinding {
   note: string;
 }
 
+// Extract the resource URL string from an x402 challenge's `resource` value,
+// which may be a plain URL string OR a metadata object { url, description, ... }
+// (the shape Coinbase's x402 middleware emits at the top level). Returns a
+// trimmed non-empty string, else null. Exported for tests.
+export function extractResourceUrl(resRaw: unknown): string | null {
+  if (typeof resRaw === "string") return resRaw.trim() || null;
+  if (resRaw && typeof resRaw === "object") {
+    const u = (resRaw as Record<string, unknown>).url;
+    if (typeof u === "string" && u.trim()) return u.trim();
+  }
+  return null;
+}
+
 // Normalize + compare a challenge's declared resource against the paid url.
 // challengeResource may be absolute or a path relative to the endpoint; we
 // compare host (case-insensitive) + pathname (trailing-slash-insensitive),
@@ -11719,11 +11732,14 @@ async function fetchLive402PayTo(targetUrl: string): Promise<{ payTo: string | n
     const atomic = parseAtomicAmount(a0.maxAmountRequired ?? a0.amount);
     const scheme = typeof a0.scheme === "string" ? a0.scheme.toLowerCase() : null;
     // The challenge's declared `resource` identifier — the one field that says
-    // WHICH resource this payment is for. Accepts[0].resource, else the top-level
-    // `resource`. This is what the cross-resource-substitution verdict reconciles
-    // the paid url against (arXiv:2605.30998).
+    // WHICH resource this payment is for. x402 carries it either as a plain
+    // string (accepts[0].resource or top-level resource) OR as a metadata OBJECT
+    // { url, description, ... } at the top level (the shape Coinbase's x402
+    // middleware emits). Extract the URL from whichever form is present. This is
+    // what the cross-resource-substitution verdict reconciles the paid url
+    // against (arXiv:2605.30998).
     const resRaw = a0.resource ?? (parsed as Record<string, unknown>).resource ?? null;
-    const resource = typeof resRaw === "string" && resRaw.trim() ? resRaw.trim() : null;
+    const resource = extractResourceUrl(resRaw);
     return { payTo, atomic, scheme, resource, fetched: true };
   } catch { return { payTo: null, atomic: null, fetched: false }; }
 }

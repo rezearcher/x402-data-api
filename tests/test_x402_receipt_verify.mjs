@@ -30,6 +30,7 @@ const {
   buildSettlementAttestation,
   computeResourceBinding,
   resourceMatchesUrl,
+  extractResourceUrl,
   makeRoutes,
   ROUTE_CATALOG,
 } = await import("../src/index.ts");
@@ -522,6 +523,16 @@ await check("resourceMatchesUrl: different path or host => false", () => {
 await check("resourceMatchesUrl: unparseable side => null", () => {
   assert.strictEqual(resourceMatchesUrl(null, "https://seller.example/x402/data"), null);
   assert.strictEqual(resourceMatchesUrl("not a url", null), null);
+});
+
+// extractResourceUrl handles both the string and {url,...} object forms.
+await check("extractResourceUrl: string, object{url}, and junk", () => {
+  assert.strictEqual(extractResourceUrl("https://seller.example/x402/data"), "https://seller.example/x402/data");
+  assert.strictEqual(extractResourceUrl({ url: "https://seller.example/x402/data", description: "x" }), "https://seller.example/x402/data");
+  assert.strictEqual(extractResourceUrl("  "), null);
+  assert.strictEqual(extractResourceUrl({ description: "no url" }), null);
+  assert.strictEqual(extractResourceUrl(null), null);
+  assert.strictEqual(extractResourceUrl(42), null);
 });
 
 // computeResourceBinding verdicts.
