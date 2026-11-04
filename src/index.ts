@@ -3473,7 +3473,7 @@ app.get("/openapi.json", (c) => {
       "/gate/swap/preview": { get: { summary: "FREE live sample of /gate/swap (no payment).", description: "Free go/hold/block sample for a demo token (?token=degen) OR any real Base 0x address, 3 free real-token checks per IP per day. Paid /gate/swap accepts ANY Base ERC-20 ($0.008). Honors side and notional_usd.", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-report/preview": { get: { summary: "FREE live sample of /chain/token-report (no payment).", description: "Free full trade-safety report for a demo token. Try ?token=aero. Paid /chain/token-report accepts ANY Base ERC-20 ($0.01).", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-security": paid("Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, contract source-verification (Sourcify), live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.", "0.009", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
-      "/x402/preflight": paid("x402 pre-payment check: fetch an unknown URL once (never pays) -> PAY|CAUTION|AVOID. Validates 402+accepts[] (will it settle), liveness LIVE|ZOMBIE|DEAD, >=$1000 price-trap, LLM01/LLM08 + OFAC/scam payTo screen, live-vs-advertised price, delivery readiness, Attack-III cache-leakage posture. Not a settlement guarantee.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to pre-check before paying", required: true, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "advertised", desc: "optional USDC-dollars price your catalog quoted (e.g. 0.001) to verify against the live charge", required: false, example: "0.001" }, { name: "max", desc: "optional per-call budget ceiling in USDC dollars; flags the live charge if it exceeds this", required: false, example: "0.05" }]),
+      "/x402/preflight": paid("x402 pre-payment check: fetch an unknown URL once (never pays) -> PAY|CAUTION|AVOID. Validates 402+accepts[] (will it settle), liveness LIVE|ZOMBIE|DEAD, >=$1000 price-trap, LLM01/LLM08 + OFAC/scam payTo screen, live-vs-advertised price, delivery readiness, Attack-III cache-leakage, facilitator verify/settle-divergence axis. Not a settlement guarantee.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to pre-check before paying", required: true, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "advertised", desc: "optional USDC-dollars price your catalog quoted (e.g. 0.001) to verify against the live charge", required: false, example: "0.001" }, { name: "max", desc: "optional per-call budget ceiling in USDC dollars; flags the live charge if it exceeds this", required: false, example: "0.05" }]),
       "/x402/receipt-verify": paid("x402 POST-payment settlement proof: bring your Base settlement tx + the resource URL you paid for on-chain proof it settled — reads the receipt, reconciles its USDC Transfers vs the endpoint's advertised payTo + amount, cross-confirmed on 2 independent RPCs (fails closed on disagreement). SETTLED|UNDERPAID|WRONG_RECIPIENT|NO_TRANSFER|REVERTED|NOT_FOUND|UNVERIFIED. Read-only.", "0.004", [{ name: "tx", desc: "0x-prefixed 32-byte Base-mainnet settlement transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }, { name: "url", desc: "the x402 resource URL you paid (its live 402 supplies the advertised payTo+amount)", required: false, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "payto", desc: "optional 0x payTo to reconcile against (bind without fetching the endpoint)", required: false, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "expect", desc: "optional advertised amount in USDC dollars to verify the settled amount against", required: false, example: "0.004" }]),
       "/x402/repeat-demand": paid("Do this x402 endpoint's payers come BACK? WORTH-paying signal (liveness/price/OFAC say SAFE; this says DELIVERED). Pass url=<x402 endpoint> or payto=<0x>: scans incoming USDC settlements to that payTo on Base by payer -> distinct + repeat payers + repeat_rate + gross + first/last. REPEAT_DEMAND|SINGLE_USE|NO_SETTLEMENTS|UNRESOLVED. Read-only.", "0.004", [{ name: "url", desc: "the x402 endpoint URL to measure (its live 402 supplies the payTo)", required: false, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "payto", desc: "optional 0x payTo to scan directly (bind without fetching the endpoint)", required: false, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "pages", desc: "optional scan depth 1-10 (default 4, ~50 settlements/page)", required: false, example: "4" }]),
       "/x402/clients": paid("WHO pays this x402 endpoint — payer roster + concentration. repeat-demand says IF payers return; this says who they ARE and whether volume is broad or one whale. Pass url=<x402 endpoint> or payto=<0x>: groups USDC settlements by payer -> roster (gross, share, first/last, is_repeat) + concentration (top_payer_share, HHI). DISTRIBUTED|CONCENTRATED|SINGLE_PAYER. Read-only.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to measure (its live 402 supplies the payTo)", required: false, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "payto", desc: "optional 0x payTo to scan directly (bind without fetching the endpoint)", required: false, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "limit", desc: "optional roster size 1-100 (default 20)", required: false, example: "20" }, { name: "pages", desc: "optional scan depth 1-10 (default 4, ~50 settlements/page)", required: false, example: "4" }]),
@@ -10170,14 +10170,18 @@ interface PreflightResult {
   liveness?: PreflightLiveness;
   price_trap?: PriceTrap;
   cache_posture?: PreflightCachePosture;
+  // Facilitator verify/settle consistency axis (arXiv:2607.19545 class-1). Always
+  // UNVERIFIED pre-payment (no tx to read); cross-links the post-payment check at
+  // /x402/receipt-verify and surfaces the pre-pay advertised-vs-wire cousin.
+  facilitator_consistency?: FacilitatorConsistency;
   scope_note: string;
   checked_at: string;
 }
 const PREFLIGHT_SCOPE_NOTE =
-  "static 402 wire-format + LIVE/ZOMBIE/DEAD liveness label + absolute price-trap flag + LLM01/LLM08 description scan + payTo OFAC/scam flag + advertised-vs-charged price-accuracy + delivery-readiness (broken-paywall / output-spec) check + Attack-III cache-leakage posture (no-store vs cacheable paid route); read-only, never pays; not a settlement guarantee.";
+  "static 402 wire-format + LIVE/ZOMBIE/DEAD liveness label + absolute price-trap flag + LLM01/LLM08 description scan + payTo OFAC/scam flag + advertised-vs-charged price-accuracy + delivery-readiness (broken-paywall / output-spec) check + Attack-III cache-leakage posture (no-store vs cacheable paid route) + the facilitator verify/settle-consistency axis (always pre-payment/UNVERIFIED here — the post-payment check is /x402/receipt-verify); read-only, never pays; not a settlement guarantee.";
 
-function preflightResult(url: string, started: number, verdict: PreflightResult["verdict"], will_settle: boolean, checks: PreflightCheck[], findings: ScanFinding[], reliability?: PreflightReliability, priceAccuracy?: PriceAccuracyVerdict, delivery?: PreflightDelivery, liveness?: PreflightLiveness, priceTrap?: PriceTrap, cachePosture?: PreflightCachePosture): PreflightResult {
-  return { url, verdict, will_settle, checks, findings, latency_ms: Date.now() - started, ...(reliability ? { reliability } : {}), ...(priceAccuracy ? { price_accuracy: priceAccuracy } : {}), ...(delivery ? { delivery } : {}), ...(liveness ? { liveness } : {}), ...(priceTrap ? { price_trap: priceTrap } : {}), ...(cachePosture ? { cache_posture: cachePosture } : {}), scope_note: PREFLIGHT_SCOPE_NOTE, checked_at: new Date().toISOString() };
+function preflightResult(url: string, started: number, verdict: PreflightResult["verdict"], will_settle: boolean, checks: PreflightCheck[], findings: ScanFinding[], reliability?: PreflightReliability, priceAccuracy?: PriceAccuracyVerdict, delivery?: PreflightDelivery, liveness?: PreflightLiveness, priceTrap?: PriceTrap, cachePosture?: PreflightCachePosture, facilitatorConsistency?: FacilitatorConsistency): PreflightResult {
+  return { url, verdict, will_settle, checks, findings, latency_ms: Date.now() - started, ...(reliability ? { reliability } : {}), ...(priceAccuracy ? { price_accuracy: priceAccuracy } : {}), ...(delivery ? { delivery } : {}), ...(liveness ? { liveness } : {}), ...(priceTrap ? { price_trap: priceTrap } : {}), ...(cachePosture ? { cache_posture: cachePosture } : {}), ...(facilitatorConsistency ? { facilitator_consistency: facilitatorConsistency } : {}), scope_note: PREFLIGHT_SCOPE_NOTE, checked_at: new Date().toISOString() };
 }
 
 // Pure Attack-III cache-leakage posture verdict. Exported for unit tests. Reads
@@ -10816,6 +10820,15 @@ export async function x402Preflight(url: string, samples = 1, advertisedUsdc: st
   // only arise on a NON-402 response (the resource came back on an unpaid
   // request), so will_settle is already false and the verdict is AVOID — the
   // delivery.note explains WHY (mis-gated paywall), no extra branch.
+  // (11) FACILITATOR VERIFY/SETTLE CONSISTENCY (arXiv:2607.19545 class-1) — the
+  // pre-payment face of the axis /x402/receipt-verify proves post-payment. We
+  // cannot observe settlement before a tx exists, so this is always UNVERIFIED
+  // here, but it NAMES the axis, cross-links the post-pay check, and reports the
+  // one pre-pay cousin we can see (advertised-vs-live-wire price). Never changes
+  // the verdict (price_accuracy already scored the wire mismatch).
+  const facilitatorConsistency = preflightFacilitatorConsistency(priceAccuracy);
+  checks.push({ name: "facilitator_consistency", ok: true, detail: `facilitator verify/settle consistency: ${facilitatorConsistency.verdict} (pre-payment) — ${facilitatorConsistency.note}`, fix: null });
+
   const hasCritHigh = findings.some((f) => f.severity === "critical" || f.severity === "high");
   const flapping = reliability !== undefined && !reliability.stable;
   const priceTrapExtreme = priceTrap.tier === "extreme";
@@ -10824,7 +10837,7 @@ export async function x402Preflight(url: string, samples = 1, advertisedUsdc: st
   if (!will_settle || hasCritHigh || payToBad || priceTrapExtreme) verdict = "AVOID";
   else if (anySoftIssue) verdict = "CAUTION";
   else verdict = "PAY";
-  return preflightResult(url, started, verdict, will_settle, checks, findings, reliability, priceAccuracy, delivery, liveness, priceTrap, cachePosture);
+  return preflightResult(url, started, verdict, will_settle, checks, findings, reliability, priceAccuracy, delivery, liveness, priceTrap, cachePosture, facilitatorConsistency);
 }
 
 app.get("/x402/preflight", async (c) => {
@@ -10867,9 +10880,20 @@ function preflightSample(): PreflightResult {
       { name: "price_accuracy", ok: true, detail: "charged 0.004 USDC == advertised (source: self-manifest)", fix: null },
       { name: "delivery", ok: true, detail: "the challenge declares the output shape (schema/example) so you know what the payment buys", fix: null },
       { name: "cache_leakage", ok: true, detail: "cache posture: NO_STORE — the endpoint marks this route non-cacheable to shared caches (no-store/private)", fix: null },
+      { name: "facilitator_consistency", ok: true, detail: "facilitator verify/settle consistency: UNVERIFIED (pre-payment) — pre-payment, the live wire amount matches the advertised amount (price_accuracy=MATCH); verify/settle divergence is only observable AFTER payment via /x402/receipt-verify", fix: null },
     ],
     findings: [],
     latency_ms: 0,
+    facilitator_consistency: {
+      verdict: "UNVERIFIED",
+      phase: "pre-payment",
+      advertised_atomic: 4000,
+      settled_atomic: null,
+      delta_atomic: null,
+      direction: null,
+      attack_class: FACILITATOR_ATTACK_CLASS,
+      note: "pre-payment, the live wire amount matches the advertised amount (price_accuracy=MATCH); verify/settle divergence is only observable AFTER payment — bring your Base settlement tx to /x402/receipt-verify?tx=…&url=… for the post-payment facilitator_consistency check (it reconciles the real on-chain settled amount against the advertised amount).",
+    },
     delivery: {
       verdict: "SPECIFIED",
       output_specified: true,
@@ -11470,6 +11494,14 @@ export interface ReceiptVerifyResult {
   // DECLARED | SUBSTITUTABLE | RESOURCE_MISMATCH | UNVERIFIED. No named x402
   // verifier covers this axis.
   resource_binding: ResourceBinding;
+  // Facilitator verify/settle consistency (arXiv:2607.19545 attack-class-1,
+  // "free-shopping"): does the amount actually settled on-chain match the amount
+  // the endpoint advertised (and that a facilitator's off-chain /verify would
+  // have approved)? CONSISTENT | SETTLE_DIVERGENCE | UNVERIFIED. The named axis
+  // every receipt-auditor rival stops short of — they prove a hash EXISTS and
+  // then TRUST the facilitator's /verify; we read the real settled amount and
+  // flag a facilitator whose verify-approved amount diverges from the chain.
+  facilitator_consistency: FacilitatorConsistency;
   // Standards-conformant settlement attestation (draft-hopley JCS/RFC8785 envelope)
   // — present ONLY when the verdict is an attestable settlement (SETTLED/REVERTED);
   // null otherwise. This is the field ERC-8004/Vouch/TrustGate can consume.
@@ -11481,7 +11513,7 @@ export interface ReceiptVerifyResult {
 }
 
 const RECEIPT_VERIFY_SCOPE_NOTE =
-  "reconciles a Base-mainnet settlement tx against an x402 endpoint's advertised payTo + amount (on-chain USDC Transfer proof) AND cross-confirms the EIP-3009 transfer authorization as consumed in live USDC contract state, across two independent RPC providers and failing closed if they disagree or if a matched Transfer's authorization is not actually consumed on-chain; read-only, confirms what already settled — it does not move funds, re-run a payment, or guarantee the resource was delivered off-chain.";
+  "reconciles a Base-mainnet settlement tx against an x402 endpoint's advertised payTo + amount (on-chain USDC Transfer proof), cross-confirms the EIP-3009 transfer authorization as consumed in live USDC contract state, AND reports a facilitator_consistency verdict — whether the amount actually settled on-chain matches the advertised amount a facilitator's off-chain /verify would have approved (arXiv:2607.19545 class-1 verify/settle divergence / free-shopping); all across two independent RPC providers and failing closed if they disagree or if a matched Transfer's authorization is not actually consumed on-chain; read-only, confirms what already settled — it does not move funds, re-run a payment, or guarantee the resource was delivered off-chain.";
 
 // ── Settlement attestation envelope (draft-hopley-x402-settlement-attestation-01) ──
 // The IETF draft defines the standard ENVELOPE a settlement attestation travels
@@ -11599,6 +11631,120 @@ async function readBlockTimestampMs(blockNumberHex: string | null): Promise<numb
 // USDC transfers decoded from the receipt, and the advertised payTo + amount,
 // decide whether the payment settled as advertised. Amounts are summed across
 // logs because a single payment can split into multiple Transfer events.
+// ── FACILITATOR VERIFY/SETTLE CONSISTENCY (arXiv:2607.19545 attack-class-1) ──
+// The July-2026 facilitator-compromise paper's first attack class is "free
+// shopping": a facilitator's OFF-CHAIN /verify endpoint approves a payment for
+// amount N (and the resource is delivered), while the ON-CHAIN settlement moves
+// a different amount M. The canonical trigger is a parser differential
+// (Vector-9): the verifier reads "1e3" as parseInt => 1 while the settlement
+// path uses BigInt => 1000, so verify approves on one figure and the chain moves
+// another. Every named receipt-auditor (x402trustlayer receipt-auditor) and
+// point-in-time guard (Guard/presidio/PayGuard/furlpay) stops at "a settlement
+// hash exists" and then TRUSTS the facilitator's /verify verdict — none of them
+// re-reads the on-chain settled amount against the advertised amount. We already
+// do (it is how we derive UNDERPAID), so we surface it as a NAMED verdict a
+// buyer who read the paper can filter on. Pure + deterministic.
+//   CONSISTENT        — the on-chain settled amount matches the advertised
+//                       (verify-approved) amount within tolerance: verify and
+//                       the chain agree, no divergence.
+//   SETTLE_DIVERGENCE — the on-chain settled amount materially differs from the
+//                       advertised amount (under_settle = free-shopping; the
+//                       chain moved less than verify would have approved;
+//                       over_settle = the chain moved more). A facilitator that
+//                       /verify-approved this is divergent.
+//   UNVERIFIED        — no settled amount to compare (no payTo transfer, revert,
+//                       not-found), no advertised amount, a non-exact (ceiling)
+//                       scheme where a lower settle is legitimate, or RPC
+//                       disagreement (fail closed).
+export interface FacilitatorConsistency {
+  verdict: "CONSISTENT" | "SETTLE_DIVERGENCE" | "UNVERIFIED";
+  phase: "pre-payment" | "post-payment";
+  advertised_atomic: number | null;
+  settled_atomic: number | null;
+  delta_atomic: number | null;        // settled - advertised
+  direction: "match" | "under_settle" | "over_settle" | null;
+  attack_class: string;               // the paper + vector this maps to
+  note: string;
+}
+
+const FACILITATOR_ATTACK_CLASS =
+  "arXiv:2607.19545 class-1 verify/settle divergence (free-shopping; Vector-9 parser differential)";
+
+// Post-payment: compare the real on-chain settled amount (from the reconciled
+// matched transfer) against the advertised/verify-approved amount. Exported for
+// unit tests. Deterministic — no network.
+export function computeFacilitatorConsistency(
+  verdict: ReceiptVerifyResult["verdict"],
+  matched: ReceiptTransfer | null,
+  advertisedAtomic: number | null,
+  amountIsCap: boolean,
+  confirmation: ReceiptVerifyResult["confirmation"],
+  decimals = PRICE_ASSET_DECIMALS,
+): FacilitatorConsistency {
+  const base = {
+    phase: "post-payment" as const,
+    advertised_atomic: advertisedAtomic,
+    settled_atomic: matched ? matched.amount_atomic : null,
+    delta_atomic: null as number | null,
+    direction: null as FacilitatorConsistency["direction"],
+    attack_class: FACILITATOR_ATTACK_CLASS,
+  };
+  if (confirmation === "rpc-disagreement") {
+    return { ...base, verdict: "UNVERIFIED",
+      note: "two independent RPC providers disagreed on the receipt, so the settled amount is not trustworthy — failing closed; verify/settle consistency not asserted" };
+  }
+  if (verdict === "NOT_FOUND" || verdict === "REVERTED" || verdict === "NO_TRANSFER" || verdict === "WRONG_RECIPIENT" || matched === null) {
+    return { ...base, verdict: "UNVERIFIED",
+      note: `no USDC settled to the advertised payTo in this tx (receipt verdict ${verdict}) — there is no on-chain settled amount to compare against the advertised amount` };
+  }
+  if (advertisedAtomic === null) {
+    return { ...base, verdict: "UNVERIFIED",
+      note: "no advertised amount to compare the on-chain settled amount against — pass &expect=<usdc> (or &url= so the live 402 supplies it) to check the facilitator's verify-vs-settle consistency" };
+  }
+  if (amountIsCap) {
+    return { ...base, verdict: "UNVERIFIED",
+      note: "the endpoint's scheme is not 'exact' (its advertised amount is a ceiling, not a fixed price), so a lower on-chain settlement is legitimate and verify/settle divergence cannot be asserted" };
+  }
+  const settled = matched.amount_atomic;
+  const delta = settled - advertisedAtomic;
+  const tol = Math.max(1, Math.round(advertisedAtomic * 0.01));
+  if (Math.abs(delta) <= tol) {
+    return { ...base, delta_atomic: delta, direction: "match", verdict: "CONSISTENT",
+      note: `the on-chain settled amount (${atomicToUsdcStr(settled, decimals)} USDC) matches the advertised/verify-approved amount (${atomicToUsdcStr(advertisedAtomic, decimals)} USDC) within tolerance — the facilitator's /verify and the chain agree; no verify/settle divergence` };
+  }
+  if (delta < 0) {
+    return { ...base, delta_atomic: delta, direction: "under_settle", verdict: "SETTLE_DIVERGENCE",
+      note: `only ${atomicToUsdcStr(settled, decimals)} USDC settled on-chain while the endpoint advertises ${atomicToUsdcStr(advertisedAtomic, decimals)} — if a facilitator's off-chain /verify approved this payment as valid, its verification and the on-chain settlement DIVERGE (free-shopping: the chain moved less than verify would have approved). ${FACILITATOR_ATTACK_CLASS}.` };
+  }
+  return { ...base, delta_atomic: delta, direction: "over_settle", verdict: "SETTLE_DIVERGENCE",
+    note: `${atomicToUsdcStr(settled, decimals)} USDC settled on-chain but the endpoint advertises only ${atomicToUsdcStr(advertisedAtomic, decimals)} — the verify-approved and on-chain-settled amounts DIVERGE (parser differential in the over-settle direction; harmless to the seller but the facilitator's quoted and settled figures disagree). ${FACILITATOR_ATTACK_CLASS}.` };
+}
+
+// Pre-payment (preflight): there is no tx to read, so settlement divergence is
+// NOT observable yet — verdict is always UNVERIFIED, and we cross-link the
+// post-payment check. We DO surface the one pre-pay cousin we can see: the
+// advertised-vs-live-wire price (price_accuracy). Exported for unit tests.
+export function preflightFacilitatorConsistency(priceAccuracy: PriceAccuracyVerdict | undefined): FacilitatorConsistency {
+  const base = {
+    verdict: "UNVERIFIED" as const,
+    phase: "pre-payment" as const,
+    advertised_atomic: priceAccuracy?.advertised_atomic ?? null,
+    settled_atomic: null,
+    delta_atomic: null,
+    direction: null as FacilitatorConsistency["direction"],
+    attack_class: FACILITATOR_ATTACK_CLASS,
+  };
+  const tail = "verify/settle divergence is only observable AFTER payment — bring your Base settlement tx to /x402/receipt-verify?tx=…&url=… for the post-payment facilitator_consistency check (it reconciles the real on-chain settled amount against the advertised amount).";
+  const pa = priceAccuracy?.verdict;
+  if (pa === "OVERCHARGE" || pa === "UNDERCHARGE") {
+    return { ...base, note: `pre-payment, the live wire amount already differs from the advertised amount (price_accuracy=${pa}) — a weaker, advertised-vs-wire cousin of verify/settle divergence; confirm the REAL price. ${tail}` };
+  }
+  if (pa === "MATCH") {
+    return { ...base, note: `pre-payment, the live wire amount matches the advertised amount (price_accuracy=MATCH); ${tail}` };
+  }
+  return { ...base, note: tail };
+}
+
 export function computeReceiptVerdict(
   txStatus: "success" | "reverted" | "unknown" | null,
   usdcTransfers: ReceiptTransfer[],
@@ -12015,6 +12161,7 @@ export async function x402ReceiptVerify(
       // vouch for it. This is the integrity guarantee competitors advertise.
       return { ...base, verdict: "UNVERIFIED", settled: false, tx_status: "unknown", advertised,
         matched_transfer: null, usdc_transfers: [], block: null, confirmation: "rpc-disagreement", rpc_sources, authorization: authNA, resource_binding: rbEarly,
+        facilitator_consistency: computeFacilitatorConsistency("UNVERIFIED", null, advAtomic, amountIsCap, "rpc-disagreement"),
         note: `two independent Base RPC providers returned DIFFERENT settlement content for this tx (${host(urlA)} vs ${host(urlB)}) — failing closed; do not treat this as settled until the providers agree. Retry shortly.` };
     }
   } else if (ra.ok || rb.ok) {
@@ -12032,12 +12179,14 @@ export async function x402ReceiptVerify(
   if (rpcError) {
     return { ...base, verdict: "UNVERIFIED", settled: false, tx_status: "unknown", advertised,
       matched_transfer: null, usdc_transfers: [], block: null, confirmation, rpc_sources, authorization: authNA, resource_binding: rbEarly,
+      facilitator_consistency: computeFacilitatorConsistency("UNVERIFIED", null, advAtomic, amountIsCap, confirmation),
       note: `could not read the transaction receipt from Base mainnet (${rpcError}) — the tx was NOT proven absent; retry shortly` };
   }
   if (receipt === null || receipt === undefined) {
     const core = computeReceiptVerdict(null, [], advPayTo, advAtomic);
     return { ...base, verdict: core.verdict, settled: core.settled, tx_status: "unknown", advertised,
-      matched_transfer: null, usdc_transfers: [], block: null, confirmation, rpc_sources, authorization: authNA, resource_binding: rbEarly, note: core.note };
+      matched_transfer: null, usdc_transfers: [], block: null, confirmation, rpc_sources, authorization: authNA, resource_binding: rbEarly,
+      facilitator_consistency: computeFacilitatorConsistency(core.verdict, null, advAtomic, amountIsCap, confirmation), note: core.note };
   }
 
   const r = receipt as { status?: string; logs?: unknown[]; blockNumber?: string };
@@ -12097,14 +12246,16 @@ export async function x402ReceiptVerify(
   if (authorization.status === "state-mismatch" && authorization.confirmation === "dual-confirmed") {
     return { ...base, verdict: "UNVERIFIED", settled: false, tx_status: txStatus, advertised,
       matched_transfer: core.matched, usdc_transfers: transfers, block, confirmation, rpc_sources, authorization, resource_binding,
+      facilitator_consistency: computeFacilitatorConsistency("UNVERIFIED", core.matched, advAtomic, amountIsCap, confirmation),
       note: `${core.note} — BUT ${authorization.note}. Failing closed: the Transfer amount matched, yet the EIP-3009 authorization is not consumed on-chain, so this tx does not prove a genuine settlement of this payment.` };
   }
 
   const note = authorization.status === "consumed"
     ? `${core.note}; EIP-3009 authorization consumed on-chain (nonce cross-confirmed), binding this settlement to a spent transfer authorization`
     : core.note;
+  const facilitator_consistency = computeFacilitatorConsistency(core.verdict, core.matched, advAtomic, amountIsCap, confirmation);
   const result0: ReceiptVerifyResult = { ...base, verdict: core.verdict, settled: core.settled, tx_status: txStatus, advertised,
-    matched_transfer: core.matched, usdc_transfers: transfers, block, confirmation, rpc_sources, authorization, resource_binding, note };
+    matched_transfer: core.matched, usdc_transfers: transfers, block, confirmation, rpc_sources, authorization, resource_binding, facilitator_consistency, note };
   // Standards-conformant settlement attestation (draft-hopley JCS/RFC8785). Built
   // only for an attestable terminal verdict; reads the settlement block time
   // (degrade-open → attest time) so a consumer gets the standard envelope inline.
@@ -12173,6 +12324,16 @@ function receiptVerifySample(): ReceiptVerifyResult {
       matches: true,
       nonce_consumed: true,
       note: "the live 402 declares resource=https://seller.example/x402/data, matching the url you paid — the seller asserts this payment is for this resource. Caveat: x402's exact scheme signs (from, to, value, validAfter, validBefore, nonce) but NOT the resource, so this is a challenge-level declaration, not a cryptographic binding (cross-resource substitution, arXiv:2605.30998). Its EIP-3009 nonce is consumed on-chain, so the on-chain spend itself is singular; the residual exposure is pre-settlement in-flight substitution of the signed payload.",
+    },
+    facilitator_consistency: {
+      verdict: "CONSISTENT",
+      phase: "post-payment",
+      advertised_atomic: 4000,
+      settled_atomic: 4000,
+      delta_atomic: 0,
+      direction: "match",
+      attack_class: FACILITATOR_ATTACK_CLASS,
+      note: "the on-chain settled amount (0.004 USDC) matches the advertised/verify-approved amount (0.004 USDC) within tolerance — the facilitator's /verify and the chain agree; no verify/settle divergence",
     },
     attestation: {
       settlement_result: "SETTLED",

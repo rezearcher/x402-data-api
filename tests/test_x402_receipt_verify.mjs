@@ -31,6 +31,8 @@ const {
   computeResourceBinding,
   resourceMatchesUrl,
   extractResourceUrl,
+  computeFacilitatorConsistency,
+  preflightFacilitatorConsistency,
   makeRoutes,
   ROUTE_CATALOG,
 } = await import("../src/index.ts");
@@ -567,6 +569,80 @@ await check("computeResourceBinding: DECLARED notes unconsumed-nonce transplant 
   const rb = computeResourceBinding("https://seller.example/x402/data", true, "https://seller.example/x402/data", "exact", false);
   assert.strictEqual(rb.verdict, "DECLARED");
   assert.ok(/transplantable|not confirmed consumed/i.test(rb.note));
+});
+
+// ---- facilitator verify/settle consistency (arXiv:2607.19545 class-1) -------
+
+const matchedT = (atomic) => ({ token: USDC, from: PAYER, to: PAYTO, amount_atomic: atomic, amount_usdc: (atomic / 1e6).toFixed(6) });
+
+await check("facilitator_consistency: settled == advertised -> CONSISTENT, delta 0, dual-confirmed", () => {
+  const fc = computeFacilitatorConsistency("SETTLED", matchedT(4000), 4000, false, "dual-confirmed");
+  assert.strictEqual(fc.verdict, "CONSISTENT");
+  assert.strictEqual(fc.phase, "post-payment");
+  assert.strictEqual(fc.delta_atomic, 0);
+  assert.strictEqual(fc.direction, "match");
+  assert.strictEqual(fc.settled_atomic, 4000);
+  assert.ok(/verify.*chain agree|no verify\/settle divergence/i.test(fc.note));
+});
+await check("facilitator_consistency: chain moved LESS than advertised (free-shopping) -> SETTLE_DIVERGENCE under_settle", () => {
+  // Vector-9 parser differential: /verify approved 1000 ('1e3'->BigInt), chain moved 1 (parseInt).
+  const fc = computeFacilitatorConsistency("UNDERPAID", matchedT(1), 1000, false, "dual-confirmed");
+  assert.strictEqual(fc.verdict, "SETTLE_DIVERGENCE");
+  assert.strictEqual(fc.direction, "under_settle");
+  assert.strictEqual(fc.delta_atomic, -999);
+  assert.ok(/free-shopping|DIVERGE/i.test(fc.note));
+  assert.ok(/arXiv:2607\.19545/.test(fc.attack_class));
+});
+await check("facilitator_consistency: chain moved MORE than advertised -> SETTLE_DIVERGENCE over_settle", () => {
+  const fc = computeFacilitatorConsistency("SETTLED", matchedT(9000), 4000, false, "dual-confirmed");
+  assert.strictEqual(fc.verdict, "SETTLE_DIVERGENCE");
+  assert.strictEqual(fc.direction, "over_settle");
+  assert.strictEqual(fc.delta_atomic, 5000);
+});
+await check("facilitator_consistency: within 1% tolerance -> CONSISTENT (no false divergence on rounding)", () => {
+  const fc = computeFacilitatorConsistency("SETTLED", matchedT(10005), 10000, false, "dual-confirmed");
+  assert.strictEqual(fc.verdict, "CONSISTENT");
+  assert.strictEqual(fc.direction, "match");
+});
+await check("facilitator_consistency: non-exact (cap) scheme -> UNVERIFIED (lower settle is legitimate)", () => {
+  const fc = computeFacilitatorConsistency("SETTLED", matchedT(1), 1000, true, "dual-confirmed");
+  assert.strictEqual(fc.verdict, "UNVERIFIED");
+  assert.ok(/not 'exact'|ceiling/i.test(fc.note));
+});
+await check("facilitator_consistency: no advertised amount -> UNVERIFIED (nothing to compare)", () => {
+  const fc = computeFacilitatorConsistency("SETTLED", matchedT(4000), null, false, "dual-confirmed");
+  assert.strictEqual(fc.verdict, "UNVERIFIED");
+  assert.ok(/no advertised amount/i.test(fc.note));
+});
+await check("facilitator_consistency: rpc-disagreement -> UNVERIFIED fail-closed (never asserts consistency on untrusted data)", () => {
+  const fc = computeFacilitatorConsistency("UNVERIFIED", null, 4000, false, "rpc-disagreement");
+  assert.strictEqual(fc.verdict, "UNVERIFIED");
+  assert.ok(/disagreed|failing closed/i.test(fc.note));
+});
+await check("facilitator_consistency: WRONG_RECIPIENT/NO_TRANSFER/REVERTED/NOT_FOUND -> UNVERIFIED (no settled amount to payTo)", () => {
+  for (const v of ["WRONG_RECIPIENT", "NO_TRANSFER", "REVERTED", "NOT_FOUND"]) {
+    const fc = computeFacilitatorConsistency(v, null, 4000, false, "dual-confirmed");
+    assert.strictEqual(fc.verdict, "UNVERIFIED", `${v} -> UNVERIFIED`);
+  }
+});
+await check("preflightFacilitatorConsistency: always UNVERIFIED pre-pay, phase pre-payment, cross-links receipt-verify", () => {
+  const fc = preflightFacilitatorConsistency({ verdict: "MATCH", advertised_atomic: 1000 });
+  assert.strictEqual(fc.verdict, "UNVERIFIED");
+  assert.strictEqual(fc.phase, "pre-payment");
+  assert.strictEqual(fc.settled_atomic, null);
+  assert.ok(/receipt-verify/i.test(fc.note));
+  assert.ok(/price_accuracy=MATCH/.test(fc.note));
+});
+await check("preflightFacilitatorConsistency: OVERCHARGE surfaces the pre-pay advertised-vs-wire cousin", () => {
+  const fc = preflightFacilitatorConsistency({ verdict: "OVERCHARGE", advertised_atomic: 1000 });
+  assert.strictEqual(fc.verdict, "UNVERIFIED");
+  assert.ok(/price_accuracy=OVERCHARGE/.test(fc.note));
+});
+await check("preflightFacilitatorConsistency: no price_accuracy -> bare post-pay pointer (degrade-open)", () => {
+  const fc = preflightFacilitatorConsistency(undefined);
+  assert.strictEqual(fc.verdict, "UNVERIFIED");
+  assert.strictEqual(fc.advertised_atomic, null);
+  assert.ok(/only observable AFTER payment/i.test(fc.note));
 });
 
 console.log(`\n${pass} passed`);
