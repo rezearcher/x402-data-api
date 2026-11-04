@@ -2286,6 +2286,45 @@ const agentJsonHandler = (c: Context<AppEnv>) => {
 app.get("/.well-known/agent.json", agentJsonHandler);
 app.get("/agent.json", agentJsonHandler);
 
+// ---------------------------------------------------------------------------
+// ai.txt — the x402 Relay (x402-relay.com) Manifest Scanner crawl hook. Per the
+// provider docs (x402relay-docs.pages.dev/providers/register), the scanner reads
+// `/.well-known/ai.txt` with four fields — x402-endpoint / x402-network /
+// x402-asset / x402-price — then probes x402-endpoint for a valid HTTP 402 and
+// extracts payTo/network/price/asset to compute a 0-100 Trust Score (protocol 30%
+// / uptime 25% / on-chain activity 25% / community 20%). The directory had ZERO
+// verified rows (>=70) and ZERO rows with any on-chain txCount when measured
+// 2026-11-04 — serving this file is the keyless, zero-capital trigger that enters
+// us as the only cat-defi/security row with real settled Base USDC (our payTo has
+// genuine on-chain history, unlike every current top-scorer at txCount:0). The
+// endpoint we advertise is a route that returns a true 402 bound to PAY_TO (root
+// is a 200 landing page, so we point at the top converting data route), keeping
+// the price field honest at the route's real $0.001. Self-host consistent: the
+// endpoint is built from the serving origin so each host advertises itself.
+export function buildAiTxt(origin: string, _payTo: string): string {
+  // Point at a route that returns a genuine 402 on a bare GET (the scanner probes
+  // this URL directly for the payment-required response); /crypto/prices is our
+  // #1 external-payer route, 402s with no query params, and carries payTo in its
+  // accepts[]. $0.001 = its real atomic price (1000 / 1e6 USDC), not a teaser.
+  const endpoint = `https://${origin}/crypto/prices`;
+  return [
+    `x402-endpoint: ${endpoint}`,
+    `x402-network: base`,
+    `x402-asset: USDC`,
+    `x402-price: 0.001`,
+    ``,
+  ].join("\n");
+}
+const aiTxtHandler = (c: Context<AppEnv>) => {
+  const origin = new URL(c.req.url).host;
+  return c.text(buildAiTxt(origin, c.env.PAY_TO), 200, {
+    "content-type": "text/plain; charset=utf-8",
+    "cache-control": "public, max-age=300",
+  });
+};
+app.get("/.well-known/ai.txt", aiTxtHandler);
+app.get("/ai.txt", aiTxtHandler);
+
 app.get("/.well-known/agent-capabilities.json", (c) => {
   const BASE = "https://x402-data-api.sigrunner.workers.dev";
   const q = (c.req.query("q") || "").toLowerCase().trim();
