@@ -22,6 +22,8 @@ const {
   computeReceiptVerdict,
   decodeUsdcTransfers,
   receiptSettlementFingerprint,
+  decodeAuthorizationUsed,
+  computeAuthorizationProof,
   x402ReceiptVerify,
   makeRoutes,
   ROUTE_CATALOG,
@@ -308,6 +310,127 @@ await check("non-exact scheme (upto): lower settled amount is SETTLED, not UNDER
   assert.strictEqual(capped.settled, true);
   const exact = computeReceiptVerdict("success", t, PAYTO, 10000, 6, false);
   assert.strictEqual(exact.verdict, "UNDERPAID");
+});
+
+// ---- EIP-3009 authorization proof (4-check standard, check #2) -------------
+
+const AUTH_USED = "0x98de503528ee59b575ef0c0a2576a82497bfc029a5685b209e9ec333479b10a5";
+const NONCE = "0x" + "ab".repeat(32);
+function authUsedLog(authorizer, nonce = NONCE, token = USDC) {
+  return { address: token, topics: [AUTH_USED, pad(authorizer), nonce] };
+}
+// authorizationState(address,bytes32) eth_call result: true/false ABI-encoded.
+function stateWord(b) { return "0x" + (b ? "1" : "0").padStart(64, "0"); }
+
+// 18. decodeAuthorizationUsed: decodes USDC AuthorizationUsed, ignores others.
+await check("decodeAuthorizationUsed decodes authorizer+nonce, ignores non-USDC/non-event", () => {
+  const out = decodeAuthorizationUsed([
+    authUsedLog(PAYER),
+    authUsedLog(OTHER, NONCE, "0x4200000000000000000000000000000000000006"), // non-USDC (drop)
+    { address: USDC, topics: ["0xdeadbeef", pad(PAYER), NONCE] },               // wrong topic (drop)
+    transferLog(PAYER, PAYTO, 4000),                                           // Transfer (drop)
+  ]);
+  assert.strictEqual(out.length, 1, `expected 1 auth event, got ${out.length}`);
+  assert.strictEqual(out[0].authorizer.toLowerCase(), PAYER.toLowerCase());
+  assert.strictEqual(out[0].nonce.toLowerCase(), NONCE.toLowerCase());
+});
+
+// 19. computeAuthorizationProof: no events -> not-eip3009 (direct transfer).
+await check("computeAuthorizationProof no events -> not-eip3009", () => {
+  const p = computeAuthorizationProof([], PAYER, null);
+  assert.strictEqual(p.status, "not-eip3009");
+  assert.strictEqual(p.events, 0);
+});
+
+// 20. event + state true -> consumed (the gold-standard bind).
+await check("computeAuthorizationProof event + state consumed -> consumed", () => {
+  const p = computeAuthorizationProof([{ authorizer: PAYER, nonce: NONCE }], PAYER, true, "dual-confirmed");
+  assert.strictEqual(p.status, "consumed");
+  assert.strictEqual(p.authorizer.toLowerCase(), PAYER.toLowerCase());
+  assert.strictEqual(p.confirmation, "dual-confirmed");
+});
+
+// 21. event present but state NOT consumed (dual-confirmed) -> state-mismatch (forgery signal).
+await check("computeAuthorizationProof event + state NOT consumed -> state-mismatch", () => {
+  const p = computeAuthorizationProof([{ authorizer: PAYER, nonce: NONCE }], PAYER, false, "dual-confirmed");
+  assert.strictEqual(p.status, "state-mismatch");
+  assert.ok(/FORGERY/i.test(p.note), "note flags the forgery signal");
+});
+
+// 22. event present, state unreadable -> unverified (degrade-open).
+await check("computeAuthorizationProof event + unreadable state -> unverified", () => {
+  const p = computeAuthorizationProof([{ authorizer: PAYER, nonce: NONCE }], PAYER, null, "single-source");
+  assert.strictEqual(p.status, "unverified");
+});
+
+// 23. providers disagree on authorizationState -> unverified, not asserted.
+await check("computeAuthorizationProof rpc-disagreement -> unverified", () => {
+  const p = computeAuthorizationProof([{ authorizer: PAYER, nonce: NONCE }], PAYER, null, "rpc-disagreement");
+  assert.strictEqual(p.status, "unverified");
+  assert.strictEqual(p.confirmation, "rpc-disagreement");
+});
+
+// 24. E2E: receipt carries a matching Transfer AND an AuthorizationUsed log, and
+//     authorizationState reads consumed on both providers -> SETTLED + consumed.
+await check("x402ReceiptVerify EIP-3009 settlement -> SETTLED + authorization consumed", async () => {
+  globalThis.fetch = async (url, opts) => {
+    const body = String(opts && opts.body);
+    if (opts && opts.method === "POST" && body.includes("eth_getTransactionReceipt")) {
+      return { ok: true, status: 200, async json() { return { result: { status: "0x1", blockNumber: "0x3077a30", logs: [transferLog(PAYER, PAYTO, 4000), authUsedLog(PAYER)] } }; } };
+    }
+    if (opts && opts.method === "POST" && body.includes("eth_call")) {
+      return { ok: true, status: 200, async json() { return { result: stateWord(true) }; } };
+    }
+    throw new Error("no endpoint fetch when payto supplied");
+  };
+  const r = await x402ReceiptVerify(TX, null, PAYTO, "0.004");
+  restore();
+  assert.strictEqual(r.verdict, "SETTLED", `verdict ${r.verdict}`);
+  assert.strictEqual(r.authorization.status, "consumed", `auth ${r.authorization.status}`);
+  assert.strictEqual(r.authorization.authorizer.toLowerCase(), PAYER.toLowerCase());
+  assert.ok(/authorization consumed/i.test(r.note), "note surfaces the authorization bind");
+});
+
+// 25. E2E forgery: a matching Transfer to payTo + an AuthorizationUsed log, but
+//     authorizationState is NOT consumed on both providers -> the amount match
+//     would have said SETTLED; we fail CLOSED to UNVERIFIED. This is the forgery
+//     (unrelated/replayed transfer to the same payTo) the amount-match misses.
+await check("x402ReceiptVerify forged/replayed auth (state not consumed) -> UNVERIFIED fail-closed", async () => {
+  globalThis.fetch = async (url, opts) => {
+    const body = String(opts && opts.body);
+    if (opts && opts.method === "POST" && body.includes("eth_getTransactionReceipt")) {
+      return { ok: true, status: 200, async json() { return { result: { status: "0x1", blockNumber: "0x3077a30", logs: [transferLog(PAYER, PAYTO, 4000), authUsedLog(PAYER)] } }; } };
+    }
+    if (opts && opts.method === "POST" && body.includes("eth_call")) {
+      return { ok: true, status: 200, async json() { return { result: stateWord(false) }; } };
+    }
+    throw new Error("no endpoint fetch when payto supplied");
+  };
+  const r = await x402ReceiptVerify(TX, null, PAYTO, "0.004");
+  restore();
+  assert.strictEqual(r.verdict, "UNVERIFIED", `verdict ${r.verdict}`);
+  assert.strictEqual(r.settled, false);
+  assert.strictEqual(r.authorization.status, "state-mismatch", `auth ${r.authorization.status}`);
+  assert.ok(/Failing closed/i.test(r.note), "note explains the fail-closed");
+});
+
+// 26. E2E: direct ERC-20 transfer (no AuthorizationUsed) -> SETTLED, authorization
+//     not-eip3009, and NO eth_call is made (authorizationState not queried).
+await check("x402ReceiptVerify direct transfer (no auth event) -> SETTLED + not-eip3009, no eth_call", async () => {
+  let ethCalls = 0;
+  globalThis.fetch = async (url, opts) => {
+    const body = String(opts && opts.body);
+    if (opts && opts.method === "POST" && body.includes("eth_getTransactionReceipt")) {
+      return { ok: true, status: 200, async json() { return { result: { status: "0x1", blockNumber: "0x3077a30", logs: [transferLog(PAYER, PAYTO, 4000)] } }; } };
+    }
+    if (opts && opts.method === "POST" && body.includes("eth_call")) { ethCalls++; return { ok: true, status: 200, async json() { return { result: stateWord(true) }; } }; }
+    throw new Error("no endpoint fetch when payto supplied");
+  };
+  const r = await x402ReceiptVerify(TX, null, PAYTO, "0.004");
+  restore();
+  assert.strictEqual(r.verdict, "SETTLED", `verdict ${r.verdict}`);
+  assert.strictEqual(r.authorization.status, "not-eip3009", `auth ${r.authorization.status}`);
+  assert.strictEqual(ethCalls, 0, "no authorizationState eth_call when there is no AuthorizationUsed event");
 });
 
 console.log(`\n${pass} passed`);

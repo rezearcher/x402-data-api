@@ -10527,6 +10527,9 @@ type CertSettlement = {
   amount_usdc: string | null;
   payTo: string | null;
   rpc_sources: string[];
+  // EIP-3009 authorization proof status for the settlement tx (4-check #2):
+  // "consumed" = the nonce is confirmed spent in live USDC contract state.
+  authorization?: AuthorizationProof["status"];
 };
 
 type X402Cert = {
@@ -10659,12 +10662,12 @@ app.get("/x402/cert", async (c) => {
   // bad / unsettled tx never blocks the depth cert; it is surfaced honestly.
   const txParam = c.req.query("tx");
   let settlement: CertSettlement | undefined;
-  let settlement_check: { verdict: string; note: string; confirmation: string } | undefined;
+  let settlement_check: { verdict: string; note: string; confirmation: string; authorization?: string } | undefined;
   if (txParam && HASH_RE.test(txParam)) {
     try {
       const rv = await x402ReceiptVerify(txParam, url);
       const proven = rv.settled === true && rv.verdict === "SETTLED" && rv.confirmation !== "rpc-disagreement";
-      settlement_check = { verdict: rv.verdict, note: rv.note, confirmation: rv.confirmation };
+      settlement_check = { verdict: rv.verdict, note: rv.note, confirmation: rv.confirmation, authorization: rv.authorization.status };
       if (proven) {
         settlement = {
           proven: true,
@@ -10674,6 +10677,7 @@ app.get("/x402/cert", async (c) => {
           amount_usdc: rv.matched_transfer?.amount_usdc ?? rv.advertised.amount_usdc,
           payTo: rv.advertised.payTo,
           rpc_sources: rv.rpc_sources,
+          authorization: rv.authorization.status,
         };
       }
     } catch { /* degrade-open: settlement stays undefined, depth cert still issues */ }
@@ -10867,6 +10871,11 @@ export interface ReceiptVerifyResult {
   // "rpc-disagreement" = two providers disagreed and we failed CLOSED (UNVERIFIED).
   confirmation: "dual-confirmed" | "single-source" | "rpc-disagreement";
   rpc_sources: string[];
+  // EIP-3009 authorization proof (4-check standard, check #2): cross-confirms the
+  // receipt's AuthorizationUsed log against live USDC authorizationState. Catches
+  // a &tx pointing at an unrelated/replayed USDC Transfer to the same payTo that
+  // the amount-match alone would wave through.
+  authorization: AuthorizationProof;
   basescan: string;
   note: string;
   scope_note: string;
@@ -10874,7 +10883,7 @@ export interface ReceiptVerifyResult {
 }
 
 const RECEIPT_VERIFY_SCOPE_NOTE =
-  "reconciles a Base-mainnet settlement tx against an x402 endpoint's advertised payTo + amount (on-chain USDC Transfer proof), cross-confirmed across two independent RPC providers and failing closed if they disagree; read-only, confirms what already settled — it does not move funds, re-run a payment, or guarantee the resource was delivered off-chain.";
+  "reconciles a Base-mainnet settlement tx against an x402 endpoint's advertised payTo + amount (on-chain USDC Transfer proof) AND cross-confirms the EIP-3009 transfer authorization as consumed in live USDC contract state, across two independent RPC providers and failing closed if they disagree or if a matched Transfer's authorization is not actually consumed on-chain; read-only, confirms what already settled — it does not move funds, re-run a payment, or guarantee the resource was delivered off-chain.";
 
 // Pure verdict core (no I/O) — exported for unit tests. Given the tx status, the
 // USDC transfers decoded from the receipt, and the advertised payTo + amount,
@@ -10981,6 +10990,101 @@ export function decodeUsdcTransfers(logs: unknown[], token = USDC_BASE.toLowerCa
   return out;
 }
 
+// EIP-3009 (USDC on Base) authorization primitives. An x402 payment settled via
+// transferWithAuthorization / receiveWithAuthorization makes the USDC contract
+// emit AuthorizationUsed(authorizer, nonce) and flip authorizationState(from,
+// nonce) -> true. These two keccak constants are self-validated against the
+// known Transfer topic (scripts/keccak_check.py) so they are trustworthy as
+// protocol constants, not a guessed list.
+const USDC_AUTH_USED_TOPIC = "0x98de503528ee59b575ef0c0a2576a82497bfc029a5685b209e9ec333479b10a5";
+const USDC_AUTH_STATE_SELECTOR = "0xe94a0102"; // authorizationState(address,bytes32)
+
+export interface AuthorizationUsedEvent { authorizer: string; nonce: string }
+
+// On-chain EIP-3009 authorization proof: did THIS tx consume a USDC transfer
+// authorization, and does the live USDC contract confirm the nonce as consumed?
+// This is the 4-check standard's check #2 — the one a Transfer-log match alone
+// (our check #3) cannot make. "consumed" cryptographically binds the settlement
+// to an EIP-3009 authorization and cross-checks the (untrusted) receipt log
+// against live contract state; "state-mismatch" (dual-confirmed) is a forgery
+// signal we fail closed on.
+export interface AuthorizationProof {
+  status: "consumed" | "state-mismatch" | "not-eip3009" | "unverified";
+  authorizer: string | null;
+  nonce: string | null;
+  events: number;
+  confirmation: "dual-confirmed" | "single-source" | "rpc-disagreement" | "n/a";
+  note: string;
+}
+
+// Decode USDC AuthorizationUsed(authorizer, nonce) events out of a receipt's
+// logs. Degrade-open (malformed log skipped). Exported for unit tests.
+export function decodeAuthorizationUsed(logs: unknown[], token = USDC_BASE.toLowerCase()): AuthorizationUsedEvent[] {
+  const out: AuthorizationUsedEvent[] = [];
+  for (const raw of logs ?? []) {
+    try {
+      const lg = raw as { address?: string; topics?: string[] };
+      if (String(lg.address ?? "").toLowerCase() !== token) continue;
+      const topics = lg.topics ?? [];
+      if ((topics[0] ?? "").toLowerCase() !== USDC_AUTH_USED_TOPIC) continue;
+      if (topics.length < 3) continue;
+      const authorizer = "0x" + String(topics[1]).slice(26).toLowerCase();
+      const nonce = String(topics[2]).toLowerCase();
+      out.push({ authorizer, nonce });
+    } catch { /* skip malformed log */ }
+  }
+  return out;
+}
+
+// Pure core (no I/O). Given the AuthorizationUsed events decoded from a receipt,
+// the `from` of the reconciled Transfer, and the result of the live USDC
+// authorizationState eth_call for the chosen (authorizer,nonce), decide the
+// EIP-3009 authorization proof. Exported for unit tests.
+//   stateConsumed: true  -> contract confirms the nonce is consumed
+//   stateConsumed: false -> contract says NOT consumed (anomaly vs the log)
+//   stateConsumed: null  -> could not read the contract state
+export function computeAuthorizationProof(
+  authEvents: AuthorizationUsedEvent[],
+  matchedFrom: string | null,
+  stateConsumed: boolean | null,
+  stateConfirmation: AuthorizationProof["confirmation"] = "n/a",
+): AuthorizationProof {
+  if (!authEvents || authEvents.length === 0) {
+    return { status: "not-eip3009", authorizer: null, nonce: null, events: 0, confirmation: "n/a",
+      note: "this tx emitted no USDC AuthorizationUsed event — it did not settle via an EIP-3009 transfer authorization (e.g. a direct ERC-20 transfer); the Transfer-amount reconciliation still stands but there is no authorization nonce to bind it to" };
+  }
+  const want = matchedFrom ? matchedFrom.toLowerCase() : null;
+  const chosen = (want && authEvents.find((e) => e.authorizer.toLowerCase() === want)) || authEvents[0];
+  const base = { authorizer: chosen.authorizer, nonce: chosen.nonce, events: authEvents.length };
+  if (stateConfirmation === "rpc-disagreement") {
+    return { status: "unverified", ...base, confirmation: "rpc-disagreement",
+      note: `two independent Base RPC providers disagreed on USDC authorizationState(${chosen.authorizer}, nonce) — could not confirm the authorization was consumed; not treated as proven` };
+  }
+  if (stateConsumed === null) {
+    return { status: "unverified", ...base, confirmation: stateConfirmation,
+      note: `could not read USDC authorizationState(${chosen.authorizer}, nonce) from Base mainnet — the AuthorizationUsed log is present but not yet cross-confirmed against live contract state` };
+  }
+  if (stateConsumed === true) {
+    return { status: "consumed", ...base, confirmation: stateConfirmation,
+      note: `EIP-3009 authorization CONSUMED: USDC authorizationState(${chosen.authorizer}, nonce) is true on Base mainnet, cross-confirming the receipt's AuthorizationUsed log against live contract state — this settlement is cryptographically bound to a spent transfer authorization, not just a matching Transfer amount` };
+  }
+  return { status: "state-mismatch", ...base, confirmation: stateConfirmation,
+    note: `FORGERY SIGNAL: the receipt carries an AuthorizationUsed log for authorizer ${chosen.authorizer}, yet USDC authorizationState(${chosen.authorizer}, nonce) reads NOT consumed on Base mainnet — the receipt does not reconcile with live contract state (possible fabricated log, replayed receipt, or wrong chain)` };
+}
+
+// Read USDC authorizationState(authorizer, nonce) from a single Base RPC
+// provider. Returns true (consumed) / false (not consumed) / null (read error).
+async function readAuthorizationState(provider: string, authorizer: string, nonce: string): Promise<boolean | null> {
+  try {
+    const a = authorizer.toLowerCase().replace(/^0x/, "").padStart(64, "0");
+    const n = nonce.toLowerCase().replace(/^0x/, "").padStart(64, "0");
+    const data = USDC_AUTH_STATE_SELECTOR + a + n;
+    const res = (await baseRpcAt(provider, "eth_call", [{ to: USDC_BASE.toLowerCase(), data }, "latest"])) as unknown;
+    if (typeof res !== "string" || !res.startsWith("0x") || res.length < 3) return null;
+    return BigInt(res) !== 0n;
+  } catch { return null; }
+}
+
 // Resolve the endpoint's advertised payTo + amount from its LIVE 402 challenge
 // (the exact requirement a buyer would have paid against). One bounded fetch,
 // degrade-open (any error / non-402 => nulls). Same accepts[] shape as preflight.
@@ -11032,6 +11136,10 @@ export async function x402ReceiptVerify(
 
   const advertised = { payTo: advPayTo, amount_atomic: advAtomic, amount_usdc: atomicToUsdcStr(advAtomic), source: advSource };
   const host = (u: string) => { try { return new URL(u).host; } catch { return u; } };
+  // Authorization proof is only meaningful once we have a receipt; the early
+  // no-receipt branches carry this "unverified/n-a" placeholder.
+  const authNA: AuthorizationProof = { status: "unverified", authorizer: null, nonce: null, events: 0, confirmation: "n/a",
+    note: "no receipt available to check an EIP-3009 authorization against" };
 
   // 2. Read the receipt from TWO independent providers and cross-confirm. A
   //    single RPC is a single point of trust: a buggy or adversarial endpoint
@@ -11068,7 +11176,7 @@ export async function x402ReceiptVerify(
       // Two independent providers disagree about what this tx did — refuse to
       // vouch for it. This is the integrity guarantee competitors advertise.
       return { ...base, verdict: "UNVERIFIED", settled: false, tx_status: "unknown", advertised,
-        matched_transfer: null, usdc_transfers: [], block: null, confirmation: "rpc-disagreement", rpc_sources,
+        matched_transfer: null, usdc_transfers: [], block: null, confirmation: "rpc-disagreement", rpc_sources, authorization: authNA,
         note: `two independent Base RPC providers returned DIFFERENT settlement content for this tx (${host(urlA)} vs ${host(urlB)}) — failing closed; do not treat this as settled until the providers agree. Retry shortly.` };
     }
   } else if (ra.ok || rb.ok) {
@@ -11085,13 +11193,13 @@ export async function x402ReceiptVerify(
 
   if (rpcError) {
     return { ...base, verdict: "UNVERIFIED", settled: false, tx_status: "unknown", advertised,
-      matched_transfer: null, usdc_transfers: [], block: null, confirmation, rpc_sources,
+      matched_transfer: null, usdc_transfers: [], block: null, confirmation, rpc_sources, authorization: authNA,
       note: `could not read the transaction receipt from Base mainnet (${rpcError}) — the tx was NOT proven absent; retry shortly` };
   }
   if (receipt === null || receipt === undefined) {
     const core = computeReceiptVerdict(null, [], advPayTo, advAtomic);
     return { ...base, verdict: core.verdict, settled: core.settled, tx_status: "unknown", advertised,
-      matched_transfer: null, usdc_transfers: [], block: null, confirmation, rpc_sources, note: core.note };
+      matched_transfer: null, usdc_transfers: [], block: null, confirmation, rpc_sources, authorization: authNA, note: core.note };
   }
 
   const r = receipt as { status?: string; logs?: unknown[]; blockNumber?: string };
@@ -11100,8 +11208,57 @@ export async function x402ReceiptVerify(
   const transfers = decodeUsdcTransfers(r.logs ?? []);
   const block = r.blockNumber ? parseInt(String(r.blockNumber), 16) : null;
   const core = computeReceiptVerdict(txStatus, transfers, advPayTo, advAtomic, PRICE_ASSET_DECIMALS, amountIsCap);
+
+  // 3. EIP-3009 authorization proof (4-check standard, check #2). Only relevant
+  //    when the tx actually settled via a USDC transfer authorization: decode the
+  //    AuthorizationUsed log and cross-confirm the nonce against live USDC
+  //    authorizationState on the SAME two providers (fail closed on disagreement).
+  //    A matching Transfer amount (check #3) passing while this is a FORGERY
+  //    SIGNAL (state-mismatch, dual-confirmed) means the receipt points at an
+  //    unrelated/fabricated transfer to the same payTo — so we fail the verdict
+  //    closed. Everything else is additive and degrades open (fail-open-but-loud).
+  const authEvents = decodeAuthorizationUsed(r.logs ?? []);
+  let authorization: AuthorizationProof;
+  if (authEvents.length === 0) {
+    authorization = computeAuthorizationProof([], core.matched?.from ?? null, null);
+  } else {
+    const matchedFrom = core.matched?.from ?? null;
+    const chosen = (matchedFrom && authEvents.find((e) => e.authorizer.toLowerCase() === matchedFrom.toLowerCase())) || authEvents[0];
+    const sA = await readAuthorizationState(urlA, chosen.authorizer, chosen.nonce);
+    const sB = urlB ? await readAuthorizationState(urlB, chosen.authorizer, chosen.nonce) : null;
+    let stateConsumed: boolean | null;
+    let stConf: AuthorizationProof["confirmation"];
+    if (sA !== null && sB !== null) {
+      if (sA === sB) { stateConsumed = sA; stConf = "dual-confirmed"; }
+      else { stateConsumed = null; stConf = "rpc-disagreement"; }
+    } else if (sA !== null || sB !== null) {
+      stateConsumed = sA !== null ? sA : sB; stConf = "single-source";
+    } else {
+      try {
+        const a = chosen.authorizer.toLowerCase().replace(/^0x/, "").padStart(64, "0");
+        const n = chosen.nonce.toLowerCase().replace(/^0x/, "").padStart(64, "0");
+        const res = (await baseRpc("eth_call", [{ to: USDC_BASE.toLowerCase(), data: USDC_AUTH_STATE_SELECTOR + a + n }, "latest"])) as unknown;
+        stateConsumed = typeof res === "string" && res.startsWith("0x") && res.length >= 3 ? BigInt(res) !== 0n : null;
+      } catch { stateConsumed = null; }
+      stConf = "single-source";
+    }
+    authorization = computeAuthorizationProof(authEvents, matchedFrom, stateConsumed, stConf);
+  }
+
+  // Forgery fail-closed: dual-confirmed state-mismatch overrides a would-be
+  // SETTLED — two independent providers confirm the nonce is NOT consumed, so
+  // the receipt's AuthorizationUsed log (and thus its settlement) is not real.
+  if (authorization.status === "state-mismatch" && authorization.confirmation === "dual-confirmed") {
+    return { ...base, verdict: "UNVERIFIED", settled: false, tx_status: txStatus, advertised,
+      matched_transfer: core.matched, usdc_transfers: transfers, block, confirmation, rpc_sources, authorization,
+      note: `${core.note} — BUT ${authorization.note}. Failing closed: the Transfer amount matched, yet the EIP-3009 authorization is not consumed on-chain, so this tx does not prove a genuine settlement of this payment.` };
+  }
+
+  const note = authorization.status === "consumed"
+    ? `${core.note}; EIP-3009 authorization consumed on-chain (nonce cross-confirmed), binding this settlement to a spent transfer authorization`
+    : core.note;
   return { ...base, verdict: core.verdict, settled: core.settled, tx_status: txStatus, advertised,
-    matched_transfer: core.matched, usdc_transfers: transfers, block, confirmation, rpc_sources, note: core.note };
+    matched_transfer: core.matched, usdc_transfers: transfers, block, confirmation, rpc_sources, authorization, note };
 }
 
 app.get("/x402/receipt-verify", async (c) => {
@@ -11144,8 +11301,16 @@ function receiptVerifySample(): ReceiptVerifyResult {
     block: 50830000,
     confirmation: "dual-confirmed",
     rpc_sources: ["mainnet.base.org", "base-rpc.publicnode.com"],
+    authorization: {
+      status: "consumed",
+      authorizer: "0x1111111111111111111111111111111111111111",
+      nonce: "0x" + "ab".repeat(32),
+      events: 1,
+      confirmation: "dual-confirmed",
+      note: "EIP-3009 authorization CONSUMED: USDC authorizationState(0x1111…1111, nonce) is true on Base mainnet, cross-confirming the receipt's AuthorizationUsed log against live contract state",
+    },
     basescan: "https://basescan.org/tx/0x<your-settlement-tx-hash>",
-    note: "confirmed on-chain: 0.004 USDC settled to the advertised payTo 0x2222…2222 (>= the advertised 0.004 USDC) in this tx",
+    note: "confirmed on-chain: 0.004 USDC settled to the advertised payTo 0x2222…2222 (>= the advertised 0.004 USDC) in this tx; EIP-3009 authorization consumed on-chain (nonce cross-confirmed)",
     scope_note: RECEIPT_VERIFY_SCOPE_NOTE,
     checked_at: new Date().toISOString(),
   };
