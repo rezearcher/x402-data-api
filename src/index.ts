@@ -2163,6 +2163,15 @@ const x402ManifestHandler = (c: Context<AppEnv>) => {
       description:
         "Pay-per-call x402 for Base agents, led by the pre-trade safety gate: /gate/swap (GO/HOLD/BLOCK sized to your trade, $0.008), /chain/token-report (SAFE/CAUTION/AVOID with measured transfer tax, $0.01) and /chain/token-security (live honeypot/sellability sim, $0.009) — a honeypot check for a fraction of what rival Base token-safety APIs charge (up to $0.25/call). Plus market & on-chain data: /defi/yields (lending/LP yields + IL risk), /crypto/funding (6-venue Binance+Bybit+OKX+Hyperliquid+dYdX+Gate funding + CEX↔DEX arb spread), /crypto/prices, /pm/markets (Polymarket) and 20+ Base RPC/chain routes. Free /preview paths on the flagship routes. No account, no key — agents pay inline in USDC from $0.001/call.",
       website: BASE,
+      // Where settlement happens. Base USDC is always live; the authoritative,
+      // live-from-the-facilitator set of networks we can actually settle on (support ∩
+      // receive-address coverage) is machine-readable at /x402/networks — an agent that
+      // filters a catalog by network checks there rather than inferring from one sample.
+      settlement: {
+        primary_network: NETWORK,
+        asset: "USDC",
+        capabilities: `${BASE}/x402/networks`,
+      },
       categories: ["prediction-markets", "crypto", "data", "security", "mcp", "funding", "yield", "token-price", "rpc", "base", "onchain", "blockchain"],
       // Primary category in the x402 agent-catalog taxonomy used by the Circle Agent
       // Marketplace / CDP discovery API (enum: FINANCIAL_ANALYSIS, PREDICTION_MARKETS,
@@ -3238,6 +3247,7 @@ app.get("/sitemap.xml", (c) => {
     { path: "/", priority: "1.0", changefreq: "daily" },
     { path: "/.well-known/x402", priority: "0.9", changefreq: "weekly" },
     { path: "/.well-known/ai.txt", priority: "0.8", changefreq: "weekly" },
+    { path: "/x402/networks", priority: "0.8", changefreq: "weekly" },
     { path: "/openapi.json", priority: "0.9", changefreq: "weekly" },
     { path: "/llms.txt", priority: "0.8", changefreq: "weekly" },
     { path: "/terms", priority: "0.7", changefreq: "monthly" },
