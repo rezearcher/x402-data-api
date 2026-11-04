@@ -30,6 +30,21 @@ Checks #1 and #4 are the depth **no hosted verifier can offer**, including Grey 
 
 A direct (non-EIP-3009) transfer degrades open and discloses it (`authorization.status: "not-eip3009"`, `payloadBind.status: "unbound"`). Every verdict carries `authorization` and `payloadBind` fields with their own cross-confirmed provenance. The nonce bind is the authoritative link; it is **not** a full secp256k1 signature recovery (that would need a crypto dependency this dep-free wrapper avoids), because a consumed EIP-3009 nonce is unforgeable and unique to the authorization that produced it.
 
+### The 4th flaw class: cross-resource substitution (`resourceBinding`)
+
+The four checks above all concern the **money** — who got paid, how much, that the authorization was genuinely spent, inside its window. They cannot answer a different question: **which resource did this payment actually buy?** x402's `exact` scheme signs `(from, to, value, validAfter, validBefore, nonce)` but **never the resource**, so one settlement to the right `payTo` for the right amount reconcile-validates as proof-of-payment for *any* x402 resource sharing that `(payTo, amount)`. That is the cross-resource substitution flaw ([arXiv:2605.30998](https://arxiv.org/abs/2605.30998)) — the 4th and last class in the x402 flaw taxonomy, and the one no money-side check sees.
+
+Every verdict now carries a `resourceBinding` that ties the settlement to the resource **this client actually fetched**:
+
+| `resourceBinding.verdict` | meaning |
+|---|---|
+| `DECLARED` | the live 402 the requested URL answered declares a `resource` matching that URL — the seller asserts the payment is for it (a declaration, **not** a cryptographic binding — `schemeBindsResource: false` always, disclosed) |
+| `SUBSTITUTABLE` | the 402 declared **no** `resource` → nothing beyond `(payTo, amount)` ties the payment to a resource; the same settlement is transplantable to any sibling endpoint |
+| `RESOURCE_MISMATCH` | the 402 declared a **different** resource than the URL you fetched — do not treat the settlement as proof of payment for your URL |
+| `UNVERIFIED` | no live 402 was read (you passed `expected`, `resolveAdvertised: "off"`, or a POST) |
+
+**Only the payer can bind this honestly.** A hosted verifier (including Grey Ridge's own `/x402/receipt-verify`) only ever gets a `url` the caller *claims* they paid — it cannot know which resource the client truly requested. This wrapper **is** the client: it holds the exact URL the agent fetched and reads the live 402 that URL answers with, so the comparison is against ground truth the client observed first-hand. That makes this **the only x402 fetch wrapper that covers all four flaw classes** (payTo, amount, replay/authorization, and resource) — the six other `@x402/fetch` wrappers read no chain at all, and no hosted verifier can run checks #1, #4, or an authoritative resource bind.
+
 It **composes** the official Coinbase payer client (`@x402/fetch` → `wrapFetchWithPayment`, 670k+ downloads/mo) rather than replacing it. You keep your existing payment flow; you gain an independent audit of what actually moved.
 
 > **Honesty (Claims Law):** this confirms the on-chain settlement went to the right address for the right amount. It does **not** prove the off-chain resource was delivered or that its content is correct — later settlement failure or cache reuse is a separate failure mode. A `SETTLED` verdict is a payment proof, not a delivery guarantee.

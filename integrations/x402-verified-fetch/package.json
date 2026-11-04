@@ -1,6 +1,6 @@
 {
   "name": "@grey-ridge/x402-verified-fetch",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Drop-in fetch wrapper for x402-paying agents that independently verifies the on-chain settlement after paying — the full 4-check standard: Transfer reconcile (payTo + amount), EIP-3009 nonce consumed, signed-payload bind, and validity-window. The only x402 client that binds the settlement to the authorization IT signed. Composes @x402/fetch; reads the Base chain itself.",
   "keywords": [
     "x402",

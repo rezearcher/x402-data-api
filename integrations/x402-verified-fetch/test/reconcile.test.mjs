@@ -434,3 +434,62 @@ test("reconcile:off is a pure pass-through payer", async () => {
   assert.equal(res.headers.get(SETTLEMENT_HEADER), null);
   assert.equal(await res.text(), "hi");
 });
+
+// --- 4th flaw class: cross-resource substitution, end-to-end through wrapper -
+test("wrapper binds the resource (DECLARED) when the live 402 declares the matching url", async () => {
+  const url = "https://seller.example/x402/data";
+  const tx = "0x5e9643e4f7a1c8e6b4d2f0a1b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c2";
+  const receipt = { status: "0x1", blockNumber: "0x2e8f4a2", logs: [usdcLog(BUYER, PAYTO, 4000)] };
+  const baseFetch = async () => makeSettledResponse(tx);
+  const fetchImpl = async (u, init) => {
+    if (init && init.method === "POST") return new Response(JSON.stringify({ result: receipt }), { status: 200 });
+    // 402 carries resource as the top-level Coinbase-middleware object shape
+    return new Response(
+      JSON.stringify({ resource: { url, description: "d" }, accepts: [{ scheme: "exact", payTo: PAYTO, amount: "4000" }] }),
+      { status: 402, headers: { "content-type": "application/json" } },
+    );
+  };
+  const vf = wrapFetchWithVerifiedPayment(baseFetch, new x402Client(), { fetchImpl });
+  const res = await vf(url);
+  const verdict = JSON.parse(res.headers.get(SETTLEMENT_HEADER));
+  assert.equal(verdict.verdict, "SETTLED");
+  assert.equal(verdict.resourceBinding.verdict, "DECLARED");
+  assert.equal(verdict.resourceBinding.matches, true);
+  assert.equal(verdict.resourceBinding.requestedUrl, url);
+  assert.equal(verdict.resourceBinding.schemeBindsResource, false);
+});
+
+test("wrapper flags SUBSTITUTABLE when the live 402 declares NO resource", async () => {
+  const url = "https://seller.example/x402/data";
+  const tx = "0x6e9643e4f7a1c8e6b4d2f0a1b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1d3";
+  const receipt = { status: "0x1", blockNumber: "0x2e8f4a2", logs: [usdcLog(BUYER, PAYTO, 4000)] };
+  const baseFetch = async () => makeSettledResponse(tx);
+  const fetchImpl = async (u, init) => {
+    if (init && init.method === "POST") return new Response(JSON.stringify({ result: receipt }), { status: 200 });
+    return new Response(JSON.stringify({ accepts: [{ scheme: "exact", payTo: PAYTO, amount: "4000" }] }), { status: 402 });
+  };
+  const vf = wrapFetchWithVerifiedPayment(baseFetch, new x402Client(), { fetchImpl });
+  const res = await vf(url);
+  const verdict = JSON.parse(res.headers.get(SETTLEMENT_HEADER));
+  assert.equal(verdict.resourceBinding.verdict, "SUBSTITUTABLE");
+  assert.match(verdict.resourceBinding.note, /ANY x402 resource/);
+});
+
+test("wrapper fails the resource bind UNVERIFIED when the caller bound `expected` (no live 402 read)", async () => {
+  const url = "https://seller.example/x402/data";
+  const tx = "0x7e9643e4f7a1c8e6b4d2f0a1b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1e4";
+  const receipt = { status: "0x1", blockNumber: "0x2e8f4a2", logs: [usdcLog(BUYER, PAYTO, 4000)] };
+  const baseFetch = async () => makeSettledResponse(tx);
+  const fetchImpl = async (u, init) => {
+    if (init && init.method === "POST") return new Response(JSON.stringify({ result: receipt }), { status: 200 });
+    throw new Error("probe must not run when expected is bound");
+  };
+  const vf = wrapFetchWithVerifiedPayment(baseFetch, new x402Client(), {
+    fetchImpl,
+    expected: { payTo: PAYTO, amountUsdc: "0.004" },
+  });
+  const res = await vf(url);
+  const verdict = JSON.parse(res.headers.get(SETTLEMENT_HEADER));
+  assert.equal(verdict.verdict, "SETTLED");
+  assert.equal(verdict.resourceBinding.verdict, "UNVERIFIED");
+});

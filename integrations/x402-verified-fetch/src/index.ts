@@ -36,6 +36,7 @@ import {
 } from "./reconcile.js";
 import { readSettlementReceipt, confirmAuthorizationState, readBlockTimestamp, type ReceiptRead } from "./chain.js";
 import { decodeSignedAuthorization, computePayloadBind, type SignedAuthorization, type PayloadBind } from "./authz.js";
+import { computeResourceBinding, extractResourceUrl, type ResourceBinding } from "./resource.js";
 
 export {
   reconcileSettlement,
@@ -58,6 +59,8 @@ export { readSettlementReceipt, confirmAuthorizationState, readBlockTimestamp, D
 export type { ReceiptRead } from "./chain.js";
 export { decodeSignedAuthorization, computePayloadBind } from "./authz.js";
 export type { SignedAuthorization, PayloadBind, PayloadBindChecks } from "./authz.js";
+export { computeResourceBinding, extractResourceUrl, resourceMatchesUrl } from "./resource.js";
+export type { ResourceBinding } from "./resource.js";
 
 /** The advertised requirement a buyer pays against (payTo + amount). */
 export interface AdvertisedRequirement {
@@ -99,6 +102,24 @@ export interface VerifiedSettlement {
    * null on reconcile:"off" or an early-out before a settlement tx was read.
    */
   payloadBind: PayloadBind | null;
+  /**
+   * Cross-resource substitution binding (the 4th x402 flaw CLASS,
+   * arXiv:2605.30998). x402's exact scheme signs (payer, payee, amount, window,
+   * nonce) but NEVER the resource, so a settlement to the right payTo for the
+   * right amount does not say WHICH resource it paid for — the same payment
+   * reconcile-validates for any resource sharing that (payTo, amount). This
+   * field binds the settlement to the resource THIS client actually fetched:
+   *  - "DECLARED": the live 402 the requested url answered declares a `resource`
+   *    matching that url (seller asserts the payment is for it);
+   *  - "SUBSTITUTABLE": the 402 declared NO resource → nothing beyond payTo+amount
+   *    ties the payment to a resource (substitution-exposed);
+   *  - "RESOURCE_MISMATCH": the 402 declared a DIFFERENT resource (fail-closed);
+   *  - "UNVERIFIED": no live 402 read (e.g. `expected` bound, probe off, POST).
+   * Only the payer can bind this authoritatively: it holds the exact url fetched,
+   * which a hosted verifier only ever gets as a self-reported parameter. null on
+   * reconcile:"off" or before any settlement was read.
+   */
+  resourceBinding: ResourceBinding | null;
   note: string;
 }
 
@@ -182,14 +203,32 @@ function requestHeader(input: RequestInfo | URL, init: RequestInit | undefined, 
   return null;
 }
 
-/** Parse the first `accepts[]` entry from a live 402 body into an advertised requirement. */
+/**
+ * The live-402 probe result: the advertised payTo+amount AND the resource
+ * context the cross-resource-substitution binding reconciles against.
+ * `challengeFetched` distinguishes "the url answered with an x402 402 we read"
+ * from "no live 402" — the two produce different resource verdicts.
+ */
+interface Live402Probe {
+  advertised: AdvertisedRequirement;
+  challengeFetched: boolean;
+  challengeResource: string | null;
+  scheme: string | null;
+}
+
+/** Parse a live 402 body into the advertised requirement + resource context. */
 async function resolveAdvertisedFrom402(
   targetUrl: string,
   method: string,
   fetchImpl: typeof globalThis.fetch,
   timeoutMs: number,
-): Promise<AdvertisedRequirement> {
-  const none: AdvertisedRequirement = { payTo: null, amountAtomic: null, source: null };
+): Promise<Live402Probe> {
+  const none: Live402Probe = {
+    advertised: { payTo: null, amountAtomic: null, source: null },
+    challengeFetched: false,
+    challengeResource: null,
+    scheme: null,
+  };
   if (method !== "GET" && method !== "HEAD") return none; // never re-send a side-effecting request unpaid
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), timeoutMs);
@@ -197,17 +236,27 @@ async function resolveAdvertisedFrom402(
     const res = await fetchImpl(targetUrl, { method: "GET", signal: ctl.signal });
     if (res.status !== 402) return none;
     const body = (await res.json()) as {
-      accepts?: Array<{ payTo?: string; amount?: string; maxAmountRequired?: string; scheme?: string }>;
+      resource?: unknown;
+      accepts?: Array<{ payTo?: string; amount?: string; maxAmountRequired?: string; scheme?: string; resource?: unknown }>;
     };
     const a = body.accepts?.[0];
-    if (!a) return none;
+    // The declared `resource` identifier — x402 carries it as accepts[0].resource
+    // OR as a top-level metadata object { url, ... } (Coinbase middleware shape).
+    const challengeResource = extractResourceUrl(a?.resource ?? body.resource ?? null);
+    const scheme = a?.scheme != null ? String(a.scheme).toLowerCase() : null;
+    if (!a) return { ...none, challengeFetched: true, challengeResource, scheme };
     const amtRaw = a.amount ?? a.maxAmountRequired;
     const amountAtomic = amtRaw != null && amtRaw !== "" ? Number(amtRaw) : null;
     return {
-      payTo: a.payTo ?? null,
-      amountAtomic: Number.isFinite(amountAtomic as number) ? (amountAtomic as number) : null,
-      amountIsCap: a.scheme != null && a.scheme !== "exact",
-      source: "live-402",
+      advertised: {
+        payTo: a.payTo ?? null,
+        amountAtomic: Number.isFinite(amountAtomic as number) ? (amountAtomic as number) : null,
+        amountIsCap: scheme != null && scheme !== "exact",
+        source: "live-402",
+      },
+      challengeFetched: true,
+      challengeResource,
+      scheme,
     };
   } catch {
     return none;
@@ -267,6 +316,13 @@ export function wrapFetchWithVerifiedPayment(
     // Pre-resolve the advertised requirement (so we can detect WRONG_RECIPIENT),
     // unless the caller bound it or disabled reconcile.
     let advertised: AdvertisedRequirement = { payTo: null, amountAtomic: null, source: null };
+    // Resource context for the cross-resource-substitution binding (4th flaw
+    // class). Captured from the SAME probe that reads the advertised payTo+amount;
+    // when the caller bound `expected` (or probing is off), no live 402 is read,
+    // so the binding honestly reports UNVERIFIED.
+    let challengeFetched = false;
+    let challengeResource: string | null = null;
+    let challengeScheme: string | null = null;
     if (reconcileMode === "local") {
       if (options.expected?.payTo) {
         advertised = {
@@ -276,7 +332,11 @@ export function wrapFetchWithVerifiedPayment(
           source: "caller",
         };
       } else if (resolveMode === "probe") {
-        advertised = await resolveAdvertisedFrom402(targetUrl, method, fetchImpl, timeoutMs);
+        const probe = await resolveAdvertisedFrom402(targetUrl, method, fetchImpl, timeoutMs);
+        advertised = probe.advertised;
+        challengeFetched = probe.challengeFetched;
+        challengeResource = probe.challengeResource;
+        challengeScheme = probe.scheme;
       }
     }
 
@@ -417,6 +477,23 @@ export function wrapFetchWithVerifiedPayment(
       }
     }
 
+    // 4th x402 flaw class: cross-resource substitution. Bind the settlement to
+    // the resource THIS client actually fetched. nonceConsumed comes from check
+    // #2 (consumed EIP-3009 authorization) — post-spend the on-chain payment is
+    // singular. Only the payer can run this honestly: `targetUrl` is the exact
+    // url the agent requested, not a self-reported parameter a hosted verifier
+    // would receive. Not gated on a settled verdict — a mismatch/substitutable
+    // resource is worth surfacing regardless of the money verdict.
+    const nonceConsumed =
+      authorization == null ? null : authorization.status === "consumed" ? true : authorization.status === "state-mismatch" ? false : null;
+    const resourceBinding: ResourceBinding = computeResourceBinding(
+      targetUrl,
+      challengeFetched,
+      challengeResource,
+      challengeScheme,
+      nonceConsumed,
+    );
+
     const settlement: VerifiedSettlement = {
       verdict: core.verdict,
       settled: core.settled,
@@ -430,6 +507,7 @@ export function wrapFetchWithVerifiedPayment(
       matched: core.matched,
       authorization,
       payloadBind,
+      resourceBinding,
       note: core.note,
     };
     // keep a trace of the header-claimed amount for callers who want it
