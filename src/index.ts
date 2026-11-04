@@ -2269,6 +2269,14 @@ app.get("/.well-known/erc-8004.json", (c) => {
     supportedTrust: ["reputation"],
     // --- Grey Ridge extension (non-breaking; canonical parsers ignore unknown keys) ---
     payment: { protocol: "x402", version: 2, network: NETWORK, asset: "USDC" },
+    // The settlement-attestation contract an ERC-8004 reputation registry can
+    // consume: our dual-RPC 4-check proof emitted in the standard draft-hopley
+    // JCS/RFC8785 envelope (the "mechanism specified elsewhere" that draft defers).
+    settlement_attestation: {
+      format: "draft-hopley-x402-settlement-attestation-01",
+      descriptor: BASE + "/.well-known/x402-settlement-attestation.json",
+      obtain: BASE + "/x402/receipt-verify?tx=<base-settlement-tx>&url=<x402-endpoint>",
+    },
     price_range_usdc: `${minP}-${maxP}`,
     route_count: rows.length,
     routes,
@@ -2298,6 +2306,7 @@ app.get("/.well-known/api-catalog", (c) => {
           service: [
             { href: CANONICAL_ORIGIN + "/.well-known/x402", type: "application/json", title: "x402 payment manifest" },
             { href: CANONICAL_ORIGIN + "/mcp", type: "application/json", title: "MCP streamable-HTTP endpoint" },
+            { href: CANONICAL_ORIGIN + "/.well-known/x402-settlement-attestation.json", type: "application/json", title: "x402 settlement attestation format (draft-hopley, JCS/RFC8785)" },
           ],
           describedby: [
             { href: CANONICAL_ORIGIN + "/llms.txt", type: "text/plain", title: "Agent catalog (llms.txt)" },
