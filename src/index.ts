@@ -11276,6 +11276,12 @@ export interface ReceiptVerifyResult {
   // a &tx pointing at an unrelated/replayed USDC Transfer to the same payTo that
   // the amount-match alone would wave through.
   authorization: AuthorizationProof;
+  // Cross-resource substitution verdict (4th x402 flaw class, arXiv:2605.30998):
+  // is this settlement uniquely attributable to the resource at `url`, or is it
+  // transplantable as proof-of-payment to other same-(payTo,amount) resources?
+  // DECLARED | SUBSTITUTABLE | RESOURCE_MISMATCH | UNVERIFIED. No named x402
+  // verifier covers this axis.
+  resource_binding: ResourceBinding;
   // Standards-conformant settlement attestation (draft-hopley JCS/RFC8785 envelope)
   // — present ONLY when the verdict is an attestable settlement (SETTLED/REVERTED);
   // null otherwise. This is the field ERC-8004/Vouch/TrustGate can consume.
@@ -11601,25 +11607,125 @@ async function readAuthorizationState(provider: string, authorizer: string, nonc
   } catch { return null; }
 }
 
+// ── Cross-resource substitution (4th x402 flaw class, arXiv:2605.30998) ──────
+// The SOTA x402 threat taxonomy (Ling et al, "Free-Riding the Agentic Web")
+// names four flaw classes; three of them we already cover (duplicate-settlement
+// race via the consumed-nonce check #2, denial-of-settlement via dual-RPC
+// reconcile, cache-leakage via the preflight NO_STORE posture). The remaining
+// axis is CROSS-RESOURCE SUBSTITUTION: the EIP-3009 "exact" scheme signs only
+// (from, to, value, validAfter, validBefore, nonce) — it never signs the
+// RESOURCE. So a single on-chain USDC settlement to a payTo for an amount is not
+// cryptographically tied to any one resource: the same settlement would
+// reconcile-validate as proof-of-payment for EVERY x402 resource sharing that
+// (payTo, amount). A receipt-verify that stops at payTo+amount (every named
+// competitor) silently accepts a payment proven for /cheap as proof of payment
+// for /expensive. This verdict is the measured, keyless answer: it reads the
+// resource identifier the endpoint's live 402 actually declares and reconciles
+// it against the url the caller paid.
+export interface ResourceBinding {
+  verdict: "DECLARED" | "SUBSTITUTABLE" | "RESOURCE_MISMATCH" | "UNVERIFIED";
+  scheme: string | null;
+  // x402's exact scheme (and every deployed scheme today) does NOT sign the
+  // resource into the transfer authorization — so a resource binding, when
+  // present, is a challenge-level DECLARATION, never a cryptographic commitment.
+  scheme_binds_resource: boolean;
+  challenge_resource: string | null;  // the `resource` the live 402 advertised
+  requested_url: string | null;       // the url the caller says they paid
+  matches: boolean | null;            // declared resource ~ requested url
+  nonce_consumed: boolean | null;     // from the EIP-3009 proof (#2) — post-spend the on-chain settlement is singular
+  note: string;
+}
+
+// Normalize + compare a challenge's declared resource against the paid url.
+// challengeResource may be absolute or a path relative to the endpoint; we
+// compare host (case-insensitive) + pathname (trailing-slash-insensitive),
+// ignoring query/fragment. null => could not parse one side. Exported for tests.
+export function resourceMatchesUrl(challengeResource: string | null, requestedUrl: string | null): boolean | null {
+  if (!challengeResource || !requestedUrl) return null;
+  try {
+    const want = new URL(requestedUrl);
+    const got = new URL(challengeResource, requestedUrl); // resolves a relative resource against the endpoint
+    const normPath = (p: string) => (p.replace(/\/+$/, "") || "/");
+    return want.host.toLowerCase() === got.host.toLowerCase() && normPath(want.pathname) === normPath(got.pathname);
+  } catch { return null; }
+}
+
+// Pure core (no I/O). Decide the cross-resource-substitution verdict from the
+// live 402 challenge's declared resource and the url the caller paid.
+//   UNVERIFIED       — no url to check, or no live 402 challenge was obtained
+//   SUBSTITUTABLE    — a 402 was read but it declares NO resource → nothing
+//                      beyond (payTo, amount) ties this settlement to a resource
+//   RESOURCE_MISMATCH— the declared resource is a DIFFERENT resource than the url
+//                      (fail-closed: do not treat this as proof of the paid url)
+//   DECLARED         — the declared resource matches the url (seller asserts the
+//                      payment is for this resource; still a declaration, not a
+//                      signature — disclosed)
+// Exported for unit tests.
+export function computeResourceBinding(
+  requestedUrl: string | null,
+  challengeFetched: boolean,
+  challengeResource: string | null,
+  scheme: string | null,
+  nonceConsumed: boolean | null,
+): ResourceBinding {
+  const common = {
+    scheme: scheme ?? null,
+    scheme_binds_resource: false,
+    challenge_resource: challengeResource ?? null,
+    requested_url: requestedUrl ?? null,
+    nonce_consumed: nonceConsumed,
+  };
+  if (!requestedUrl) {
+    return { ...common, verdict: "UNVERIFIED", matches: null,
+      note: "no resource url supplied — this payment was reconciled by payTo + amount only, so its cross-resource binding cannot be assessed. Pass ?url=<the x402 resource you paid> to check whether this settlement is uniquely attributable to that resource (cross-resource substitution, arXiv:2605.30998)." };
+  }
+  if (!challengeFetched) {
+    return { ...common, verdict: "UNVERIFIED", matches: null,
+      note: `could not read a live 402 challenge from ${requestedUrl} (unreachable, or it did not answer with an x402 challenge) — the payTo + amount reconciliation stands, but the resource binding is unverified.` };
+  }
+  if (challengeResource === null) {
+    return { ...common, verdict: "SUBSTITUTABLE", matches: null,
+      note: `the live 402 at ${requestedUrl} declares NO \`resource\` field, so nothing beyond (payTo, amount) ties this settlement to a specific resource: the same on-chain payment would reconcile-validate as proof-of-payment for ANY x402 resource sharing this payTo + amount (cross-resource substitution, arXiv:2605.30998). x402's exact scheme does not sign the resource into the transfer authorization, so no verifier — including the facilitator — can cryptographically say which resource this settlement paid for.` };
+  }
+  const matches = resourceMatchesUrl(challengeResource, requestedUrl);
+  if (matches === false) {
+    return { ...common, verdict: "RESOURCE_MISMATCH", matches,
+      note: `the live 402 declares resource=${challengeResource}, which does NOT match the url you verified (${requestedUrl}) — the challenge you would pay there is issued for a different resource. Do not treat this settlement as proof of payment for ${requestedUrl}.` };
+  }
+  const consumedNote = nonceConsumed === true
+    ? " Its EIP-3009 nonce is consumed on-chain, so the on-chain spend itself is singular (not re-spendable); the residual exposure is pre-settlement in-flight substitution of the signed payload."
+    : nonceConsumed === false
+      ? " Note: the nonce is NOT confirmed consumed, so a still-valid authorization for this (payTo, amount) remains structurally transplantable to another resource until spent."
+      : "";
+  return { ...common, verdict: "DECLARED", matches: matches === null ? null : true,
+    note: `the live 402 declares resource=${challengeResource}, matching the url you paid — the seller asserts this payment is for this resource. Caveat: x402's exact scheme signs (from, to, value, validAfter, validBefore, nonce) but NOT the resource, so this is a challenge-level declaration, not a cryptographic binding (cross-resource substitution, arXiv:2605.30998).${consumedNote}` };
+}
+
 // Resolve the endpoint's advertised payTo + amount from its LIVE 402 challenge
 // (the exact requirement a buyer would have paid against). One bounded fetch,
 // degrade-open (any error / non-402 => nulls). Same accepts[] shape as preflight.
-async function fetchLive402PayTo(targetUrl: string): Promise<{ payTo: string | null; atomic: number | null; scheme?: string | null }> {
+async function fetchLive402PayTo(targetUrl: string): Promise<{ payTo: string | null; atomic: number | null; scheme?: string | null; resource?: string | null; fetched?: boolean }> {
   try {
     const res = await preflightFetch(targetUrl, { headers: { "User-Agent": "greyridge-x402-receipt/1", accept: "application/json" }, signal: AbortSignal.timeout(4000) });
-    if (res.status !== 402) return { payTo: null, atomic: null };
+    if (res.status !== 402) return { payTo: null, atomic: null, fetched: false };
     let raw = ""; try { raw = await res.text(); } catch { /* body optional */ }
     let parsed: Record<string, unknown> | null = null; try { parsed = JSON.parse(raw) as Record<string, unknown>; } catch { parsed = null; }
-    if (!parsed) return { payTo: null, atomic: null };
+    if (!parsed) return { payTo: null, atomic: null, fetched: false };
     const acc = (parsed.accepts as unknown[]) ?? (parsed.paymentRequirements as unknown[]);
     const a0 = Array.isArray(acc) && acc.length ? (acc[0] as Record<string, unknown>) : null;
-    if (!a0) return { payTo: null, atomic: null };
+    if (!a0) return { payTo: null, atomic: null, fetched: false };
     const payToRaw = String(a0.payTo ?? a0.payto ?? a0.pay_to ?? "");
     const payTo = ADDR_RE.test(payToRaw) ? payToRaw : null;
     const atomic = parseAtomicAmount(a0.maxAmountRequired ?? a0.amount);
     const scheme = typeof a0.scheme === "string" ? a0.scheme.toLowerCase() : null;
-    return { payTo, atomic, scheme };
-  } catch { return { payTo: null, atomic: null }; }
+    // The challenge's declared `resource` identifier — the one field that says
+    // WHICH resource this payment is for. Accepts[0].resource, else the top-level
+    // `resource`. This is what the cross-resource-substitution verdict reconciles
+    // the paid url against (arXiv:2605.30998).
+    const resRaw = a0.resource ?? (parsed as Record<string, unknown>).resource ?? null;
+    const resource = typeof resRaw === "string" && resRaw.trim() ? resRaw.trim() : null;
+    return { payTo, atomic, scheme, resource, fetched: true };
+  } catch { return { payTo: null, atomic: null, fetched: false }; }
 }
 
 // I/O wrapper: read the receipt from Base mainnet and reconcile it against the
@@ -11642,13 +11748,25 @@ export async function x402ReceiptVerify(
   let advAtomic: number | null = usdcDollarsToAtomic(callerExpectUsdc);
   let advSource: ReceiptVerifyResult["advertised"]["source"] = advPayTo ? "caller" : (advAtomic !== null ? "caller" : null);
   let amountIsCap = false;
-  if (!advPayTo && url) {
+  // Fetch the live 402 whenever a url is present (even if the caller supplied a
+  // payTo) — its declared `resource` + scheme feed the cross-resource-binding
+  // verdict. Caller payTo still wins for the payTo/amount reconciliation.
+  let challengeFetched = false;
+  let challengeResource: string | null = null;
+  let challengeScheme: string | null = null;
+  if (url) {
     const live = await fetchLive402PayTo(url);
-    if (live.payTo) {
+    challengeFetched = live.fetched === true;
+    challengeResource = live.resource ?? null;
+    challengeScheme = live.scheme ?? null;
+    if (!advPayTo && live.payTo) {
       advPayTo = live.payTo; advSource = "live-402";
       if (advAtomic === null) { advAtomic = live.atomic; amountIsCap = !!live.scheme && live.scheme !== "exact"; }
     }
   }
+  // Early resource-binding (no nonce-consumption known yet) for the branches that
+  // return before the EIP-3009 proof is computed. Refined in the success path.
+  const rbEarly = computeResourceBinding(url, challengeFetched, challengeResource, challengeScheme, null);
 
   const advertised = { payTo: advPayTo, amount_atomic: advAtomic, amount_usdc: atomicToUsdcStr(advAtomic), source: advSource };
   const host = (u: string) => { try { return new URL(u).host; } catch { return u; } };
@@ -11692,7 +11810,7 @@ export async function x402ReceiptVerify(
       // Two independent providers disagree about what this tx did — refuse to
       // vouch for it. This is the integrity guarantee competitors advertise.
       return { ...base, verdict: "UNVERIFIED", settled: false, tx_status: "unknown", advertised,
-        matched_transfer: null, usdc_transfers: [], block: null, confirmation: "rpc-disagreement", rpc_sources, authorization: authNA,
+        matched_transfer: null, usdc_transfers: [], block: null, confirmation: "rpc-disagreement", rpc_sources, authorization: authNA, resource_binding: rbEarly,
         note: `two independent Base RPC providers returned DIFFERENT settlement content for this tx (${host(urlA)} vs ${host(urlB)}) — failing closed; do not treat this as settled until the providers agree. Retry shortly.` };
     }
   } else if (ra.ok || rb.ok) {
@@ -11709,13 +11827,13 @@ export async function x402ReceiptVerify(
 
   if (rpcError) {
     return { ...base, verdict: "UNVERIFIED", settled: false, tx_status: "unknown", advertised,
-      matched_transfer: null, usdc_transfers: [], block: null, confirmation, rpc_sources, authorization: authNA,
+      matched_transfer: null, usdc_transfers: [], block: null, confirmation, rpc_sources, authorization: authNA, resource_binding: rbEarly,
       note: `could not read the transaction receipt from Base mainnet (${rpcError}) — the tx was NOT proven absent; retry shortly` };
   }
   if (receipt === null || receipt === undefined) {
     const core = computeReceiptVerdict(null, [], advPayTo, advAtomic);
     return { ...base, verdict: core.verdict, settled: core.settled, tx_status: "unknown", advertised,
-      matched_transfer: null, usdc_transfers: [], block: null, confirmation, rpc_sources, authorization: authNA, note: core.note };
+      matched_transfer: null, usdc_transfers: [], block: null, confirmation, rpc_sources, authorization: authNA, resource_binding: rbEarly, note: core.note };
   }
 
   const r = receipt as { status?: string; logs?: unknown[]; blockNumber?: string };
@@ -11764,9 +11882,17 @@ export async function x402ReceiptVerify(
   // Forgery fail-closed: dual-confirmed state-mismatch overrides a would-be
   // SETTLED — two independent providers confirm the nonce is NOT consumed, so
   // the receipt's AuthorizationUsed log (and thus its settlement) is not real.
+  // Nonce-consumption state for the resource-binding verdict: consumed => true,
+  // dual-confirmed forgery => false, otherwise unknown.
+  const nonceConsumed: boolean | null =
+    authorization.status === "consumed" ? true
+    : (authorization.status === "state-mismatch" && authorization.confirmation === "dual-confirmed") ? false
+    : null;
+  const resource_binding = computeResourceBinding(url, challengeFetched, challengeResource, challengeScheme, nonceConsumed);
+
   if (authorization.status === "state-mismatch" && authorization.confirmation === "dual-confirmed") {
     return { ...base, verdict: "UNVERIFIED", settled: false, tx_status: txStatus, advertised,
-      matched_transfer: core.matched, usdc_transfers: transfers, block, confirmation, rpc_sources, authorization,
+      matched_transfer: core.matched, usdc_transfers: transfers, block, confirmation, rpc_sources, authorization, resource_binding,
       note: `${core.note} — BUT ${authorization.note}. Failing closed: the Transfer amount matched, yet the EIP-3009 authorization is not consumed on-chain, so this tx does not prove a genuine settlement of this payment.` };
   }
 
@@ -11774,7 +11900,7 @@ export async function x402ReceiptVerify(
     ? `${core.note}; EIP-3009 authorization consumed on-chain (nonce cross-confirmed), binding this settlement to a spent transfer authorization`
     : core.note;
   const result0: ReceiptVerifyResult = { ...base, verdict: core.verdict, settled: core.settled, tx_status: txStatus, advertised,
-    matched_transfer: core.matched, usdc_transfers: transfers, block, confirmation, rpc_sources, authorization, note };
+    matched_transfer: core.matched, usdc_transfers: transfers, block, confirmation, rpc_sources, authorization, resource_binding, note };
   // Standards-conformant settlement attestation (draft-hopley JCS/RFC8785). Built
   // only for an attestable terminal verdict; reads the settlement block time
   // (degrade-open → attest time) so a consumer gets the standard envelope inline.
@@ -11833,6 +11959,16 @@ function receiptVerifySample(): ReceiptVerifyResult {
       events: 1,
       confirmation: "dual-confirmed",
       note: "EIP-3009 authorization CONSUMED: USDC authorizationState(0x1111…1111, nonce) is true on Base mainnet, cross-confirming the receipt's AuthorizationUsed log against live contract state",
+    },
+    resource_binding: {
+      verdict: "DECLARED",
+      scheme: "exact",
+      scheme_binds_resource: false,
+      challenge_resource: "https://seller.example/x402/data",
+      requested_url: "https://seller.example/x402/data",
+      matches: true,
+      nonce_consumed: true,
+      note: "the live 402 declares resource=https://seller.example/x402/data, matching the url you paid — the seller asserts this payment is for this resource. Caveat: x402's exact scheme signs (from, to, value, validAfter, validBefore, nonce) but NOT the resource, so this is a challenge-level declaration, not a cryptographic binding (cross-resource substitution, arXiv:2605.30998). Its EIP-3009 nonce is consumed on-chain, so the on-chain spend itself is singular; the residual exposure is pre-settlement in-flight substitution of the signed payload.",
     },
     attestation: {
       settlement_result: "SETTLED",

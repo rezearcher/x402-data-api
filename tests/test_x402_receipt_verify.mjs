@@ -28,6 +28,8 @@ const {
   jcsCanonicalize,
   settlementResultOf,
   buildSettlementAttestation,
+  computeResourceBinding,
+  resourceMatchesUrl,
   makeRoutes,
   ROUTE_CATALOG,
 } = await import("../src/index.ts");
@@ -499,6 +501,61 @@ await check("buildSettlementAttestation emits a verifiable draft-hopley envelope
 await check("buildSettlementAttestation returns null for a non-settlement", async () => {
   const att = await buildSettlementAttestation({ verdict: "UNVERIFIED", settled: false, confirmation: "rpc-disagreement", tx: "0x" + "00".repeat(32), advertised: { payTo: null, amount_atomic: null }, matched_transfer: null, authorization: { nonce: null } }, 1730000000000);
   assert.strictEqual(att, null);
+});
+
+// ── Cross-resource substitution verdict (arXiv:2605.30998, 4th flaw class) ──
+// resourceMatchesUrl normalization.
+await check("resourceMatchesUrl: exact match ignores query/fragment/trailing slash", () => {
+  assert.strictEqual(resourceMatchesUrl("https://seller.example/x402/data", "https://seller.example/x402/data"), true);
+  assert.strictEqual(resourceMatchesUrl("https://seller.example/x402/data/", "https://seller.example/x402/data"), true);
+  assert.strictEqual(resourceMatchesUrl("https://seller.example/x402/data?x=1#f", "https://seller.example/x402/data"), true);
+  assert.strictEqual(resourceMatchesUrl("https://SELLER.example/x402/data", "https://seller.example/x402/data"), true);
+});
+await check("resourceMatchesUrl: relative resource resolves against the paid url", () => {
+  assert.strictEqual(resourceMatchesUrl("/x402/data", "https://seller.example/x402/data"), true);
+  assert.strictEqual(resourceMatchesUrl("/x402/other", "https://seller.example/x402/data"), false);
+});
+await check("resourceMatchesUrl: different path or host => false", () => {
+  assert.strictEqual(resourceMatchesUrl("https://seller.example/x402/expensive", "https://seller.example/x402/cheap"), false);
+  assert.strictEqual(resourceMatchesUrl("https://evil.example/x402/data", "https://seller.example/x402/data"), false);
+});
+await check("resourceMatchesUrl: unparseable side => null", () => {
+  assert.strictEqual(resourceMatchesUrl(null, "https://seller.example/x402/data"), null);
+  assert.strictEqual(resourceMatchesUrl("not a url", null), null);
+});
+
+// computeResourceBinding verdicts.
+await check("computeResourceBinding: DECLARED when declared resource matches the paid url", () => {
+  const rb = computeResourceBinding("https://seller.example/x402/data", true, "https://seller.example/x402/data", "exact", true);
+  assert.strictEqual(rb.verdict, "DECLARED");
+  assert.strictEqual(rb.matches, true);
+  assert.strictEqual(rb.scheme_binds_resource, false, "exact scheme never cryptographically binds the resource");
+  assert.strictEqual(rb.nonce_consumed, true);
+});
+await check("computeResourceBinding: RESOURCE_MISMATCH fails closed when the 402 names a different resource (cross-resource substitution)", () => {
+  const rb = computeResourceBinding("https://seller.example/x402/expensive", true, "https://seller.example/x402/cheap", "exact", true);
+  assert.strictEqual(rb.verdict, "RESOURCE_MISMATCH");
+  assert.strictEqual(rb.matches, false);
+  assert.ok(/different resource/i.test(rb.note));
+});
+await check("computeResourceBinding: SUBSTITUTABLE when a 402 is read but declares no resource field", () => {
+  const rb = computeResourceBinding("https://seller.example/x402/data", true, null, "exact", null);
+  assert.strictEqual(rb.verdict, "SUBSTITUTABLE");
+  assert.ok(/no .?resource.? field|ANY x402 resource/i.test(rb.note));
+});
+await check("computeResourceBinding: UNVERIFIED when no url supplied", () => {
+  const rb = computeResourceBinding(null, false, null, null, null);
+  assert.strictEqual(rb.verdict, "UNVERIFIED");
+});
+await check("computeResourceBinding: UNVERIFIED when the live 402 could not be read (payTo-only path)", () => {
+  const rb = computeResourceBinding("https://seller.example/x402/data", false, null, null, true);
+  assert.strictEqual(rb.verdict, "UNVERIFIED");
+  assert.ok(/could not read a live 402/i.test(rb.note));
+});
+await check("computeResourceBinding: DECLARED notes unconsumed-nonce transplant exposure", () => {
+  const rb = computeResourceBinding("https://seller.example/x402/data", true, "https://seller.example/x402/data", "exact", false);
+  assert.strictEqual(rb.verdict, "DECLARED");
+  assert.ok(/transplantable|not confirmed consumed/i.test(rb.note));
 });
 
 console.log(`\n${pass} passed`);
