@@ -10,7 +10,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
-from canary_predicates import yields_ok, funding_ok  # noqa: E402
+from canary_predicates import yields_ok, funding_ok, prices_ok  # noqa: E402
 
 checks = []
 
@@ -56,6 +56,29 @@ expect("funding: null markPx -> False", funding_ok({"preview": [{"funding": GOOD
 expect("funding: empty preview -> False", funding_ok({"preview": []})[0], False)
 # degrade open
 expect("funding: no payload -> None", funding_ok(None)[0], None)
+
+# ---- /crypto/prices ----
+GOOD_PRICES = {"preview": [{"id": "bitcoin", "symbol": "BTC", "price": 80329.95, "change_24h": 2.9, "confidence": 0.999, "timestamp": 1793830206}]}
+expect("prices: healthy BTC -> True", prices_ok(GOOD_PRICES)[0], True)
+# negative change_24h is valid (a down day), not a failure
+DOWN_DAY = {"preview": [{"id": "bitcoin", "symbol": "BTC", "price": 61000.0, "change_24h": -7.4, "confidence": 0.98, "timestamp": 1793830206}]}
+expect("prices: down day is fine -> True", prices_ok(DOWN_DAY)[0], True)
+# THE footgun: CoinGecko 403 geo-block/UA regression -> empty preview with a 200
+expect("prices: empty preview -> False", prices_ok({"preview": []})[0], False)
+# null price (hollow upstream)
+expect("prices: null price -> False", prices_ok({"preview": [{"id": "bitcoin", "symbol": "BTC", "price": None, "change_24h": 1.0, "confidence": 0.99, "timestamp": 1793830206}]})[0], False)
+# decimals-inflation bug (x1e6) blows past the $10M ceiling
+expect("prices: decimals inflation -> False", prices_ok({"preview": [{"id": "bitcoin", "symbol": "BTC", "price": 8.03e10, "change_24h": 1.0, "confidence": 0.99, "timestamp": 1793830206}]})[0], False)
+# wrong coin returned (resolver regression) — default preview must be bitcoin
+expect("prices: wrong coin -> False", prices_ok({"preview": [{"id": "dogecoin", "symbol": "DOGE", "price": 0.12, "change_24h": 1.0, "confidence": 0.99, "timestamp": 1793830206}]})[0], False)
+# bool price (isinstance(True, int) footgun)
+expect("prices: bool price -> False", prices_ok({"preview": [{"id": "bitcoin", "symbol": "BTC", "price": True, "change_24h": 1.0, "confidence": 0.99, "timestamp": 1793830206}]})[0], False)
+# confidence out of (0,1] band (garbage)
+expect("prices: bad confidence -> False", prices_ok({"preview": [{"id": "bitcoin", "symbol": "BTC", "price": 80000.0, "change_24h": 1.0, "confidence": 1.5, "timestamp": 1793830206}]})[0], False)
+# missing timestamp (schema regression)
+expect("prices: null timestamp -> False", prices_ok({"preview": [{"id": "bitcoin", "symbol": "BTC", "price": 80000.0, "change_24h": 1.0, "confidence": 0.99, "timestamp": None}]})[0], False)
+# degrade open
+expect("prices: no payload -> None", prices_ok(None)[0], None)
 
 failed = [c for c in checks if not c[1]]
 print(f"\n{len(checks) - len(failed)}/{len(checks)} checks passed")

@@ -63,3 +63,44 @@ def funding_ok(payload):
                    f"binance={f0.get('binance')} bybit={f0.get('bybit')} markPx={mark} "
                    f"(a venue silently degraded to null — the geo-block/UA footgun; "
                    f"5-venue superset is hollow)")
+
+
+def prices_ok(payload):
+    """/crypto/prices preview — the #2 external-payer DATA route (9 recurring payers).
+
+    Silent-degradation guard: /crypto/prices is CoinGecko-backed, the same upstream
+    class whose geo-block/UA regression (403) returns an empty list / null fields with
+    a 200 — a paying agent then gets a hollow price and churns, and availability alone
+    never catches it. The free preview's default coin is DETERMINISTIC bitcoin/BTC
+    (confirmed live 2026-11-04 across both hosts), so anchor on that structurally-stable
+    fixture: a non-empty preview whose top item is id=bitcoin / symbol=BTC with a
+    numeric price in a permanent band (>$1k floor BTC has held for years; <$10M ceiling
+    catches a 1e6/1e18 decimals-inflation bug), a numeric change_24h, a confidence in
+    (0,1], and a positive int timestamp. Bands are wide enough that live market drift
+    cannot flap them, tight enough to catch null / empty / a decimals bug. Degrade open
+    on a missing payload.
+    """
+    if not isinstance(payload, dict):
+        return None, "no payload"
+    pv = payload.get("preview") or []
+    top = pv[0] if pv else {}
+    price = top.get("price")
+    chg = top.get("change_24h")
+    conf = top.get("confidence")
+    ts = top.get("timestamp")
+
+    def numeric(x):
+        return isinstance(x, (int, float)) and not isinstance(x, bool)
+    ok = bool(
+        len(pv) >= 1
+        and top.get("id") == "bitcoin" and top.get("symbol") == "BTC"
+        and numeric(price) and 1000 < price < 10_000_000
+        and numeric(chg)
+        and numeric(conf) and 0 < conf <= 1
+        and isinstance(ts, int) and not isinstance(ts, bool) and ts > 0)
+    if ok:
+        return True, "ok"
+    return False, (f"preview_len={len(pv)} top_id={top.get('id')} top_symbol={top.get('symbol')} "
+                   f"price={price} change_24h={chg} confidence={conf} timestamp={ts} "
+                   f"(empty/null CoinGecko upstream — the geo-block/UA 403 footgun — or a "
+                   f"decimals bug; #2 paid route returning a hollow price)")

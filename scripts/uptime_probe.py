@@ -197,7 +197,7 @@ def _get(path):
     return json.loads(urllib.request.urlopen(urllib.request.Request(BASE + path, headers=ghdr), timeout=20).read())
 # Pure predicates live in canary_predicates.py (unit-tested with negative controls so the canary is
 # proven to TRIP on the exact silent-degradation it guards — not just pass on a healthy day).
-from canary_predicates import yields_ok, funding_ok  # noqa: E402
+from canary_predicates import yields_ok, funding_ok, prices_ok  # noqa: E402
 # (1) /defi/yields — the #1 external-payer route; (2) /crypto/funding — the 5-venue superset whose
 # Binance+Bybit legs geo-block to null. Degrade OPEN: a probe error is inconclusive (None).
 yields_detection_ok = None
@@ -214,8 +214,18 @@ try:
         degraded.append("/crypto/funding VENUE REGRESSION: " + _fr)
 except Exception:
     funding_detection_ok = None  # inconclusive — degrade open
+# (3) /crypto/prices — the #2 external-payer DATA route (9 recurring payers, CDP Bazaar
+# demand sensor). CoinGecko-backed => the same geo-block/UA 403 footgun that empties
+# /crypto/funding empties this with a 200; availability alone never sees a hollow price.
+prices_detection_ok = None
+try:
+    prices_detection_ok, _pr = prices_ok(_get("/crypto/prices/preview"))
+    if prices_detection_ok is False:
+        degraded.append("/crypto/prices DATA REGRESSION: " + _pr)
+except Exception:
+    prices_detection_ok = None  # inconclusive — degrade open
 d = os.path.expanduser("~/.hermes/data/x402-data-api-uptime"); os.makedirs(d, exist_ok=True)
 alert = bool(degraded)
 summary = f"{len(S)} eps, n={sum(o['n'] for o in out.values())}" + (f" | ALERT degraded: {'; '.join(degraded)}" if degraded else "")
-json.dump({"fetched_at": now, "status": "ok", "summary": summary, "alert": alert, "degraded": degraded, "scan_detection_ok": detection_ok, "gate_detection_ok": gate_detection_ok, "report_detection_ok": report_detection_ok, "security_detection_ok": security_detection_ok, "yields_detection_ok": yields_detection_ok, "funding_detection_ok": funding_detection_ok, "tg_bot_ok": tg_bot_ok, "endpoints": out}, open(d + "/latest.json", "w"), indent=1)
+json.dump({"fetched_at": now, "status": "ok", "summary": summary, "alert": alert, "degraded": degraded, "scan_detection_ok": detection_ok, "gate_detection_ok": gate_detection_ok, "report_detection_ok": report_detection_ok, "security_detection_ok": security_detection_ok, "yields_detection_ok": yields_detection_ok, "funding_detection_ok": funding_detection_ok, "prices_detection_ok": prices_detection_ok, "tg_bot_ok": tg_bot_ok, "endpoints": out}, open(d + "/latest.json", "w"), indent=1)
 print(json.dumps(out, indent=1))
