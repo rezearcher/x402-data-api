@@ -1444,6 +1444,7 @@ ${provisionMeta}
     <li><a href="/llms.txt">/llms.txt</a></li>
     <li><a href="/openapi.json">/openapi.json</a></li>
     <li><a href="/.well-known/x402">/.well-known/x402</a></li>
+    <li><a href="/.well-known/ai.txt">/.well-known/ai.txt</a></li>
     <li><a href="/.well-known/agent-card.json">A2A Agent Card</a></li>
     <li><a href="/.well-known/erc-8004.json">ERC-8004 agent registration (x402-payable)</a></li>
     <li><a href="/.well-known/x402-settlement-attestation.json">x402 settlement attestation format (draft-hopley, JCS/RFC8785)</a></li>
@@ -3140,6 +3141,7 @@ app.get("/sitemap.xml", (c) => {
   const pages = [
     { path: "/", priority: "1.0", changefreq: "daily" },
     { path: "/.well-known/x402", priority: "0.9", changefreq: "weekly" },
+    { path: "/.well-known/ai.txt", priority: "0.8", changefreq: "weekly" },
     { path: "/openapi.json", priority: "0.9", changefreq: "weekly" },
     { path: "/llms.txt", priority: "0.8", changefreq: "weekly" },
     { path: "/terms", priority: "0.7", changefreq: "monthly" },
