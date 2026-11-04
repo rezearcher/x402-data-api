@@ -3446,11 +3446,40 @@ app.get("/openapi.json", (c) => {
 // real value, then pays for the full set. Mirrors /scan/mcp/preview + the freemium
 // pattern proven across the Bazaar's top data sellers. Free, ungated.
 app.get("/crypto/prices/preview", async (c) => {
+  const coinsParam = c.req.query("coins");
+  // No ?coins= → the unchanged 1-of-N teaser (what catalogs/marketing link).
+  if (!coinsParam) {
+    try {
+      const all = await fetchTokenPrices(["bitcoin", "ethereum", "solana"]);
+      return c.json({
+        preview: all.slice(0, 1),
+        note: "Free 1-of-N sample. Pass ?coins=<ids> to price YOUR coins free (3/IP/day full output), or GET /crypto/prices?coins=<ids> ($0.001) — up to 25 tokens, keyless x402 on Base.",
+      });
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, { status: 502 });
+    }
+  }
+  // ?coins= present → the caller wants the real thing. Validate BEFORE the
+  // trial so a malformed request never burns one of the 3 free pulls.
+  const ids = resolveCoinIds(coinsParam.split(",").map((s) => s.trim()).filter(Boolean));
+  if (ids.length === 0) return c.json({ error: "coins query param must contain at least one CoinGecko id or ticker symbol" }, { status: 400 });
+  if (ids.length > 25) return c.json({ error: "coins query param accepts at most 25 ids" }, { status: 400 });
+  const invalid = ids.filter((id) => !COINGECKO_ID_RE.test(id));
+  if (invalid.length > 0) return c.json({ error: `invalid coingecko id(s): ${invalid.join(", ")}` }, { status: 400 });
+  const paidUrl = paidUrlFrom(c);
   try {
-    const all = await fetchTokenPrices(["bitcoin", "ethereum", "solana"]);
+    const t = await trialQuota(c, "prices");
+    if (t.exhausted) {
+      const all = await fetchTokenPrices(["bitcoin", "ethereum", "solana"]);
+      return c.json({ preview: all.slice(0, 1), trial: { full_pulls_left_today: 0 }, paid: paidUrl, price_usdc: "0.001", note: "Free full-output trial exhausted for today (3/IP/day); showing 1-of-N sample. Paid (unmetered): GET /crypto/prices?coins=<ids> ($0.001)." });
+    }
+    const prices = await fetchTokenPrices(ids);
     return c.json({
-      preview: all.slice(0, 1),
-      note: "Free 1-of-N sample. Full: GET /crypto/prices?coins=<ids> ($0.001) — up to 25 tokens, keyless x402 on Base.",
+      data: prices,
+      trial: t.left === null ? undefined : { full_pulls_left_today: t.left },
+      paid: paidUrl,
+      price_usdc: "0.001",
+      note: `Free full-output trial — the complete paid result for your coins${t.left === null ? "" : ` (${t.left} left today, 3/IP/day)`}. Wire it unmetered: GET /crypto/prices?coins=<ids> ($0.001), keyless x402 on Base.`,
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -3473,36 +3502,123 @@ app.get("/crypto/funding/preview", async (c) => {
       venues: { gate, bitget, okx, dydx },
     });
   }
+  const limitParam = c.req.query("limit");
+  // No ?limit= → the unchanged top-1 teaser (what catalogs/marketing link).
+  if (!limitParam) {
+    try {
+      const all = await fetchFundingRates(20);
+      return c.json({
+        preview: all.slice(0, 1),
+        total_available: all.length,
+        note: "Free top-1 sample. Pass ?limit=20 to pull the FULL ranked feed + arb verdict free (3/IP/day), or GET /crypto/funding?limit=20 ($0.004) — ranked 6-venue Binance+Bybit+OKX+Hyperliquid+dYdX+Gate funding + per-venue open interest + an OI-weighted CEX↔DEX arb verdict (thin-book venues screened out so the best long/short is executable), keyless x402 on Base.",
+      });
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, { status: 502 });
+    }
+  }
+  // ?limit= present → the caller wants the real feed. Validate BEFORE the trial.
+  let limit = parseInt(limitParam, 10);
+  if (!Number.isFinite(limit) || limit <= 0) return c.json({ error: "limit must be a positive integer (1-100)" }, { status: 400 });
+  limit = Math.min(limit, 100);
+  const paidUrl = paidUrlFrom(c);
   try {
-    const all = await fetchFundingRates(20);
+    const t = await trialQuota(c, "funding");
+    if (t.exhausted) {
+      const all = await fetchFundingRates(20);
+      return c.json({ preview: all.slice(0, 1), total_available: all.length, trial: { full_pulls_left_today: 0 }, paid: paidUrl, price_usdc: "0.004", note: "Free full-feed trial exhausted for today (3/IP/day); showing top-1 sample. Paid (unmetered): GET /crypto/funding?limit=20 ($0.004)." });
+    }
+    const rates = await fetchFundingRates(limit);
     return c.json({
-      preview: all.slice(0, 1),
-      total_available: all.length,
-      note: "Free top-1 sample. Full: GET /crypto/funding?limit=20 ($0.004) — ranked 6-venue Binance+Bybit+OKX+Hyperliquid+dYdX+Gate funding + per-venue open interest + an OI-weighted CEX↔DEX arb verdict (thin-book venues screened out so the best long/short is executable), keyless x402 on Base.",
+      data: rates,
+      trial: t.left === null ? undefined : { full_pulls_left_today: t.left },
+      paid: paidUrl,
+      price_usdc: "0.004",
+      note: `Free full-feed trial — the complete paid 6-venue funding + OI-weighted arb verdict${t.left === null ? "" : ` (${t.left} left today, 3/IP/day)`}. Wire it unmetered: GET /crypto/funding?limit=20 ($0.004), keyless x402 on Base.`,
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
 });
 app.get("/defi/yields/preview", async (c) => {
+  const project = c.req.query("project") || undefined;
+  const chain = c.req.query("chain") || undefined;
+  const stable = c.req.query("stable") === "true";
+  const sort = c.req.query("sort") === "risk_adjusted" ? "risk_adjusted" : "tvl";
+  const limitParam = c.req.query("limit");
+  const hasQuery = !!(project || chain || c.req.query("stable") || limitParam || c.req.query("sort"));
+  // No filter params → the unchanged top-1 teaser (what catalogs/marketing link).
+  if (!hasQuery) {
+    try {
+      const all = await fetchDefiYields(20, undefined, undefined, false);
+      return c.json({
+        preview: all.slice(0, 1),
+        total_available: all.length,
+        note: "Free top-1 sample. Pass ?project=/?chain=/?stable=true/?limit= to pull the FULL ranked+filtered list free (3/IP/day), or GET /defi/yields?limit=20 ($0.001) — ranked APY trend+IL risk+stability forecast+TVL, filter by project/chain/stablecoin, keyless x402 on Base.",
+      });
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, { status: 502 });
+    }
+  }
+  // Filters present → the caller wants the real list. Validate BEFORE the trial.
+  let limit = limitParam ? parseInt(limitParam, 10) : 20;
+  if (limitParam && (!Number.isFinite(limit) || limit <= 0)) return c.json({ error: "limit must be a positive integer (1-100)" }, { status: 400 });
+  limit = Math.min(Math.max(limit, 1), 100);
+  const paidUrl = paidUrlFrom(c);
   try {
-    const all = await fetchDefiYields(20, undefined, undefined, false);
+    const t = await trialQuota(c, "yields");
+    if (t.exhausted) {
+      const all = await fetchDefiYields(20, undefined, undefined, false);
+      return c.json({ preview: all.slice(0, 1), total_available: all.length, trial: { full_pulls_left_today: 0 }, paid: paidUrl, price_usdc: "0.001", note: "Free full-list trial exhausted for today (3/IP/day); showing top-1 sample. Paid (unmetered): GET /defi/yields?limit=20&project=<p> ($0.001)." });
+    }
+    const pools = await fetchDefiYields(limit, project, chain, stable, sort);
     return c.json({
-      preview: all.slice(0, 1),
-      total_available: all.length,
-      note: "Free top-1 sample. Full: GET /defi/yields?limit=20 ($0.001) — ranked APY trend+IL risk+stability forecast+TVL, filter by project/chain/stablecoin, keyless x402 on Base.",
+      data: pools,
+      total_available: pools.length,
+      trial: t.left === null ? undefined : { full_pulls_left_today: t.left },
+      paid: paidUrl,
+      price_usdc: "0.001",
+      note: `Free full-list trial — the complete paid ranked+filtered result for your query${t.left === null ? "" : ` (${t.left} left today, 3/IP/day)`}. Wire it unmetered: GET /defi/yields?limit=20 ($0.001), keyless x402 on Base.`,
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
 });
 app.get("/pm/markets/preview", async (c) => {
+  const query = c.req.query("query") || undefined;
+  const limitParam = c.req.query("limit");
+  const hasQuery = !!(query || limitParam);
+  // No query/limit → the unchanged top-1 teaser (what catalogs/marketing link).
+  if (!hasQuery) {
+    try {
+      const all = await fetchPolymarketMarkets(undefined, 20);
+      return c.json({
+        preview: all.slice(0, 1),
+        total_available: all.length,
+        note: "Free top-1 sample. Pass ?query=<kw> or ?limit= to pull the FULL ranked market list free (3/IP/day), or GET /pm/markets?query=&limit=20 ($0.005) — up to 100 markets ranked by volume24hr, with bestBid/bestAsk/spread, clobTokenIds, and category tags, keyless x402 on Base.",
+      });
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, { status: 502 });
+    }
+  }
+  // query/limit present → the caller wants the real list. Validate BEFORE trial.
+  let limit = limitParam ? parseInt(limitParam, 10) : 20;
+  if (limitParam && (!Number.isFinite(limit) || limit <= 0)) return c.json({ error: "limit must be a positive integer (1-100)" }, { status: 400 });
+  limit = Math.min(Math.max(limit, 1), 100);
+  const paidUrl = paidUrlFrom(c);
   try {
-    const all = await fetchPolymarketMarkets(undefined, 20);
+    const t = await trialQuota(c, "pm");
+    if (t.exhausted) {
+      const all = await fetchPolymarketMarkets(undefined, 20);
+      return c.json({ preview: all.slice(0, 1), total_available: all.length, trial: { full_pulls_left_today: 0 }, paid: paidUrl, price_usdc: "0.005", note: "Free full-list trial exhausted for today (3/IP/day); showing top-1 sample. Paid (unmetered): GET /pm/markets?query=&limit=20 ($0.005)." });
+    }
+    const markets = await fetchPolymarketMarkets(query, limit);
     return c.json({
-      preview: all.slice(0, 1),
-      total_available: all.length,
-      note: "Free top-1 sample. Full: GET /pm/markets?query=&limit=20 ($0.005) — up to 100 markets ranked by volume24hr, with bestBid/bestAsk/spread, clobTokenIds, and category tags, keyless x402 on Base.",
+      data: markets,
+      total_available: markets.length,
+      trial: t.left === null ? undefined : { full_pulls_left_today: t.left },
+      paid: paidUrl,
+      price_usdc: "0.005",
+      note: `Free full-list trial — the complete paid ranked market result for your query${t.left === null ? "" : ` (${t.left} left today, 3/IP/day)`}. Wire it unmetered: GET /pm/markets?query=&limit=20 ($0.005), keyless x402 on Base.`,
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -8050,15 +8166,46 @@ app.get("/defi/yield-entry-verdict", async (c) => {
 // Free keyless preview — the verdict for a demo pool so an agent can sample the
 // packaged output before paying, mirroring /defi/safe-yields/preview.
 app.get("/defi/yield-entry-verdict/preview", async (c) => {
-  try {
-    const sample = await fetchDefiYields(1, undefined, undefined, false);
-    if (sample.length === 0) {
-      return c.json({ preview: null, note: "No demo pool available right now.", status: 502 }, { status: 502 });
+  const pool = (c.req.query("pool") || "").trim();
+  // No ?pool= → the unchanged top-TVL demo verdict (what catalogs/marketing link).
+  if (!pool) {
+    try {
+      const sample = await fetchDefiYields(1, undefined, undefined, false);
+      if (sample.length === 0) {
+        return c.json({ preview: null, note: "No demo pool available right now.", status: 502 }, { status: 502 });
+      }
+      const result = computeYieldEntryVerdict(sample[0]);
+      return c.json({
+        preview: result,
+        note: "Free sample verdict for the current top-TVL pool. Pass ?pool=<poolId from /defi/yields> to get the verdict for YOUR pool free (3/IP/day), or GET /defi/yield-entry-verdict?pool=<poolId> ($0.01) — packaged SUSTAINABLE|DECAYING|OUTLIER|AVOID + risk score + field-cited reasons, keyless x402 on Base.",
+      });
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, { status: 502 });
     }
-    const result = computeYieldEntryVerdict(sample[0]);
+  }
+  // ?pool= present → the caller wants the verdict for their own pool.
+  const paidUrl = paidUrlFrom(c);
+  try {
+    const t = await trialQuota(c, "yieldverdict");
+    if (t.exhausted) {
+      const sample = await fetchDefiYields(1, undefined, undefined, false);
+      const demo = sample.length ? computeYieldEntryVerdict(sample[0]) : null;
+      return c.json({ preview: demo, trial: { full_pulls_left_today: 0 }, paid: paidUrl, price_usdc: "0.01", note: "Free per-pool trial exhausted for today (3/IP/day); showing the top-TVL demo verdict. Paid (unmetered): GET /defi/yield-entry-verdict?pool=<poolId> ($0.01)." });
+    }
+    const p = await fetchDefiPoolById(pool);
+    if (!p) {
+      // Pool-not-found doesn't consume real value — refund the trial so a typo'd
+      // poolId never burns one of the 3 genuine pulls.
+      await refundTrial(c, "yieldverdict");
+      return c.json({ pool, verdict: null, error: "pool not found — the poolId is not in DefiLlama's current universe. Use the 'pool' field from GET /defi/yields.", paid: paidUrl });
+    }
+    const result = computeYieldEntryVerdict(p);
     return c.json({
-      preview: result,
-      note: "Free sample verdict for the current top-TVL pool. Full: GET /defi/yield-entry-verdict?pool=<poolId from /defi/yields> ($0.01) — packaged SUSTAINABLE|DECAYING|OUTLIER|AVOID + risk score + field-cited reasons, keyless x402 on Base.",
+      data: result,
+      trial: t.left === null ? undefined : { full_pulls_left_today: t.left },
+      paid: paidUrl,
+      price_usdc: "0.01",
+      note: `Free per-pool trial — the complete packaged verdict for YOUR pool${t.left === null ? "" : ` (${t.left} left today, 3/IP/day)`}. Wire it unmetered: GET /defi/yield-entry-verdict?pool=<poolId> ($0.01), keyless x402 on Base.`,
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -15085,6 +15232,38 @@ async function trialToken(c: any, q: string | undefined): Promise<{ token: strin
   await c.env.API_KEYS.put(key, String(used + 1), { expirationTtl: 90000 });
   return { token: raw, left: TRIAL_PER_DAY - used - 1 };
 }
+
+// Full-depth 3/IP/day trial for the DATA routes — the oracle-proven converting
+// surface (100% of external payers hit /defi/yields + /crypto/*, 0 on security),
+// yet until now only the SECURITY routes had a "try your real input free a few
+// times" path and the converting DATA routes returned just a 1-of-N teaser. An
+// evaluating agent could not see the full ranked/filtered output for ITS query
+// before wiring a funded wallet — the exact gap between a download and a dollar.
+// This closes it: the no-arg preview still returns the teaser (unchanged — what
+// the catalogs/marketing link), but passing the SAME parameter the paid route
+// takes returns the FULL paid output, metered 3/IP/day. Scoped per route-family
+// so trying yields never burns the prices budget. Degrades OPEN when KV is
+// unbound (left:null, no cap) so a KV outage never breaks the free teaser.
+export async function trialQuota(c: any, scope: string): Promise<{ left: number | null; exhausted: boolean }> {
+  if (!c.env.API_KEYS) return { left: null, exhausted: false };
+  const ip = c.req.header("cf-connecting-ip") ?? "unknown";
+  const key = `trialq:${scope}:${ip}:${new Date().toISOString().slice(0, 10)}`;
+  const used = parseInt((await c.env.API_KEYS.get(key)) ?? "0", 10) || 0;
+  if (used >= TRIAL_PER_DAY) return { left: 0, exhausted: true };
+  await c.env.API_KEYS.put(key, String(used + 1), { expirationTtl: 90000 });
+  return { left: TRIAL_PER_DAY - used - 1, exhausted: false };
+}
+
+// Give one trial back when the paid work couldn't be delivered (e.g. a typo'd
+// poolId resolves to nothing) — a non-result must never cost the caller a pull.
+export async function refundTrial(c: any, scope: string): Promise<void> {
+  if (!c.env.API_KEYS) return;
+  const ip = c.req.header("cf-connecting-ip") ?? "unknown";
+  const key = `trialq:${scope}:${ip}:${new Date().toISOString().slice(0, 10)}`;
+  const used = parseInt((await c.env.API_KEYS.get(key)) ?? "0", 10) || 0;
+  if (used > 0) await c.env.API_KEYS.put(key, String(used - 1), { expirationTtl: 90000 });
+}
+
 app.get("/gate/swap/preview", async (c) => {
   const tq = tokenQ(c);
   if (tq !== undefined && !ADDR_RE.test(tq) && !PREVIEW_DEMO_TOKENS[tq.toLowerCase()]) return c.json({ error: `token must be a 0x-prefixed 20-byte Base address (or demo: ${DEMO_TOKEN_ALIAS_HINT})` }, { status: 400 });
