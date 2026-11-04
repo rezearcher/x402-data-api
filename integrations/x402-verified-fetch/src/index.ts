@@ -139,6 +139,18 @@ export interface VerifiedFetchOptions {
    */
   onMismatch?: "annotate" | "throw";
   /**
+   * How to treat a cross-resource-substitution signal (the 4th flaw class):
+   * `resourceBinding.verdict` of RESOURCE_MISMATCH (the live 402 declares a
+   * DIFFERENT resource than the url you fetched) — and, when `strict`, also
+   * SUBSTITUTABLE (the 402 declares no resource at all). "annotate" (default)
+   * attaches the verdict and lets the response through (degrade-open). "throw"
+   * raises X402SettlementError so a strict agent can refuse to use a response it
+   * cannot attribute to the resource it meant to pay for. Independent of the
+   * money-side `onMismatch` — the payment can settle perfectly yet be bound to
+   * the wrong resource.
+   */
+  onResourceMismatch?: "annotate" | "throw" | "strict";
+  /**
    * Resolve the advertised payTo+amount. "probe" (default) sends one unpaid GET
    * to capture the endpoint's live 402; pass `expected` to skip the probe
    * (required for POST/side-effecting endpoints).
@@ -159,7 +171,15 @@ export class X402SettlementError extends Error {
   readonly settlement: VerifiedSettlement;
   readonly response: Response;
   constructor(settlement: VerifiedSettlement, response: Response) {
-    super(`x402 settlement ${settlement.verdict}: ${settlement.note}`);
+    // If the money verdict is fine but we threw on the resource binding, say so —
+    // a strict agent aborting on a wrong/absent resource is a different failure
+    // than an underpaid/wrong-recipient settlement.
+    const rb = settlement.resourceBinding;
+    const msg =
+      settlement.settled && rb && (rb.verdict === "RESOURCE_MISMATCH" || rb.verdict === "SUBSTITUTABLE")
+        ? `x402 resource binding ${rb.verdict}: ${rb.note}`
+        : `x402 settlement ${settlement.verdict}: ${settlement.note}`;
+    super(msg);
     this.name = "X402SettlementError";
     this.settlement = settlement;
     this.response = response;
@@ -293,6 +313,7 @@ export function wrapFetchWithVerifiedPayment(
 ): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
   const reconcileMode = options.reconcile ?? "local";
   const onMismatch = options.onMismatch ?? "annotate";
+  const onResourceMismatch = options.onResourceMismatch ?? "annotate";
   const resolveMode = options.resolveAdvertised ?? "probe";
   const fetchImpl = options.fetchImpl ?? baseFetch;
   const timeoutMs = options.timeoutMs ?? 7000;
@@ -536,6 +557,15 @@ export function wrapFetchWithVerifiedPayment(
 
     if (onMismatch === "throw" && !core.settled && core.verdict !== "UNVERIFIED" && core.verdict !== "NOT_FOUND") {
       throw new X402SettlementError(settlement, out);
+    }
+    // 4th flaw class: let a strict agent refuse a response it cannot attribute to
+    // the resource it paid for. RESOURCE_MISMATCH always throws under "throw"/"strict";
+    // the softer SUBSTITUTABLE (no resource declared) throws only under "strict".
+    if (onResourceMismatch !== "annotate") {
+      const rbVerdict = resourceBinding.verdict;
+      if (rbVerdict === "RESOURCE_MISMATCH" || (onResourceMismatch === "strict" && rbVerdict === "SUBSTITUTABLE")) {
+        throw new X402SettlementError(settlement, out);
+      }
     }
     return out;
   };

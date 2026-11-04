@@ -493,3 +493,57 @@ test("wrapper fails the resource bind UNVERIFIED when the caller bound `expected
   assert.equal(verdict.verdict, "SETTLED");
   assert.equal(verdict.resourceBinding.verdict, "UNVERIFIED");
 });
+
+// --- onResourceMismatch: strict agent aborts on wrong/absent resource --------
+test("onResourceMismatch=throw raises on RESOURCE_MISMATCH even when money SETTLED", async () => {
+  const url = "https://seller.example/x402/data";
+  const tx = "0x8e9643e4f7a1c8e6b4d2f0a1b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1f5";
+  const receipt = { status: "0x1", blockNumber: "0x2e8f4a2", logs: [usdcLog(BUYER, PAYTO, 4000)] };
+  const baseFetch = async () => makeSettledResponse(tx);
+  const fetchImpl = async (u, init) => {
+    if (init && init.method === "POST") return new Response(JSON.stringify({ result: receipt }), { status: 200 });
+    // 402 declares a DIFFERENT resource than the url we fetched
+    return new Response(
+      JSON.stringify({ resource: { url: "https://seller.example/x402/PREMIUM" }, accepts: [{ scheme: "exact", payTo: PAYTO, amount: "4000" }] }),
+      { status: 402 },
+    );
+  };
+  const vf = wrapFetchWithVerifiedPayment(baseFetch, new x402Client(), { fetchImpl, onResourceMismatch: "throw" });
+  await assert.rejects(() => vf(url), (e) => {
+    assert.ok(e instanceof X402SettlementError);
+    assert.equal(e.settlement.verdict, "SETTLED"); // money is fine
+    assert.equal(e.settlement.resourceBinding.verdict, "RESOURCE_MISMATCH");
+    assert.match(e.message, /resource binding RESOURCE_MISMATCH/);
+    return true;
+  });
+});
+
+test("onResourceMismatch=throw does NOT throw on a plain SUBSTITUTABLE (only strict does)", async () => {
+  const url = "https://seller.example/x402/data";
+  const tx = "0x9e9643e4f7a1c8e6b4d2f0a1b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b106";
+  const receipt = { status: "0x1", blockNumber: "0x2e8f4a2", logs: [usdcLog(BUYER, PAYTO, 4000)] };
+  const baseFetch = async () => makeSettledResponse(tx);
+  const fetchImpl = async (u, init) => {
+    if (init && init.method === "POST") return new Response(JSON.stringify({ result: receipt }), { status: 200 });
+    return new Response(JSON.stringify({ accepts: [{ scheme: "exact", payTo: PAYTO, amount: "4000" }] }), { status: 402 });
+  };
+  const vf = wrapFetchWithVerifiedPayment(baseFetch, new x402Client(), { fetchImpl, onResourceMismatch: "throw" });
+  const res = await vf(url); // no throw
+  assert.equal(JSON.parse(res.headers.get(SETTLEMENT_HEADER)).resourceBinding.verdict, "SUBSTITUTABLE");
+});
+
+test("onResourceMismatch=strict DOES throw on SUBSTITUTABLE", async () => {
+  const url = "https://seller.example/x402/data";
+  const tx = "0xae9643e4f7a1c8e6b4d2f0a1b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b117";
+  const receipt = { status: "0x1", blockNumber: "0x2e8f4a2", logs: [usdcLog(BUYER, PAYTO, 4000)] };
+  const baseFetch = async () => makeSettledResponse(tx);
+  const fetchImpl = async (u, init) => {
+    if (init && init.method === "POST") return new Response(JSON.stringify({ result: receipt }), { status: 200 });
+    return new Response(JSON.stringify({ accepts: [{ scheme: "exact", payTo: PAYTO, amount: "4000" }] }), { status: 402 });
+  };
+  const vf = wrapFetchWithVerifiedPayment(baseFetch, new x402Client(), { fetchImpl, onResourceMismatch: "strict" });
+  await assert.rejects(() => vf(url), (e) => {
+    assert.equal(e.settlement.resourceBinding.verdict, "SUBSTITUTABLE");
+    return true;
+  });
+});

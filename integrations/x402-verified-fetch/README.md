@@ -43,6 +43,8 @@ Every verdict now carries a `resourceBinding` that ties the settlement to the re
 | `RESOURCE_MISMATCH` | the 402 declared a **different** resource than the URL you fetched — do not treat the settlement as proof of payment for your URL |
 | `UNVERIFIED` | no live 402 was read (you passed `expected`, `resolveAdvertised: "off"`, or a POST) |
 
+A strict agent can refuse a response it cannot attribute to the resource it paid for: `onResourceMismatch: "throw"` raises `X402SettlementError` on `RESOURCE_MISMATCH` (even when the money `SETTLED`), and `"strict"` additionally throws on `SUBSTITUTABLE`. Default is `"annotate"` (degrade-open — the verdict rides on `x-grs-settlement`, the request is never broken).
+
 **Only the payer can bind this honestly.** A hosted verifier (including Grey Ridge's own `/x402/receipt-verify`) only ever gets a `url` the caller *claims* they paid — it cannot know which resource the client truly requested. This wrapper **is** the client: it holds the exact URL the agent fetched and reads the live 402 that URL answers with, so the comparison is against ground truth the client observed first-hand. That makes this **the only x402 fetch wrapper that covers all four flaw classes** (payTo, amount, replay/authorization, and resource) — the six other `@x402/fetch` wrappers read no chain at all, and no hosted verifier can run checks #1, #4, or an authoritative resource bind.
 
 It **composes** the official Coinbase payer client (`@x402/fetch` → `wrapFetchWithPayment`, 670k+ downloads/mo) rather than replacing it. You keep your existing payment flow; you gain an independent audit of what actually moved.
