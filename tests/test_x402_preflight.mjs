@@ -17,7 +17,7 @@ import { register } from "node:module";
 
 register(new URL("./cfw-hooks.mjs", import.meta.url));
 
-const { x402Preflight, makeRoutes, ROUTE_CATALOG, computePriceAccuracy, findManifestAdvertisedAtomic, usdcDollarsToAtomic, computeDelivery, computeLiveness, computePriceTrap } = await import("../src/index.ts");
+const { x402Preflight, makeRoutes, ROUTE_CATALOG, computePriceAccuracy, findManifestAdvertisedAtomic, usdcDollarsToAtomic, computeDelivery, computeLiveness, computePriceTrap, computeCachePosture } = await import("../src/index.ts");
 
 let pass = 0;
 function check(name, fn) { return Promise.resolve(fn()).then(() => { pass++; console.log(`ok - ${name}`); }); }
@@ -494,6 +494,80 @@ await check("e2e: live $0.004 over &max $0.001 -> CAUTION (budget), not AVOID", 
   restoreFetch();
   assert.strictEqual(r.price_trap.exceeds_caller_max, true, "exceeds caller max");
   assert.strictEqual(r.verdict, "CAUTION", `verdict ${r.verdict} (over budget, not a honeypot)`);
+});
+
+// ---------------------------------------------------------------------------
+// Attack III (arXiv 2605.11781) cache-leakage posture — computeCachePosture unit
+// tests + an e2e that a shared cache actively storing the route trips CAUTION.
+// ---------------------------------------------------------------------------
+const H = (obj) => new Headers(obj);
+
+// 47. no-store -> NO_STORE, not cacheable (the good posture).
+await check("cache posture: no-store -> NO_STORE (good)", async () => {
+  const p = computeCachePosture(H({ "cache-control": "no-store" }));
+  assert.strictEqual(p.verdict, "NO_STORE", `verdict ${p.verdict}`);
+  assert.strictEqual(p.cacheable, false, "not cacheable");
+});
+
+// 48. private (no public) -> NO_STORE (shared caches cannot store it).
+await check("cache posture: private -> NO_STORE (shared cache can't store)", async () => {
+  const p = computeCachePosture(H({ "cache-control": "private, max-age=60" }));
+  assert.strictEqual(p.verdict, "NO_STORE", `verdict ${p.verdict}`);
+});
+
+// 49. public, max-age -> CACHEABLE advisory (a shared cache MAY store it).
+await check("cache posture: public,max-age -> CACHEABLE (advisory)", async () => {
+  const p = computeCachePosture(H({ "cache-control": "public, max-age=300" }));
+  assert.strictEqual(p.verdict, "CACHEABLE", `verdict ${p.verdict}`);
+  assert.strictEqual(p.cacheable, true, "cacheable");
+});
+
+// 50. Age>0 -> OBSERVED_CACHED (hard evidence a shared cache served it).
+await check("cache posture: Age>0 -> OBSERVED_CACHED (hard evidence)", async () => {
+  const p = computeCachePosture(H({ "age": "42", "cache-control": "max-age=600" }));
+  assert.strictEqual(p.verdict, "OBSERVED_CACHED", `verdict ${p.verdict}`);
+  assert.strictEqual(p.observed_cache_hit, true, "observed hit");
+});
+
+// 51. CF-Cache-Status: HIT -> OBSERVED_CACHED even with no Cache-Control.
+await check("cache posture: cf-cache-status HIT -> OBSERVED_CACHED", async () => {
+  const p = computeCachePosture(H({ "cf-cache-status": "HIT" }));
+  assert.strictEqual(p.verdict, "OBSERVED_CACHED", `verdict ${p.verdict}`);
+});
+
+// 52. No headers at all -> UNKNOWN (honest: never assert a leak we can't see).
+await check("cache posture: no headers -> UNKNOWN (honest)", async () => {
+  assert.strictEqual(computeCachePosture(H({})).verdict, "UNKNOWN", "empty headers");
+  assert.strictEqual(computeCachePosture(null).verdict, "UNKNOWN", "null headers");
+  assert.strictEqual(computeCachePosture(undefined).verdict, "UNKNOWN", "undefined headers");
+});
+
+// 53. E2E: a settle-valid endpoint whose 402 is actively CDN-cached -> CAUTION
+// with a flagged cache_leakage check, never AVOID (heuristic, not proof).
+await check("e2e: observed-cached paid route -> CAUTION + cache_leakage flagged", async () => {
+  const realHeadersRes = (status, bodyObj, headers) => ({
+    status, headers: H(headers), async text() { return typeof bodyObj === "string" ? bodyObj : JSON.stringify(bodyObj); },
+  });
+  globalThis.fetch = async () => realHeadersRes(402, GOOD_402, { "cf-cache-status": "HIT", "age": "15" });
+  const r = await x402Preflight("https://seller.example/data");
+  restoreFetch();
+  assert.strictEqual(r.will_settle, true, "challenge still settles");
+  assert.ok(r.cache_posture, "cache_posture present");
+  assert.strictEqual(r.cache_posture.verdict, "OBSERVED_CACHED", `posture ${r.cache_posture.verdict}`);
+  assert.strictEqual(r.verdict, "CAUTION", `verdict ${r.verdict} (cache leak downgrades, never AVOID)`);
+  assert.ok(r.checks.find((c) => c.name === "cache_leakage" && !c.ok), "cache_leakage check flagged");
+});
+
+// 54. E2E: a no-store paid route keeps PAY and reports NO_STORE posture.
+await check("e2e: no-store paid route -> PAY + NO_STORE posture", async () => {
+  const realHeadersRes = (status, bodyObj, headers) => ({
+    status, headers: H(headers), async text() { return typeof bodyObj === "string" ? bodyObj : JSON.stringify(bodyObj); },
+  });
+  globalThis.fetch = async () => realHeadersRes(402, GOOD_402, { "cache-control": "no-store" });
+  const r = await x402Preflight("https://seller.example/data");
+  restoreFetch();
+  assert.strictEqual(r.cache_posture.verdict, "NO_STORE", `posture ${r.cache_posture.verdict}`);
+  assert.strictEqual(r.verdict, "PAY", `verdict ${r.verdict}`);
 });
 
 console.log(`\n${pass} checks passed`);

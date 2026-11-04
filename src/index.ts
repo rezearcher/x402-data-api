@@ -284,7 +284,7 @@ export const ROUTE_CATALOG_BASE: Array<[string, string, string, string, string, 
   ["/chain/wallet", "GET", "0.003", "3000", "Wallet screening bundle (balance, activity, contract vs EOA check): ETH balance + balance_usd (internal ETH price cross-call) + tx count + contract-code check (EIP-7702 delegated-EOA aware) for a Base mainnet address, in one call.", ["rpc", "base", "onchain", "blockchain", "wallet", "data"]],
   ["/chain/wallet-screen", "GET", "0.004", "4000", "Is this wallet sanctioned OR a known scammer? Pre-trade screen for a counterparty / recipient / token-spender address before an agent sends, swaps or approves: exact match against the U.S. Treasury OFAC SDN crypto-address list AND community scam/phishing/wallet-drainer threat-intel (ScamSniffer + MEW darklist). Returns sanctioned (bool) + malicious (bool) + verdict (blocked/clear) + lists + the list sources and snapshot dates. 'clear' means not on these lists, not a safety guarantee. Use alongside /gate/swap and /chain/token-security to avoid sanctioned-or-scammer-counterparty liability.", ["security", "sanctions", "ofac", "compliance", "scam", "phishing", "drainer", "wallet", "base", "onchain", "screening", "data"]],
   ["/x402/cert", "GET", "1.00", "1000000", "Mint a DEEP VERIFIED certificate for YOUR x402 endpoint — pay once ($1 USDC, no account) and, if the full deep audit passes, get a dated, HMAC-signed 30-day certificate plus an embeddable badge that re-audits live on every render and flips to 'degraded' if your endpoint breaks before expiry. Certifies the DEPTH axis a liveness-only verified badge cannot: advertised-vs-charged price accuracy, delivery readiness, LLM01/LLM08 injection safety and payTo OFAC/scam screening. Any buyer re-checks the signature free at /x402/cert/verify. Fails honest: no cert unless the audit returns PAY (you get findings + fix hints instead). Pass ?url= (and optional &advertised=<usdc>).", ["x402", "certificate", "verified", "badge", "seller", "trust", "price-accuracy", "delivery", "injection", "ofac", "attestation", "signed", "deep-verified", "data"]],
-  ["/x402/preflight", "GET", "0.001", "1000", "x402 pre-payment endpoint check — before an agent pays an unknown x402 URL, fetch it once (never pays): (1) validate the 402 challenge + accepts[] (will it settle), (2) LIVENESS label LIVE|ZOMBIE|DEAD (is it a working payable endpoint now or listed-active-but-broken), (3) absolute PRICE-TRAP flag — a honeypot charging >=$1000/call trips AVOID even when its advertised==live price looks self-consistent; pass &max=<usdc> for your own budget ceiling, (4) scan the resource + advertised MCP tools for LLM01/LLM08 injection and screen payTo vs OFAC/scam lists (safe to pay), (5) PRICE ACCURACY — does the live accepts[].amount match the advertised price? pass &advertised=<usdc> or it self-checks /.well-known/x402: MATCH|OVERCHARGE|UNDERCHARGE, (6) optional &samples=N (1-5) reliability burst, (7) DELIVERY readiness — flags a leaking paywall and whether the output shape is specified. Returns PAY|CAUTION|AVOID + fix hints. Read-only, not a settlement guarantee. ?url=<endpoint>.", ["x402", "preflight", "security", "verify", "payment", "safe-to-pay", "liveness", "zombie", "honeypot", "price-trap", "price-accuracy", "overcharge", "reliability", "uptime", "delivery", "data"]],
+  ["/x402/preflight", "GET", "0.001", "1000", "x402 pre-payment endpoint check — before an agent pays an unknown x402 URL, fetch it once (never pays): (1) validate the 402 challenge + accepts[] (will it settle), (2) LIVENESS label LIVE|ZOMBIE|DEAD (is it a working payable endpoint now or listed-active-but-broken), (3) absolute PRICE-TRAP flag — a honeypot charging >=$1000/call trips AVOID even when its advertised==live price looks self-consistent; pass &max=<usdc> for your own budget ceiling, (4) scan the resource + advertised MCP tools for LLM01/LLM08 injection and screen payTo vs OFAC/scam lists (safe to pay), (5) PRICE ACCURACY — does the live accepts[].amount match the advertised price? pass &advertised=<usdc> or it self-checks /.well-known/x402: MATCH|OVERCHARGE|UNDERCHARGE, (6) optional &samples=N (1-5) reliability burst, (7) DELIVERY readiness — flags a leaking paywall and whether the output shape is specified, (8) CACHE-LEAKAGE posture — is the paid route marked non-cacheable (Cache-Control: no-store) or does a shared/CDN cache store it so a later UNPAID client can be served the paid body (Attack III of the 'Five Attacks on x402', arXiv 2605.11781): NO_STORE|CACHEABLE|OBSERVED_CACHED|UNKNOWN. Returns PAY|CAUTION|AVOID + fix hints. Read-only, not a settlement guarantee. ?url=<endpoint>.", ["x402", "preflight", "security", "verify", "payment", "safe-to-pay", "liveness", "zombie", "honeypot", "price-trap", "price-accuracy", "overcharge", "reliability", "uptime", "delivery", "cache-leakage", "data"]],
   ["/x402/receipt-verify", "GET", "0.004", "4000", "x402 POST-payment settlement proof. After you pay an x402 endpoint, bring your Base settlement ?tx=<0x hash> + ?url=<resource paid> for on-chain proof it settled: reads the tx receipt, decodes its USDC Transfer events, reconciles them against the endpoint's advertised payTo + amount (from its live 402, or &payto=/&expect= to bind). Verdict SETTLED|UNDERPAID|WRONG_RECIPIENT|NO_TRANSFER|REVERTED|NOT_FOUND|UNVERIFIED, 2-RPC cross-confirmed. Confirms settlement, not off-chain delivery.", ["x402", "receipt", "settlement", "verify", "payment", "proof", "post-payment", "onchain", "base", "usdc", "data"]],
   ["/dns", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH. Pass ?domain=stripe.com.", ["dns", "domain", "data", "recon"]],
   ["/whois", "GET", "0.01", "10000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain. Pass ?domain=cloudflare.com.", ["whois", "rdap", "domain", "data", "recon"]],
@@ -2801,7 +2801,7 @@ Raw honeypot-flag APIs make your agent interpret the flags; this returns ONE dec
 
 Measured uptime/latency of these (not an SLA): GET ${BASE}/status (live machine-readable JSON) or https://github.com/rezearcher/x402-data-api/blob/main/docs/STATUS.md
 Proof pack for integrators (a real settled Base-mainnet x402 tx + decoded receipt, measured reliability, and accuracy stated honestly incl. what we have NOT yet benchmarked): https://github.com/rezearcher/x402-data-api/blob/main/docs/EVIDENCE.md
-Our own payment hardening (the posture we hold to, and screen others for): every PAID response is returned non-cacheable — \`Cache-Control: no-store\` + \`Vary: X-PAYMENT\` keyed on the settlement header — so no shared/proxy/browser cache can replay a paid body to an unpaid client. That closes Attack III (HTTP/proxy cache-leakage) of the "Five Attacks on x402" taxonomy (arXiv 2605.11781); combined with on-chain receipt verification (/x402/receipt-verify), payment-identifier idempotency, pre-payment safety (/x402/preflight), and payTo OFAC screening, the rail answers all of M1–M6. Verify it yourself: a paid route's 200 carries \`cache-control: no-store\`, while a free /preview stays cacheable.
+Our own payment hardening (the posture we hold to, and screen others for): every PAID response is returned non-cacheable — \`Cache-Control: no-store\` + \`Vary: X-PAYMENT\` keyed on the settlement header — so no shared/proxy/browser cache can replay a paid body to an unpaid client. That closes Attack III (HTTP/proxy cache-leakage) of the "Five Attacks on x402" taxonomy (arXiv 2605.11781); combined with on-chain receipt verification (/x402/receipt-verify), payment-identifier idempotency, pre-payment safety (/x402/preflight), and payTo OFAC screening, the rail answers all of M1–M6. And we screen OTHER endpoints for the same posture: /x402/preflight now returns an Attack-III cache_posture verdict (NO_STORE | CACHEABLE | OBSERVED_CACHED | UNKNOWN) on any x402 URL you pre-check — a shared cache actively storing a paid route trips CAUTION. Verify it yourself: a paid route's 200 carries \`cache-control: no-store\`, while a free /preview stays cacheable.
 
 ## Endpoints
 - Human/agent try-it page: ${BASE}/check?token=<0x… Base ERC-20> — free verdict card (3/day/IP).
@@ -3250,7 +3250,7 @@ app.get("/openapi.json", (c) => {
       "/gate/swap/preview": { get: { summary: "FREE live sample of /gate/swap (no payment).", description: "Free go/hold/block sample for a demo token (?token=degen) OR any real Base 0x address, 3 free real-token checks per IP per day. Paid /gate/swap accepts ANY Base ERC-20 ($0.008). Honors side and notional_usd.", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-report/preview": { get: { summary: "FREE live sample of /chain/token-report (no payment).", description: "Free full trade-safety report for a demo token. Try ?token=aero. Paid /chain/token-report accepts ANY Base ERC-20 ($0.01).", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-security": paid("Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, contract source-verification (Sourcify), live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.", "0.009", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
-      "/x402/preflight": paid("x402 pre-payment check: fetch an unknown URL once (never pays) and return PAY|CAUTION|AVOID — validates the 402+accepts[] (will it settle), liveness LIVE|ZOMBIE|DEAD, absolute price-trap (>=$1000 honeypot), LLM01/LLM08 scan + OFAC/scam payTo screen, live-vs-advertised price (MATCH|OVERCHARGE|UNDERCHARGE) and delivery readiness. Not a settlement guarantee.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to pre-check before paying", required: true, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "advertised", desc: "optional USDC-dollars price your catalog quoted (e.g. 0.001) to verify against the live charge", required: false, example: "0.001" }, { name: "max", desc: "optional per-call budget ceiling in USDC dollars; flags the live charge if it exceeds this", required: false, example: "0.05" }]),
+      "/x402/preflight": paid("x402 pre-payment check: fetch an unknown URL once (never pays) and return PAY|CAUTION|AVOID — validates the 402+accepts[] (will it settle), liveness LIVE|ZOMBIE|DEAD, absolute price-trap (>=$1000 honeypot), LLM01/LLM08 scan + OFAC/scam payTo screen, live-vs-advertised price (MATCH|OVERCHARGE|UNDERCHARGE), delivery readiness, and Attack-III cache-leakage posture (is the paid route non-cacheable or does a shared cache leak the paid body: NO_STORE|CACHEABLE|OBSERVED_CACHED). Not a settlement guarantee.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to pre-check before paying", required: true, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "advertised", desc: "optional USDC-dollars price your catalog quoted (e.g. 0.001) to verify against the live charge", required: false, example: "0.001" }, { name: "max", desc: "optional per-call budget ceiling in USDC dollars; flags the live charge if it exceeds this", required: false, example: "0.05" }]),
       "/x402/receipt-verify": paid("x402 POST-payment settlement proof: bring your Base settlement tx + the resource URL you paid for on-chain proof it settled — reads the receipt, reconciles its USDC Transfers vs the endpoint's advertised payTo + amount, cross-confirmed on 2 independent RPCs (fails closed on disagreement). SETTLED|UNDERPAID|WRONG_RECIPIENT|NO_TRANSFER|REVERTED|NOT_FOUND|UNVERIFIED. Read-only.", "0.004", [{ name: "tx", desc: "0x-prefixed 32-byte Base-mainnet settlement transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }, { name: "url", desc: "the x402 resource URL you paid (its live 402 supplies the advertised payTo+amount)", required: false, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "payto", desc: "optional 0x payTo to reconcile against (bind without fetching the endpoint)", required: false, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "expect", desc: "optional advertised amount in USDC dollars to verify the settled amount against", required: false, example: "0.004" }]),
       "/dns": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "query", required: true, example: "stripe.com" }]),
       "/whois": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.01", [{ name: "domain", desc: "domain name to look up", in: "query", required: true, example: "cloudflare.com" }]),
@@ -4688,7 +4688,7 @@ export function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "Should an agent pay this x402 endpoint? One read-only call (never pays): validates the 402 + accepts[] (will it settle), labels liveness LIVE|ZOMBIE|DEAD, flags an absolute price-trap (>=$1000 honeypot => AVOID), scans resource + MCP tools for LLM01/LLM08 injection, screens payTo vs OFAC/scam, and verifies price (live vs advertised: MATCH|OVERCHARGE|UNDERCHARGE). Returns PAY|CAUTION|AVOID + fix hints. Not a settlement guarantee.",
+        "Should an agent pay this x402 endpoint? One read-only call (never pays): validates the 402 + accepts[] (will it settle), labels liveness LIVE|ZOMBIE|DEAD, flags an absolute price-trap (>=$1000 honeypot => AVOID), scans resource + MCP tools for LLM01/LLM08 injection, screens payTo vs OFAC/scam, verifies price (live vs advertised: MATCH|OVERCHARGE|UNDERCHARGE), and flags Attack-III cache-leakage posture (is the paid route non-cacheable or does a shared cache leak the paid body). Returns PAY|CAUTION|AVOID + fix hints. Not a settlement guarantee.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -4717,6 +4717,7 @@ export function makeRoutes(payTo: string) {
               { name: "liveness", ok: true, detail: "liveness: LIVE — reachable, presents a settle-complete 402, stable across 3 probes", fix: null },
               { name: "reliability", ok: true, detail: "3/3 probes payable; latency median 210ms (max 240ms)", fix: null },
               { name: "delivery", ok: true, detail: "the challenge declares the output shape (schema/example) so you know what the payment buys", fix: null },
+              { name: "cache_leakage", ok: true, detail: "cache posture: NO_STORE — the paid route is marked non-cacheable to shared caches (no-store/private), closing Attack III", fix: null },
             ],
             findings: [],
             latency_ms: 142,
@@ -4725,7 +4726,8 @@ export function makeRoutes(payTo: string) {
             price_trap: { flagged: false, tier: "none", charged_atomic: 1000, charged_usdc: "0.001", ceiling_usdc: "1", extreme_ceiling_usdc: "1000", caller_max_usdc: null, exceeds_caller_max: false, note: "the live 402 charges 0.001 USDC/call — within the normal x402 micro-payment band (below 1)" },
             reliability: { samples: 3, settle_consistency: "3/3", settle_rate: 1, reachable_rate: 1, stable: true, latency_ms: { min: 190, median: 210, max: 240 }, note: "point-in-time burst sampled now (not historical uptime); a stable burst is not a durability guarantee" },
             delivery: { verdict: "SPECIFIED", output_specified: true, served_without_payment: false, note: "the challenge declares the output shape (schema/example) so you know what the payment buys; post-payment delivery is still only provable from your on-chain settlement receipt after you pay" },
-            scope_note: "static 402 wire-format + LIVE/ZOMBIE/DEAD liveness label + absolute price-trap flag + LLM01/LLM08 description scan + payTo flag + advertised-vs-charged price-accuracy + delivery-readiness check; read-only, never pays; not a settlement guarantee.",
+            cache_posture: { verdict: "NO_STORE", cacheable: false, observed_cache_hit: false, directives: "no-store", note: "the endpoint marks this route non-cacheable to shared caches (no-store/private), so a proxy/CDN cannot replay a paid body to a later unpaid client — the correct posture against Attack III (cache-leakage, arXiv 2605.11781)" },
+            scope_note: "static 402 wire-format + LIVE/ZOMBIE/DEAD liveness label + absolute price-trap flag + LLM01/LLM08 description scan + payTo flag + advertised-vs-charged price-accuracy + delivery-readiness + Attack-III cache-leakage posture check; read-only, never pays; not a settlement guarantee.",
           },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
@@ -9677,6 +9679,22 @@ export interface PreflightDelivery {
   served_without_payment: boolean;  // the resource came back on an UNPAID request
   note: string;
 }
+// Attack III (arXiv 2605.11781 "Five Attacks on x402", HTTP/proxy cache-leakage):
+// the seller-side POSTURE check that is the counterpart to our own M5 no-store
+// hardening. We cannot observe the paid 200 without paying, but the 402 challenge
+// rides the SAME route, so its cache headers are an honest signal for how the
+// route is configured. NO_STORE = good (shared caches cannot replay a paid body);
+// OBSERVED_CACHED = hard evidence a shared/CDN cache is actively storing the route
+// (Age>0 / CF-Cache HIT) → CAUTION; CACHEABLE = a public/max-age directive advises
+// a shared cache MAY store it (advisory, not a verdict downgrade); UNKNOWN = no
+// usable signal (stay honest, never assert a leak we cannot see).
+export interface PreflightCachePosture {
+  verdict: "NO_STORE" | "CACHEABLE" | "OBSERVED_CACHED" | "UNKNOWN";
+  cacheable: boolean;            // a shared/proxy cache could store this response
+  observed_cache_hit: boolean;   // a CDN actually served this from cache (Age>0 / HIT)
+  directives: string | null;     // the observed Cache-Control value, if any
+  note: string;
+}
 interface PreflightResult {
   url: string;
   verdict: "PAY" | "CAUTION" | "AVOID";
@@ -9689,14 +9707,56 @@ interface PreflightResult {
   delivery?: PreflightDelivery;
   liveness?: PreflightLiveness;
   price_trap?: PriceTrap;
+  cache_posture?: PreflightCachePosture;
   scope_note: string;
   checked_at: string;
 }
 const PREFLIGHT_SCOPE_NOTE =
-  "static 402 wire-format + LIVE/ZOMBIE/DEAD liveness label + absolute price-trap flag + LLM01/LLM08 description scan + payTo OFAC/scam flag + advertised-vs-charged price-accuracy + delivery-readiness (broken-paywall / output-spec) check; read-only, never pays; not a settlement guarantee.";
+  "static 402 wire-format + LIVE/ZOMBIE/DEAD liveness label + absolute price-trap flag + LLM01/LLM08 description scan + payTo OFAC/scam flag + advertised-vs-charged price-accuracy + delivery-readiness (broken-paywall / output-spec) check + Attack-III cache-leakage posture (no-store vs cacheable paid route); read-only, never pays; not a settlement guarantee.";
 
-function preflightResult(url: string, started: number, verdict: PreflightResult["verdict"], will_settle: boolean, checks: PreflightCheck[], findings: ScanFinding[], reliability?: PreflightReliability, priceAccuracy?: PriceAccuracyVerdict, delivery?: PreflightDelivery, liveness?: PreflightLiveness, priceTrap?: PriceTrap): PreflightResult {
-  return { url, verdict, will_settle, checks, findings, latency_ms: Date.now() - started, ...(reliability ? { reliability } : {}), ...(priceAccuracy ? { price_accuracy: priceAccuracy } : {}), ...(delivery ? { delivery } : {}), ...(liveness ? { liveness } : {}), ...(priceTrap ? { price_trap: priceTrap } : {}), scope_note: PREFLIGHT_SCOPE_NOTE, checked_at: new Date().toISOString() };
+function preflightResult(url: string, started: number, verdict: PreflightResult["verdict"], will_settle: boolean, checks: PreflightCheck[], findings: ScanFinding[], reliability?: PreflightReliability, priceAccuracy?: PriceAccuracyVerdict, delivery?: PreflightDelivery, liveness?: PreflightLiveness, priceTrap?: PriceTrap, cachePosture?: PreflightCachePosture): PreflightResult {
+  return { url, verdict, will_settle, checks, findings, latency_ms: Date.now() - started, ...(reliability ? { reliability } : {}), ...(priceAccuracy ? { price_accuracy: priceAccuracy } : {}), ...(delivery ? { delivery } : {}), ...(liveness ? { liveness } : {}), ...(priceTrap ? { price_trap: priceTrap } : {}), ...(cachePosture ? { cache_posture: cachePosture } : {}), scope_note: PREFLIGHT_SCOPE_NOTE, checked_at: new Date().toISOString() };
+}
+
+// Pure Attack-III cache-leakage posture verdict. Exported for unit tests. Reads
+// the observed response headers (from the UNPAID 402 challenge, which rides the
+// same route config as the paid 200). Degrades open: a header bag with no usable
+// signal (or none at all — e.g. a test stub) returns UNKNOWN, never a throw.
+export function computeCachePosture(h: { get(name: string): string | null } | null | undefined): PreflightCachePosture {
+  const get = (n: string): string | null => { try { return h?.get?.(n) ?? null; } catch { return null; } };
+  const cc = (get("cache-control") ?? "").toLowerCase();
+  const ccPresent = cc.length > 0;
+  const ageRaw = get("age");
+  const age = ageRaw !== null ? parseInt(ageRaw, 10) : NaN;
+  const cfCache = (get("cf-cache-status") ?? "").toUpperCase();
+  const xCache = (get("x-cache") ?? "").toUpperCase();
+
+  // (a) Explicit non-cacheable posture — the GOOD answer. no-store forbids any
+  // store; private forbids SHARED/proxy caches (the Attack-III vector) even if a
+  // private browser cache is allowed.
+  if (/\bno-store\b/.test(cc) || (/\bprivate\b/.test(cc) && !/\bpublic\b/.test(cc))) {
+    return { verdict: "NO_STORE", cacheable: false, observed_cache_hit: false, directives: ccPresent ? cc : null,
+      note: "the endpoint marks this route non-cacheable to shared caches (no-store/private), so a proxy/CDN cannot replay a paid body to a later unpaid client — the correct posture against Attack III (cache-leakage, arXiv 2605.11781)" };
+  }
+
+  // (b) Observed evidence a shared cache actually stored/served this route — the
+  // strongest signal (hard fact, not a directive). CAUTION-worthy.
+  const observedHit = (Number.isFinite(age) && age > 0) || /^(HIT|STALE|UPDATING|REVALIDATED)$/.test(cfCache) || /\bHIT\b/.test(xCache);
+  if (observedHit) {
+    const ev = cfCache || xCache || `Age=${age}`;
+    return { verdict: "OBSERVED_CACHED", cacheable: true, observed_cache_hit: true, directives: ccPresent ? cc : null,
+      note: `a shared/CDN cache is actively storing this route (${ev}) — if the paid 200 inherits the same cache config, a later UNPAID client can be served the paid body; mark paid responses Cache-Control: no-store (Attack III, cache-leakage, arXiv 2605.11781)` };
+  }
+
+  // (c) Directive says a shared cache MAY store it — advisory, not a downgrade.
+  if (/\bpublic\b/.test(cc) || /\bmax-age=([1-9]\d*)\b/.test(cc) || /\bs-maxage=([1-9]\d*)\b/.test(cc)) {
+    return { verdict: "CACHEABLE", cacheable: true, observed_cache_hit: false, directives: cc,
+      note: "this route advertises a cacheable Cache-Control (public/max-age) on the 402 challenge — if the paid 200 carries the same, a shared cache could replay the paid body to an unpaid client; prefer Cache-Control: no-store on paid responses (Attack III, arXiv 2605.11781)" };
+  }
+
+  // (d) No usable signal — stay honest, never assert a leak we cannot see.
+  return { verdict: "UNKNOWN", cacheable: false, observed_cache_hit: false, directives: ccPresent ? cc : null,
+    note: "no explicit cache directive observed on the 402 challenge; the Attack-III cache-leakage posture of the paid response could not be determined pre-payment (the proof is a no-store on the paid 200)" };
 }
 
 // Pure delivery-readiness verdict. Exported for unit tests. LEAK requires BOTH
@@ -10273,6 +10333,20 @@ export async function x402Preflight(url: string, samples = 1, advertisedUsdc: st
   const liveness = computeLiveness(true, res.status === 402, will_settle, reliability);
   checks.push({ name: "liveness", ok: liveness.label === "LIVE", detail: `liveness: ${liveness.label} — ${liveness.note}`, fix: liveness.label === "LIVE" ? null : "a ZOMBIE/DEAD endpoint is listed-active but not a working payable x402 resource right now" });
 
+  // (10) CACHE-LEAKAGE POSTURE (Attack III, arXiv 2605.11781) — the seller-side
+  // counterpart to our own M5 no-store hardening, and what makes "the posture we
+  // hold to, and screen others for" literally true. The 402 challenge rides the
+  // same route as the paid 200, so its cache headers are an honest posture signal.
+  // OBSERVED_CACHED (hard evidence a shared cache is storing the route) → un-ok
+  // check → CAUTION; CACHEABLE (directive only) → advisory note, no downgrade;
+  // NO_STORE/UNKNOWN → ok. Zero COGS (headers we already fetched). Never AVOID on
+  // a heuristic — the un-paid 402 is not proof the paid 200 leaks.
+  const cachePosture = computeCachePosture((res as { headers?: { get(name: string): string | null } }).headers);
+  checks.push({ name: "cache_leakage", ok: cachePosture.verdict !== "OBSERVED_CACHED", detail: `cache posture: ${cachePosture.verdict} — ${cachePosture.note}`,
+    fix: cachePosture.verdict === "OBSERVED_CACHED" ? "set Cache-Control: no-store on paid responses so a shared/proxy cache cannot replay a paid body to an unpaid client"
+      : cachePosture.verdict === "CACHEABLE" ? "consider Cache-Control: no-store on paid responses (advisory — the 402 route is cacheable; the paid 200 may inherit it)"
+      : null });
+
   // Verdict. AVOID on a hard problem (won't settle, a critical/high finding, a
   // sanctioned/flagged payTo, or an extreme price-trap); CAUTION on any soft
   // issue (incl. a flapping reliability burst, an advertised-vs-charged
@@ -10288,7 +10362,7 @@ export async function x402Preflight(url: string, samples = 1, advertisedUsdc: st
   if (!will_settle || hasCritHigh || payToBad || priceTrapExtreme) verdict = "AVOID";
   else if (anySoftIssue) verdict = "CAUTION";
   else verdict = "PAY";
-  return preflightResult(url, started, verdict, will_settle, checks, findings, reliability, priceAccuracy, delivery, liveness, priceTrap);
+  return preflightResult(url, started, verdict, will_settle, checks, findings, reliability, priceAccuracy, delivery, liveness, priceTrap, cachePosture);
 }
 
 app.get("/x402/preflight", async (c) => {
@@ -10330,6 +10404,7 @@ function preflightSample(): PreflightResult {
       { name: "reliability", ok: true, detail: "3/3 probes payable; latency median 210ms (max 240ms)", fix: null },
       { name: "price_accuracy", ok: true, detail: "charged 0.004 USDC == advertised (source: self-manifest)", fix: null },
       { name: "delivery", ok: true, detail: "the challenge declares the output shape (schema/example) so you know what the payment buys", fix: null },
+      { name: "cache_leakage", ok: true, detail: "cache posture: NO_STORE — the endpoint marks this route non-cacheable to shared caches (no-store/private)", fix: null },
     ],
     findings: [],
     latency_ms: 0,
@@ -10338,6 +10413,13 @@ function preflightSample(): PreflightResult {
       output_specified: true,
       served_without_payment: false,
       note: "the challenge declares the output shape (schema/example) so you know what the payment buys; post-payment delivery is still only provable from your on-chain settlement receipt after you pay",
+    },
+    cache_posture: {
+      verdict: "NO_STORE",
+      cacheable: false,
+      observed_cache_hit: false,
+      directives: "no-store",
+      note: "the endpoint marks this route non-cacheable to shared caches (no-store/private), so a proxy/CDN cannot replay a paid body to a later unpaid client — the correct posture against Attack III (cache-leakage, arXiv 2605.11781)",
     },
     price_accuracy: {
       verdict: "MATCH",
@@ -10459,6 +10541,7 @@ export function x402BadgeShields(r: PreflightResult): { schemaVersion: 1; label:
     const reason =
       r.liveness?.label === "ZOMBIE" ? "zombie" :
       r.delivery?.verdict === "LEAK" ? "paywall leak" :
+      r.cache_posture?.verdict === "OBSERVED_CACHED" ? "cache leak" :
       r.price_accuracy && r.price_accuracy.verdict !== "MATCH" ? r.price_accuracy.verdict.toLowerCase() :
       r.delivery?.verdict === "UNVERIFIED" ? "delivery unverified" :
       !t.injection_safe ? "injection risk" :
