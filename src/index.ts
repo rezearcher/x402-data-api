@@ -1997,7 +1997,7 @@ export const manifestCallContract = (
 // Self-describing x402 discovery manifest — the standard `.well-known/x402` catalog
 // that x402 crawlers/directories read to discover a provider's paid endpoints
 // (independent of any facilitator's Bazaar). Lists every paid resource we serve.
-app.get("/.well-known/x402", (c) => {
+const x402ManifestHandler = (c: Context<AppEnv>) => {
   const BASE = "https://x402-data-api.sigrunner.workers.dev";
   const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
   const payTo = c.env.PAY_TO;
@@ -2157,7 +2157,134 @@ app.get("/.well-known/x402", (c) => {
     // declaration order — the arrival channels read this list top-down.
     resources: demandOrderedCatalog().map((r) => mk(...r)),
   });
-});
+};
+// Standard extension-less path plus the `.json`-suffixed path that stricter
+// crawlers probe (returning `noDiscovery` when only the bare path answers).
+app.get("/.well-known/x402", x402ManifestHandler);
+app.get("/.well-known/x402.json", x402ManifestHandler);
+
+// ---------------------------------------------------------------------------
+// agent.json — the Open 402 Directory / Agent Internet Runtime capability
+// manifest (spec v1.4, agentinternetruntime.com/spec/agent-json). The directory
+// (ArcedeDev/open-402, 18k+ domains, nightly crawl from x402scan + 402index)
+// auto-indexes any domain serving `/.well-known/agent.json`; a domain WITHOUT
+// one sits as an `unclaimed` blank row (null display_name/description, 0 intents).
+// Serving this Tier-2 ("Capable") manifest — version/origin/payout_address plus
+// rich intents[] with per-endpoint price + parameters — flips every Grey Ridge
+// row to a VERIFIED listing with full metadata (verified = top ~3.7% of the
+// directory). Derived entirely from ROUTE_CATALOG + manifestCallContract so it
+// never drifts from the real routes, and from STATUS_SNAPSHOT for the measured
+// behavioral commitments (Tier 3+ shape, unsigned — honest measurement, not an
+// SLA). origin is read from the serving host so each of our hosts emits a
+// self-consistent manifest (the validator requires origin == serving domain).
+//
+// Pure + exported for unit-locking against the real catalog.
+export function buildAgentJson(origin: string, payTo: string): Record<string, unknown> {
+  // Trim a long route description to a crawler-friendly intent blurb: first
+  // sentence, hard-capped — the catalog descriptions can run to paragraphs
+  // (preflight is ~1.5k chars) which bloats the manifest and reads poorly in a
+  // directory card. No vaporware: it is a prefix of the real description.
+  const blurb = (desc: string): string => {
+    const firstDot = desc.indexOf(". ");
+    let s = firstDot > 0 && firstDot < 220 ? desc.slice(0, firstDot + 1) : desc;
+    if (s.length > 240) s = s.slice(0, 237).trimEnd() + "…";
+    return s.trim();
+  };
+  const intents = demandOrderedCatalog().map(([p, method, price, , desc, tags]) => {
+    const cc = manifestCallContract(p, desc, tags);
+    const intent: Record<string, unknown> = {
+      name: cc.name,
+      description: blurb(desc),
+      endpoint: p,
+      method,
+      price: { amount: Number(price), currency: "USDC" },
+    };
+    // Convert the JSON-Schema inputSchema into the agent.json parameters shape:
+    // { paramName: { type, required, description } }. Degrades open when a route
+    // has no declared params.
+    const schema = cc.inputSchema as
+      | { properties?: Record<string, { type?: string; description?: string; enum?: string[] }> }
+      | undefined;
+    const reqd = new Set(cc.required ?? []);
+    if (schema && schema.properties && Object.keys(schema.properties).length) {
+      const params: Record<string, unknown> = {};
+      for (const [name, prop] of Object.entries(schema.properties)) {
+        params[name] = {
+          type: prop.type || "string",
+          required: reqd.has(name),
+          description: prop.description || "",
+          ...(prop.enum ? { enum: prop.enum } : {}),
+        };
+      }
+      intent.parameters = params;
+    }
+    // Free try-before-pay path, surfaced per-intent for runtimes that honor it.
+    if (PREVIEW_ROUTES.has(p)) intent.preview_endpoint = `${p}/preview`;
+    return intent;
+  });
+
+  // Measured behavioral invariants (Tier 3+ "commitments" shape, unsigned).
+  // Real numbers from the 5-min /preview probe — stated as a measurement, never
+  // a contractual SLA (Claims Law).
+  const commitments = {
+    note: "Measured from a 5-minute free-/preview uptime probe; a measurement, not a contractual SLA.",
+    measurement_window: {
+      from: STATUS_SNAPSHOT.window.from,
+      to: STATUS_SNAPSHOT.window.to,
+      samples: STATUS_SNAPSHOT.window.samples,
+    },
+    entries: [
+      {
+        type: "availability",
+        metric: "measured_success_pct",
+        value: STATUS_SNAPSHOT.overall_success_pct,
+        unit: "percent",
+        source: `https://${origin}/status`,
+      },
+    ],
+  };
+
+  return {
+    version: "1.4",
+    origin,
+    display_name: "Grey Ridge Signals — x402 Data & Security",
+    description:
+      "Pay-per-call x402 API for Base agents, led by a pre-trade token-safety gate (GO/HOLD/BLOCK honeypot + due-diligence verdicts) plus live DeFi yields, funding rates, prices, Polymarket and Base RPC data. No account or key — agents pay inline in USDC.",
+    payout_address: payTo,
+    payments: {
+      x402: {
+        networks: [
+          { network: "base", asset: "USDC", contract: USDC_BASE },
+        ],
+      },
+    },
+    provider: "Grey Ridge Signals Group LLC",
+    documentation: `https://${origin}/openapi.json`,
+    source_repository: "https://github.com/rezearcher/x402-data-api",
+    license: "MIT",
+    contact: "contact@greyridgesignals.ai",
+    intents,
+    commitments,
+    extensions: {
+      "ai.greyridgesignals": {
+        x402_manifest: `https://${origin}/.well-known/x402`,
+        mcp_endpoint: `https://${origin}/mcp`,
+        settlement_attestation: `https://${origin}/.well-known/x402-settlement-attestation.json`,
+      },
+    },
+  };
+}
+
+// Serve the capability manifest at the spec's preferred path and the `/agent.json`
+// fallback, plus a `/.well-known/x402.json` alias (some stricter crawlers probe the
+// `.json` suffix and return `noDiscovery` when only the extension-less path exists).
+const agentJsonHandler = (c: Context<AppEnv>) => {
+  const origin = new URL(c.req.url).host;
+  const body = buildAgentJson(origin, c.env.PAY_TO);
+  return c.json(body, 200, { "cache-control": "public, max-age=300" });
+};
+app.get("/.well-known/agent.json", agentJsonHandler);
+app.get("/agent.json", agentJsonHandler);
 
 app.get("/.well-known/agent-capabilities.json", (c) => {
   const BASE = "https://x402-data-api.sigrunner.workers.dev";
@@ -3308,7 +3435,7 @@ app.get("/openapi.json", (c) => {
       "/x402/preflight": paid("x402 pre-payment check: fetch an unknown URL once (never pays) -> PAY|CAUTION|AVOID. Validates 402+accepts[] (will it settle), liveness LIVE|ZOMBIE|DEAD, >=$1000 price-trap, LLM01/LLM08 + OFAC/scam payTo screen, live-vs-advertised price, delivery readiness, Attack-III cache-leakage posture. Not a settlement guarantee.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to pre-check before paying", required: true, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "advertised", desc: "optional USDC-dollars price your catalog quoted (e.g. 0.001) to verify against the live charge", required: false, example: "0.001" }, { name: "max", desc: "optional per-call budget ceiling in USDC dollars; flags the live charge if it exceeds this", required: false, example: "0.05" }]),
       "/x402/receipt-verify": paid("x402 POST-payment settlement proof: bring your Base settlement tx + the resource URL you paid for on-chain proof it settled — reads the receipt, reconciles its USDC Transfers vs the endpoint's advertised payTo + amount, cross-confirmed on 2 independent RPCs (fails closed on disagreement). SETTLED|UNDERPAID|WRONG_RECIPIENT|NO_TRANSFER|REVERTED|NOT_FOUND|UNVERIFIED. Read-only.", "0.004", [{ name: "tx", desc: "0x-prefixed 32-byte Base-mainnet settlement transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }, { name: "url", desc: "the x402 resource URL you paid (its live 402 supplies the advertised payTo+amount)", required: false, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "payto", desc: "optional 0x payTo to reconcile against (bind without fetching the endpoint)", required: false, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "expect", desc: "optional advertised amount in USDC dollars to verify the settled amount against", required: false, example: "0.004" }]),
       "/x402/repeat-demand": paid("Do this x402 endpoint's payers come BACK? WORTH-paying signal (liveness/price/OFAC say SAFE; this says DELIVERED). Pass url=<x402 endpoint> or payto=<0x>: scans incoming USDC settlements to that payTo on Base by payer -> distinct + repeat payers + repeat_rate + gross + first/last. REPEAT_DEMAND|SINGLE_USE|NO_SETTLEMENTS|UNRESOLVED. Read-only.", "0.004", [{ name: "url", desc: "the x402 endpoint URL to measure (its live 402 supplies the payTo)", required: false, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "payto", desc: "optional 0x payTo to scan directly (bind without fetching the endpoint)", required: false, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "pages", desc: "optional scan depth 1-10 (default 4, ~50 settlements/page)", required: false, example: "4" }]),
-      "/x402/clients": paid("WHO pays this x402 endpoint — payer roster + concentration behind the settlement count. repeat-demand says IF payers return; this says who they ARE and whether volume is broad demand or one whale. Pass url=<x402 endpoint> or payto=<0x>: scans incoming USDC settlements to that payTo on Base, groups by payer -> per-wallet roster (payments + gross + share + first/last + is_repeat) + concentration (top_payer_share + HHI -> effective_payers). DISTRIBUTED|CONCENTRATED|SINGLE_PAYER|NO_SETTLEMENTS|UNRESOLVED. Read-only.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to measure (its live 402 supplies the payTo)", required: false, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "payto", desc: "optional 0x payTo to scan directly (bind without fetching the endpoint)", required: false, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "limit", desc: "optional roster size 1-100 (default 20)", required: false, example: "20" }, { name: "pages", desc: "optional scan depth 1-10 (default 4, ~50 settlements/page)", required: false, example: "4" }]),
+      "/x402/clients": paid("WHO pays this x402 endpoint — payer roster + concentration. repeat-demand says IF payers return; this says who they ARE and whether volume is broad or one whale. Pass url=<x402 endpoint> or payto=<0x>: groups USDC settlements by payer -> roster (gross, share, first/last, is_repeat) + concentration (top_payer_share, HHI). DISTRIBUTED|CONCENTRATED|SINGLE_PAYER. Read-only.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to measure (its live 402 supplies the payTo)", required: false, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "payto", desc: "optional 0x payTo to scan directly (bind without fetching the endpoint)", required: false, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "limit", desc: "optional roster size 1-100 (default 20)", required: false, example: "20" }, { name: "pages", desc: "optional scan depth 1-10 (default 4, ~50 settlements/page)", required: false, example: "4" }]),
       "/dns": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "query", required: true, example: "stripe.com" }]),
       "/whois": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.01", [{ name: "domain", desc: "domain name to look up", in: "query", required: true, example: "cloudflare.com" }]),
     })),
@@ -4931,7 +5058,7 @@ export function makeRoutes(payTo: string) {
         payTo,
       },
       description:
-        "WHO pays this x402 endpoint — the payer roster + concentration behind the settlement count. repeat-demand says IF payers return; this says who they ARE and whether volume is broad demand or one whale. Pass ?url=<x402 endpoint> (its 402 supplies the payTo) or &payto=<0x>: scans incoming USDC settlements to that payTo on Base, grouped by payer -> per-wallet roster (payments + gross + share + first/last + is_repeat) + concentration (top_payer_share + Herfindahl HHI -> effective_payers). DISTRIBUTED|CONCENTRATED|SINGLE_PAYER|NO_SETTLEMENTS|UNRESOLVED. &limit=1-100 (default 20). Read-only.",
+        "WHO pays this x402 endpoint — the payer roster + concentration behind the settlement count. repeat-demand says IF payers return; this says who they ARE and whether volume is broad or one whale. Pass ?url=<x402 endpoint> (its 402 supplies the payTo) or &payto=<0x>: groups USDC settlements by payer -> per-wallet roster (gross, share, first/last, is_repeat) + concentration (top_payer_share, HHI -> effective_payers). DISTRIBUTED|CONCENTRATED|SINGLE_PAYER. Read-only.",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
