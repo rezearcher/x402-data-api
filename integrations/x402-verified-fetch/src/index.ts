@@ -27,25 +27,33 @@ import type { x402Client, x402HTTPClient } from "@x402/core/client";
 
 import {
   reconcileSettlement,
+  computeAuthorizationProof,
   usdcToAtomic,
   type ReconcileResult,
   type SettlementVerdict,
   type ReceiptTransfer,
+  type AuthorizationProof,
 } from "./reconcile.js";
-import { readSettlementReceipt, type ReceiptRead } from "./chain.js";
+import { readSettlementReceipt, confirmAuthorizationState, type ReceiptRead } from "./chain.js";
 
 export {
   reconcileSettlement,
   decodeUsdcTransfers,
+  decodeAuthorizationUsed,
+  computeAuthorizationProof,
+  authorizationStateCallData,
+  decodeAuthorizationStateResult,
   usdcToAtomic,
   atomicToUsdcStr,
   receiptStatus,
   USDC_BASE,
   USDC_DECIMALS,
   USDC_TRANSFER_TOPIC,
+  USDC_AUTH_USED_TOPIC,
+  USDC_AUTH_STATE_SELECTOR,
 } from "./reconcile.js";
-export type { ReconcileResult, SettlementVerdict, ReceiptTransfer } from "./reconcile.js";
-export { readSettlementReceipt, DEFAULT_BASE_RPCS } from "./chain.js";
+export type { ReconcileResult, SettlementVerdict, ReceiptTransfer, AuthorizationProof, AuthorizationUsedEvent } from "./reconcile.js";
+export { readSettlementReceipt, confirmAuthorizationState, DEFAULT_BASE_RPCS } from "./chain.js";
 export type { ReceiptRead } from "./chain.js";
 
 /** The advertised requirement a buyer pays against (payTo + amount). */
@@ -69,6 +77,15 @@ export interface VerifiedSettlement {
   rpcSources: string[];
   advertised: AdvertisedRequirement;
   matched: ReceiptTransfer | null;
+  /**
+   * EIP-3009 authorization proof (4-check standard, check #2). "consumed" binds
+   * the settlement to a spent USDC transfer authorization — catching a replayed
+   * / unrelated Transfer to the same payTo that a Transfer-amount match alone
+   * cannot. "state-mismatch" (dual-confirmed) is a forgery signal we fail closed
+   * on. "not-eip3009" = a direct transfer (reconcile still stands, nothing to
+   * bind). null on reconcile:"off" or an UNVERIFIED/NOT_FOUND early-out.
+   */
+  authorization: AuthorizationProof | null;
   note: string;
 }
 
@@ -244,8 +261,9 @@ export function wrapFetchWithVerifiedPayment(
       /* unparseable header — leave nulls, verdict UNVERIFIED below */
     }
 
-    let read: ReceiptRead = { found: false, status: null, transfers: [], block: null, confirmation: "not-found", sources: [] };
+    let read: ReceiptRead = { found: false, status: null, transfers: [], authEvents: [], block: null, confirmation: "not-found", sources: [] };
     let core: ReconcileResult;
+    let authorization: AuthorizationProof | null = null;
     if (!tx) {
       core = {
         verdict: "UNVERIFIED",
@@ -264,6 +282,38 @@ export function wrapFetchWithVerifiedPayment(
         };
       } else {
         core = reconcileSettlement(read.status, read.transfers, advertised.payTo, advertised.amountAtomic, undefined, advertised.amountIsCap ?? false);
+
+        // 4-check standard, check #2: bind the settlement to a CONSUMED EIP-3009
+        // authorization nonce. A Transfer-amount match (check #3) cannot catch a
+        // tx that points at a replayed / unrelated USDC transfer to the same
+        // payTo — this can. Keyless: one extra cross-confirmed USDC eth_call.
+        if (read.authEvents.length === 0) {
+          authorization = computeAuthorizationProof([], core.matched?.from ?? null, null);
+        } else {
+          const matchedFrom = core.matched?.from ?? null;
+          const chosen =
+            (matchedFrom && read.authEvents.find((e) => e.authorizer.toLowerCase() === matchedFrom.toLowerCase())) ||
+            read.authEvents[0];
+          const st = await confirmAuthorizationState(chosen.authorizer, chosen.nonce, { rpcUrls: options.rpcUrls, fetchImpl, timeoutMs });
+          authorization = computeAuthorizationProof(read.authEvents, matchedFrom, st.consumed, st.confirmation);
+        }
+
+        // Forgery fail-closed: a dual-confirmed state-mismatch means two
+        // independent providers confirm the nonce is NOT consumed, so a would-be
+        // SETTLED is not a genuine settlement of this payment.
+        if (authorization.status === "state-mismatch" && authorization.confirmation === "dual-confirmed" && core.settled) {
+          core = {
+            verdict: "UNVERIFIED",
+            settled: false,
+            matched: core.matched,
+            note: `${core.note} — BUT ${authorization.note}. Failing closed: the Transfer amount matched, yet the EIP-3009 authorization is not consumed on-chain, so this tx does not prove a genuine settlement of this payment.`,
+          };
+        } else if (authorization.status === "consumed") {
+          core = {
+            ...core,
+            note: `${core.note}; EIP-3009 authorization consumed on-chain (nonce cross-confirmed), binding this settlement to a spent transfer authorization`,
+          };
+        }
       }
     }
 
@@ -278,6 +328,7 @@ export function wrapFetchWithVerifiedPayment(
       rpcSources: read.sources,
       advertised,
       matched: core.matched,
+      authorization,
       note: core.note,
     };
     // keep a trace of the header-claimed amount for callers who want it
@@ -290,9 +341,16 @@ export function wrapFetchWithVerifiedPayment(
     }
 
     // Attach the verdict so downstream code can read it off the response.
+    // HTTP header values must be ASCII ByteStrings; our notes can carry
+    // non-ASCII typography (em-dash). Escape any non-ASCII to its \uXXXX form —
+    // still valid JSON, and JSON.parse decodes it back losslessly.
     const out = new Response(res.body, res);
     try {
-      out.headers.set(SETTLEMENT_HEADER, JSON.stringify(settlement));
+      const asciiJson = JSON.stringify(settlement).replace(
+        /[^\x00-\x7F]/g,
+        (ch) => "\\u" + ch.charCodeAt(0).toString(16).padStart(4, "0"),
+      );
+      out.headers.set(SETTLEMENT_HEADER, asciiJson);
     } catch {
       /* some runtimes freeze headers on certain responses — non-fatal */
     }

@@ -4,20 +4,25 @@ import assert from "node:assert/strict";
 import {
   reconcileSettlement,
   decodeUsdcTransfers,
+  decodeAuthorizationUsed,
+  computeAuthorizationProof,
   usdcToAtomic,
   atomicToUsdcStr,
   readSettlementReceipt,
+  confirmAuthorizationState,
   wrapFetchWithVerifiedPayment,
   X402SettlementError,
   SETTLEMENT_HEADER,
   USDC_BASE,
   USDC_TRANSFER_TOPIC,
+  USDC_AUTH_USED_TOPIC,
 } from "../dist/index.js";
 import { encodePaymentResponseHeader } from "@x402/core/http";
 import { x402Client } from "@x402/fetch";
 
 const PAYTO = "0x5765ae06a52dc7a0bb71c36a11db512c7ea9ed10";
 const BUYER = "0x1111111111111111111111111111111111111111";
+const NONCE = "0x" + "ab".repeat(32);
 
 function pad(addr) {
   return "0x" + "0".repeat(24) + addr.slice(2).toLowerCase();
@@ -29,6 +34,24 @@ function usdcLog(from, to, atomic) {
     data: "0x" + atomic.toString(16).padStart(64, "0"),
   };
 }
+function authUsedLog(authorizer, nonce = NONCE) {
+  return {
+    address: USDC_BASE,
+    topics: [USDC_AUTH_USED_TOPIC, pad(authorizer), nonce],
+    data: "0x",
+  };
+}
+// classify an RPC POST body as a receipt read or an authorizationState eth_call
+function rpcMethod(init) {
+  try {
+    const b = JSON.parse(init.body);
+    return b.method;
+  } catch {
+    return null;
+  }
+}
+const CONSUMED = "0x" + "0".repeat(63) + "1";
+const NOT_CONSUMED = "0x" + "0".repeat(64);
 
 // ---- pure reconcile ----
 test("SETTLED when correct payTo gets >= advertised amount", () => {
@@ -114,6 +137,54 @@ test("readSettlementReceipt fails closed on RPC disagreement", async () => {
   assert.equal(read.status, null);
 });
 
+// ---- EIP-3009 authorization proof (4-check #2) ----
+test("decodeAuthorizationUsed pulls authorizer + nonce from the receipt log", () => {
+  const ev = decodeAuthorizationUsed([usdcLog(BUYER, PAYTO, 4000), authUsedLog(BUYER)]);
+  assert.equal(ev.length, 1);
+  assert.equal(ev[0].authorizer, BUYER.toLowerCase());
+  assert.equal(ev[0].nonce, NONCE.toLowerCase());
+});
+
+test("computeAuthorizationProof: not-eip3009 when no AuthorizationUsed event", () => {
+  const p = computeAuthorizationProof([], BUYER, null);
+  assert.equal(p.status, "not-eip3009");
+});
+
+test("computeAuthorizationProof: consumed when state true (dual-confirmed)", () => {
+  const ev = decodeAuthorizationUsed([authUsedLog(BUYER)]);
+  const p = computeAuthorizationProof(ev, BUYER, true, "dual-confirmed");
+  assert.equal(p.status, "consumed");
+  assert.equal(p.authorizer, BUYER.toLowerCase());
+});
+
+test("computeAuthorizationProof: state-mismatch (FORGERY) when log present but state false", () => {
+  const ev = decodeAuthorizationUsed([authUsedLog(BUYER)]);
+  const p = computeAuthorizationProof(ev, BUYER, false, "dual-confirmed");
+  assert.equal(p.status, "state-mismatch");
+});
+
+test("computeAuthorizationProof: unverified on rpc-disagreement", () => {
+  const ev = decodeAuthorizationUsed([authUsedLog(BUYER)]);
+  const p = computeAuthorizationProof(ev, BUYER, null, "rpc-disagreement");
+  assert.equal(p.status, "unverified");
+});
+
+test("confirmAuthorizationState dual-confirmed consumed", async () => {
+  const fetchImpl = async () => new Response(JSON.stringify({ result: CONSUMED }), { status: 200 });
+  const st = await confirmAuthorizationState(BUYER, NONCE, { fetchImpl });
+  assert.equal(st.consumed, true);
+  assert.equal(st.confirmation, "dual-confirmed");
+});
+
+test("confirmAuthorizationState fails closed on disagreement", async () => {
+  let i = 0;
+  const fetchImpl = async () =>
+    new Response(JSON.stringify({ result: i++ === 0 ? CONSUMED : NOT_CONSUMED }), { status: 200 });
+  const st = await confirmAuthorizationState(BUYER, NONCE, { fetchImpl });
+  assert.equal(st.consumed, null);
+  assert.equal(st.confirmation, "rpc-disagreement");
+});
+
 // ---- end-to-end wrapper ----
 function makeSettledResponse(tx, { payer = BUYER, network = "eip155:8453", amount = "4000" } = {}) {
   const header = encodePaymentResponseHeader({ success: true, transaction: tx, network, payer, amount });
@@ -171,6 +242,48 @@ test("wrapper throws on WRONG_RECIPIENT when onMismatch=throw", async () => {
     assert.equal(e.settlement.verdict, "WRONG_RECIPIENT");
     return true;
   });
+});
+
+test("wrapper binds a CONSUMED EIP-3009 authorization and annotates the verdict", async () => {
+  const tx = "0x4e9643e4f7a1c8e6b4d2f0a1b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1b1";
+  const receipt = { status: "0x1", blockNumber: "0x2e8f4a2", logs: [usdcLog(BUYER, PAYTO, 4000), authUsedLog(BUYER)] };
+  const baseFetch = async () => makeSettledResponse(tx);
+  const fetchImpl = async (url, init) => {
+    if (init && init.method === "POST") {
+      const m = rpcMethod(init);
+      if (m === "eth_call") return new Response(JSON.stringify({ result: CONSUMED }), { status: 200 });
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: receipt }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ accepts: [{ scheme: "exact", payTo: PAYTO, amount: "4000" }] }), { status: 402 });
+  };
+  const vf = wrapFetchWithVerifiedPayment(baseFetch, new x402Client(), { fetchImpl });
+  const res = await vf("https://seller.example/x402/data");
+  const verdict = JSON.parse(res.headers.get(SETTLEMENT_HEADER));
+  assert.equal(verdict.verdict, "SETTLED");
+  assert.equal(verdict.authorization.status, "consumed");
+  assert.match(verdict.note, /authorization consumed on-chain/);
+});
+
+test("wrapper FAILS CLOSED when Transfer matches but authorization is NOT consumed (replay/forgery)", async () => {
+  const tx = "0x5e9643e4f7a1c8e6b4d2f0a1b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c2";
+  const receipt = { status: "0x1", blockNumber: "0x2e8f4a2", logs: [usdcLog(BUYER, PAYTO, 4000), authUsedLog(BUYER)] };
+  const baseFetch = async () => makeSettledResponse(tx);
+  const fetchImpl = async (url, init) => {
+    if (init && init.method === "POST") {
+      const m = rpcMethod(init);
+      // both RPCs agree the nonce is NOT consumed -> dual-confirmed forgery signal
+      if (m === "eth_call") return new Response(JSON.stringify({ result: NOT_CONSUMED }), { status: 200 });
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: receipt }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ accepts: [{ scheme: "exact", payTo: PAYTO, amount: "4000" }] }), { status: 402 });
+  };
+  const vf = wrapFetchWithVerifiedPayment(baseFetch, new x402Client(), { fetchImpl });
+  const res = await vf("https://seller.example/x402/data");
+  const verdict = JSON.parse(res.headers.get(SETTLEMENT_HEADER));
+  assert.equal(verdict.verdict, "UNVERIFIED");
+  assert.equal(verdict.settled, false);
+  assert.equal(verdict.authorization.status, "state-mismatch");
+  assert.match(verdict.note, /Failing closed/);
 });
 
 test("reconcile:off is a pure pass-through payer", async () => {

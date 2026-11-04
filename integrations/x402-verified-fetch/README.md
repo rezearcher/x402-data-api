@@ -10,6 +10,12 @@ The verdict is on-chain ground truth, not a claim the server made about itself:
 SETTLED | UNDERPAID | WRONG_RECIPIENT | NO_TRANSFER | REVERTED | NOT_FOUND | UNVERIFIED
 ```
 
+### Two on-chain checks, not one (the EIP-3009 depth)
+
+A matching `Transfer` to the right `payTo` for the right amount (**check #3** of the market's 4-check settlement standard) is necessary but not sufficient: it cannot catch a `PAYMENT-RESPONSE` that points at an **unrelated or replayed** USDC transfer which happens to hit the same `payTo` for the same amount. So this wrapper also runs **check #2 — the EIP-3009 authorization nonce**: it decodes the USDC `AuthorizationUsed(authorizer, nonce)` event from the receipt and cross-confirms, over the same two independent RPCs, that the live USDC contract's `authorizationState(authorizer, nonce)` reads **consumed**. That cryptographically binds the settlement to a spent transfer authorization.
+
+If the amount matches but the authorization is **not** consumed on-chain (dual-confirmed), that is a forgery/replay signal and the verdict **fails closed to `UNVERIFIED`** — a strict agent is never told a replayed receipt `SETTLED`. A direct (non-EIP-3009) transfer degrades open: the `Transfer` reconcile still stands and `authorization.status` reports `not-eip3009`. Every verdict carries an `authorization` field with its own cross-confirmed provenance. No other x402 fetch wrapper does this; the hosted Grey Ridge endpoint makes the same binding.
+
 It **composes** the official Coinbase payer client (`@x402/fetch` → `wrapFetchWithPayment`, 670k+ downloads/mo) rather than replacing it. You keep your existing payment flow; you gain an independent audit of what actually moved.
 
 > **Honesty (Claims Law):** this confirms the on-chain settlement went to the right address for the right amount. It does **not** prove the off-chain resource was delivered or that its content is correct — later settlement failure or cache reuse is a separate failure mode. A `SETTLED` verdict is a payment proof, not a delivery guarantee.
@@ -52,7 +58,8 @@ Read the verdict off the response header, via the `onSettlement` callback, or le
 import { SETTLEMENT_HEADER } from "@grey-ridge/x402-verified-fetch";
 const verdict = JSON.parse(res.headers.get(SETTLEMENT_HEADER));
 // { verdict: "SETTLED", settled: true, tx, network, payer, block,
-//   confirmation: "dual-confirmed", rpcSources: [...], advertised: {...}, matched: {...} }
+//   confirmation: "dual-confirmed", rpcSources: [...], advertised: {...}, matched: {...},
+//   authorization: { status: "consumed", authorizer, nonce, confirmation: "dual-confirmed", ... } }
 ```
 
 ### Options
@@ -80,7 +87,7 @@ const verdict = reconcileSettlement(read.status, read.transfers,  // pure
 
 ## Cross-confirmation (fail closed)
 
-`readSettlementReceipt` queries two independent Base RPCs and fingerprints each receipt's `(status + USDC transfers)`:
+`readSettlementReceipt` queries two independent Base RPCs and fingerprints each receipt's `(status + USDC transfers + authorization nonces)`:
 
 - both reachable **and agree** → `dual-confirmed`
 - both reachable **and differ** → `rpc-disagreement` → verdict `UNVERIFIED` (we refuse to trust a single source)

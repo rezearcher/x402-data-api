@@ -1,6 +1,6 @@
 {
   "name": "@grey-ridge/x402-verified-fetch",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Drop-in fetch wrapper for x402-paying agents that independently reconciles the on-chain settlement (payTo + amount) after paying — SETTLED | UNDERPAID | WRONG_RECIPIENT | NO_TRANSFER | REVERTED. Composes @x402/fetch; reads the Base chain itself (the one thing no other x402 wrapper does).",
   "keywords": [
     "x402",
