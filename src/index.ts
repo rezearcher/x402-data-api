@@ -177,7 +177,7 @@ const PREVIEW_ROUTES = new Set<string>([
   "/chain/block-number", "/chain/token-balance", "/defi/protocol-risk",
   "/defi/safe-yields", "/enrich/tech-risk", "/scan/mcp", "/ai/ask", "/ai/extract",
   "/v1/chat/completions", "/chain/simulate", "/x402/preflight", "/x402/cert",
-  "/x402/receipt-verify", "/x402/repeat-demand",
+  "/x402/receipt-verify", "/x402/repeat-demand", "/x402/clients",
 ]);
 
 // --- Willingness-to-pay price floor (evidence-based, sensor-gated) ----------
@@ -287,6 +287,7 @@ export const ROUTE_CATALOG_BASE: Array<[string, string, string, string, string, 
   ["/x402/cert", "GET", "1.00", "1000000", "Mint a DEEP VERIFIED certificate for YOUR x402 endpoint — pay once ($1 USDC, no account) and, if the full deep audit passes, get a dated, HMAC-signed 30-day certificate plus an embeddable badge that re-audits live on every render and flips to 'degraded' if your endpoint breaks before expiry. Certifies the DEPTH axis a liveness-only verified badge cannot: advertised-vs-charged price accuracy, delivery readiness, LLM01/LLM08 injection safety and payTo OFAC/scam screening. Any buyer re-checks the signature free at /x402/cert/verify. Fails honest: no cert unless the audit returns PAY (you get findings + fix hints instead). Pass ?url= (and optional &advertised=<usdc>).", ["x402", "certificate", "verified", "badge", "seller", "trust", "price-accuracy", "delivery", "injection", "ofac", "attestation", "signed", "deep-verified", "data"]],
   ["/x402/preflight", "GET", "0.001", "1000", "x402 pre-payment endpoint check — before an agent pays an unknown x402 URL, fetch it once (never pays): (1) validate the 402 challenge + accepts[] (will it settle), (2) LIVENESS label LIVE|ZOMBIE|DEAD (is it a working payable endpoint now or listed-active-but-broken), (3) absolute PRICE-TRAP flag — a honeypot charging >=$1000/call trips AVOID even when its advertised==live price looks self-consistent; pass &max=<usdc> for your own budget ceiling, (4) scan the resource + advertised MCP tools for LLM01/LLM08 injection and screen payTo vs OFAC/scam lists (safe to pay), (5) PRICE ACCURACY — does the live accepts[].amount match the advertised price? pass &advertised=<usdc> or it self-checks /.well-known/x402: MATCH|OVERCHARGE|UNDERCHARGE, (6) optional &samples=N (1-5) reliability burst, (7) DELIVERY readiness — flags a leaking paywall and whether the output shape is specified, (8) CACHE-LEAKAGE posture — is the paid route marked non-cacheable (Cache-Control: no-store) or does a shared/CDN cache store it so a later UNPAID client can be served the paid body (Attack III of the 'Five Attacks on x402', arXiv 2605.11781): NO_STORE|CACHEABLE|OBSERVED_CACHED|UNKNOWN. Returns PAY|CAUTION|AVOID + fix hints. Read-only, not a settlement guarantee. ?url=<endpoint>.", ["x402", "preflight", "security", "verify", "payment", "safe-to-pay", "liveness", "zombie", "honeypot", "price-trap", "price-accuracy", "overcharge", "reliability", "uptime", "delivery", "cache-leakage", "data"]],
   ["/x402/receipt-verify", "GET", "0.004", "4000", "x402 POST-payment settlement proof. After you pay an x402 endpoint, bring your Base settlement ?tx=<0x hash> + ?url=<resource paid> for on-chain proof it settled: reads the tx receipt, decodes its USDC Transfer events, reconciles them against the endpoint's advertised payTo + amount (from its live 402, or &payto=/&expect= to bind). Verdict SETTLED|UNDERPAID|WRONG_RECIPIENT|NO_TRANSFER|REVERTED|NOT_FOUND|UNVERIFIED, 2-RPC cross-confirmed. Confirms settlement, not off-chain delivery.", ["x402", "receipt", "settlement", "verify", "payment", "proof", "post-payment", "onchain", "base", "usdc", "data"]],
+  ["/x402/clients", "GET", "0.001", "1000", "WHO pays this x402 endpoint — the payer roster + concentration behind the settlement count. repeat-demand says IF payers return; this says who they ARE and whether the volume is broad demand or one whale. Pass ?url=<x402 endpoint> (its live 402 supplies the payTo) or &payto=<0x>: scans incoming USDC settlements to that payTo on Base, groups by payer, returns the roster (each wallet's payments + gross + share + first/last seen + is_repeat), gross, distinct_payers, and a concentration block (top_payer_share + Herfindahl HHI -> effective_payers). Verdict DISTRIBUTED|CONCENTRATED|SINGLE_PAYER|NO_SETTLEMENTS|UNRESOLVED — CONCENTRATED flags a settlement count inflated by one dominant wallet (self-wash / captive integration, not organic breadth). &limit=1-100 (default 20), &pages=1-10. For a dedicated x402 payTo the roster == its paying agents (shared wallet overcounts, disclosed). Read-only.", ["x402", "clients", "payers", "roster", "concentration", "trust", "demand", "settlement", "onchain", "base", "usdc", "seller", "data"]],
   ["/x402/repeat-demand", "GET", "0.004", "4000", "Do this x402 endpoint's payers come BACK? The only on-chain signal that a paid resource was WORTH paying for — liveness/price/OFAC say it is SAFE to pay, this says it DELIVERED. Pass ?url=<x402 endpoint> (its live 402 supplies the payTo) or &payto=<0x>: scans every incoming USDC settlement to that payTo on Base, groups by payer, returns distinct_payers + repeat_payers + repeat_rate + gross + first/last seen + top payer. Verdict REPEAT_DEMAND|SINGLE_USE|NO_SETTLEMENTS|UNRESOLVED. For a dedicated x402 payTo the inflow == its paying agents (a shared/treasury wallet overcounts — disclosed). Lower bound (scans recent pages, &pages=1-10). Read-only; proves repeat payment, not delivery quality.", ["x402", "repeat-demand", "trust", "payers", "retention", "demand", "settlement", "onchain", "base", "usdc", "seller", "data"]],
   ["/dns", "GET", "0.01", "10000", "Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH. Pass ?domain=stripe.com.", ["dns", "domain", "data", "recon"]],
   ["/whois", "GET", "0.01", "10000", "WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain. Pass ?domain=cloudflare.com.", ["whois", "rdap", "domain", "data", "recon"]],
@@ -2804,6 +2805,7 @@ If you build, ship, or operate MCP servers and tools, this is the fast path — 
 - Deep verified badge for YOUR x402 endpoint (free, embeddable, re-audits live): ${BASE}/x402/badge?url=<your-endpoint> — returns the shields.io endpoint schema, so \`![x402 verified](https://img.shields.io/endpoint?url=${BASE}/x402/badge%3Furl%3D<encoded>)\` shows buyers a live third-party verdict that re-runs on every render and flips colour when your endpoint degrades. Certifies the DEPTH axis a liveness-only badge cannot: advertised-vs-charged price accuracy, delivery readiness, LLM01/LLM08 injection safety, and payTo OFAC/scam screening. Add &detail=1 for the full tier breakdown. The machine-readable report is at ${BASE}/x402/preflight ($0.001).
 - Deep verified CERTIFICATE for YOUR x402 endpoint (paid, $1 USDC, no account): ${BASE}/x402/cert?url=<your-endpoint> — pay once inline with x402 and, if the full deep audit passes, get a dated, HMAC-signed 30-day certificate persisted and served as a certified badge (\`![x402 deep-certified](https://img.shields.io/endpoint?url=${BASE}/x402/cert/badge%3Furl%3D<encoded>)\`) that re-audits live on every render and flips to "degraded" the moment your endpoint breaks before expiry. Unlike a liveness-only verified badge, this certifies price ACCURACY, delivery readiness, LLM01/LLM08 injection safety and payTo OFAC/scam screening — and any buyer re-checks the signature free at ${BASE}/x402/cert/verify?id=<cert_id>. Fails honest: no certificate unless the audit returns PAY (you get the findings + fix hints instead). Free preview: ${BASE}/x402/cert/preview.
 - Repeat-demand check — do an x402 endpoint's payers come BACK? (paid, $0.004): ${BASE}/x402/repeat-demand?url=<endpoint> (or &payto=<0x>). Liveness, price-accuracy and OFAC tell you an endpoint is SAFE to pay — none tell you it was WORTH paying. This reads the only on-chain repeat-value signal: it scans every incoming USDC settlement to the endpoint's advertised payTo on Base, groups by payer, and returns distinct_payers vs repeat_payers + repeat_rate + gross + first/last seen. Verdict REPEAT_DEMAND | SINGLE_USE | NO_SETTLEMENTS. Use it to pick, from two endpoints that both pass preflight, the one real agents keep paying. Honest: for a dedicated x402 payTo the inflow == its paying agents (a shared/treasury wallet overcounts, disclosed); lower bound. Free preview (3/IP/day): ${BASE}/x402/repeat-demand/preview.
+- Payer roster + concentration — WHO pays an x402 endpoint (paid, $0.001): ${BASE}/x402/clients?url=<endpoint> (or &payto=<0x>). repeat-demand tells you IF payers return; this tells you who they ARE and whether a headline settlement count is broad demand or one whale. Scans incoming USDC settlements to the endpoint's advertised payTo on Base, groups by payer, and returns the per-wallet roster (payments + gross + share + first/last seen + is_repeat) plus a concentration block (top_payer_share + Herfindahl HHI -> effective number of payers). Verdict DISTRIBUTED | CONCENTRATED | SINGLE_PAYER | NO_SETTLEMENTS — CONCENTRATED flags volume inflated by one dominant wallet (self-wash or a captive integration, not organic breadth). &limit=1-100 (default 20). Honest: dedicated payTo => roster == paying agents (shared wallet overcounts, disclosed); lower bound. Free preview (3/IP/day): ${BASE}/x402/clients/preview.
 - Subscribe by card — $9.99/mo: ${BASE}/pricing. Gives you an API key for 100 scans/month across any Grey Ridge endpoint, so you can gate your CI (fail the build on \`block\`) and re-scan continuously. Card only — no wallet, no USDC, no on-chain anything. Checkout is Stripe; your key is shown on the success page and at ${BASE}/api-key.
 - CI gate (GitHub Action): \`uses: rezearcher/greyridge-x402-tools@v0.3.2\` — on the GitHub Marketplace (https://github.com/marketplace/actions/mcp-server-tool-poisoning-scan); runs the scan on every push and fails the build on a \`block\` verdict.
 - Why this and not a free token checker: token-safety has free multi-chain scanners; MCP tool-poisoning / prompt-injection detection does not. This is the differentiated, paid-worthy lane.
@@ -3306,6 +3308,7 @@ app.get("/openapi.json", (c) => {
       "/x402/preflight": paid("x402 pre-payment check: fetch an unknown URL once (never pays) -> PAY|CAUTION|AVOID. Validates 402+accepts[] (will it settle), liveness LIVE|ZOMBIE|DEAD, >=$1000 price-trap, LLM01/LLM08 + OFAC/scam payTo screen, live-vs-advertised price, delivery readiness, Attack-III cache-leakage posture. Not a settlement guarantee.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to pre-check before paying", required: true, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "advertised", desc: "optional USDC-dollars price your catalog quoted (e.g. 0.001) to verify against the live charge", required: false, example: "0.001" }, { name: "max", desc: "optional per-call budget ceiling in USDC dollars; flags the live charge if it exceeds this", required: false, example: "0.05" }]),
       "/x402/receipt-verify": paid("x402 POST-payment settlement proof: bring your Base settlement tx + the resource URL you paid for on-chain proof it settled — reads the receipt, reconciles its USDC Transfers vs the endpoint's advertised payTo + amount, cross-confirmed on 2 independent RPCs (fails closed on disagreement). SETTLED|UNDERPAID|WRONG_RECIPIENT|NO_TRANSFER|REVERTED|NOT_FOUND|UNVERIFIED. Read-only.", "0.004", [{ name: "tx", desc: "0x-prefixed 32-byte Base-mainnet settlement transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }, { name: "url", desc: "the x402 resource URL you paid (its live 402 supplies the advertised payTo+amount)", required: false, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "payto", desc: "optional 0x payTo to reconcile against (bind without fetching the endpoint)", required: false, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "expect", desc: "optional advertised amount in USDC dollars to verify the settled amount against", required: false, example: "0.004" }]),
       "/x402/repeat-demand": paid("Do this x402 endpoint's payers come BACK? WORTH-paying signal (liveness/price/OFAC say SAFE; this says DELIVERED). Pass url=<x402 endpoint> or payto=<0x>: scans incoming USDC settlements to that payTo on Base by payer -> distinct + repeat payers + repeat_rate + gross + first/last. REPEAT_DEMAND|SINGLE_USE|NO_SETTLEMENTS|UNRESOLVED. Read-only.", "0.004", [{ name: "url", desc: "the x402 endpoint URL to measure (its live 402 supplies the payTo)", required: false, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "payto", desc: "optional 0x payTo to scan directly (bind without fetching the endpoint)", required: false, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "pages", desc: "optional scan depth 1-10 (default 4, ~50 settlements/page)", required: false, example: "4" }]),
+      "/x402/clients": paid("WHO pays this x402 endpoint — payer roster + concentration behind the settlement count. repeat-demand says IF payers return; this says who they ARE and whether volume is broad demand or one whale. Pass url=<x402 endpoint> or payto=<0x>: scans incoming USDC settlements to that payTo on Base, groups by payer -> per-wallet roster (payments + gross + share + first/last + is_repeat) + concentration (top_payer_share + HHI -> effective_payers). DISTRIBUTED|CONCENTRATED|SINGLE_PAYER|NO_SETTLEMENTS|UNRESOLVED. Read-only.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to measure (its live 402 supplies the payTo)", required: false, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "payto", desc: "optional 0x payTo to scan directly (bind without fetching the endpoint)", required: false, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "limit", desc: "optional roster size 1-100 (default 20)", required: false, example: "20" }, { name: "pages", desc: "optional scan depth 1-10 (default 4, ~50 settlements/page)", required: false, example: "4" }]),
       "/dns": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "query", required: true, example: "stripe.com" }]),
       "/whois": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.01", [{ name: "domain", desc: "domain name to look up", in: "query", required: true, example: "cloudflare.com" }]),
     })),
@@ -3467,6 +3470,7 @@ const BAZAAR_SERVICE_NAME_OVERRIDES: Record<string, string> = {
   "/chain/wallet-screen": "OFAC Wallet Sanctions Screen",
   "/x402/preflight": "x402 Pre-Payment Safety Check",
   "/x402/repeat-demand": "x402 Repeat-Payer Demand Check",
+  "/x402/clients": "x402 Payer Roster & Concentration",
   "/scan/mcp": "MCP Server Security Scan",
   "/enrich/tech-risk": "Domain & Tech Risk (CVE/EPSS)",
   "/crypto/funding": "Cross-Venue Perp Funding Rates",
@@ -3496,6 +3500,7 @@ const BAZAAR_TAG_OVERRIDES: Record<string, string[]> = {
   "/chain/wallet-screen": ["sanctions", "ofac", "compliance", "scam", "phishing", "drainer", "wallet-screening", "security"],
   "/x402/preflight": ["x402", "preflight", "safe-to-pay", "verify", "payment", "security"],
   "/x402/repeat-demand": ["x402", "repeat-demand", "payers", "retention", "trust", "demand"],
+  "/x402/clients": ["x402", "clients", "payers", "roster", "concentration", "trust"],
   "/scan/mcp": ["mcp", "security", "prompt-injection", "audit", "tool-poisoning"],
   "/enrich/tech-risk": ["security", "cve", "risk", "epss", "attack-surface"],
   "/enrich/domain": ["domain", "enrichment", "security", "dns", "risk"],
@@ -4914,6 +4919,50 @@ export function makeRoutes(payTo: string) {
             top_payer: { from: "0x1111…1111", payments: 12, usdc: 0.048 },
             note: "5 of 9 payer(s) returned to pay this endpoint again (repeat_rate 0.556) — proven repeat value.",
             scope_note: REPEAT_DEMAND_SCOPE_NOTE,
+          },
+        },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /x402/clients": {
+      accepts: {
+        scheme: "exact" as const,
+        price: "$0.001",
+        network: NETWORK,
+        payTo,
+      },
+      description:
+        "WHO pays this x402 endpoint — the payer roster + concentration behind the settlement count. repeat-demand says IF payers return; this says who they ARE and whether volume is broad demand or one whale. Pass ?url=<x402 endpoint> (its 402 supplies the payTo) or &payto=<0x>: scans incoming USDC settlements to that payTo on Base, grouped by payer -> per-wallet roster (payments + gross + share + first/last + is_repeat) + concentration (top_payer_share + Herfindahl HHI -> effective_payers). DISTRIBUTED|CONCENTRATED|SINGLE_PAYER|NO_SETTLEMENTS|UNRESOLVED. &limit=1-100 (default 20). Read-only.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { url: "https://api.greyridgesignals.ai/crypto/prices" },
+        inputSchema: {
+          type: "object",
+          properties: {
+            url: { type: "string", description: "the x402 endpoint URL to measure; its live 402 challenge supplies the advertised payTo to scan" },
+            payto: { type: "string", description: "optional 0x payTo to scan directly (binds the roster without fetching the endpoint)" },
+            limit: { type: "integer", description: "optional roster size 1-100 (default 20) — how many top payers to list" },
+            pages: { type: "integer", description: "optional scan depth, 1-10 Blockscout pages (default 4, ~50 settlements/page)" },
+          },
+        },
+        output: {
+          example: {
+            url: "https://seller.example/x402/data",
+            payTo: "0x2222…2222",
+            payto_source: "live-402",
+            verdict: "CONCENTRATED",
+            settlements_scanned: 41,
+            distinct_payers: 4,
+            gross_usdc: 0.182,
+            concentration: { top_payer_share: 0.78, hhi: 0.63, effective_payers: 1.6 },
+            clients: [
+              { from: "0x1111…1111", payments: 33, usdc: 0.142, share: 0.78, first_seen: "2026-10-05T12:03:11.000Z", last_seen: "2026-11-03T22:41:50.000Z", is_repeat: true },
+              { from: "0x3333…3333", payments: 4, usdc: 0.02, share: 0.11, first_seen: "2026-10-12T09:00:00.000Z", last_seen: "2026-10-30T18:00:00.000Z", is_repeat: true },
+            ],
+            clients_returned: 4,
+            clients_truncated: false,
+            note: "4 distinct payers but the top wallet is 78% of gross (HHI 0.63, ~1.6 effective payers) — volume is concentrated in one client.",
+            scope_note: CLIENTS_SCOPE_NOTE,
           },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
@@ -11716,9 +11765,9 @@ const REPEAT_DEMAND_SCOPE_NOTE =
 // Bounded scan of incoming USDC transfers to `to`, grouped by sender. Blockscout
 // v2 first (reliable, CF-IP egress, no getLogs range cap); paginates up to
 // `maxPages`. Degrades open: any failure returns what was collected so far.
-async function scanRepeatDemand(to: string, maxPages: number): Promise<{ payers: Map<string, { count: number; usdc: number }>; total: number; gross: number; firstTs: number | null; lastTs: number | null; source: string; pages: number; capped: boolean }> {
+async function scanRepeatDemand(to: string, maxPages: number): Promise<{ payers: Map<string, { count: number; usdc: number; firstTs: number | null; lastTs: number | null }>; total: number; gross: number; firstTs: number | null; lastTs: number | null; source: string; pages: number; capped: boolean }> {
   const USDC = USDC_BASE.toLowerCase();
-  const payers = new Map<string, { count: number; usdc: number }>();
+  const payers = new Map<string, { count: number; usdc: number; firstTs: number | null; lastTs: number | null }>();
   let total = 0, gross = 0, firstTs: number | null = null, lastTs: number | null = null, pages = 0, capped = false, source = "none";
   let nextParams: Record<string, string | number> | null = null;
   const base = `https://base.blockscout.com/api/v2/addresses/${to}/token-transfers`;
@@ -11743,9 +11792,14 @@ async function scanRepeatDemand(to: string, maxPages: number): Promise<{ payers:
       const val = Number((it.total ?? {}).value ?? "0") / 10 ** dec;
       if (!Number.isFinite(val)) continue;
       total++; gross += val;
-      const prev = payers.get(frm) ?? { count: 0, usdc: 0 };
-      prev.count++; prev.usdc += val; payers.set(frm, prev);
+      const prev = payers.get(frm) ?? { count: 0, usdc: 0, firstTs: null as number | null, lastTs: null as number | null };
+      prev.count++; prev.usdc += val;
       const ts = Date.parse(it.timestamp ?? "");
+      if (Number.isFinite(ts)) {
+        if (prev.firstTs === null || ts < prev.firstTs) prev.firstTs = ts;
+        if (prev.lastTs === null || ts > prev.lastTs) prev.lastTs = ts;
+      }
+      payers.set(frm, prev);
       if (Number.isFinite(ts)) { if (firstTs === null || ts < firstTs) firstTs = ts; if (lastTs === null || ts > lastTs) lastTs = ts; }
     }
     nextParams = j?.next_page_params ?? null;
@@ -11770,7 +11824,7 @@ async function scanRepeatDemand(to: string, maxPages: number): Promise<{ payers:
             if (!ADDR_RE.test(frm)) continue;
             const val = parseInt(lg.data, 16) / 1e6;
             total++; gross += val;
-            const prev = payers.get(frm) ?? { count: 0, usdc: 0 };
+            const prev = payers.get(frm) ?? { count: 0, usdc: 0, firstTs: null as number | null, lastTs: null as number | null };
             prev.count++; prev.usdc += val; payers.set(frm, prev);
           }
         } catch { /* skip chunk */ }
@@ -11898,6 +11952,193 @@ app.get("/x402/repeat-demand/preview", async (c) => {
   }
   const pages = Math.min(Math.max(parseInt(c.req.query("pages") ?? "4") || 4, 1), 10);
   return c.json({ ...(await x402RepeatDemand(url, payto, c.env.PAY_TO ?? null, pages)), trial: { real_checks_left_today: t.left } });
+});
+
+// ---------------------------------------------------------------------------
+// /x402/clients — the PAYER ROSTER + concentration behind an x402 endpoint.
+// repeat-demand answers "do payers come back?" (an aggregate rate); clients
+// answers "WHO pays this, and is the volume broad demand or one whale?" — the
+// per-payer roster + a concentration verdict the aggregate hides. A buyer
+// vetting a seller's "41 settlements!" needs to know whether that is 20 distinct
+// agents (DISTRIBUTED) or 38 payments from a single wallet (CONCENTRATED, i.e.
+// self-wash or a captive integration, not organic demand). Same on-chain scan as
+// repeat-demand (reuses scanRepeatDemand), so ~0 marginal COGS. Read-only.
+// ---------------------------------------------------------------------------
+type ClientRosterEntry = { from: string; payments: number; usdc: number; share: number; first_seen: string | null; last_seen: string | null; is_repeat: boolean };
+type ClientsResult = {
+  url: string | null;
+  payTo: string | null;
+  payto_source: "caller" | "live-402" | null;
+  verdict: "DISTRIBUTED" | "CONCENTRATED" | "SINGLE_PAYER" | "NO_SETTLEMENTS" | "UNRESOLVED";
+  settlements_scanned: number;
+  distinct_payers: number;
+  gross_usdc: number;
+  concentration: { top_payer_share: number; hhi: number; effective_payers: number } | null;
+  clients: ClientRosterEntry[];
+  clients_returned: number;
+  clients_truncated: boolean;
+  first_seen: string | null;
+  last_seen: string | null;
+  span_days: number | null;
+  is_own_endpoint: boolean;
+  scan: { source: string; pages: number; capped: boolean };
+  note: string;
+  scope_note: string;
+  checked_at: string;
+};
+const CLIENTS_SCOPE_NOTE =
+  "Lists the distinct payer wallets that have sent USDC settlements to an x402 endpoint's advertised payTo on Base mainnet, with per-payer payment count, gross, first/last seen, and a concentration measure (top-payer share + Herfindahl index -> effective number of payers). For a dedicated x402 payTo the roster == its paying agents; a shared/treasury wallet includes unrelated inflow (disclosed). Lower bound (scans recent pages). Read-only; reveals payer breadth, not off-chain delivery quality.";
+const CLIENTS_CONCENTRATION_THRESHOLD = 0.6; // top payer >=60% of gross => CONCENTRATED
+
+export async function x402Clients(url: string | null, callerPayTo: string | null, ownPayTo: string | null, maxPages = 4, limit = 20): Promise<ClientsResult> {
+  const checked_at = new Date().toISOString();
+  let payTo: string | null = callerPayTo && ADDR_RE.test(callerPayTo) ? callerPayTo : null;
+  let payto_source: ClientsResult["payto_source"] = payTo ? "caller" : null;
+  if (!payTo && url) {
+    const live = await fetchLive402PayTo(url);
+    if (live.payTo) { payTo = live.payTo; payto_source = "live-402"; }
+  }
+  const empty = (verdict: ClientsResult["verdict"], note: string): ClientsResult => ({
+    url, payTo, payto_source, verdict, settlements_scanned: 0, distinct_payers: 0, gross_usdc: 0,
+    concentration: null, clients: [], clients_returned: 0, clients_truncated: false,
+    first_seen: null, last_seen: null, span_days: null, is_own_endpoint: false,
+    scan: { source: "none", pages: 0, capped: false }, note, scope_note: CLIENTS_SCOPE_NOTE, checked_at,
+  });
+  if (!payTo) {
+    return empty("UNRESOLVED", url
+      ? "could not resolve a payTo: the URL did not return a parseable x402 402 challenge with an accepts[].payTo. Pass &payto=<0x> to bind the address directly."
+      : "no payTo to scan: pass ?url=<x402 endpoint> (its live 402 supplies the payTo) or &payto=<0x address>.");
+  }
+  const cap = Math.min(Math.max(limit, 1), 100);
+  const s = await scanRepeatDemand(payTo.toLowerCase(), Math.min(Math.max(maxPages, 1), 10));
+  const is_own = !!ownPayTo && payTo.toLowerCase() === ownPayTo.toLowerCase();
+  if (s.total === 0) {
+    const r = empty("NO_SETTLEMENTS", `no incoming USDC settlements found to payTo ${payTo} on Base — no payer roster yet: either a brand-new/unused endpoint or one whose payers have not settled on-chain. Not a negative verdict on safety.`);
+    r.is_own_endpoint = is_own; r.scan = { source: s.source, pages: s.pages, capped: s.capped };
+    return r;
+  }
+  const distinct = s.payers.size;
+  const gross = s.gross > 0 ? s.gross : 0;
+  // Full roster sorted by payments desc, then gross desc.
+  const roster: ClientRosterEntry[] = [...s.payers.entries()]
+    .map(([from, v]) => ({
+      from,
+      payments: v.count,
+      usdc: Math.round(v.usdc * 1e6) / 1e6,
+      share: gross > 0 ? Math.round((v.usdc / gross) * 1000) / 1000 : 0,
+      first_seen: v.firstTs ? new Date(v.firstTs).toISOString() : null,
+      last_seen: v.lastTs ? new Date(v.lastTs).toISOString() : null,
+      is_repeat: v.count >= 2,
+    }))
+    .sort((a, b) => (b.payments - a.payments) || (b.usdc - a.usdc));
+  // Concentration: Herfindahl index over gross share; effective payers = 1/HHI.
+  const hhi = gross > 0 ? roster.reduce((acc, e) => acc + (e.usdc / gross) ** 2, 0) : 1;
+  const topShare = roster.length ? roster[0].share : 0;
+  const effective = hhi > 0 ? Math.round((1 / hhi) * 10) / 10 : distinct;
+  const concentration = { top_payer_share: topShare, hhi: Math.round(hhi * 1000) / 1000, effective_payers: effective };
+  const clients = roster.slice(0, cap);
+  const span_days = s.firstTs && s.lastTs ? Math.round(((s.lastTs - s.firstTs) / 86400000) * 10) / 10 : null;
+  let verdict: ClientsResult["verdict"];
+  let note: string;
+  if (distinct === 1) {
+    verdict = "SINGLE_PAYER";
+    note = `every settlement (${s.total}) came from ONE payer wallet — captive/self-use so far, not broad demand.${is_own ? " (our own payTo — disclosed.)" : ""}`;
+  } else if (topShare >= CLIENTS_CONCENTRATION_THRESHOLD) {
+    verdict = "CONCENTRATED";
+    note = `${distinct} distinct payers but the top wallet is ${Math.round(topShare * 100)}% of gross (HHI ${concentration.hhi}, ~${effective} effective payers) — volume is concentrated in one client, so the headline settlement count overstates breadth of demand.${is_own ? " (our own payTo — disclosed.)" : ""}`;
+  } else {
+    verdict = "DISTRIBUTED";
+    note = `${distinct} distinct payers with no single wallet dominating (top ${Math.round(topShare * 100)}% of gross, HHI ${concentration.hhi}, ~${effective} effective payers) — broad-based demand across multiple clients.${is_own ? " (our own payTo — disclosed.)" : ""}`;
+  }
+  if (s.capped) note += " Scan hit the page cap, so payers beyond the scanned window are not counted (lower bound).";
+  return {
+    url, payTo, payto_source, verdict,
+    settlements_scanned: s.total, distinct_payers: distinct, gross_usdc: Math.round(gross * 1e6) / 1e6,
+    concentration, clients, clients_returned: clients.length, clients_truncated: roster.length > clients.length,
+    first_seen: s.firstTs ? new Date(s.firstTs).toISOString() : null,
+    last_seen: s.lastTs ? new Date(s.lastTs).toISOString() : null,
+    span_days, is_own_endpoint: is_own,
+    scan: { source: s.source, pages: s.pages, capped: s.capped },
+    note, scope_note: CLIENTS_SCOPE_NOTE, checked_at,
+  };
+}
+
+function clientsSample(): ClientsResult {
+  return {
+    url: "https://seller.example/x402/data",
+    payTo: "0x2222222222222222222222222222222222222222",
+    payto_source: "live-402",
+    verdict: "CONCENTRATED",
+    settlements_scanned: 41,
+    distinct_payers: 4,
+    gross_usdc: 0.182,
+    concentration: { top_payer_share: 0.78, hhi: 0.63, effective_payers: 1.6 },
+    clients: [
+      { from: "0x1111111111111111111111111111111111111111", payments: 33, usdc: 0.142, share: 0.78, first_seen: "2026-10-05T12:03:11.000Z", last_seen: "2026-11-03T22:41:50.000Z", is_repeat: true },
+      { from: "0x3333333333333333333333333333333333333333", payments: 4, usdc: 0.02, share: 0.11, first_seen: "2026-10-12T09:00:00.000Z", last_seen: "2026-10-30T18:00:00.000Z", is_repeat: true },
+      { from: "0x4444444444444444444444444444444444444444", payments: 3, usdc: 0.015, share: 0.082, first_seen: "2026-10-20T00:00:00.000Z", last_seen: "2026-10-28T00:00:00.000Z", is_repeat: true },
+      { from: "0x5555555555555555555555555555555555555555", payments: 1, usdc: 0.005, share: 0.027, first_seen: "2026-11-01T00:00:00.000Z", last_seen: "2026-11-01T00:00:00.000Z", is_repeat: false },
+    ],
+    clients_returned: 4,
+    clients_truncated: false,
+    first_seen: "2026-10-05T12:03:11.000Z",
+    last_seen: "2026-11-03T22:41:50.000Z",
+    span_days: 29.4,
+    is_own_endpoint: false,
+    scan: { source: "blockscout", pages: 2, capped: false },
+    note: "4 distinct payers but the top wallet is 78% of gross (HHI 0.63, ~1.6 effective payers) — volume is concentrated in one client, so the headline settlement count overstates breadth of demand.",
+    scope_note: CLIENTS_SCOPE_NOTE,
+    checked_at: new Date().toISOString(),
+  };
+}
+
+app.get("/x402/clients", async (c) => {
+  const url = c.req.query("url") ?? null;
+  if (url !== null && !/^https?:\/\//i.test(url)) {
+    return c.json({ error: "url (optional) must be an absolute http(s) x402 endpoint URL; or pass &payto=<0x>" }, { status: 400 });
+  }
+  const payto = c.req.query("payto") ?? null;
+  if (payto !== null && !ADDR_RE.test(payto)) {
+    return c.json({ error: "payto (optional) must be a 0x-prefixed 20-byte address" }, { status: 400 });
+  }
+  if (url === null && payto === null) {
+    return c.json({ error: "pass ?url=<x402 endpoint> (its live 402 supplies the payTo) or &payto=<0x address>" }, { status: 400 });
+  }
+  const pages = Math.min(Math.max(parseInt(c.req.query("pages") ?? "4") || 4, 1), 10);
+  const limit = Math.min(Math.max(parseInt(c.req.query("limit") ?? "20") || 20, 1), 100);
+  const result = await x402Clients(url, payto, c.env.PAY_TO ?? null, pages, limit);
+  console.log(JSON.stringify({ event: "paid_request", endpoint: "/x402/clients", url, payTo: result.payTo, verdict: result.verdict, distinct: result.distinct_payers, top_share: result.concentration?.top_payer_share ?? null, ts: result.checked_at }));
+  const rail = c.get("rail") ?? "x402-paid";
+  fireAndForget(c, trackPaidRequest("GET /x402/clients", rail, makeUsageCounter(c.env)));
+  return c.json(result);
+});
+
+app.get("/x402/clients/preview", async (c) => {
+  const url = c.req.query("url") ?? null;
+  const payto = c.req.query("payto") ?? null;
+  if (url === null && payto === null) {
+    console.log(JSON.stringify({ event: "free_preview", endpoint: "/x402/clients/preview", verdict: "CONCENTRATED", sample: true }));
+    return c.json({
+      ...clientsSample(),
+      sample: true,
+      note: "Representative sample (the shape of a CONCENTRATED verdict: a payer roster where one wallet dominates gross). Pass ?url=<x402 endpoint> or &payto=<0x> to measure a REAL endpoint free (3/IP/day), or GET /x402/clients?url=… ($0.001) for unmetered rosters.",
+      upgrade: upgradeCTA(paidUrlFrom(c), "0.001", "Unmetered payer-roster + concentration for any x402 endpoint (this free preview is capped at 3 real scans/IP/day)."),
+    });
+  }
+  if (url !== null && !/^https?:\/\//i.test(url)) {
+    return c.json({ error: "url (optional) must be an absolute http(s) x402 endpoint URL" }, { status: 400 });
+  }
+  if (payto !== null && !ADDR_RE.test(payto)) {
+    return c.json({ error: "payto (optional) must be a 0x-prefixed 20-byte address" }, { status: 400 });
+  }
+  const t = await trialToken(c, "clients:" + (payto ?? url ?? ""));
+  if (t.exhausted) {
+    const pu = paidUrlFrom(c);
+    return c.json({ error: "free clients trial exhausted (3/day/IP) - this is NOT a result for the endpoint you asked about", trial: { real_checks_left_today: 0 }, paid: pu, paid_url: pu, price_usdc: "0.001", pay_with: `x402: npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f("${pu}") - pays USDC on Base automatically. Docs: https://api.greyridgesignals.ai/llms.txt` }, { status: 429 });
+  }
+  const pages = Math.min(Math.max(parseInt(c.req.query("pages") ?? "4") || 4, 1), 10);
+  const limit = Math.min(Math.max(parseInt(c.req.query("limit") ?? "20") || 20, 1), 100);
+  return c.json({ ...(await x402Clients(url, payto, c.env.PAY_TO ?? null, pages, limit)), trial: { real_checks_left_today: t.left } });
 });
 
 app.get("/x402/receipt-verify/preview", async (c) => {

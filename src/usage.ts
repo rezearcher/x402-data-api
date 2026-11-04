@@ -97,6 +97,7 @@ export type Route =
   | "GET /x402/preflight"
   | "GET /x402/receipt-verify"
   | "GET /x402/repeat-demand"
+  | "GET /x402/clients"
   | "GET /x402/cert"
   | "POST /mcp";
 
@@ -233,6 +234,7 @@ const ALL_ROUTES: Route[] = [
   "GET /x402/preflight",
   "GET /x402/receipt-verify",
   "GET /x402/repeat-demand",
+  "GET /x402/clients",
   "GET /x402/cert",
   "POST /mcp",
 ];
