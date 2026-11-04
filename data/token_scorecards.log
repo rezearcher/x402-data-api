@@ -149,3 +149,14 @@ discovered 3 trending Base tokens from GeckoTerminal
 PUT docs/sitemap.xml (215 urls)
 IndexNow: submitted 7 URLs -> HTTP 200
 PUBLISHED 6 token scorecards + index
+        WETH  GO     token-weth-420000-honeypot-check
+        USDC  HOLD   token-usdc-833589-honeypot-check
+       cbBTC  GO     token-cbbtc-cbb7c0-honeypot-check
+        AERO  GO     token-aero-940181-honeypot-check
+       DEGEN  GO     token-degen-4ed4e8-honeypot-check
+discovered 3 trending Base tokens from GeckoTerminal
+      Reboot  HOLD   token-reboot-6f1827-honeypot-check
+         DRB  GO     token-drb-3ec215-honeypot-check
+PUT docs/sitemap.xml (216 urls)
+IndexNow: submitted 8 URLs -> HTTP 200
+PUBLISHED 7 token scorecards + index

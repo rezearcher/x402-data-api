@@ -1,9 +1,9 @@
 {
- "checked_at": "2026-11-03T16:42:22.703958+00:00",
+ "checked_at": "2026-11-04T16:41:51.213170+00:00",
  "summary": {
   "ok": 46,
   "stale": 0,
-  "unindexed": 21,
+  "unindexed": 24,
   "error": 0
  },
  "routes": [
@@ -11,7 +11,7 @@
    "resource": "https://x402-data-api.sigrunner.workers.dev/defi/yields",
    "valid": true,
    "active": true,
-   "last_crawled": "2026-11-03T03:55:59.072Z",
+   "last_crawled": "2026-11-04T04:06:33.103Z",
    "age_days": 0.5,
    "status": "ok"
   },
@@ -20,7 +20,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-11-01T23:17:24.037Z",
-   "age_days": 1.7,
+   "age_days": 2.7,
    "status": "ok"
   },
   {
@@ -28,15 +28,15 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-20T17:03:22.745Z",
-   "age_days": 14.0,
+   "age_days": 15.0,
    "status": "ok"
   },
   {
    "resource": "https://x402-data-api.sigrunner.workers.dev/chain/block-number",
    "valid": true,
    "active": true,
-   "last_crawled": "2026-10-20T17:03:21.728Z",
-   "age_days": 14.0,
+   "last_crawled": "2026-11-04T03:27:41.559Z",
+   "age_days": 0.6,
    "status": "ok"
   },
   {
@@ -44,7 +44,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-20T17:03:23.772Z",
-   "age_days": 14.0,
+   "age_days": 15.0,
    "status": "ok"
   },
   {
@@ -52,7 +52,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-20T17:03:24.848Z",
-   "age_days": 14.0,
+   "age_days": 15.0,
    "status": "ok"
   },
   {
@@ -60,23 +60,23 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-20T17:03:26.05Z",
-   "age_days": 14.0,
+   "age_days": 15.0,
    "status": "ok"
   },
   {
    "resource": "https://x402-data-api.sigrunner.workers.dev/chain/receipt",
    "valid": true,
    "active": true,
-   "last_crawled": "2026-10-20T17:03:27.353Z",
-   "age_days": 14.0,
+   "last_crawled": "2026-11-04T06:05:03.118Z",
+   "age_days": 0.4,
    "status": "ok"
   },
   {
    "resource": "https://x402-data-api.sigrunner.workers.dev/chain/code",
    "valid": true,
    "active": true,
-   "last_crawled": "2026-10-20T17:03:28.947Z",
-   "age_days": 14.0,
+   "last_crawled": "2026-11-04T05:17:51.898Z",
+   "age_days": 0.5,
    "status": "ok"
   },
   {
@@ -84,7 +84,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-11-01T07:19:48.593Z",
-   "age_days": 2.4,
+   "age_days": 3.4,
    "status": "ok"
   },
   {
@@ -92,7 +92,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-11-01T10:15:25.329Z",
-   "age_days": 2.3,
+   "age_days": 3.3,
    "status": "ok"
   },
   {
@@ -100,7 +100,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-11-01T10:12:51.194Z",
-   "age_days": 2.3,
+   "age_days": 3.3,
    "status": "ok"
   },
   {
@@ -108,7 +108,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-11-01T07:35:08.279Z",
-   "age_days": 2.4,
+   "age_days": 3.4,
    "status": "ok"
   },
   {
@@ -116,7 +116,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-11-01T07:40:41.67Z",
-   "age_days": 2.4,
+   "age_days": 3.4,
    "status": "ok"
   },
   {
@@ -124,7 +124,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-11-01T07:44:57.049Z",
-   "age_days": 2.4,
+   "age_days": 3.4,
    "status": "ok"
   },
   {
@@ -132,7 +132,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-11-01T10:20:23.574Z",
-   "age_days": 2.3,
+   "age_days": 3.3,
    "status": "ok"
   },
   {
@@ -140,7 +140,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-11-01T07:30:29.323Z",
-   "age_days": 2.4,
+   "age_days": 3.4,
    "status": "ok"
   },
   {
@@ -148,7 +148,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-11-01T10:20:52.168Z",
-   "age_days": 2.3,
+   "age_days": 3.3,
    "status": "ok"
   },
   {
@@ -156,7 +156,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-20T17:03:31.902Z",
-   "age_days": 14.0,
+   "age_days": 15.0,
    "status": "ok"
   },
   {
@@ -164,7 +164,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-20T17:03:33.166Z",
-   "age_days": 14.0,
+   "age_days": 15.0,
    "status": "ok"
   },
   {
@@ -172,7 +172,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-11-01T10:29:25.732Z",
-   "age_days": 2.3,
+   "age_days": 3.3,
    "status": "ok"
   },
   {
@@ -180,7 +180,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-20T17:03:17.863Z",
-   "age_days": 14.0,
+   "age_days": 15.0,
    "status": "ok"
   },
   {
@@ -188,7 +188,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-20T17:03:18.665Z",
-   "age_days": 14.0,
+   "age_days": 15.0,
    "status": "ok"
   },
   {
@@ -228,7 +228,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-20T17:03:09.963Z",
-   "age_days": 14.0,
+   "age_days": 15.0,
    "status": "ok"
   },
   {
@@ -316,7 +316,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-20T17:03:11.157Z",
-   "age_days": 14.0,
+   "age_days": 15.0,
    "status": "ok"
   },
   {
@@ -324,7 +324,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-19T20:38:17.078Z",
-   "age_days": 14.8,
+   "age_days": 15.8,
    "status": "ok"
   },
   {
@@ -332,7 +332,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-19T19:48:22.958Z",
-   "age_days": 14.9,
+   "age_days": 15.9,
    "status": "ok"
   },
   {
@@ -340,7 +340,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-19T19:53:36.465Z",
-   "age_days": 14.9,
+   "age_days": 15.9,
    "status": "ok"
   },
   {
@@ -348,7 +348,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-19T20:38:18.951Z",
-   "age_days": 14.8,
+   "age_days": 15.8,
    "status": "ok"
   },
   {
@@ -356,7 +356,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-19T18:00:10.769Z",
-   "age_days": 14.9,
+   "age_days": 15.9,
    "status": "ok"
   },
   {
@@ -364,7 +364,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-19T18:10:09.367Z",
-   "age_days": 14.9,
+   "age_days": 15.9,
    "status": "ok"
   },
   {
@@ -372,7 +372,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-19T18:13:08.508Z",
-   "age_days": 14.9,
+   "age_days": 15.9,
    "status": "ok"
   },
   {
@@ -380,7 +380,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-19T18:13:07.001Z",
-   "age_days": 14.9,
+   "age_days": 15.9,
    "status": "ok"
   },
   {
@@ -388,7 +388,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-19T18:18:06.272Z",
-   "age_days": 14.9,
+   "age_days": 15.9,
    "status": "ok"
   },
   {
@@ -396,7 +396,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-19T18:20:28.447Z",
-   "age_days": 14.9,
+   "age_days": 15.9,
    "status": "ok"
   },
   {
@@ -404,7 +404,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-19T18:20:30.562Z",
-   "age_days": 14.9,
+   "age_days": 15.9,
    "status": "ok"
   },
   {
@@ -412,7 +412,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-19T19:53:34.357Z",
-   "age_days": 14.9,
+   "age_days": 15.9,
    "status": "ok"
   },
   {
@@ -420,7 +420,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-19T18:33:27.163Z",
-   "age_days": 14.9,
+   "age_days": 15.9,
    "status": "ok"
   },
   {
@@ -428,7 +428,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-19T19:28:39.77Z",
-   "age_days": 14.9,
+   "age_days": 15.9,
    "status": "ok"
   },
   {
@@ -436,7 +436,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-19T19:28:41.263Z",
-   "age_days": 14.9,
+   "age_days": 15.9,
    "status": "ok"
   },
   {
@@ -444,7 +444,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-19T19:58:15.726Z",
-   "age_days": 14.9,
+   "age_days": 15.9,
    "status": "ok"
   },
   {
@@ -460,7 +460,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-19T19:33:57.296Z",
-   "age_days": 14.9,
+   "age_days": 15.9,
    "status": "ok"
   },
   {
@@ -468,7 +468,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-19T20:33:38.216Z",
-   "age_days": 14.8,
+   "age_days": 15.8,
    "status": "ok"
   },
   {
@@ -476,7 +476,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-19T19:33:57.508Z",
-   "age_days": 14.9,
+   "age_days": 15.9,
    "status": "ok"
   },
   {
@@ -484,7 +484,7 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-19T17:44:32.846Z",
-   "age_days": 15.0,
+   "age_days": 16.0,
    "status": "ok"
   },
   {
@@ -500,11 +500,19 @@
    "valid": true,
    "active": true,
    "last_crawled": "2026-10-20T17:03:15.726Z",
-   "age_days": 14.0,
+   "age_days": 15.0,
    "status": "ok"
   },
   {
    "resource": "https://x402-data-api.sigrunner.workers.dev/chain/wallet-screen",
+   "valid": true,
+   "active": null,
+   "last_crawled": null,
+   "age_days": null,
+   "status": "unindexed"
+  },
+  {
+   "resource": "https://x402-data-api.sigrunner.workers.dev/x402/cert",
    "valid": true,
    "active": null,
    "last_crawled": null,
@@ -521,6 +529,22 @@
   },
   {
    "resource": "https://x402-data-api.sigrunner.workers.dev/x402/receipt-verify",
+   "valid": true,
+   "active": null,
+   "last_crawled": null,
+   "age_days": null,
+   "status": "unindexed"
+  },
+  {
+   "resource": "https://x402-data-api.sigrunner.workers.dev/x402/clients",
+   "valid": true,
+   "active": null,
+   "last_crawled": null,
+   "age_days": null,
+   "status": "unindexed"
+  },
+  {
+   "resource": "https://x402-data-api.sigrunner.workers.dev/x402/repeat-demand",
    "valid": true,
    "active": null,
    "last_crawled": null,

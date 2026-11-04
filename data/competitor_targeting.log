@@ -818,3 +818,18 @@
 }
 
 [wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
+{
+  "generated_at": "2026-11-04T12:58:01.355744+00:00",
+  "status": "ok",
+  "alert": false,
+  "competitor_payto_age_days": 16.2,
+  "payto_stale_warning": "competitor_payto.json is 16.2d old and has no auto-refresh; new competitors won't be seen. Re-snapshot the facilitator catalogue.",
+  "our_catalogue_routes": 70,
+  "overlapping_competitor_sellers": 37,
+  "census_rows": 3910,
+  "total_buyers_of_overlapping_competitors": 11,
+  "convertible_candidates": 0,
+  "summary": "11 buyers of 37 overlapping competitors in census; 0 convertible depth buyers (all sweep/thin). No pitch target this cycle."
+}
+
+[wrote /home/rez/.hermes/data/x402-demand/competitor_buyer_targeting.json]
