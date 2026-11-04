@@ -1,13 +1,37 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "ai.greyridgesignals/tech-risk",
-  "description": "x402 payment verification: safe-to-pay preflight, on-chain receipt proof, OFAC/scam wallet screen",
-  "version": "0.1.6",
+  "description": "MCP security scanner: tool-poisoning & prompt-injection audit (OWASP LLM01/LLM08), x402-payable",
+  "version": "0.1.7",
   "repository": {
     "url": "https://github.com/rezearcher/x402-data-api",
     "source": "github"
   },
-  "websiteUrl": "https://api.greyridgesignals.ai/x402/preflight",
+  "websiteUrl": "https://x402-data-api.sigrunner.workers.dev/x402/preflight",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "greyridge-x402-tools",
+      "version": "0.8.2",
+      "runtimeHint": "uvx",
+      "runtimeArguments": [
+        {
+          "type": "named",
+          "name": "--from",
+          "value": "greyridge-x402-tools"
+        },
+        {
+          "type": "positional",
+          "value": "greyridge-x402-verify",
+          "valueHint": "command"
+        }
+      ],
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ],
   "remotes": [
     {
       "type": "streamable-http",

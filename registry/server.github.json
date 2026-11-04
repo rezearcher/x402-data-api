@@ -1,0 +1,28 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.rezearcher/tech-risk",
+  "description": "MCP security scanner: tool-poisoning & prompt-injection audit (OWASP LLM01/LLM08), x402-payable",
+  "version": "1.4.0",
+  "repository": {
+    "url": "https://github.com/rezearcher/x402-data-api",
+    "source": "github"
+  },
+  "websiteUrl": "https://x402-data-api.sigrunner.workers.dev/x402/preflight",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "greyridge-x402-tools",
+      "version": "0.8.2",
+      "runtimeHint": "uvx",
+      "runtimeArguments": [
+        { "type": "named", "name": "--from", "value": "greyridge-x402-tools" },
+        { "type": "positional", "value": "greyridge-x402-verify", "valueHint": "command" }
+      ],
+      "transport": { "type": "stdio" }
+    }
+  ],
+  "remotes": [
+    { "type": "streamable-http", "url": "https://x402-data-api.sigrunner.workers.dev/mcp" }
+  ]
+}

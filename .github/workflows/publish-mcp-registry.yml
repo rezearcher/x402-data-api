@@ -1,0 +1,52 @@
+name: publish-mcp-registry
+
+# Publishes the io.github.rezearcher namespace MCP registry listing hands-free
+# via GitHub Actions OIDC (no device-flow, no stored token). The io.github.<owner>
+# namespace is authorized automatically by the registry when the OIDC subject's
+# repository owner matches. Keeps the crawler-reachable workers.dev listing current.
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - "registry/server.github.json"
+      - ".github/workflows/publish-mcp-registry.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mcp-publisher
+        run: |
+          set -euo pipefail
+          VER="v1.8.7"
+          url="https://github.com/modelcontextprotocol/registry/releases/download/${VER}/mcp-publisher_linux_amd64.tar.gz"
+          curl -fsSL "$url" -o /tmp/mcp-publisher.tar.gz
+          tar -xzf /tmp/mcp-publisher.tar.gz -C /tmp mcp-publisher
+          sudo install -m 0755 /tmp/mcp-publisher /usr/local/bin/mcp-publisher
+          mcp-publisher --help >/dev/null
+
+      - name: Validate server.json against official schema
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet jsonschema
+          curl -fsSL https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json -o /tmp/schema.json
+          python3 - <<'PY'
+          import json, jsonschema
+          jsonschema.validate(json.load(open("registry/server.github.json")),
+                              json.load(open("/tmp/schema.json")))
+          print("registry/server.github.json VALID")
+          PY
+
+      - name: Login via GitHub OIDC
+        run: mcp-publisher login github-oidc
+
+      - name: Publish
+        run: mcp-publisher publish registry/server.github.json
