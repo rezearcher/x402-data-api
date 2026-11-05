@@ -104,3 +104,58 @@ def prices_ok(payload):
                    f"price={price} change_24h={chg} confidence={conf} timestamp={ts} "
                    f"(empty/null CoinGecko upstream — the geo-block/UA 403 footgun — or a "
                    f"decimals bug; #2 paid route returning a hollow price)")
+
+
+VERDICTS = ("SUSTAINABLE", "DECAYING", "OUTLIER", "AVOID")
+
+
+def yield_verdict_ok(payload):
+    """/defi/yield-entry-verdict preview — our #1 MOAT route (the only entry DECISION;
+    named rivals charge 5x for raw pools and return no go/no-go — ClawMerchants intel).
+
+    Silent-degradation guard: the verdict is computed from DefiLlama /pools PLUS the
+    /chart prediction endpoint. If either upstream goes null/empty with a 200, the
+    decision layer collapses hollow — the verdict label survives but apy goes null,
+    the predicted class/probability drops, and the field-cited reasons array empties.
+    A paying agent then gets a confident-looking label with no substance behind it and
+    makes a real capital decision on it — the worst failure on the lane that converts.
+    Availability alone never sees it. The free preview anchors on the current top-TVL
+    pool (large, structurally stable), so assert the decision envelope, not a specific
+    pool: a dict preview whose verdict is one of the 4 valid labels, risk_score in
+    [0,100], a numeric apy in [0,100000)%, a predicted {class:non-empty-str,
+    probability:[0,100]}, a positive tvlUsd, and a non-empty reasons[] whose first
+    entry carries both a `code` and a `field` (the field-citation moat — reasons going
+    empty IS the decision-layer regression). Degrade open on a missing payload.
+    """
+    if not isinstance(payload, dict):
+        return None, "no payload"
+    pv = payload.get("preview")
+    if not isinstance(pv, dict) or not pv:
+        return None, "no preview object"
+
+    def numeric(x):
+        return isinstance(x, (int, float)) and not isinstance(x, bool)
+    verdict = pv.get("verdict")
+    risk = pv.get("risk_score")
+    apy = pv.get("apy")
+    pred = pv.get("predicted") if isinstance(pv.get("predicted"), dict) else {}
+    pcls = pred.get("class")
+    pprob = pred.get("probability")
+    tvl = pv.get("tvlUsd")
+    reasons = pv.get("reasons") if isinstance(pv.get("reasons"), list) else []
+    r0 = reasons[0] if reasons and isinstance(reasons[0], dict) else {}
+    ok = bool(
+        verdict in VERDICTS
+        and numeric(risk) and 0 <= risk <= 100
+        and numeric(apy) and 0 <= apy < 100000
+        and isinstance(pcls, str) and pcls.strip()
+        and numeric(pprob) and 0 <= pprob <= 100
+        and numeric(tvl) and tvl > 0
+        and len(reasons) >= 1 and bool(r0.get("code")) and bool(r0.get("field")))
+    if ok:
+        return True, "ok"
+    return False, (f"verdict={verdict} risk_score={risk} apy={apy} predicted_class={pcls} "
+                   f"predicted_prob={pprob} tvlUsd={tvl} reasons={len(reasons)} "
+                   f"r0_code={r0.get('code')} r0_field={r0.get('field')} "
+                   f"(null DefiLlama/prediction upstream or a resolver bug — the MOAT "
+                   f"entry-decision route returning a hollow verdict)")

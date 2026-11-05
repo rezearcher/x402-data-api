@@ -197,7 +197,7 @@ def _get(path):
     return json.loads(urllib.request.urlopen(urllib.request.Request(BASE + path, headers=ghdr), timeout=20).read())
 # Pure predicates live in canary_predicates.py (unit-tested with negative controls so the canary is
 # proven to TRIP on the exact silent-degradation it guards — not just pass on a healthy day).
-from canary_predicates import yields_ok, funding_ok, prices_ok  # noqa: E402
+from canary_predicates import yields_ok, funding_ok, prices_ok, yield_verdict_ok  # noqa: E402
 # (1) /defi/yields — the #1 external-payer route; (2) /crypto/funding — the 5-venue superset whose
 # Binance+Bybit legs geo-block to null. Degrade OPEN: a probe error is inconclusive (None).
 yields_detection_ok = None
@@ -224,8 +224,20 @@ try:
         degraded.append("/crypto/prices DATA REGRESSION: " + _pr)
 except Exception:
     prices_detection_ok = None  # inconclusive — degrade open
+# (4) /defi/yield-entry-verdict — the #1 MOAT route (only entry DECISION; rivals charge
+# 5x for raw pools with no go/no-go). Built on DefiLlama /pools + the /chart prediction
+# endpoint; either going null with a 200 collapses the verdict hollow (label survives,
+# apy/predicted/reasons empty) — a paying agent then sizes a real position on substance-
+# free output. This is the lane that converts, so it gets a correctness guard too.
+yield_verdict_detection_ok = None
+try:
+    yield_verdict_detection_ok, _yvr = yield_verdict_ok(_get("/defi/yield-entry-verdict/preview"))
+    if yield_verdict_detection_ok is False:
+        degraded.append("/defi/yield-entry-verdict MOAT REGRESSION: " + _yvr)
+except Exception:
+    yield_verdict_detection_ok = None  # inconclusive — degrade open
 d = os.path.expanduser("~/.hermes/data/x402-data-api-uptime"); os.makedirs(d, exist_ok=True)
 alert = bool(degraded)
 summary = f"{len(S)} eps, n={sum(o['n'] for o in out.values())}" + (f" | ALERT degraded: {'; '.join(degraded)}" if degraded else "")
-json.dump({"fetched_at": now, "status": "ok", "summary": summary, "alert": alert, "degraded": degraded, "scan_detection_ok": detection_ok, "gate_detection_ok": gate_detection_ok, "report_detection_ok": report_detection_ok, "security_detection_ok": security_detection_ok, "yields_detection_ok": yields_detection_ok, "funding_detection_ok": funding_detection_ok, "prices_detection_ok": prices_detection_ok, "tg_bot_ok": tg_bot_ok, "endpoints": out}, open(d + "/latest.json", "w"), indent=1)
+json.dump({"fetched_at": now, "status": "ok", "summary": summary, "alert": alert, "degraded": degraded, "scan_detection_ok": detection_ok, "gate_detection_ok": gate_detection_ok, "report_detection_ok": report_detection_ok, "security_detection_ok": security_detection_ok, "yields_detection_ok": yields_detection_ok, "funding_detection_ok": funding_detection_ok, "prices_detection_ok": prices_detection_ok, "yield_verdict_detection_ok": yield_verdict_detection_ok, "tg_bot_ok": tg_bot_ok, "endpoints": out}, open(d + "/latest.json", "w"), indent=1)
 print(json.dumps(out, indent=1))

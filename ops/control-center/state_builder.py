@@ -442,13 +442,15 @@ def health(rt: dict, rev: dict, hist: dict, cfg: dict) -> dict:
     security_ok = u.get("security_detection_ok")  # 3rd Line-A paid surface (/chain/token-security)
     yields_ok = u.get("yields_detection_ok")  # #1 external-payer DATA route (/defi/yields)
     funding_ok = u.get("funding_detection_ok")  # 5-venue superset (/crypto/funding) — venue-null guard
+    prices_ok = u.get("prices_detection_ok")  # #2 external-payer DATA route (/crypto/prices) — hollow-price guard
+    verdict_ok = u.get("yield_verdict_detection_ok")  # MOAT route (/defi/yield-entry-verdict) — hollow-verdict guard
     degraded = u.get("degraded") or []
-    gate_degraded = [d for d in degraded if "/gate/swap" in d or "/scan/mcp" in d or "/chain/token-report" in d or "/chain/token-security" in d or "/defi/yields" in d or "/crypto/funding" in d]
-    corr_regressed = gate_ok is False or scan_ok is False or report_ok is False or security_ok is False or yields_ok is False or funding_ok is False or bool(gate_degraded)
+    gate_degraded = [d for d in degraded if "/gate/swap" in d or "/scan/mcp" in d or "/chain/token-report" in d or "/chain/token-security" in d or "/defi/yields" in d or "/crypto/funding" in d or "/crypto/prices" in d or "/defi/yield-entry-verdict" in d]
+    corr_regressed = gate_ok is False or scan_ok is False or report_ok is False or security_ok is False or yields_ok is False or funding_ok is False or prices_ok is False or verdict_ok is False or bool(gate_degraded)
     gate_health_ok = not corr_regressed       # inconclusive/missing => ok (degrade open)
-    _all_pass = gate_ok and scan_ok and report_ok and security_ok and yields_ok and funding_ok
+    _all_pass = gate_ok and scan_ok and report_ok and security_ok and yields_ok and funding_ok and prices_ok and verdict_ok
     gate_why = ("; ".join(gate_degraded) if gate_degraded
-                else "money-gate + token-report + token-security + yields + funding + scanner canaries PASS" if _all_pass
+                else "money-gate + token-report + token-security + yields + funding + prices + yield-verdict + scanner canaries PASS" if _all_pass
                 else "correctness inconclusive (probe not run yet / unreachable) — not alarming")
     return {
         "green": {"ok": green_ok, "why": f"engine {'alive' if green_ok else 'DOWN'} (pid {rt.get('pid')})"},
@@ -525,6 +527,46 @@ def sentinel() -> dict:
     }
 
 
+def _inbox_snapshot() -> dict:
+    """The dashboard INBOX (mailbox replacement): open alert/triage items + honest counts."""
+    import sys as _sys
+    here = str(Path(__file__).resolve().parent)
+    if here not in _sys.path:
+        _sys.path.insert(0, here)
+    import dashboard_inbox
+    return dashboard_inbox.snapshot()
+
+
+# Brief files, freshest wins. These are produced by the existing brief generators (vand-brief timer
+# writes last-brief.md; house_morning_brief.py writes the /tmp assembly) — the dashboard READS them so
+# it REPLACES the emailed/Slacked brief without changing how the brief is generated.
+_BRIEF_FILES = [
+    HOME / ".hermes" / "profiles" / "vand" / "home" / "last-brief.md",
+    Path("/tmp/house_morning_brief.md"),
+]
+
+
+def _latest_brief() -> dict:
+    best = None
+    for p in _BRIEF_FILES:
+        try:
+            if p.exists() and p.stat().st_size > 0:
+                mt = p.stat().st_mtime
+                if best is None or mt > best[0]:
+                    best = (mt, p)
+        except Exception:
+            continue
+    if not best:
+        return {"markdown": "", "source": None, "age_hours": None, "stale": True}
+    mt, p = best
+    age_h = round((time.time() - mt) / 3600, 1)
+    md = _read(p) or ""
+    if len(md) > 24000:
+        md = md[:24000] + "\n\n…(truncated — open the file for the full brief)"
+    return {"markdown": md, "source": str(p), "generated": datetime.fromtimestamp(mt, timezone.utc).isoformat(),
+            "age_hours": age_h, "stale": age_h > 28}   # a brief older than ~a day is flagged, never passed as fresh
+
+
 def build() -> dict:
     """Multi-loop: build full state for EVERY armed chain so the page can tab between them.
     The active (running / most-recently-run) loop's state is also spread at the top level for
@@ -571,6 +613,8 @@ def build() -> dict:
     state["loop_names"] = show
     state["active"] = active
     state["sentinel"] = _safe(sentinel, {})
+    state["inbox"] = _safe(_inbox_snapshot, {"items": [], "counts": {}})
+    state["brief"] = _safe(_latest_brief, {})
     return state
 
 

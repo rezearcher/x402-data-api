@@ -10,7 +10,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
-from canary_predicates import yields_ok, funding_ok, prices_ok  # noqa: E402
+from canary_predicates import yields_ok, funding_ok, prices_ok, yield_verdict_ok  # noqa: E402
 
 checks = []
 
@@ -79,6 +79,36 @@ expect("prices: bad confidence -> False", prices_ok({"preview": [{"id": "bitcoin
 expect("prices: null timestamp -> False", prices_ok({"preview": [{"id": "bitcoin", "symbol": "BTC", "price": 80000.0, "change_24h": 1.0, "confidence": 0.99, "timestamp": None}]})[0], False)
 # degrade open
 expect("prices: no payload -> None", prices_ok(None)[0], None)
+
+# ---- /defi/yield-entry-verdict (the MOAT route) ----
+GOOD_VERDICT = {"preview": {"verdict": "SUSTAINABLE", "risk_score": 0, "apy": 2.274,
+                            "predicted": {"class": "Stable/Up", "probability": 70}, "tvlUsd": 2.34e10,
+                            "reasons": [{"code": "stable_sustainable", "detail": "…", "field": "predicted_class"}]}}
+expect("verdict: healthy SUSTAINABLE -> True", yield_verdict_ok(GOOD_VERDICT)[0], True)
+# every valid verdict label passes (AVOID is a real, substance-backed decision, not a failure)
+AVOID_V = {"preview": {"verdict": "AVOID", "risk_score": 85, "apy": 120.0,
+                       "predicted": {"class": "Decay", "probability": 15}, "tvlUsd": 4.1e6,
+                       "reasons": [{"code": "outlier_apy", "detail": "…", "field": "apy"}]}}
+expect("verdict: AVOID is a valid decision -> True", yield_verdict_ok(AVOID_V)[0], True)
+# THE regression: DefiLlama/prediction upstream nulls -> label survives but apy/predicted/reasons collapse
+HOLLOW = {"preview": {"verdict": "SUSTAINABLE", "risk_score": 0, "apy": None,
+                      "predicted": {}, "tvlUsd": 2.34e10, "reasons": []}}
+expect("verdict: hollow (null apy, empty reasons) -> False", yield_verdict_ok(HOLLOW)[0], False)
+# garbage verdict label (resolver regression)
+expect("verdict: bad label -> False", yield_verdict_ok({"preview": {**GOOD_VERDICT["preview"], "verdict": "MAYBE"}})[0], False)
+# field-citation moat lost: reasons present but missing the `field` cite
+NO_FIELD = {"preview": {**GOOD_VERDICT["preview"], "reasons": [{"code": "x", "detail": "y"}]}}
+expect("verdict: reasons missing field cite -> False", yield_verdict_ok(NO_FIELD)[0], False)
+# predicted probability out of band (garbage)
+expect("verdict: prob out of band -> False", yield_verdict_ok({"preview": {**GOOD_VERDICT["preview"], "predicted": {"class": "Up", "probability": 150}}})[0], False)
+# zero tvl (hollow pool)
+expect("verdict: zero tvl -> False", yield_verdict_ok({"preview": {**GOOD_VERDICT["preview"], "tvlUsd": 0}})[0], False)
+# bool risk_score (isinstance(True,int) footgun)
+expect("verdict: bool risk_score -> False", yield_verdict_ok({"preview": {**GOOD_VERDICT["preview"], "risk_score": True}})[0], False)
+# preview is a list (wrong shape — the yields route returns a list; this route an object)
+expect("verdict: list preview -> None", yield_verdict_ok({"preview": []})[0], None)
+# degrade open
+expect("verdict: no payload -> None", yield_verdict_ok(None)[0], None)
 
 failed = [c for c in checks if not c[1]]
 print(f"\n{len(checks) - len(failed)}/{len(checks)} checks passed")
