@@ -311,6 +311,7 @@ export const ROUTE_CATALOG_BASE: Array<[string, string, string, string, string, 
   ["/defi/safe-yields", "GET", "0.01", "10000", "Vetted stablecoin yields: top stablecoin pools (DefiLlama, TVL>$5M, APY 1-25%) joined with each protocol's age and hack history, safest-yield first; optional ?chain= (short names like eth/arb/op/avax/matic/sol resolve to the canonical chain) & ?limit=. No required params. Use when an agent needs where to park stablecoins with due-diligence already applied.", ["defi", "yield", "stablecoin", "risk", "data"]],
   ["/defi/yields-top", "GET", "0.003", "3000", "Top DeFi yield pools by TVL (DefiLlama): chain, project, symbol, APY, TVL USD; optional ?chain= (short names like eth/arb/op/avax/matic/sol resolve to the canonical chain) & ?stable=true. Use when an agent needs where to earn yield.", ["defi", "yield", "apy", "data"]],
   ["/defi/yield-entry-verdict", "GET", "0.01", "10000", "Per-pool DeFi yield-entry verdict: pass ?pool=<DefiLlama poolId from /defi/yields> and get a packaged SUSTAINABLE|DECAYING|OUTLIER|AVOID go/no-go + 0-100 risk score + field-cited reasons, built from the pool's APY trend (1d/7d/30d), DefiLlama stability forecast, impermanent loss (il7d), volatility (sigma), outlier flag and TVL. Optional ?token=<0x underlying, Base> adds a honeypot-check pointer. Use after /defi/yields finds a high-APY pool to get a go/no-go on THAT pool before funding.", ["defi", "yield", "apy", "risk", "due-diligence", "data"]],
+  ["/defi/yield-rotation", "GET", "0.01", "10000", "Rotate-or-stay DeFi yield decision: pass ?from=<poolId you hold>&to=<poolId you're considering> (both the 'pool' field from /defi/yields) and &notional=<usd> (default 10000) and get a packaged ROTATE|STAY|MARGINAL verdict net of a transparent roundtrip cost (bps) + the risk-score change, with breakeven days, first-year net gain and field-cited reasons. Never rotates into an AVOID/OUTLIER target. The repeat-query sibling to /defi/yield-entry-verdict: re-check an open LP position as APYs drift.", ["defi", "yield", "apy", "rotation", "risk", "data"]],
   ["/ai/classify", "GET", "0.003", "3000", "Zero-shot text classification (Llama 3.2 3B): ?text=<up to 1000 chars>&labels=<comma-separated labels, 2-10> returns the single best label. Use when an agent needs to route or tag text (intent, sentiment, topic, spam) in one cheap call.", ["ai", "llm", "classification", "text", "data"]],
   ["/ai/summarize", "GET", "0.003", "3000", "Text summarization (Llama 3.2 3B): ?text=<up to 1500 chars> returns a 1-3 sentence summary. Use when an agent needs to compress a passage cheaply before reasoning over it.", ["ai", "llm", "summarization", "text", "data"]],
   ["/ai/translate", "GET", "0.003", "3000", "Text translation (Llama 3.2 3B): ?text=<up to 800 chars>&to=<target language, e.g. es, fr, de, ja> returns the translated text only. Use when an agent needs quick pay-per-call translation with no API key.", ["ai", "llm", "translation", "language", "data"]],
@@ -3820,6 +3821,7 @@ app.get("/openapi.json", (c) => {
       "/defi/safe-yields": paid("Vetted stablecoin yields with protocol age and hack flags (DefiLlama).", "0.01", [{ name: "chain", desc: "optional chain filter; short names (eth, arb, op, avax, matic, sol, bnb) resolve to the DefiLlama canonical chain", example: "eth" }, { name: "limit", desc: "optional, max 30", example: "10" }]),
       "/defi/yields-top": paid("Top DeFi yield pools by TVL (DefiLlama).", "0.003", [{ name: "chain", desc: "optional chain filter; short names (eth, arb, op, avax, matic, sol, bnb) resolve to the DefiLlama canonical chain", example: "eth" }, { name: "stable", desc: "true = stablecoin pools only", example: "true" }, { name: "limit", desc: "optional", example: "20" }]),
       "/defi/yield-entry-verdict": paid("Per-pool DeFi yield-entry go/no-go verdict: SUSTAINABLE/DECAYING/OUTLIER/AVOID + risk score + field-cited reasons from APY trend, stability forecast, IL, volatility, outlier flag and TVL.", "0.01", [{ name: "pool", desc: "DefiLlama poolId — the 'pool' field from /defi/yields (required)", example: "747c1d2a-c668-4682-b9f9-296708a3dd90" }, { name: "token", desc: "optional underlying token (0x, Base) — adds a honeypot-check pointer", example: "0x4200000000000000000000000000000000000006" }]),
+      "/defi/yield-rotation": paid("Rotate-or-stay DeFi yield decision: ROTATE/STAY/MARGINAL net of a roundtrip cost (bps) + risk-score change, with breakeven days and first-year net gain. Re-check an open LP position as APYs drift.", "0.01", [{ name: "from", desc: "DefiLlama poolId you currently hold — the 'pool' field from /defi/yields (required)", required: true, example: "747c1d2a-c668-4682-b9f9-296708a3dd90" }, { name: "to", desc: "DefiLlama poolId you're considering (required)", required: true, example: "aa70268e-4b52-42bf-a116-608b370f9501" }, { name: "notional", desc: "optional position size in USD (default 10000)", example: "25000" }]),
       "/ai/classify": paid("Classify text into one of your labels.", "0.003", [{ name: "text", desc: "text, max 1000 chars", required: true, example: "My card was charged twice" }, { name: "labels", desc: "comma-separated labels, 2-10", required: true, example: "billing,bug,feature_request,other" }]),
       "/ai/summarize": paid("Summarize a passage into 1-3 sentences.", "0.003", [{ name: "text", desc: "passage, max 1500 chars", required: true, example: "x402 is an open HTTP 402 payment protocol letting clients pay per request in USDC on Base without accounts or API keys." }]),
       "/ai/translate": paid("Translate text into a target language.", "0.003", [{ name: "text", desc: "source text, max 800 chars", required: true, example: "Hello, how are you?" }, { name: "to", desc: "target language name or code", required: true, example: "es" }]),
@@ -8806,6 +8808,242 @@ app.get("/defi/yield-entry-verdict/preview", async (c) => {
       paid: paidUrl,
       price_usdc: "0.01",
       note: `Free per-pool trial — the complete packaged verdict for YOUR pool${t.left === null ? "" : ` (${t.left} left today, 3/IP/day)`}. Wire it unmetered: GET /defi/yield-entry-verdict?pool=<poolId> ($0.01), keyless x402 on Base.`,
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+// Fetch several DefiLlama pools by id in ONE upstream call (the /pools endpoint
+// has no id filter, so a rotation that compares two pools must not fetch-all
+// twice). Returns a map poolId → normalized pool (missing ids absent).
+export async function fetchDefiPoolsByIds(poolIds: string[]): Promise<Map<string, YieldPool>> {
+  const res = await fetch("https://yields.llama.fi/pools", { headers: { accept: "application/json" } });
+  if (!res.ok) {
+    throw new Error(`DefiLlama yields upstream error: ${res.status}`);
+  }
+  const raw = (await res.json()) as { status: string; data: DefiLlamaPool[] };
+  const want = new Set(poolIds);
+  const out = new Map<string, YieldPool>();
+  for (const p of raw.data) {
+    if (want.has(p.pool)) out.set(p.pool, normalizeDefiLlamaPool(p));
+  }
+  return out;
+}
+
+// ── /defi/yield-rotation ($0.01) — the rotate-or-stay decision ───────────────
+// An agent already holding an LP position re-makes ONE decision continuously as
+// APYs drift: is pool B enough better than my current pool A to move, AFTER the
+// roundtrip cost and the risk change? DefiLlama's free /pools and every x402
+// yield seller give the two raw APYs; none packages the net-of-cost, risk-aware
+// ROTATE | STAY | MARGINAL verdict. Pure + deterministic over both pools' own
+// DefiLlama fields + a transparent gas/breakeven model (every threshold a named
+// constant, every reason field-cited). This is the repeat-query sibling to the
+// one-shot /defi/yield-entry-verdict: an open position is re-checked, not entered
+// once.
+export type YieldRotationVerdict = "ROTATE" | "STAY" | "MARGINAL";
+export interface YieldRotationLeg {
+  pool: string;
+  project: string;
+  chain: string;
+  symbol: string;
+  apy: number | null;
+  verdict: YieldEntryVerdict;
+  risk_score: number;
+  tvlUsd: number;
+}
+export interface YieldRotationResult {
+  verdict: YieldRotationVerdict;
+  from: YieldRotationLeg;
+  to: YieldRotationLeg;
+  notional_usd: number;
+  apy_delta_pct: number | null;
+  risk_score_delta: number;
+  rotation_cost_bps: number;
+  rotation_cost_usd: number;
+  breakeven_days: number | null;          // null = no positive pickup → never pays back
+  net_gain_first_year_usd: number | null; // extra yield minus rotation cost over 12mo
+  reasons: YieldEntryReason[];
+}
+
+export const YIELD_ROTATION_THRESHOLDS = {
+  ROTATION_COST_BPS: 30,          // roundtrip exit+enter estimate (≈2 swaps @ ~15bps on Base) applied to notional
+  BREAKEVEN_ROTATE_DAYS: 30,      // pickup recoups the cost within this → clearly worth moving
+  BREAKEVEN_MARGINAL_DAYS: 90,    // recoups within this → marginal; beyond → STAY
+  RISK_DELTA_MATERIAL: 20,        // to.risk_score − from.risk_score ≥ this → materially riskier target
+  MIN_APY_PICKUP_PCT: 1.0,        // |apyDelta| below this → not worth the rotation cost
+} as const;
+
+export function computeYieldRotation(from: YieldPool, to: YieldPool, notionalUsd: number): YieldRotationResult {
+  const T = YIELD_ROTATION_THRESHOLDS;
+  const fv = computeYieldEntryVerdict(from);
+  const tv = computeYieldEntryVerdict(to);
+  const reasons: YieldEntryReason[] = [];
+  const num = (v: number | null | undefined): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
+  const r2 = (x: number) => Math.round(x * 100) / 100;
+  const r1 = (x: number) => Math.round(x * 10) / 10;
+
+  const fromApy = num(from.apy);
+  const toApy = num(to.apy);
+  const apyDelta = fromApy != null && toApy != null ? toApy - fromApy : null;
+  const riskDelta = tv.risk_score - fv.risk_score;
+  const costUsd = (notionalUsd * T.ROTATION_COST_BPS) / 10000;
+
+  let breakevenDays: number | null = null;
+  let netGainYr: number | null = null;
+  if (apyDelta != null) {
+    netGainYr = (notionalUsd * apyDelta) / 100 - costUsd;
+    if (apyDelta > 0) {
+      const dailyGain = (notionalUsd * (apyDelta / 100)) / 365;
+      breakevenDays = dailyGain > 0 ? costUsd / dailyGain : null;
+    }
+  }
+
+  const leg = (p: YieldPool, v: YieldEntryVerdictResult): YieldRotationLeg => ({
+    pool: p.pool, project: p.project, chain: p.chain, symbol: p.symbol,
+    apy: num(p.apy), verdict: v.verdict, risk_score: v.risk_score, tvlUsd: num(p.tvlUsd) ?? 0,
+  });
+
+  let verdict: YieldRotationVerdict = "STAY";
+  const materialRisk = riskDelta >= T.RISK_DELTA_MATERIAL;
+
+  if (tv.verdict === "AVOID" || tv.verdict === "OUTLIER") {
+    // Never rotate INTO a pool our own entry verdict rejects, whatever the pickup.
+    verdict = "STAY";
+    reasons.push({ code: "target_unsafe", detail: `Target pool verdict is ${tv.verdict} (risk ${tv.risk_score}/100) — do not rotate into it regardless of the APY pickup.`, field: "to.verdict" });
+  } else if (apyDelta == null) {
+    reasons.push({ code: "apy_unknown", detail: "APY is missing on one leg — the yield pickup cannot be quantified; hold the current position.", field: "apy" });
+  } else if (apyDelta < T.MIN_APY_PICKUP_PCT) {
+    reasons.push({ code: "no_yield_pickup", detail: `Target APY is ${apyDelta >= 0 ? "only " : ""}${apyDelta.toFixed(2)}% ${apyDelta >= 0 ? "higher" : "lower"} than the current pool (<${T.MIN_APY_PICKUP_PCT}% pickup) — not worth the rotation cost.`, field: "apy" });
+  } else if (breakevenDays != null && breakevenDays <= T.BREAKEVEN_ROTATE_DAYS && !materialRisk) {
+    verdict = "ROTATE";
+    reasons.push({ code: "pickup_pays_off", detail: `Target pays ${apyDelta.toFixed(2)}% more APY; at $${Math.round(notionalUsd).toLocaleString("en-US")} the ~$${r2(costUsd)} rotation cost is recouped in ${Math.ceil(breakevenDays)}d (≤${T.BREAKEVEN_ROTATE_DAYS}d) with no material risk increase.`, field: "breakeven_days" });
+  } else if (breakevenDays != null && breakevenDays > T.BREAKEVEN_MARGINAL_DAYS) {
+    reasons.push({ code: "slow_breakeven", detail: `The rotation cost takes ${Math.ceil(breakevenDays)}d to recoup (>${T.BREAKEVEN_MARGINAL_DAYS}d) — the APY edge is too thin at this notional to justify moving.`, field: "breakeven_days" });
+  } else {
+    verdict = "MARGINAL";
+    if (materialRisk) {
+      reasons.push({ code: "riskier_target", detail: `Target is materially riskier (risk ${tv.risk_score} vs ${fv.risk_score}, +${riskDelta}) — the ${apyDelta.toFixed(2)}% pickup may not compensate for the added risk.`, field: "risk_score" });
+    }
+    reasons.push({ code: "marginal_edge", detail: `A real but not decisive edge: ${apyDelta.toFixed(2)}% pickup, breakeven ~${breakevenDays != null ? Math.ceil(breakevenDays) + "d" : "n/a"}. Rotate only if you expect the target's APY to hold.`, field: "breakeven_days" });
+  }
+
+  // Always fold the target's own decay signal in when we're not already staying.
+  if (tv.verdict === "DECAYING" && verdict !== "STAY") {
+    reasons.push({ code: "target_decaying", detail: "The target pool's own APY trend is DECAYING — the pickup may not persist; re-check before committing.", field: "to.verdict" });
+  }
+
+  return {
+    verdict,
+    from: leg(from, fv),
+    to: leg(to, tv),
+    notional_usd: notionalUsd,
+    apy_delta_pct: apyDelta != null ? r2(apyDelta) : null,
+    risk_score_delta: riskDelta,
+    rotation_cost_bps: T.ROTATION_COST_BPS,
+    rotation_cost_usd: r2(costUsd),
+    breakeven_days: breakevenDays != null ? r1(breakevenDays) : null,
+    net_gain_first_year_usd: netGainYr != null ? r2(netGainYr) : null,
+    reasons,
+  };
+}
+
+// Parse + clamp the ?notional= position size (USD). Default $10k; floor $100,
+// ceiling $10M. Degrade-open: junk → default, never a 400.
+function parseRotationNotional(raw: string | undefined): number {
+  const n = raw ? Number(raw) : NaN;
+  if (!Number.isFinite(n) || n <= 0) return 10_000;
+  return Math.max(100, Math.min(10_000_000, n));
+}
+
+// GET /defi/yield-rotation — paid ($0.01). Pass ?from=<poolId you hold>&to=<poolId
+// you're considering> (&notional=<usd>, default 10000) → ROTATE | STAY | MARGINAL
+// net of a transparent roundtrip cost + risk change. One upstream DefiLlama call
+// covers both legs.
+app.get("/defi/yield-rotation", async (c) => {
+  const from = (c.req.query("from") || "").trim();
+  const to = (c.req.query("to") || "").trim();
+  if (!from || !to) {
+    return c.json(
+      { error: "from and to required — pass ?from=<poolId you currently hold>&to=<poolId you're considering> (the 'pool' field from GET /defi/yields). Optional &notional=<usd> (default 10000)." },
+      { status: 400 },
+    );
+  }
+  if (from === to) {
+    return c.json({ error: "from and to are the same pool — nothing to rotate." }, { status: 400 });
+  }
+  const notional = parseRotationNotional(c.req.query("notional"));
+  try {
+    const pools = await fetchDefiPoolsByIds([from, to]);
+    const pf = pools.get(from);
+    const pt = pools.get(to);
+    if (!pf || !pt) {
+      const missing = [!pf ? from : null, !pt ? to : null].filter(Boolean).join(", ");
+      return c.json({ from, to, verdict: null, error: `pool not found (${missing}) — the poolId is not in DefiLlama's current universe. Use the 'pool' field from GET /defi/yields.` });
+    }
+    const result = computeYieldRotation(pf, pt, notional);
+    console.log(
+      JSON.stringify({ event: "paid_request", endpoint: "/defi/yield-rotation", from, to, notional, verdict: result.verdict, ts: new Date().toISOString() }),
+    );
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /defi/yield-rotation", rail, makeUsageCounter(c.env)));
+    return c.json(result);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+// Free keyless preview — a demo rotation between the two top-TVL pools so an agent
+// can sample the packaged decision before paying; with ?from=&to= it runs YOUR
+// pair 3/IP/day (trial), mirroring /defi/yield-entry-verdict/preview.
+app.get("/defi/yield-rotation/preview", async (c) => {
+  const from = (c.req.query("from") || "").trim();
+  const to = (c.req.query("to") || "").trim();
+  const notional = parseRotationNotional(c.req.query("notional"));
+  // No pair → demo rotation (top-2 TVL pools), what catalogs/marketing link.
+  if (!from || !to) {
+    try {
+      const sample = await fetchDefiYields(2, undefined, undefined, false);
+      if (sample.length < 2) {
+        return c.json({ preview: null, note: "No demo pair available right now.", status: 502 }, { status: 502 });
+      }
+      const result = computeYieldRotation(sample[0], sample[1], notional);
+      return c.json({
+        preview: result,
+        note: "Free demo rotation between the two top-TVL pools. Pass ?from=<poolId you hold>&to=<poolId you're considering> to run YOUR pair free (3/IP/day), or GET /defi/yield-rotation?from=…&to=… ($0.01) — ROTATE|STAY|MARGINAL net of a transparent roundtrip cost + risk change, keyless x402 on Base.",
+      });
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, { status: 502 });
+    }
+  }
+  const paidUrl = paidUrlFrom(c);
+  if (from === to) {
+    return c.json({ preview: null, error: "from and to are the same pool — nothing to rotate.", paid: paidUrl });
+  }
+  try {
+    const t = await trialQuota(c, "yieldrotation");
+    if (t.exhausted) {
+      const sample = await fetchDefiYields(2, undefined, undefined, false);
+      const demo = sample.length >= 2 ? computeYieldRotation(sample[0], sample[1], notional) : null;
+      return c.json({ preview: demo, trial: { full_pulls_left_today: 0 }, paid: paidUrl, price_usdc: "0.01", note: "Free rotation trial exhausted for today (3/IP/day); showing the top-TVL demo. Paid (unmetered): GET /defi/yield-rotation?from=…&to=… ($0.01)." });
+    }
+    const pools = await fetchDefiPoolsByIds([from, to]);
+    const pf = pools.get(from);
+    const pt = pools.get(to);
+    if (!pf || !pt) {
+      // Not-found doesn't consume real value — refund the trial.
+      await refundTrial(c, "yieldrotation");
+      const missing = [!pf ? from : null, !pt ? to : null].filter(Boolean).join(", ");
+      return c.json({ from, to, verdict: null, error: `pool not found (${missing}) — use the 'pool' field from GET /defi/yields.`, paid: paidUrl });
+    }
+    const result = computeYieldRotation(pf, pt, notional);
+    return c.json({
+      data: result,
+      trial: t.left === null ? undefined : { full_pulls_left_today: t.left },
+      paid: paidUrl,
+      price_usdc: "0.01",
+      note: `Free rotation trial — the complete ROTATE|STAY|MARGINAL decision for YOUR pair${t.left === null ? "" : ` (${t.left} left today, 3/IP/day)`}. Wire it unmetered: GET /defi/yield-rotation?from=…&to=… ($0.01), keyless x402 on Base.`,
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
