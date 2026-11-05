@@ -42,6 +42,7 @@ export type Route =
   | "GET /defi/yields"
   | "GET /defi/yield-entry-verdict"
   | "GET /defi/yield-rotation"
+  | "GET /security/epss-movers"
   | "GET /crypto/prices"
   | "GET /chain/block-number"
   | "GET /chain/gas-price"
@@ -192,6 +193,7 @@ const ALL_ROUTES: Route[] = [
   "GET /crypto/funding",
   "GET /defi/yields",
   "GET /defi/yield-rotation",
+  "GET /security/epss-movers",
   "GET /crypto/prices",
   "GET /chain/block-number",
   "GET /chain/gas-price",

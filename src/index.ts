@@ -214,6 +214,7 @@ const PREVIEW_ROUTES = new Set<string>([
   "/defi/safe-yields", "/enrich/tech-risk", "/scan/mcp", "/ai/ask", "/ai/extract",
   "/v1/chat/completions", "/chain/simulate", "/x402/preflight", "/x402/cert",
   "/x402/receipt-verify", "/x402/repeat-demand", "/x402/clients",
+  "/security/epss-movers",
 ]);
 
 // --- Willingness-to-pay price floor (evidence-based, sensor-gated) ----------
@@ -266,6 +267,7 @@ export const ROUTE_CATALOG_BASE: Array<[string, string, string, string, string, 
   ["/crypto/prices", "GET", "0.001", "1000", "Spot token prices from DefiLlama — pass comma-separated ticker symbols or CoinGecko ids, get price/change_24h/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "market-data", "defi", "data"]],
   ["/scan/mcp", "GET", "0.05", "50000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score + verdict (clear/review/block).", ["security", "mcp", "audit", "prompt-injection"]],
   ["/enrich/tech-risk", "GET", "0.01", "10000", "Tech-stack fingerprint -> CVE (NVD) + EPSS + CISA-KEV attack-surface risk + verdict (clear/review/block) for a domain.", ["security", "cve", "risk"]],
+  ["/security/epss-movers", "GET", "0.01", "10000", "EPSS velocity feed — not a point lookup. Scans the top-N CVEs by current exploit probability (EPSS) and returns WHAT MOVED: rising[] (Δepss over 7d), crossed_action_level[] (just passed the 0.5 patch threshold), new_kev_high_epss[] (CISA known-exploited AND high EPSS), and top_movers[] ranked by |Δ7d|, each with 1d/7d deltas and percentile. Tune with ?limit=<N≤200>&rising=<delta>&level=<0..1>. The self-describing 'what changed today' shape agents pre-evaluate — built on FIRST's daily-rescored EPSS, keyless.", ["security", "cve", "epss", "vulnerability", "kev", "data"]],
   ["/enrich/domain", "GET", "0.01", "10000", "Firmographic + tech-stack enrichment for a domain, incl. full subdomain enumeration via certificate-transparency logs (crt.sh, RDAP, DoH, HTTP fingerprint) + verdict (clear/review/block, based on domain age).", ["data", "domain", "enrichment"]],
   ["/chain/block-number", "GET", "0.002", "2000", "Current Base mainnet block number.", ["rpc", "base", "onchain", "blockchain", "data"]],
   ["/chain/gas-price", "GET", "0.002", "2000", "Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, and gas_price_usd — no price oracle on ETH-only competitors.", ["rpc", "base", "onchain", "blockchain", "data"]],
@@ -3822,6 +3824,7 @@ app.get("/openapi.json", (c) => {
       "/defi/yields-top": paid("Top DeFi yield pools by TVL (DefiLlama).", "0.003", [{ name: "chain", desc: "optional chain filter; short names (eth, arb, op, avax, matic, sol, bnb) resolve to the DefiLlama canonical chain", example: "eth" }, { name: "stable", desc: "true = stablecoin pools only", example: "true" }, { name: "limit", desc: "optional", example: "20" }]),
       "/defi/yield-entry-verdict": paid("Per-pool DeFi yield-entry go/no-go verdict: SUSTAINABLE/DECAYING/OUTLIER/AVOID + risk score + field-cited reasons from APY trend, stability forecast, IL, volatility, outlier flag and TVL.", "0.01", [{ name: "pool", desc: "DefiLlama poolId — the 'pool' field from /defi/yields (required)", example: "747c1d2a-c668-4682-b9f9-296708a3dd90" }, { name: "token", desc: "optional underlying token (0x, Base) — adds a honeypot-check pointer", example: "0x4200000000000000000000000000000000000006" }]),
       "/defi/yield-rotation": paid("Rotate-or-stay DeFi yield decision: ROTATE/STAY/MARGINAL net of a roundtrip cost (bps) + risk-score change, with breakeven days and first-year net gain. Re-check an open LP position as APYs drift.", "0.01", [{ name: "from", desc: "DefiLlama poolId you currently hold — the 'pool' field from /defi/yields (required)", required: true, example: "747c1d2a-c668-4682-b9f9-296708a3dd90" }, { name: "to", desc: "DefiLlama poolId you're considering (required)", required: true, example: "aa70268e-4b52-42bf-a116-608b370f9501" }, { name: "notional", desc: "optional position size in USD (default 10000)", example: "25000" }]),
+      "/security/epss-movers": paid("EPSS velocity feed (not a point lookup): rising[], crossed_action_level[], new_kev_high_epss[] and top_movers[] by |Δ7d|, each with 1d/7d EPSS deltas + percentile. The 'what changed' shape agents pre-evaluate, from FIRST's daily-rescored EPSS.", "0.01", [{ name: "limit", desc: "top-N CVEs by current EPSS to scan (default 100, max 200)", example: "100" }, { name: "rising", desc: "optional Δepss/7d threshold for rising[] (0..1, default 0.1)", example: "0.1" }, { name: "level", desc: "optional action threshold for crossed/KEV lists (0..1, default 0.5)", example: "0.5" }]),
       "/ai/classify": paid("Classify text into one of your labels.", "0.003", [{ name: "text", desc: "text, max 1000 chars", required: true, example: "My card was charged twice" }, { name: "labels", desc: "comma-separated labels, 2-10", required: true, example: "billing,bug,feature_request,other" }]),
       "/ai/summarize": paid("Summarize a passage into 1-3 sentences.", "0.003", [{ name: "text", desc: "passage, max 1500 chars", required: true, example: "x402 is an open HTTP 402 payment protocol letting clients pay per request in USDC on Base without accounts or API keys." }]),
       "/ai/translate": paid("Translate text into a target language.", "0.003", [{ name: "text", desc: "source text, max 800 chars", required: true, example: "Hello, how are you?" }, { name: "to", desc: "target language name or code", required: true, example: "es" }]),
@@ -5326,6 +5329,17 @@ export function makeRoutes(payTo: string, extraNetworks: readonly string[] = [])
         input: { from: "747c1d2a-c668-4682-b9f9-296708a3dd90", to: "aa70268e-4b52-42bf-a116-608b370f9501", notional: "25000" },
         inputSchema: { type: "object", properties: { from: { type: "string", description: "DefiLlama poolId you currently hold" }, to: { type: "string", description: "DefiLlama poolId you're considering" }, notional: { type: "string", description: "position size in USD (default 10000)" } }, required: ["from", "to"] },
         output: { example: { verdict: "ROTATE", apy_delta_pct: 8, risk_score_delta: 0, rotation_cost_usd: 7.5, breakeven_days: 3.4, net_gain_first_year_usd: 1992.5, reasons: [{ code: "pickup_pays_off", detail: "Target pays 8.00% more APY; the rotation cost is recouped in 4d with no material risk increase.", field: "breakeven_days" }] } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
+    "GET /security/epss-movers": {
+      accepts: { scheme: "exact" as const, price: "$0.01", network: NETWORK, payTo },
+      description: "EPSS velocity feed — scans the top-N CVEs by current exploit probability and returns WHAT MOVED: rising[] (Δepss ≥ threshold over 7d), crossed_action_level[] (just passed the 0.5 patch threshold), new_kev_high_epss[] (CISA known-exploited AND high EPSS), top_movers[] ranked by |Δ7d|. Each row carries 1d/7d deltas + percentile. Tune ?limit=<N≤200>&rising=<delta>&level=<0..1>. Daily-rescored EPSS from FIRST, keyless.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { limit: "100" },
+        inputSchema: { type: "object", properties: { limit: { type: "string", description: "top-N CVEs by current EPSS to scan (default 100, max 200)" }, rising: { type: "string", description: "Δepss/7d threshold for rising[] (0..1, default 0.1)" }, level: { type: "string", description: "action threshold for crossed/KEV lists (0..1, default 0.5)" } }, required: [] },
+        output: { example: { as_of: "2026-11-05", universe_scanned: 100, thresholds: { rising_delta_7d: 0.1, action_level: 0.5 }, top_movers: [{ cve: "CVE-2026-12345", epss: 0.82, epss_percentile: 99.6, delta_7d: 0.37, in_kev: true, flags: ["rising", "crossed_action_level", "in_kev", "weaponized_and_rising"] }] } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
     "GET /ai/classify": {
@@ -7307,6 +7321,156 @@ async function fetchEpss(
   }
 }
 
+// ── /security/epss-movers ($0.01) — EPSS velocity, not point lookups ─────────
+// Every x402 security rival (CyberPulse, VulnFeed, MCPBundles) serves point-in-
+// time EPSS/CVE lookups. The uncontested axis is VELOCITY: which exploit
+// probabilities are RISING, which just crossed the action threshold, which
+// known-exploited CVEs are heating up. FIRST's EPSS API ships a per-CVE
+// `scope=time-series` (≤30d) for free — so the delta is computed deterministically
+// from a single upstream call, no durable archive, correct on the first request.
+interface EpssSeriesPoint { epss: string; percentile: string; date: string }
+interface EpssMoverRow {
+  cve: string;
+  epss: string;
+  percentile: string;
+  date?: string;
+  "time-series"?: EpssSeriesPoint[];
+}
+export interface EpssMover {
+  cve: string;
+  epss: number;            // today's exploit probability (0..1)
+  epss_percentile: number; // 0..100, rank vs all scored CVEs
+  epss_1d_ago: number | null;
+  epss_7d_ago: number | null;
+  delta_1d: number | null; // today − 1d ago (absolute EPSS points)
+  delta_7d: number | null; // today − 7d ago
+  pct_change_7d: number | null; // relative %, null when 7d base ~0
+  in_kev: boolean;         // on CISA Known-Exploited list
+  flags: string[];
+}
+export interface EpssMoversResult {
+  as_of: string;
+  universe_scanned: number;      // CVEs evaluated this call (top-N by current EPSS)
+  total_scored_global: number;   // all CVEs FIRST scores (context)
+  thresholds: { rising_delta_7d: number; action_level: number };
+  rising: EpssMover[];           // delta_7d ≥ threshold, biggest first
+  crossed_action_level: EpssMover[]; // today ≥ level AND 7d-ago below it
+  new_kev_high_epss: EpssMover[];    // KEV-listed AND epss ≥ level
+  top_movers: EpssMover[];       // largest |delta_7d|, the headline list
+  summary: string;
+}
+
+const EPSS_RISING_DELTA_7D = 0.1; // +10 EPSS points over a week = materially rising
+const EPSS_ACTION_LEVEL = 0.5;    // common patch-prioritization threshold
+
+// Pick the time-series point ~`daysAgo` before today. The series is dated
+// descending from yesterday (index 0 = −1d), so −Nd sits at index N−1; clamp to
+// the last available point when the history is short (new CVEs).
+function epssAtDaysAgo(series: EpssSeriesPoint[], daysAgo: number): number | null {
+  if (series.length === 0) return null;
+  const idx = Math.min(daysAgo - 1, series.length - 1);
+  if (idx < 0) return null;
+  const v = parseFloat(series[idx].epss);
+  return Number.isFinite(v) ? v : null;
+}
+
+function roundTo(x: number, dp: number): number {
+  const f = Math.pow(10, dp);
+  return Math.round(x * f) / f;
+}
+
+export function computeEpssMovers(
+  rows: EpssMoverRow[],
+  kev: Record<string, boolean>,
+  opts?: { risingDelta7d?: number; actionLevel?: number; topN?: number },
+): EpssMoversResult {
+  const risingDelta = opts?.risingDelta7d ?? EPSS_RISING_DELTA_7D;
+  const level = opts?.actionLevel ?? EPSS_ACTION_LEVEL;
+  const topN = opts?.topN ?? 15;
+  const movers: EpssMover[] = [];
+  for (const r of rows) {
+    const epss = parseFloat(r.epss);
+    if (!Number.isFinite(epss)) continue;
+    const series = r["time-series"] ?? [];
+    const d1 = epssAtDaysAgo(series, 1);
+    const d7 = epssAtDaysAgo(series, 7);
+    const delta1 = d1 === null ? null : epss - d1;
+    const delta7 = d7 === null ? null : epss - d7;
+    const pctChange7 =
+      d7 === null || d7 < 1e-6 ? null : ((epss - d7) / d7) * 100;
+    const inKev = kev[r.cve] ?? false;
+    const flags: string[] = [];
+    if (delta7 !== null && delta7 >= risingDelta) flags.push("rising");
+    if (delta7 !== null && delta7 <= -risingDelta) flags.push("falling");
+    if (epss >= level && d7 !== null && d7 < level) flags.push("crossed_action_level");
+    if (inKev) flags.push("in_kev");
+    if (inKev && delta7 !== null && delta7 >= 0.05) flags.push("weaponized_and_rising");
+    movers.push({
+      cve: r.cve,
+      epss: roundTo(epss, 5),
+      epss_percentile: roundTo(parseFloat(r.percentile) * 100, 2),
+      epss_1d_ago: d1 === null ? null : roundTo(d1, 5),
+      epss_7d_ago: d7 === null ? null : roundTo(d7, 5),
+      delta_1d: delta1 === null ? null : roundTo(delta1, 5),
+      delta_7d: delta7 === null ? null : roundTo(delta7, 5),
+      pct_change_7d: pctChange7 === null ? null : roundTo(pctChange7, 1),
+      in_kev: inKev,
+      flags,
+    });
+  }
+  const rising = movers
+    .filter((m) => m.flags.includes("rising"))
+    .sort((a, b) => (b.delta_7d ?? 0) - (a.delta_7d ?? 0));
+  const crossed = movers
+    .filter((m) => m.flags.includes("crossed_action_level"))
+    .sort((a, b) => b.epss - a.epss);
+  const newKevHigh = movers
+    .filter((m) => m.in_kev && m.epss >= level)
+    .sort((a, b) => (b.delta_7d ?? 0) - (a.delta_7d ?? 0));
+  const topMovers = [...movers]
+    .filter((m) => m.delta_7d !== null)
+    .sort((a, b) => Math.abs(b.delta_7d ?? 0) - Math.abs(a.delta_7d ?? 0))
+    .slice(0, topN);
+  const parts: string[] = [];
+  parts.push(`${rising.length} CVE(s) rising (Δepss ≥ ${risingDelta} / 7d)`);
+  if (crossed.length) parts.push(`${crossed.length} crossed the ${level} action level`);
+  if (newKevHigh.length) parts.push(`${newKevHigh.length} KEV-listed with EPSS ≥ ${level}`);
+  const summary =
+    movers.length === 0
+      ? "No EPSS data available this cycle."
+      : `${parts.join("; ")}. Prioritize the top movers for patching before they are weaponized.`;
+  return {
+    as_of: new Date().toISOString().slice(0, 10),
+    universe_scanned: movers.length,
+    total_scored_global: 0,
+    thresholds: { rising_delta_7d: risingDelta, action_level: level },
+    rising: rising.slice(0, topN),
+    crossed_action_level: crossed.slice(0, topN),
+    new_kev_high_epss: newKevHigh.slice(0, topN),
+    top_movers: topMovers,
+    summary,
+  };
+}
+
+// Fetch the top-N CVEs by current EPSS WITH their ≤30d time-series in one call.
+// Returns {rows,total}. Degrades to an empty set on upstream failure.
+async function fetchEpssMovers(
+  limit: number,
+): Promise<{ rows: EpssMoverRow[]; total: number }> {
+  const n = Math.max(1, Math.min(limit, 200));
+  try {
+    const res = await fetch(
+      `https://api.first.org/data/v1/epss?order=!epss&scope=time-series&limit=${n}`,
+      { headers: { accept: "application/json" } },
+    );
+    if (!res.ok) return { rows: [], total: 0 };
+    const data = (await res.json()) as { data?: EpssMoverRow[]; total?: number };
+    return { rows: data.data ?? [], total: data.total ?? 0 };
+  } catch {
+    return { rows: [], total: 0 };
+  }
+}
+
 // Check CISA KEV — cache the feed in-memory for this worker isolate
 let kevCache: Set<string> | null = null;
 let kevCacheTime = 0;
@@ -9055,6 +9219,98 @@ app.get("/defi/yield-rotation/preview", async (c) => {
       paid: paidUrl,
       price_usdc: "0.01",
       note: `Free rotation trial — the complete ROTATE|STAY|MARGINAL decision for YOUR pair${t.left === null ? "" : ` (${t.left} left today, 3/IP/day)`}. Wire it unmetered: GET /defi/yield-rotation?from=…&to=… ($0.01), keyless x402 on Base.`,
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+// ── /security/epss-movers ($0.01) — EPSS velocity feed ──────────────────────
+// The uncontested axis on the security lane: WHAT CHANGED, not a point lookup.
+// Optional ?limit=<N> (top-N by current EPSS to scan, default 100, max 200) and
+// ?rising=<delta> / ?level=<0..1> to tune thresholds. One upstream call.
+function parseEpssLimit(raw: string | undefined): number {
+  const n = parseInt((raw ?? "").trim(), 10);
+  if (!Number.isFinite(n) || n <= 0) return 100;
+  return Math.min(n, 200);
+}
+function parseUnit(raw: string | undefined, fallback: number): number {
+  const n = parseFloat((raw ?? "").trim());
+  if (!Number.isFinite(n) || n < 0 || n > 1) return fallback;
+  return n;
+}
+async function buildEpssMovers(
+  limit: number,
+  risingDelta: number,
+  level: number,
+): Promise<EpssMoversResult> {
+  const { rows, total } = await fetchEpssMovers(limit);
+  const kev = await isInKev(rows.map((r) => r.cve));
+  const result = computeEpssMovers(rows, kev, {
+    risingDelta7d: risingDelta,
+    actionLevel: level,
+  });
+  result.total_scored_global = total;
+  return result;
+}
+
+app.get("/security/epss-movers", async (c) => {
+  const limit = parseEpssLimit(c.req.query("limit"));
+  const risingDelta = parseUnit(c.req.query("rising"), EPSS_RISING_DELTA_7D);
+  const level = parseUnit(c.req.query("level"), EPSS_ACTION_LEVEL);
+  try {
+    const result = await buildEpssMovers(limit, risingDelta, level);
+    if (result.universe_scanned === 0) {
+      return c.json({ ...result, error: "EPSS feed unavailable upstream right now — try again shortly." }, { status: 502 });
+    }
+    console.log(
+      JSON.stringify({ event: "paid_request", endpoint: "/security/epss-movers", limit, rising: result.rising.length, crossed: result.crossed_action_level.length, ts: new Date().toISOString() }),
+    );
+    const rail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /security/epss-movers", rail, makeUsageCounter(c.env)));
+    return c.json(result);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
+});
+
+// Free keyless preview — a demo over the top-20 EPSS CVEs so an agent can sample
+// the "what moved" shape before paying; with ?limit= it runs YOUR scan 3/IP/day.
+app.get("/security/epss-movers/preview", async (c) => {
+  const hasArgs = !!(c.req.query("limit") || c.req.query("rising") || c.req.query("level"));
+  const risingDelta = parseUnit(c.req.query("rising"), EPSS_RISING_DELTA_7D);
+  const level = parseUnit(c.req.query("level"), EPSS_ACTION_LEVEL);
+  const paidUrl = paidUrlFrom(c);
+  // No args → small demo scan (top-20), what catalogs/marketing link.
+  if (!hasArgs) {
+    try {
+      const demo = await buildEpssMovers(20, risingDelta, level);
+      return c.json({
+        preview: { ...demo, top_movers: demo.top_movers.slice(0, 5), rising: demo.rising.slice(0, 5), crossed_action_level: demo.crossed_action_level.slice(0, 5), new_kev_high_epss: demo.new_kev_high_epss.slice(0, 5) },
+        note: "Free demo over the top-20 EPSS CVEs (lists capped at 5). Pass ?limit=<N up to 200> to scan deeper free (3/IP/day), or GET /security/epss-movers?limit=100 ($0.01) — the full EPSS velocity feed (rising / crossed-threshold / KEV-and-rising), keyless x402 on Base.",
+      });
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, { status: 502 });
+    }
+  }
+  const limit = parseEpssLimit(c.req.query("limit"));
+  try {
+    const t = await trialQuota(c, "epssmovers");
+    if (t.exhausted) {
+      const demo = await buildEpssMovers(20, risingDelta, level);
+      return c.json({ preview: { ...demo, top_movers: demo.top_movers.slice(0, 5) }, trial: { full_pulls_left_today: 0 }, paid: paidUrl, price_usdc: "0.01", note: "Free EPSS-movers trial exhausted for today (3/IP/day); showing the top-20 demo. Paid (unmetered): GET /security/epss-movers?limit=100 ($0.01)." });
+    }
+    const result = await buildEpssMovers(limit, risingDelta, level);
+    if (result.universe_scanned === 0) {
+      await refundTrial(c, "epssmovers");
+      return c.json({ data: null, error: "EPSS feed unavailable upstream right now — try again shortly.", paid: paidUrl });
+    }
+    return c.json({
+      data: result,
+      trial: t.left === null ? undefined : { full_pulls_left_today: t.left },
+      paid: paidUrl,
+      price_usdc: "0.01",
+      note: `Free EPSS-movers trial — the complete velocity feed for your scan${t.left === null ? "" : ` (${t.left} left today, 3/IP/day)`}. Wire it unmetered: GET /security/epss-movers?limit=${limit} ($0.01), keyless x402 on Base.`,
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
