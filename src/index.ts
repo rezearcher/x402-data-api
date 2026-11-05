@@ -456,6 +456,67 @@ export function buildSeeAlso(
   return out;
 }
 
+// Find the data rows inside a 200 body so a cross-sell can carry the exact
+// identifier the current response surfaced. Shape-derived, NOT a key list: the
+// body is either the row array itself (paid /defi/yields) or an envelope whose
+// first array-of-objects value is the row set (preview: [...], data: [...]).
+// Degrade-open: no such array → [] and the cross-sell stays generic.
+function firstDataRows(body: unknown): unknown[] {
+  if (Array.isArray(body)) return body;
+  if (body && typeof body === "object") {
+    for (const v of Object.values(body as Record<string, unknown>)) {
+      if (Array.isArray(v) && v.length && v[0] && typeof v[0] === "object") return v as unknown[];
+    }
+  }
+  return [];
+}
+
+// Turn a generic verdict cross-sell into a ONE-CLICK action by carrying the
+// exact identifier the current response surfaced — the connection that converts
+// a warm lead. The output of a data route (e.g. a /defi/yields pool id) becomes
+// the INPUT to its proprietary verdict upsell, so an agent can free-sample the
+// go/no-go (3/IP/day) or pay for the verdict on the EXACT pool it is looking at,
+// instead of re-typing a poolId into a generic link. This is the decision-layer
+// moat no raw yield feed matches, surfaced as an actionable deep link.
+//
+// Pure + degrade-open: the param NAME is read from the entry description's
+// "?<name>=" token (derived, never a path literal), and the value is pulled from
+// the matching field of the first data row carrying it as a safe-identifier
+// string. If either is absent, or the value has unsafe chars, the entry is
+// returned unchanged. Never throws, never drops or reorders an entry.
+export function contextualizeSeeAlso(
+  seeAlso: SeeAlsoEntry[],
+  body: unknown,
+): SeeAlsoEntry[] {
+  try {
+    const rows = firstDataRows(body);
+    if (rows.length === 0) return seeAlso;
+    return seeAlso.map((e) => {
+      const m = /[?&]([A-Za-z_][A-Za-z0-9_]*)=/.exec(String(e.description || ""));
+      if (!m) return e; // this upsell takes no query param → leave it generic
+      const param = m[1];
+      let val: string | undefined;
+      for (const r of rows) {
+        if (r && typeof r === "object") {
+          const fv = (r as Record<string, unknown>)[param];
+          if (typeof fv === "string" && fv) { val = fv; break; }
+        }
+      }
+      if (!val) return e; // the parent rows don't carry that field → generic
+      // Only plain identifier chars may enter the URL — a body value must never
+      // inject an extra query param or path segment into the cross-sell link.
+      if (!/^[A-Za-z0-9._:-]{1,80}$/.test(val)) return e;
+      const q = `?${param}=${encodeURIComponent(val)}`;
+      const out: SeeAlsoEntry = { ...e, resource: e.resource + q };
+      if (e.preview) out.preview = e.preview + q;
+      out.description = `Go/no-go on the top result above (${param}=${val}) — ` + e.description;
+      return out;
+    });
+  } catch {
+    return seeAlso; // degrade-open: untouched entries
+  }
+}
+
 // Inject the demand-ordered see_also cross-sell into a 200 SUCCESS JSON body.
 //
 // An x402 buyer client auto-pays the 402 INSIDE its payment middleware; the
@@ -483,7 +544,10 @@ export function injectSeeAlso(
     // the payload the buyer requested. Arrays/primitives pass through untouched.
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return body;
     if ("_greyridge" in parsed) return body; // never double-inject
-    (parsed as Record<string, unknown>)._greyridge = { see_also: seeAlso };
+    // Carry the exact identifier this response surfaced into the verdict upsell
+    // so the cross-sell is a one-click action on THIS pool, not a generic link.
+    const contextual = contextualizeSeeAlso(seeAlso, parsed);
+    (parsed as Record<string, unknown>)._greyridge = { see_also: contextual };
     return JSON.stringify(parsed);
   } catch {
     return body; // degrade-open: original body, byte-for-byte
@@ -3745,7 +3809,7 @@ app.get("/defi/yields/preview", async (c) => {
       return c.json({
         preview: all.slice(0, 1),
         total_available: all.length,
-        note: "Free top-1 sample. Pass ?project=/?chain=/?stable=true/?limit= to pull the FULL ranked+filtered list free (3/IP/day), or GET /defi/yields?limit=20 ($0.001) — ranked APY trend+IL risk+stability forecast+TVL, filter by project/chain/stablecoin, keyless x402 on Base.",
+        note: "Found a high-APY pool? Get the go/no-go no raw yield feed returns: pass its ?pool= to /defi/yield-entry-verdict for a packaged SUSTAINABLE|DECAYING|OUTLIER|AVOID verdict + 0-100 risk score ($0.01; see _greyridge.see_also for a one-click link to the pool above). Free top-1 sample here. Pass ?project=/?chain=/?stable=true/?limit= to pull the FULL ranked+filtered list free (3/IP/day), or GET /defi/yields?limit=20 ($0.001) — ranked APY trend+IL risk+stability forecast+TVL, keyless x402 on Base.",
       });
     } catch (e) {
       return c.json({ error: (e as Error).message }, { status: 502 });
