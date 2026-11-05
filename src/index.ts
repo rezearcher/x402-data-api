@@ -57,6 +57,7 @@ import {
   type Route,
 } from "./usage.ts";
 import { makeUsageCounter, type UsageCounter } from "./usage_counter.ts";
+import { appendTick, summarizeProvenance, type ProvRecord, type ProvSummary } from "./provenance.ts";
 
 // ---------------------------------------------------------------------------
 // Environment bindings
@@ -3707,9 +3708,16 @@ app.get("/crypto/prices/preview", async (c) => {
   if (!coinsParam) {
     try {
       const all = await fetchTokenPrices(["bitcoin", "ethereum", "solana"]);
+      const sample = all.slice(0, 1);
+      const withProv = await Promise.all(
+        sample.map(async (p) => {
+          const prov = await readProvenance(c, "price", p.id);
+          return prov ? { ...p, provenance: prov } : p;
+        }),
+      );
       return c.json({
-        preview: all.slice(0, 1),
-        note: "Free 1-of-N sample. Pass ?coins=<ids> to price YOUR coins free (3/IP/day full output), or GET /crypto/prices?coins=<ids> ($0.001) — up to 25 tokens, keyless x402 on Base.",
+        preview: withProv,
+        note: "Free 1-of-N sample. Paid calls carry a provenance archive (tracked_since / ticks / trajectory) no point-in-time feed can reconstruct. Pass ?coins=<ids> to price YOUR coins free (3/IP/day full output), or GET /crypto/prices?coins=<ids> ($0.001) — up to 25 tokens, keyless x402 on Base.",
       });
     } catch (e) {
       return c.json({ error: (e as Error).message }, { status: 502 });
@@ -3730,12 +3738,20 @@ app.get("/crypto/prices/preview", async (c) => {
       return c.json({ preview: all.slice(0, 1), trial: { full_pulls_left_today: 0 }, paid: paidUrl, price_usdc: "0.001", note: "Free full-output trial exhausted for today (3/IP/day); showing 1-of-N sample. Paid (unmetered): GET /crypto/prices?coins=<ids> ($0.001)." });
     }
     const prices = await fetchTokenPrices(ids);
+    // Read-only provenance teaser (no KV write on a free call) — shows the agent
+    // the archive depth it unlocks when it wires the paid route.
+    const data = await Promise.all(
+      prices.map(async (p) => {
+        const prov = await readProvenance(c, "price", p.id);
+        return prov ? { ...p, provenance: prov } : p;
+      }),
+    );
     return c.json({
-      data: prices,
+      data,
       trial: t.left === null ? undefined : { full_pulls_left_today: t.left },
       paid: paidUrl,
       price_usdc: "0.001",
-      note: `Free full-output trial — the complete paid result for your coins${t.left === null ? "" : ` (${t.left} left today, 3/IP/day)`}. Wire it unmetered: GET /crypto/prices?coins=<ids> ($0.001), keyless x402 on Base.`,
+      note: `Free full-output trial — the complete paid result for your coins${t.left === null ? "" : ` (${t.left} left today, 3/IP/day)`}, including the provenance archive (tracked_since / trajectory) no point-in-time feed can reconstruct. Wire it unmetered: GET /crypto/prices?coins=<ids> ($0.001), keyless x402 on Base.`,
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -8596,6 +8612,56 @@ async function fetchTokenPrices(ids: string[]): Promise<TokenPrice[]> {
     .filter((c): c is TokenPrice => c !== null);
 }
 
+// --- The TIME moat: a per-series tick archive in KV ------------------------
+// Point-in-time rivals cannot reconstruct history they never stored. We record a
+// compact, size-bounded, write-throttled tick per DATA series on serve, and the
+// paid payload leads with its provenance: tracked_since, tick count and the
+// trajectory since we first saw it. Every function here is degrade-open — a KV
+// outage or write-limit returns no provenance block, never a 500 and never a
+// broken DATA answer (same discipline as trialQuota).
+const ARCH_SCHEMA = 1;
+
+async function archiveProvenance(
+  c: any,
+  series: string,
+  id: string,
+  value: number,
+): Promise<ProvSummary | null> {
+  try {
+    const kv = c.env?.API_KEYS;
+    if (!kv) return null;
+    const key = `arch:${series}:${id}`;
+    const raw = await kv.get(key);
+    const rec: ProvRecord | null = raw ? JSON.parse(raw) : null;
+    const now = Date.now();
+    const { rec: updated, appended } = appendTick(rec, now, value);
+    if (appended) {
+      // Only spend a KV put() when a tick was actually added (throttle gate),
+      // so a hot series costs ≤4 writes/day, not one per request.
+      await kv.put(key, JSON.stringify({ v: ARCH_SCHEMA, ...updated }));
+    }
+    return summarizeProvenance(updated, now);
+  } catch {
+    return null;
+  }
+}
+
+// Read-only provenance for free/preview surfaces: summarize whatever history we
+// already hold without appending or writing (zero KV puts). This is the
+// conversion teaser — it shows an agent the depth of archive a paid call unlocks.
+async function readProvenance(c: any, series: string, id: string): Promise<ProvSummary | null> {
+  try {
+    const kv = c.env?.API_KEYS;
+    if (!kv) return null;
+    const raw = await kv.get(`arch:${series}:${id}`);
+    if (!raw) return null;
+    const rec: ProvRecord = JSON.parse(raw);
+    return summarizeProvenance(rec, Date.now());
+  } catch {
+    return null;
+  }
+}
+
 app.get("/crypto/prices", async (c) => {
   const coinsParam = c.req.query("coins") || "bitcoin,ethereum,solana";
   const ids = resolveCoinIds(coinsParam.split(",").map((s) => s.trim()).filter(Boolean));
@@ -8614,6 +8680,18 @@ app.get("/crypto/prices", async (c) => {
   try {
     const prices = await fetchTokenPrices(ids);
 
+    // Lead with provenance — the one axis no point-in-time rival can match. Each
+    // item carries the archive we hold for that coin (tracked_since, ticks,
+    // trajectory, change-since-first). Writes are throttled + degrade-open, so an
+    // enriched array is best-effort: an item without `.provenance` still has its
+    // price (never a breaking change to the array shape).
+    const enriched = await Promise.all(
+      prices.map(async (p) => {
+        const prov = await archiveProvenance(c, "price", p.id, p.price);
+        return prov ? { ...p, provenance: prov } : p;
+      }),
+    );
+
     console.log(
       JSON.stringify({
         event: "paid_request",
@@ -8626,7 +8704,7 @@ app.get("/crypto/prices", async (c) => {
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /crypto/prices", rail, makeUsageCounter(c.env)));
 
-    return c.json(prices);
+    return c.json(enriched);
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
