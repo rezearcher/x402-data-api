@@ -56,6 +56,13 @@ for (const [topic, t] of Object.entries(topics)) {
 
   // No AI tells / vendor attribution on a customer surface.
   ok(!/claude|anthropic|as an ai|language model/i.test(html), `${topic}: no AI/vendor tells`);
+
+  // Multi-network + prepaid-session pay-paths are surfaced in crawler-readable prose
+  // (routing-agent LLMs read capabilities here before fetching the manifest).
+  ok(/Pay on Base, Polygon or Arbitrum/.test(html), `${topic}: advertises the multi-network pay-path in prose`);
+  ok(html.includes("POST /x402/session"), `${topic}: advertises the prepaid session-cap rail`);
+  ok(html.includes("no per-call signature") || html.includes("no EIP-712 signature per call"), `${topic}: states the no-signature session benefit`);
+  ok(html.includes("$0.05") && html.includes("$0.50") && html.includes("$5.00"), `${topic}: lists all session-cap tiers`);
 }
 
 // Token-safety page: the pre-trade safety cluster, derived by the NARROW

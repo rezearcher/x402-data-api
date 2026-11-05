@@ -19242,6 +19242,23 @@ app.get("/for-agents/:topic", (c) => {
     const preview = PREVIEW_ROUTES.has(path) ? `<a href="${esc(path)}/preview">free preview</a>` : "<span class=muted>&mdash;</span>";
     return `<tr><td><code>${esc(method)} ${esc(path)}</code></td><td class=price>$${esc(price)}</td><td>${esc(desc)}</td><td>${preview}</td></tr>`;
   }).join("\n");
+  // Pay-path facts, DERIVED from the same constants that drive the live 402 challenge
+  // (never a hand-kept list that drifts): the settleable networks and the prepaid
+  // session-cap tiers. A routing agent's LLM reads these in prose at discovery time,
+  // before it ever fetches the manifest — so the multi-chain + no-signature pay-paths
+  // are visible pre-fetch, not only in /.well-known/x402 and /.well-known/agent.json.
+  const payNetworkLabels = ["base", ...EXTRA_EVM_SETTLEMENT_NETWORKS.map((n) => AGENTJSON_NETWORK_LABEL[n] || n)];
+  const payNetworksProse = payNetworkLabels
+    .map((n) => n.charAt(0).toUpperCase() + n.slice(1))
+    .join(payNetworkLabels.length > 2 ? ", " : " or ")
+    .replace(/, ([^,]*)$/, " or $1");
+  const sessionTiers = Object.entries(SESSION_TIERS).map(([k, v]) => ({
+    route: k.replace(/^POST\s+/, ""),
+    usd: atomicToUsdcStr(v),
+  }));
+  const sessionTiersProse = sessionTiers
+    .map((t) => `$${t.usd != null && isFinite(Number(t.usd)) ? Number(t.usd).toFixed(2) : t.usd}`)
+    .join(" / ");
   const canon = `${CANONICAL_ORIGIN}/for-agents/${topic}`;
   const svcJsonLd = JSON.stringify({
     "@context": "https://schema.org",
@@ -19305,8 +19322,14 @@ ${rowsHtml}
 const fetchPaid = wrapFetch(fetch, { account }); // your agent's Base wallet
 const r = await fetchPaid("${CANONICAL_ORIGIN}${cfg.ex_path}");
 const ${cfg.ex_var} = await r.json(); // ${cfg.ex_comment}</pre>
-<p class=muted style="margin:.7rem 0 0">No API key is sent or stored. Settlement is a standard USDC transfer on Base the route verifies on-chain before returning data.</p>
+<p class=muted style="margin:.7rem 0 0">No API key is sent or stored. Settlement is a standard USDC transfer the route verifies on-chain before returning data.</p>
 </div>
+
+<h2>Pay on ${esc(payNetworksProse)}</h2>
+<p>The 402 challenge offers native USDC on ${esc(payNetworkLabels.length.toString())} networks — ${esc(payNetworksProse)} — so an agent holding USDC on any of them settles without bridging. Each offer in <code>accepts[]</code> carries the matching chain id and USDC contract; Base is listed first. Pick whichever network your wallet already funds.</p>
+
+<h2>Prepaid session cap — no per-call signature</h2>
+<p>For high-frequency polling, open a session once with a single USDC payment up to a cap, then call any paid route with just the returned session token — no EIP-712 signature per call. Each call debits the cap until it runs out. Open a cap at <code>POST /x402/session</code> (tiers ${esc(sessionTiersProse)}), check the remaining balance any time at the free <code>GET /x402/session/status</code>. This removes the per-call signing round-trip for agents that make many requests in a row.</p>
 
 <h2>${esc(cfg.intent_h2)}</h2>
 <p class=muted>${cfg.intent_p}</p>
