@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import state_builder
+import dashboard_inbox
 
 HERE = Path(__file__).resolve().parent
 INDEX = HERE / "index.html"
@@ -74,6 +75,16 @@ class H(BaseHTTPRequestHandler):
             try:
                 body = json.loads(self.rfile.read(n) or b"{}")
                 ok = state_builder.mark_atom(str(body.get("id", "")), bool(body.get("done", True)))
+                self._send(200, json.dumps({"ok": ok}).encode(), "application/json")
+            except Exception as e:
+                self._send(500, json.dumps({"error": str(e)}).encode(), "application/json")
+        elif self.path == "/api/inbox":
+            # Triage action on an inbox item: ack (seen, still open) or resolve (done). Reading an
+            # item in the UI does NOT resolve it — resolving is an explicit act, like a Rez-atom.
+            n = int(self.headers.get("content-length", 0) or 0)
+            try:
+                body = json.loads(self.rfile.read(n) or b"{}")
+                ok = dashboard_inbox.set_state(str(body.get("id", "")), str(body.get("state", "")))
                 self._send(200, json.dumps({"ok": ok}).encode(), "application/json")
             except Exception as e:
                 self._send(500, json.dumps({"error": str(e)}).encode(), "application/json")

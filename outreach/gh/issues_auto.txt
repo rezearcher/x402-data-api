@@ -1,3 +1,7 @@
+https://github.com/X402blockchains/x402-registry/issues/19
+https://github.com/ARPAHLS/skillware/issues/445
+https://github.com/twzrd-sol/twzrd-trust/issues/214
+https://github.com/twzrd-sol/twzrd-trust/issues/207
 https://github.com/aklivity/zilla/issues/2751
 https://github.com/DrVelvetFog/x402-pilot/issues/13
 https://github.com/BlockRunAI/blockrun-mcp/issues/183
@@ -7,7 +11,6 @@ https://github.com/romudille-bit/agentpay/issues/11
 https://github.com/Haustorium12/gold-402/issues/434
 https://github.com/preloop/preloop/issues/1944
 https://github.com/red-cup-engineering/x402-exact-purchase-service/issues/5
-https://github.com/X402blockchains/x402-registry/issues/19
 https://github.com/vercel/ai/issues/24276
 https://github.com/kzmttkc/vet402/issues/68
 https://github.com/kzmttkc/vet402/issues/67
@@ -67,7 +70,6 @@ https://github.com/samanhappy/mcphub/issues/1357
 https://github.com/guardana/control/issues/27
 https://github.com/Kuadrant/mcp-gateway/issues/1617
 https://github.com/noobshole/svalin-agent/issues/2
-https://github.com/ARPAHLS/skillware/issues/445
 https://github.com/dchu3/x402-agent-mcp/issues/49
 https://github.com/dchu3/x402-agent-mcp/issues/51
 https://github.com/michielpost/x402-dev/issues/206

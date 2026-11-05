@@ -1,21 +1,21 @@
-# Measured status (auto-generated 2026-11-05T14:59Z)
+# Measured status (auto-generated 2026-11-05T20:05Z)
 
-Source: `data/uptime_samples.jsonl`, 32920 samples from 2026-10-19T22:06:27.945628Z to 2026-11-05T14:58:02.790262Z, produced by `scripts/uptime_probe.py` hitting each free `/preview` path. Window is short; treat as a measurement, not an SLA.
+Source: `data/uptime_samples.jsonl`, 33400 samples from 2026-10-19T22:06:27.945628Z to 2026-11-05T20:00:01.451839Z, produced by `scripts/uptime_probe.py` hitting each free `/preview` path. Window is short; treat as a measurement, not an SLA.
 
 | endpoint | samples | success | p50 ms | p95 ms |
 |---|---|---|---|---|
-| /chain/gas-price/preview | 4828 | 100.0% | 296 | 1276 |
-| /chain/token-report/preview | 4828 | 99.5% | 1912 | 3423 |
-| /chain/token-security/preview | 4828 | 99.6% | 1323 | 2625 |
-| /crypto/funding/preview | 2166 | 99.2% | 2875 | 4050 |
-| /crypto/prices/preview | 4828 | 99.8% | 301 | 1032 |
-| /defi/yields/preview | 2166 | 98.9% | 408 | 773 |
-| /gate/swap/preview | 4828 | 99.4% | 2070 | 3457 |
-| /scan/mcp/preview | 4448 | 99.9% | 165 | 920 |
+| /chain/gas-price/preview | 4888 | 99.6% | 298 | 1301 |
+| /chain/token-report/preview | 4888 | 99.1% | 1920 | 3467 |
+| /chain/token-security/preview | 4888 | 99.2% | 1336 | 2674 |
+| /crypto/funding/preview | 2226 | 98.4% | 2884 | 4268 |
+| /crypto/prices/preview | 4888 | 99.4% | 305 | 1056 |
+| /defi/yields/preview | 2226 | 98.1% | 411 | 801 |
+| /gate/swap/preview | 4888 | 99.0% | 2077 | 3498 |
+| /scan/mcp/preview | 4508 | 99.5% | 166 | 936 |
 
 ## Data correctness (canary probes)
 
-Method: canary probes with proven negative controls (scripts/uptime_probe.py + canary_predicates.py); availability (HTTP 200) is NOT correctness. Point-in-time measurement, not an SLA. 'inconclusive' = the probe could not conclude (degrade-open), not a failure. Last checked: 2026-11-05T14:58:02.790262Z (fresh: True).
+Method: canary probes with proven negative controls (scripts/uptime_probe.py + canary_predicates.py); availability (HTTP 200) is NOT correctness. Point-in-time measurement, not an SLA. 'inconclusive' = the probe could not conclude (degrade-open), not a failure. Last checked: 2026-11-05T20:00:01.451839Z (fresh: True).
 
 | route | correctness | guards |
 |---|---|---|

@@ -1757,6 +1757,19 @@ app.get("/x402/networks", async (c) => {
   const settlementNetworks = [...new Set(settleable.map((k) => k.network))];
   const byFamily = (fam: string) => [...new Set(kinds.filter((k) => settlementFamily(k.network) === fam).map((k) => k.network))];
 
+  // Scheme capability, derived from the SAME live facilitator kinds (no hardcoded list).
+  // x402 defines multiple payment schemes (e.g. "exact" = fixed charge, "upto" = authorize a
+  // ceiling, settle on consumption). We only ever advertise a scheme in a 402 challenge if the
+  // facilitator reports it settleable for that network — never a path we cannot honor.
+  const schemesByNetwork: Record<string, string[]> = {};
+  for (const k of kinds) {
+    (schemesByNetwork[k.network] ||= []);
+    if (!schemesByNetwork[k.network].includes(k.scheme)) schemesByNetwork[k.network].push(k.scheme);
+  }
+  const allSchemes = [...new Set(kinds.map((k) => k.scheme))].filter(Boolean);
+  // What WE can offer: facilitator-settleable schemes on networks we hold a receive address for.
+  const settleableSchemes = [...new Set(settleable.map((k) => k.scheme))].filter(Boolean);
+
   const body = {
     service: "Grey Ridge Signals — x402 data API",
     facilitator: env.FACILITATOR_MODE === "cdp" ? "cdp" : "xpay",
@@ -1769,6 +1782,11 @@ app.get("/x402/networks", async (c) => {
     },
     // What the FACILITATOR supports (superset; may exceed our receive-address coverage).
     facilitator_supports: { evm: byFamily("evm"), svm: byFamily("svm"), other: byFamily("other") },
+    // Payment schemes (the "exact"/"upto"/... dimension) the facilitator reports, per network
+    // and settleable-by-us. Lets a client know which billing models it can construct against us.
+    facilitator_schemes: allSchemes,
+    schemes_by_network: schemesByNetwork,
+    settleable_schemes: settleableSchemes,
     receive_addresses: { base: !!env.PAY_TO, solana: !!env.SOLANA_PAY_TO },
     note: "settlement_networks = facilitator-supported networks intersected with networks we hold a receive address for. We never advertise a settlement path we cannot honor. Base USDC is always available.",
     as_of: new Date().toISOString(),

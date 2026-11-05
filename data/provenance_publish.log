@@ -1,0 +1,4 @@
+provenance_snapshot: 50 ids ticked | price: 10 coins/40 ticks | yield: 42 pools/80 ticks -> /home/rez/projects/x402-data-api/src/provenance_snapshot.ts
+To https://github.com/rezearcher/x402-data-api.git
+   3d0439f..2ecdd53  main -> main
+provenance_publish: pushed fresh archive, CI will redeploy

@@ -1,0 +1,3 @@
+title: The x402 DeFi data feed that fails open — 16 days of measured uptime
+description: Reproducible numbers for an x402 DeFi data endpoint: 31,784 samples over ~16 days (99.58% success), a trial that fails open not closed, and a pool-level SUSTAINABLE/DECAYING/OUTLIER/AVOID verdict the raw feed never returns — $0.01 on Base.
+slug: x402-defi-feed-that-fails-open-16-days-uptime

@@ -1,0 +1,6 @@
+slug: x402-facilitators-all-15-failed-the-reconcile-check
+title: x402's facilitators are the trust bottleneck — USENIX tested 15, all 15 failed
+description: USENIX Security 2026 (arXiv:2607.19545) tested 15 x402 facilitators and found security-rule violations in all 15. The 'Free Shopping' attack lets the on-chain settled amount diverge from what the facilitator approved — invisible until after you pay. /x402/receipt-verify re-derives the settled USDC amount from two independent Base RPCs and reconciles it against the advertised terms (facilitator_consistency: CONSISTENT | SETTLE_DIVERGENCE | UNVERIFIED), a check that does not trust the facilitator.
+status: STAGED — ready to publish; blocked only by CF KV free write quota (code 10048) 2026-11-04, resets ~00:00 UTC
+channel: site
+claim_trace: all numbers verified live 2026-11-04 (receipt-verify 402 amount=4000/asset 0x833589..2913/eip155:8453; preflight 402 amount=1000; preview CONSISTENT 4000/4000/0/match; furlpay x402-guard 0.2.0 facilitator-layer npm; @x402/fetch 694719 dl/mo npm; arXiv:2607.19545 abstract 15 facilitators/all violated/8 rules/4 attacks/119M tx)

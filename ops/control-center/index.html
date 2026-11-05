@@ -114,6 +114,60 @@
   .stamp{color:var(--muted);font-size:11px}
   .paused{color:var(--amber);font-size:11px;display:none} .paused.show{display:inline}
   @media(max-width:1000px){.grid{grid-template-columns:1fr}.btm{grid-template-columns:1fr}.lamps{margin-left:0}}
+  /* ---- INBOX (mailbox replacement: triage surface) ---- */
+  .inbox{margin-top:12px;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:12px 14px}
+  .ihead{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .ititle{font-size:12px;letter-spacing:.12em;font-weight:600;color:var(--txt)}
+  .ibadge{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--rust);color:#fff;
+          font-size:11px;font-weight:700;display:none;align-items:center;justify-content:center;line-height:20px;text-align:center}
+  .ibadge.show{display:inline-flex}
+  .ibadge.calm{background:var(--jade)}
+  .isub{font-size:11px;color:var(--muted)}
+  .ifilter{margin-left:auto;display:flex;gap:4px}
+  .iflt{background:transparent;border:1px solid var(--line);color:var(--muted);font-size:10.5px;
+        padding:3px 9px;border-radius:999px;cursor:pointer;transition:all .15s ease}
+  .iflt:hover{color:var(--txt);border-color:var(--muted)}
+  .iflt.sel{background:var(--panel2);color:var(--txt);border-color:var(--muted)}
+  .irow{display:flex;align-items:flex-start;gap:10px;padding:9px 10px 9px 12px;border:1px solid var(--line);
+        border-left-width:3px;border-radius:8px;margin-top:7px;background:var(--ink);position:relative;transition:border-color .15s ease,transform .08s ease}
+  .irow:hover{border-color:var(--muted)}
+  .irow.crit{border-left-color:var(--rust)} .irow.warn{border-left-color:var(--amber)} .irow.info{border-left-color:var(--cyan)}
+  .irow.ack{opacity:.72}
+  .idot{width:7px;height:7px;border-radius:50%;margin-top:6px;flex:none}
+  .irow.crit .idot{background:var(--rust);box-shadow:0 0 0 3px rgba(212,105,74,.15)}
+  .irow.warn .idot{background:var(--amber)} .irow.info .idot{background:var(--cyan)}
+  .ibody{flex:1;min-width:0}
+  .ititle2{font-size:13px;color:var(--txt);line-height:1.4;font-weight:500}
+  .icount{display:inline-block;margin-left:7px;font-size:10px;font-weight:700;color:var(--amber);
+          background:rgba(232,176,75,.12);border-radius:8px;padding:1px 6px;vertical-align:middle}
+  .idesc{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+  .imeta{display:flex;gap:8px;align-items:center;margin-top:5px}
+  .ichip{font-size:10px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:1px 6px}
+  .itime{font-size:10px;color:var(--muted)}
+  .iacts{display:flex;gap:6px;flex:none;align-items:center}
+  .iact{background:transparent;border:1px solid var(--line);color:var(--muted);font-size:10.5px;
+        padding:4px 10px;border-radius:7px;cursor:pointer;transition:all .15s ease}
+  .iact:hover{color:var(--txt);border-color:var(--jade)}
+  .iact.resolve:hover{border-color:var(--jade);color:var(--jade)}
+  .inone{font-size:12px;color:var(--muted);padding:10px 2px}
+  /* ---- DAILY BRIEF (collapsible) ---- */
+  .brief{margin-top:12px;border:1px solid var(--line);background:var(--panel);border-radius:10px;overflow:hidden}
+  .brief>summary{list-style:none;cursor:pointer;padding:11px 14px;display:flex;align-items:center;gap:10px;user-select:none}
+  .brief>summary::-webkit-details-marker{display:none}
+  .brief>summary:hover{background:var(--panel2)}
+  .btitle{font-size:12px;letter-spacing:.12em;font-weight:600;color:var(--txt)}
+  .btitle::before{content:'▸';color:var(--muted);margin-right:8px;font-size:10px;transition:transform .15s ease;display:inline-block}
+  .brief[open] .btitle::before{transform:rotate(90deg)}
+  .bage{margin-left:auto;font-size:10.5px;color:var(--muted)}
+  .bage.stale{color:var(--amber)}
+  .briefbody{padding:4px 18px 16px;border-top:1px solid var(--line);font-size:13px;line-height:1.6;color:var(--txt);max-height:60vh;overflow:auto}
+  .briefbody h1,.briefbody h2,.briefbody h3{color:var(--txt);margin:16px 0 6px;line-height:1.3}
+  .briefbody h1{font-size:16px} .briefbody h2{font-size:14px;color:var(--cyan)} .briefbody h3{font-size:13px;color:var(--jade)}
+  .briefbody code{font-family:'IBM Plex Mono',monospace;font-size:11.5px;background:var(--ink);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+  .briefbody a{color:var(--cyan);text-decoration:none} .briefbody a:hover{text-decoration:underline}
+  .briefbody hr{border:none;border-top:1px solid var(--line);margin:12px 0}
+  .briefbody ul{margin:4px 0 4px 2px;padding-left:18px} .briefbody li{margin:3px 0}
+  .briefbody .bhr-strong{color:var(--amber);font-weight:600}
 </style>
 </head>
 <body>
@@ -128,6 +182,26 @@
       <div class="toggle" id="toggle" onclick="toggleMon()"><div class="knob"></div></div>
     </div>
   </div>
+
+  <!-- INBOX — the triage surface that REPLACES the mailbox: alerts + escalations land here, not email -->
+  <div class="inbox" id="inboxbox">
+    <div class="ihead">
+      <span class="ititle">📥 INBOX</span>
+      <span class="ibadge" id="ibadge"></span>
+      <span class="isub" id="isub">the dashboard replaces your mailbox — alerts arrive here</span>
+      <span class="ifilter">
+        <button class="iflt sel" data-f="open" onclick="setInboxFilter('open')">open</button>
+        <button class="iflt" data-f="all" onclick="setInboxFilter('all')">all</button>
+      </span>
+    </div>
+    <div id="inboxlist"></div>
+  </div>
+
+  <!-- DAILY BRIEF — the emailed brief, rendered in place (read-on-demand, collapsible) -->
+  <details class="brief" id="briefbox">
+    <summary><span class="btitle">📰 DAILY BRIEF</span><span class="bage mono" id="bage"></span></summary>
+    <div class="briefbody" id="briefbody"></div>
+  </details>
 
   <div class="atoms" id="atomsbox">
     <div class="ahead">NEEDS REZ — account / identity gates (not loop blockers)<span class="acount" id="acount"></span></div>
@@ -297,6 +371,8 @@ function renderSentinel(top){
 function render(top){
   renderTabs(top);
   renderSentinel(top);
+  renderInbox(top);
+  renderBrief(top);
   const d=(top.loops&&top.loops[TAB||top.active])||top;
   if(!d.engine){ return; }
   const AG=agentsOf(d);                     // this loop's real agent columns (sentinel excluded)
@@ -389,6 +465,71 @@ function atomRow(a,done){
 }
 function copySteps(btn){ const pre=btn.parentElement.querySelector('pre'); navigator.clipboard.writeText(pre.textContent).then(()=>{const o=btn.textContent;btn.textContent='copied ✓';setTimeout(()=>btn.textContent=o,1200);}).catch(()=>{}); }
 async function checkAtom(id,done){ try{ if(done){ openAtoms.delete(id); _saveOpen(); } await fetch('/api/atom',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id,done})}); tick(); }catch(e){} }
+
+// ---- INBOX (triage surface) ----
+let inboxFilter = (()=>{try{return localStorage.getItem('inboxFilter')||'open'}catch(e){return 'open'}})();
+function setInboxFilter(f){ inboxFilter=f; try{localStorage.setItem('inboxFilter',f)}catch(e){}
+  document.querySelectorAll('.iflt').forEach(b=>b.classList.toggle('sel',b.dataset.f===f)); tick(); }
+function relTime(iso){ if(!iso) return ''; const s=(Date.now()-new Date(iso).getTime())/1000;
+  if(s<60) return 'just now'; if(s<3600) return Math.floor(s/60)+'m ago';
+  if(s<86400) return Math.floor(s/3600)+'h ago'; return Math.floor(s/86400)+'d ago'; }
+function renderInbox(top){
+  const ib=(top&&top.inbox)||{items:[],counts:{}}; const c=ib.counts||{};
+  const badge=document.getElementById('ibadge');
+  const unread=c.unread||0;
+  badge.textContent = unread>9?'9+':String(unread);
+  badge.className='ibadge '+(unread>0?'show'+(c.crit_open?'':' calm'):'');
+  if(unread===0) badge.className='ibadge';
+  document.getElementById('isub').textContent = (c.open||0)
+    ? `${c.open} open · ${c.crit_open||0} critical — the dashboard replaces your mailbox`
+    : 'inbox clear — alerts arrive here instead of your mailbox';
+  let items=(ib.items||[]);
+  // 'open' shows unread+ack; 'all' would need resolved too — server sends only open, so filter is unread-only vs open
+  if(inboxFilter==='open') items=items.filter(i=>i.state==='unread'||i.state==='ack');
+  const html = items.map(i=>{
+    const sev=i.severity||'info';
+    const cnt=(i.count&&i.count>1)?`<span class="icount">×${i.count}</span>`:'';
+    const body=i.last_body||i.body||'';
+    const acts = i.state==='unread'
+      ? `<button class="iact" onclick="inboxAct('${i.id}','ack')">mark seen</button><button class="iact resolve" onclick="inboxAct('${i.id}','resolved')">resolve</button>`
+      : `<button class="iact resolve" onclick="inboxAct('${i.id}','resolved')">resolve</button>`;
+    return `<div class="irow ${sev} ${i.state}"><span class="idot"></span>
+      <div class="ibody"><div class="ititle2">${esc(i.title)}${cnt}</div>
+      ${body?`<div class="idesc">${esc(body.slice(0,400))}</div>`:''}
+      <div class="imeta"><span class="ichip">${esc(i.source||'')}</span><span class="itime">${relTime(i.ts)}</span>
+      ${i.state==='ack'?'<span class="ichip">seen</span>':''}</div></div>
+      <div class="iacts">${acts}</div></div>`;
+  }).join('') || '<div class="inone">✓ inbox clear — nothing needs your eyes right now</div>';
+  document.getElementById('inboxlist').innerHTML = html;
+}
+async function inboxAct(id,state){ try{ await fetch('/api/inbox',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id,state})}); tick(); }catch(e){} }
+
+// ---- DAILY BRIEF (minimal markdown render; the brief replaces the emailed/Slacked copy) ----
+function mdLite(md){
+  const lines=(md||'').split('\n'); let out=[]; let inList=false;
+  const inl=s=>esc(s).replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');
+  const closeList=()=>{ if(inList){out.push('</ul>');inList=false;} };
+  for(let raw of lines){
+    const l=raw.replace(/\s+$/,'');
+    if(/^#{1,6}\s/.test(l)){ closeList(); const h=Math.min(l.match(/^#+/)[0].length,3); out.push(`<h${h}>${inl(l.replace(/^#+\s/,''))}</h${h}>`); }
+    else if(/^(\s*[-*]\s+)/.test(l)){ if(!inList){out.push('<ul>');inList=true;} out.push(`<li>${inl(l.replace(/^\s*[-*]\s+/,''))}</li>`); }
+    else if(/^\s*---+\s*$/.test(l)){ closeList(); out.push('<hr>'); }
+    else if(l.trim()===''){ closeList(); }
+    else { closeList(); out.push(`<div>${inl(l)}</div>`); }
+  }
+  closeList(); return out.join('');
+}
+function renderBrief(top){
+  const b=(top&&top.brief)||{}; const age=b.age_hours;
+  const ageEl=document.getElementById('bage');
+  ageEl.textContent = (age==null)?'no brief yet':(b.stale?`⚠ ${age}h old (stale)`:`${age}h ago`);
+  ageEl.className='bage mono'+(b.stale?' stale':'');
+  document.getElementById('briefbody').innerHTML = b.markdown ? mdLite(b.markdown)
+    : '<div class="off" style="padding:10px 0;color:var(--muted)">No brief generated yet — the morning brief will appear here.</div>';
+}
 
 async function tick(){ try{ const r=await fetch('/api/state',{cache:'no-store'}); render(await r.json()); }catch(e){} }
 async function toggleMon(){ try{ await fetch('/api/monitor',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({on:!monOn})}); tick(); }catch(e){} }

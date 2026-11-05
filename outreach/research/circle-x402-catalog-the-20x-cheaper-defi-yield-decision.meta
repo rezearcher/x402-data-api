@@ -1,0 +1,6 @@
+slug: circle-x402-catalog-the-20x-cheaper-defi-yield-decision
+title: The Circle x402 catalog: a DeFi-yield decision layer at 1/20th the going rate
+description: Live-probed Circle's keyless x402 Discovery API (2,781 listings). In FINANCIAL_ANALYSIS (460 listings) the dedicated DeFi-vault provider vaults.fyi gates its ranked/detailed yield-decision calls at $0.202-$0.302; Grey Ridge's /defi/yield-entry-verdict is $0.01 and raw /defi/yields $0.001 — 20-30x cheaper on the decision layer agents pay a premium for. Honest: catalog presence is necessary-not-sufficient in a demand-winter; not a claim we're listed yet.
+status: STAGED — ready to publish; blocked only by CF KV free write quota (code 10048) 2026-11-04 22:22 UTC, resets ~00:00 UTC
+channel: site
+claim_trace: all live 2026-11-04 — Circle discovery HTTP 200/144716 bytes/2781 total; FINANCIAL_ANALYSIS=460; sub-$0.01 band=119 (91=BlockRun.AI prediction-markets); vaults.fyi endpoints /v2/vaults=0.002,/v2/best-vault=0.004,/v2/idle-assets=0.01,/v2/best-deposit-options=0.202,/v2/detailed-vaults=0.302; ours /defi/yields=1000atomic=$0.001, /defi/yield-entry-verdict=10000atomic=$0.01, verdict enum SUSTAINABLE|DECAYING|OUTLIER|AVOID; DefiLlama pools free keyless 15993

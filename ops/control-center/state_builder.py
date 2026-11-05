@@ -392,9 +392,59 @@ def mark_atom(aid: str, done: bool = True) -> bool:
     return hit is not None
 
 
+ROTATION_FALLBACK_MIN = 12 * 60  # overdue threshold for a rotating chain when no pass duration is known
+
+
+def _open_epoch() -> float:
+    """Today's 6am ET business-day open (same definition agent_chain_routine.sh uses)."""
+    from zoneinfo import ZoneInfo
+    n = datetime.now(ZoneInfo("America/New_York"))
+    return n.replace(hour=6, minute=0, second=0, microsecond=0).timestamp()
+
+
+def _in_business_hours() -> bool:
+    from zoneinfo import ZoneInfo
+    n = datetime.now(ZoneInfo("America/New_York"))
+    return n.hour >= 6 and n.weekday() != 6
+
+
+def idle_status(rt: dict, cfg: dict) -> dict:
+    """Ground-truth liveness for a chain that shares a global singleton lock with its siblings.
+    Returns {ok, why, rotating}: rotating=True means the chain is legitimately idle (waiting its
+    turn / already ran today), so rest-between-passes cadence checks do not apply."""
+    name = cfg["name"]
+    if rt.get("alive"):
+        return {"ok": True, "why": f"engine alive (pid {rt.get('pid')})", "rotating": False}
+    halt = CHAIN_DIR / f"{name}.HALT"
+    if halt.exists():
+        return {"ok": False, "why": "engine DOWN - HALTED by Sentinel", "rotating": False}
+    manifest = _safe(lambda: json.loads(_read(CHAIN_DIR / f"{name}.chain.json")), {}) or {}
+    lr = CHAIN_DIR / f"{name}.lastrun"
+    lr_epoch = lr.stat().st_mtime if lr.exists() else 0.0
+    now = time.time()
+    age_min = (now - lr_epoch) / 60.0 if lr_epoch else None
+    age_txt = f"{age_min:.0f}m" if age_min is not None and age_min < 180 else (f"{age_min / 60:.1f}h" if age_min is not None else "never")
+    if not _in_business_hours():
+        return {"ok": True, "why": f"idle: outside business hours (last run {age_txt} ago)", "rotating": True}
+    if manifest.get("daily"):
+        if lr_epoch >= _open_epoch():
+            return {"ok": True, "why": f"idle: daily chain ran {age_txt} ago", "rotating": True}
+        return {"ok": False, "why": f"engine DOWN - overdue: daily chain has not run since today's 6am ET open (last run {age_txt} ago)", "rotating": True}
+    n_enabled = max(1, len(list(CHAIN_DIR.glob("*.enabled"))))
+    recent = sorted(cfg_runs for cfg_runs in (rt.get("runs") or [])[-5:])
+    thr_min = (n_enabled * 2 * recent[len(recent) // 2]) if recent else ROTATION_FALLBACK_MIN
+    thr_min = max(thr_min, 120.0)
+    eff_age_min = (now - max(lr_epoch, _open_epoch())) / 60.0   # overnight/closed time does not count
+    if eff_age_min <= thr_min:
+        return {"ok": True, "why": "idle: waiting its round-robin turn", "rotating": True}
+    return {"ok": False, "why": f"engine DOWN - overdue: no pass in {eff_age_min / 60:.1f}h of open hours (threshold {thr_min / 60:.1f}h, last run {age_txt} ago)", "rotating": True}
+
+
 def health(rt: dict, rev: dict, hist: dict, cfg: dict) -> dict:
     # GREEN: engine alive + a pass completed recently
-    green_ok = bool(rt.get("alive"))
+    idle = idle_status(rt, cfg)
+    green_ok = idle["ok"]
+    green_why = idle["why"]
     # SUPER-GREEN: recent builder work shipped+deployed (a commit verified) and no bare ATOM gaming
     builder_hist = hist.get("builder", [])
     shipped = any(re.search(r"\bcommit\b|deployed|SUCCESS|shipped", (e.get("did") or ""), re.I) for e in builder_hist[:3])
@@ -418,10 +468,14 @@ def health(rt: dict, rev: dict, hist: dict, cfg: dict) -> dict:
     # is ~the configured cooldown (so it's genuinely re-looping, not dead), and no pass is hung.
     runs, rests = rt.get("runs", []), rt.get("rests", [])
     cooldown_min = (cfg.get("pass_cooldown", 600) or 600) / 60.0
-    have_passes = bool(runs)
+    have_passes = bool(runs) or (idle["rotating"] and idle["ok"])
     not_hung = (runs[-1] <= 60) if runs else True          # a pass grossly over ~1h signals a hang
-    looping = (rests[-1] <= cooldown_min + 10) if rests else True  # rest ≈ cooldown ⇒ re-looping
-    ever_ok = have_passes and not_hung and looping
+    # a chain idling in the shared rotation rests for its siblings' turns, not its own cooldown
+    looping = True if idle["rotating"] else ((rests[-1] <= cooldown_min + 10) if rests else True)
+    ever_ok = have_passes and not_hung and looping and (idle["ok"] or bool(rt.get("alive")))
+    ever_idle_why = (f"{idle['why']}; rotation-aware" if idle["rotating"] and ever_ok else None)
+    ever_why = (ever_idle_why or (f"looping on tempo (last run {runs[-1] if runs else '?'}m, rest {rests[-1] if rests else '?'}m ≈ {cooldown_min:.0f}m cooldown)"
+                if ever_ok else ("no completed pass yet" if not have_passes else (f"halted/idle problem: {idle['why']}" if not idle["ok"] else f"off-tempo (last run {runs[-1] if runs else '?'}m / rest {rests[-1] if rests else '?'}m vs {cooldown_min:.0f}m cooldown)"))))
     # GATE: x402 money-route correctness canary (uptime_probe.py). Only applies to the x402 money
     # loop; other chains have no such sensor → degrade OPEN (gate ok, "n/a for this chain").
     u = _safe(lambda: json.loads(_read(cfg["uptime_sensor"])), {})
@@ -429,11 +483,10 @@ def health(rt: dict, rev: dict, hist: dict, cfg: dict) -> dict:
         gate_why = ("money-route canaries only apply to the x402 loop — n/a for this chain"
                     if not cfg["is_x402"] else "correctness inconclusive (probe not run yet / unreachable) — not alarming")
         return {
-            "green": {"ok": green_ok, "why": f"engine {'alive' if green_ok else 'DOWN'} (pid {rt.get('pid')})"},
+            "green": {"ok": green_ok, "why": green_why},
             "super_green": {"ok": super_ok, "why": ("builder shipped+verified; atom clear or a one-time account gate" if super_ok
                             else ("no recently-verified shipped commit" if not shipped else "work parked on a non-account human atom"))},
-            "ever_green": {"ok": ever_ok, "why": (f"looping on tempo (last run {runs[-1] if runs else '?'}m, rest {rests[-1] if rests else '?'}m ≈ {cooldown_min:.0f}m cooldown)"
-                            if ever_ok else ("no completed pass yet" if not have_passes else f"off-tempo (last run {runs[-1] if runs else '?'}m / rest {rests[-1] if rests else '?'}m vs {cooldown_min:.0f}m cooldown)"))},
+            "ever_green": {"ok": ever_ok, "why": ever_why},
             "gate": {"ok": True, "why": gate_why},
         }
     gate_ok = u.get("gate_detection_ok")      # True pass / False regression / None inconclusive
@@ -454,11 +507,10 @@ def health(rt: dict, rev: dict, hist: dict, cfg: dict) -> dict:
                 else "money-gate + token-report + token-security + yields + funding + prices + yield-verdict + pm-markets + scanner canaries PASS" if _all_pass
                 else "correctness inconclusive (probe not run yet / unreachable) — not alarming")
     return {
-        "green": {"ok": green_ok, "why": f"engine {'alive' if green_ok else 'DOWN'} (pid {rt.get('pid')})"},
+        "green": {"ok": green_ok, "why": green_why},
         "super_green": {"ok": super_ok, "why": ("builder shipped+verified; atom clear or a one-time account gate" if super_ok
                         else ("no recently-verified shipped commit" if not shipped else "work parked on a non-account human atom"))},
-        "ever_green": {"ok": ever_ok, "why": (f"looping on tempo (last run {runs[-1] if runs else '?'}m, rest {rests[-1] if rests else '?'}m ≈ {cooldown_min:.0f}m cooldown)"
-                        if ever_ok else ("no completed pass yet" if not have_passes else f"off-tempo (last run {runs[-1] if runs else '?'}m / rest {rests[-1] if rests else '?'}m vs {cooldown_min:.0f}m cooldown)"))},
+        "ever_green": {"ok": ever_ok, "why": ever_why},
         "gate": {"ok": gate_health_ok, "why": gate_why},
     }
 
