@@ -18,7 +18,7 @@ import { register } from "node:module";
 
 register(new URL("./cfw-hooks.mjs", import.meta.url));
 
-const { makeRoutes, routePriceAtomic, usdcDollarsToAtomic } = await import("../src/index.ts");
+const { makeRoutes, routePriceAtomic, usdcDollarsToAtomic, extractSessionToken } = await import("../src/index.ts");
 
 const PAY_TO = "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10";
 const OTHER_PAYTO = "0x0000000000000000000000000000000000000001";
@@ -81,6 +81,29 @@ check("cap covers expected call count", () => {
   const cap = usdcDollarsToAtomic("$0.50");
   const perCall = routePriceAtomic("/defi/yields", "GET", PAY_TO);
   assert.strictEqual(Math.floor(cap / perCall), 500, "0.50 cap / 0.001 = 500 calls");
+});
+
+// 9. extractSessionToken: the dedicated header wins and is returned verbatim.
+check("extractSessionToken returns X-Session-Token verbatim", () => {
+  assert.strictEqual(extractSessionToken("grsess_abc-DEF_123", undefined), "grsess_abc-DEF_123");
+  // X-Session-Token takes precedence over Authorization when both are present.
+  assert.strictEqual(extractSessionToken("grsess_x", "Bearer grsess_y"), "grsess_x");
+});
+
+// 10. extractSessionToken: a standard `Authorization: Bearer grsess_…` is accepted.
+check("extractSessionToken parses Bearer grsess_ token", () => {
+  assert.strictEqual(extractSessionToken(undefined, "Bearer grsess_abc-DEF_123"), "grsess_abc-DEF_123");
+  // case-insensitive scheme keyword
+  assert.strictEqual(extractSessionToken(undefined, "bearer grsess_zzz"), "grsess_zzz");
+});
+
+// 11. extractSessionToken: non-session Bearer credentials are IGNORED (fall through).
+check("extractSessionToken ignores non-grsess Bearer + junk", () => {
+  assert.strictEqual(extractSessionToken(undefined, "Bearer eyJhbGciOiJIUzI1NiJ9.jwt.sig"), undefined, "JWT ignored");
+  assert.strictEqual(extractSessionToken(undefined, "Bearer sk_live_apikey"), undefined, "api key ignored");
+  assert.strictEqual(extractSessionToken(undefined, "grsess_nobearerscheme"), undefined, "no Bearer scheme -> ignored");
+  assert.strictEqual(extractSessionToken(undefined, undefined), undefined, "no headers -> undefined");
+  assert.strictEqual(extractSessionToken(null, null), undefined, "null headers -> undefined");
 });
 
 console.log(`\n${pass} checks passed`);

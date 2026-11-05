@@ -3275,6 +3275,16 @@ app.get("/.well-known/agent-card.json", (c) => {
 app.get("/aa3ee6fa313780532656391c0c73664f.txt", (c) => c.text("aa3ee6fa313780532656391c0c73664f"));
 app.get("/llms.txt", (c) => {
   const BASE = "https://x402-data-api.sigrunner.workers.dev";
+  // Derive the settleable-network list + prepaid-session openers from the SAME
+  // constants that drive the live 402 challenge and the session-cap rail, so this
+  // plain-text catalog can never advertise a pay-path the server does not honor.
+  const payNetworkList = ["Base", ...EXTRA_EVM_SETTLEMENT_NETWORKS.map((n) => {
+    const l = AGENTJSON_NETWORK_LABEL[n] || n;
+    return l.charAt(0).toUpperCase() + l.slice(1);
+  })].join(", ");
+  const sessionOpeners = Object.entries(SESSION_TIERS)
+    .map(([route, cap]) => `${route.replace("POST ", "")} ($${(cap / 1e6).toFixed(2)} cap)`)
+    .join(", ");
   return c.text(`# Grey Ridge Signals — MCP security scanning & on-chain data APIs
 
 > Two ways to use us. HUMANS & TEAMS: scan any MCP server for prompt-injection / tool-poisoning (OWASP LLM01/LLM08) in your browser — free, read-only — and subscribe by card ($9.99/mo) to gate CI and get continuous re-scans. No wallet, no crypto. AGENTS: the same endpoints are agent-native, pay-per-call on Base (USDC via x402) — no account, no API key, pay inline.
@@ -3302,6 +3312,8 @@ When a static scan isn't enough — a live agent deployment, permission and auth
 
 ## How to pay — first paid call in ~8 lines (copy-paste, verified)
 Each paid GET returns HTTP 402 with an x402 v2 challenge (network eip155:8453 / Base, asset USDC, 6 decimals). The standard x402-fetch client signs + retries for you — no account, no API key. Your wallet needs a little USDC on Base; no gas ETH (the exact scheme is EIP-3009 gasless — the facilitator submits). The 2nd arg to wrapFetchWithPayment is a viem WalletClient, not a bare account.
+
+Hold USDC on another chain? The live 402 offers native USDC on ${payNetworkList} (Base is accepts[0]; same payTo, same price) — pick whichever your wallet funds, your x402 client selects it automatically. Calling many routes in a loop and don't want a signature per call? Open a prepaid session cap ONCE over x402 — ${sessionOpeners} — then pass the returned token as \`Authorization: Bearer <token>\` (or \`X-Session-Token\`) and paid routes debit the cap with no per-call signature. Open: POST ${BASE}/x402/session (pays the cap inline). Check remaining balance free: GET ${BASE}/x402/session/status.
 
   npm i x402-fetch viem
   import { createWalletClient, http } from "viem";
@@ -6729,7 +6741,14 @@ app.use(async (c, next) => {
   // buyer re-opens or signs per-call), never serving unmetered. The opener
   // routes themselves (/x402/session*) are excluded — they must be paid via
   // x402 so the cap is a real on-chain settlement, not funded from another cap.
-  const sessionTok = c.req.header("X-Session-Token");
+  // Accept the session token via the dedicated `X-Session-Token` header OR via a
+  // standard `Authorization: Bearer grsess_…` (many HTTP clients set Authorization
+  // by default). The `grsess_` prefix guard means a Bearer carrying anything else
+  // (a JWT, an API key) is ignored here and falls through untouched.
+  const sessionTok = extractSessionToken(
+    c.req.header("X-Session-Token"),
+    c.req.header("Authorization") || c.req.header("authorization"),
+  );
   if (sessionTok && c.env.API_KEYS && c.env.CREDIT_LEDGER && !c.req.path.startsWith("/x402/session")) {
     try {
       const raw = await c.env.API_KEYS.get(`${SESSION_KV_PREFIX}${sessionTok}`);
@@ -11082,6 +11101,24 @@ export function routePriceAtomic(path: string, method: string, payTo: string): n
     if (r.method === method && r.re.test(path)) return r.atomic;
   }
   return null;
+}
+
+// Resolve the prepaid-session token a request presents, from the dedicated
+// `X-Session-Token` header OR a standard `Authorization: Bearer grsess_…`. The
+// `grsess_` prefix is REQUIRED on the Bearer path so a Bearer carrying any other
+// credential (JWT, API key) is ignored and the request falls through untouched.
+// Pure + exported so the gate and tests share one definition. Returns the raw
+// token string, or undefined when neither header carries a session token.
+export function extractSessionToken(
+  xSessionHeader?: string | null,
+  authHeader?: string | null,
+): string | undefined {
+  if (xSessionHeader) return xSessionHeader;
+  if (authHeader) {
+    const m = authHeader.match(/^Bearer\s+(grsess_[A-Za-z0-9_-]+)$/i);
+    if (m) return m[1];
+  }
+  return undefined;
 }
 
 // Mint an opaque session token (urlsafe, unguessable).
