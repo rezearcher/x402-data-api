@@ -37,6 +37,14 @@ import {
 import { readSettlementReceipt, confirmAuthorizationState, readBlockTimestamp, type ReceiptRead } from "./chain.js";
 import { decodeSignedAuthorization, computePayloadBind, type SignedAuthorization, type PayloadBind } from "./authz.js";
 import { computeResourceBinding, extractResourceUrl, type ResourceBinding } from "./resource.js";
+import {
+  readSolanaSettlement,
+  computeSvmReconcile,
+  isSolanaRail,
+  isSolanaAddress,
+  SOLANA_USDC_MINT,
+  type SvmReconcileResult,
+} from "./svm.js";
 
 export {
   reconcileSettlement,
@@ -61,6 +69,21 @@ export { decodeSignedAuthorization, computePayloadBind } from "./authz.js";
 export type { SignedAuthorization, PayloadBind, PayloadBindChecks } from "./authz.js";
 export { computeResourceBinding, extractResourceUrl, resourceMatchesUrl } from "./resource.js";
 export type { ResourceBinding } from "./resource.js";
+export {
+  readSolanaSettlement,
+  computeSvmReconcile,
+  decodeSvmUsdcDeltas,
+  decodeSolanaMemos,
+  svmFingerprint,
+  solanaGetTransaction,
+  isSolanaRail,
+  isSolanaSignature,
+  isSolanaAddress,
+  SOLANA_USDC_MINT,
+  SVM_USDC_DECIMALS,
+  DEFAULT_SOLANA_RPCS,
+} from "./svm.js";
+export type { SvmReconcileResult, SvmUsdcDelta, SolanaRead } from "./svm.js";
 
 /** The advertised requirement a buyer pays against (payTo + amount). */
 export interface AdvertisedRequirement {
@@ -120,6 +143,22 @@ export interface VerifiedSettlement {
    * reconcile:"off" or before any settlement was read.
    */
   resourceBinding: ResourceBinding | null;
+  /**
+   * Which settlement rail this verdict was reconciled on. "evm" = Base-mainnet
+   * USDC (the default). "svm" = Solana-mainnet SPL-USDC — reconciled by reading
+   * the Solana chain directly (keyless public getTransaction, dual-RPC
+   * cross-confirmed), so the wrapper never has to trust a Solana facilitator's
+   * /verify (cf. GHSA-qr2g-p6q7-w82m). This makes it the only x402 fetch wrapper
+   * that reconciles both rails on-chain.
+   */
+  rail: "evm" | "svm";
+  /**
+   * The full Solana reconcile detail when `rail === "svm"` (per-owner USDC
+   * balance deltas, SPL memos, slot, block time, explorer link). null on the
+   * EVM path. The EVM-shaped `matched`/`authorization`/`payloadBind` fields are
+   * null on the SVM path (EIP-3009 is EVM-specific); read `svm` instead.
+   */
+  svm: SvmReconcileResult | null;
   note: string;
 }
 
@@ -131,6 +170,12 @@ export interface VerifiedFetchOptions {
   reconcile?: "local" | "off";
   /** Base-mainnet JSON-RPC URLs (up to 2 used, cross-confirmed). */
   rpcUrls?: string[];
+  /**
+   * Solana-mainnet JSON-RPC URLs (up to 2 used, cross-confirmed) for the SVM
+   * rail. Defaults to keyless public endpoints. Only consulted when the
+   * settlement's PAYMENT-RESPONSE network is `solana:*`.
+   */
+  solanaRpcUrls?: string[];
   /**
    * How to treat a failed settlement (WRONG_RECIPIENT / UNDERPAID / REVERTED /
    * NO_TRANSFER). "annotate" (default) attaches the verdict and lets the
@@ -397,6 +442,8 @@ export function wrapFetchWithVerifiedPayment(
     let core: ReconcileResult;
     let authorization: AuthorizationProof | null = null;
     let payloadBind: PayloadBind | null = null;
+    let rail: "evm" | "svm" = "evm";
+    let svm: SvmReconcileResult | null = null;
     if (!tx) {
       core = {
         verdict: "UNVERIFIED",
@@ -404,6 +451,32 @@ export function wrapFetchWithVerifiedPayment(
         matched: null,
         note: "the server returned a PAYMENT-RESPONSE header but no settlement tx hash could be decoded from it",
       };
+    } else if (isSolanaRail(network, tx)) {
+      // ── Cross-rail: Solana (SVM) settlement. Read the Solana chain directly
+      // (keyless getTransaction, dual-RPC cross-confirmed) and reconcile the
+      // per-owner USDC balance delta against the advertised payTo+amount. No
+      // EIP-3009 authorization / payloadBind on this rail (EVM-specific) → those
+      // stay null and the detail lives in `svm`. The payTo must be a Solana
+      // owner to bind; otherwise UNVERIFIED-by-construction (never a false proof).
+      rail = "svm";
+      const svmPayTo = advertised.payTo && isSolanaAddress(advertised.payTo) ? advertised.payTo : null;
+      const sread = await readSolanaSettlement(tx, {
+        rpcUrls: options.solanaRpcUrls,
+        fetchImpl,
+        timeoutMs,
+        mint: SOLANA_USDC_MINT,
+      });
+      svm = computeSvmReconcile({
+        signature: tx,
+        network: network ?? "solana:mainnet",
+        txJson: sread.txJson,
+        payToOwner: svmPayTo,
+        expectAtomic: advertised.amountAtomic,
+        advertisedSource: advertised.source,
+        confirmation: sread.confirmation,
+        sources: sread.sources,
+      });
+      core = { verdict: svm.verdict, settled: svm.settled, matched: null, note: svm.note };
     } else {
       read = await readSettlementReceipt(tx, { rpcUrls: options.rpcUrls, fetchImpl, timeoutMs });
       if (read.confirmation === "rpc-disagreement") {
@@ -522,13 +595,15 @@ export function wrapFetchWithVerifiedPayment(
       network,
       payer,
       block: read.block,
-      confirmation: read.confirmation,
-      rpcSources: read.sources,
+      confirmation: svm ? svm.confirmation : read.confirmation,
+      rpcSources: svm ? svm.sources : read.sources,
       advertised,
       matched: core.matched,
       authorization,
       payloadBind,
       resourceBinding,
+      rail,
+      svm,
       note: core.note,
     };
     // keep a trace of the header-claimed amount for callers who want it

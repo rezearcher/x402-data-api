@@ -1,7 +1,7 @@
 {
   "name": "@grey-ridge/x402-verified-fetch",
-  "version": "0.4.1",
-  "description": "Drop-in fetch wrapper for x402-paying agents that reads the Base chain itself and verifies every settlement after paying. The only @x402/fetch wrapper covering all four x402 flaw classes: Transfer reconcile (payTo + amount), EIP-3009 nonce consumed, signed-payload bind, validity-window, AND cross-resource substitution — binding the settlement to the resource this client actually fetched (arXiv:2605.30998). Checks #1, #4 and the resource bind are ones no hosted verifier can run. Composes @x402/fetch.",
+  "version": "0.5.0",
+  "description": "Drop-in fetch wrapper for x402-paying agents that reads the Base chain itself and verifies every settlement after paying. The only @x402/fetch wrapper covering all four x402 flaw classes: Transfer reconcile (payTo + amount), EIP-3009 nonce consumed, signed-payload bind, validity-window, AND cross-resource substitution \u2014 binding the settlement to the resource this client actually fetched (arXiv:2605.30998). Checks #1, #4 and the resource bind are ones no hosted verifier can run. Composes @x402/fetch.",
   "keywords": [
     "x402",
     "x402-fetch",

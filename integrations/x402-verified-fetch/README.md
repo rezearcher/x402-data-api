@@ -47,6 +47,24 @@ A strict agent can refuse a response it cannot attribute to the resource it paid
 
 **Only the payer can bind this honestly.** A hosted verifier (including Grey Ridge's own `/x402/receipt-verify`) only ever gets a `url` the caller *claims* they paid — it cannot know which resource the client truly requested. This wrapper **is** the client: it holds the exact URL the agent fetched and reads the live 402 that URL answers with, so the comparison is against ground truth the client observed first-hand. That makes this **the only x402 fetch wrapper that covers all four flaw classes** (payTo, amount, replay/authorization, and resource) — the six other `@x402/fetch` wrappers read no chain at all, and no hosted verifier can run checks #1, #4, or an authoritative resource bind.
 
+### Cross-rail: Base (EVM) **and** Solana (SVM)
+
+The live x402 market is **majority Solana** — 2,637 of 4,019 indexed services (65.6%) settle on Solana, not Base ([x402.direct](https://x402.direct), 2026-11-05). Every other named independent x402 verifier (t54 `x402-secure`, `x402-trust.com`, TrustBench, BlockRun) is **EVM-only**. This wrapper reconciles **both rails on-chain**, making it the only cross-rail x402 verify wrapper.
+
+When the `PAYMENT-RESPONSE` network is `solana:*`, the wrapper reads the Solana chain directly (keyless public `getTransaction`, two independent RPCs cross-confirmed) and reconciles the canonical settlement signal — the per-owner **SPL-USDC token-balance delta** (`post − pre`), the SPL analogue of summing ERC-20 `Transfer` logs — against the advertised `payTo` owner + amount. Same verdict enum, same fail-closed discipline (two RPCs disagree → `UNVERIFIED`), one shape across both rails. The result carries `rail: "evm" | "svm"` and, on the SVM path, a full `svm` detail (balance deltas, SPL memos, slot, block time, Solscan link); the EVM-specific EIP-3009 `authorization`/`payloadBind` fields are `null` on Solana.
+
+This is especially timely given **[GHSA-qr2g-p6q7-w82m](https://github.com/advisories/GHSA-qr2g-p6q7-w82m)** — a Solana x402 *facilitator* signature-bypass (fixed in `@x402/svm` 2.6.0). A client that reads the Solana chain itself never has to trust a facilitator's `/verify`.
+
+```ts
+// A Solana (SVM) settlement verifies with the same call — the wrapper detects
+// the rail from the PAYMENT-RESPONSE network and reconciles SPL-USDC on-chain.
+const res = await fetchVerified("https://seller.example/x402/data", {
+  // for a Solana seller, expected.payTo is the SPL-USDC OWNER you paid
+});
+const s = JSON.parse(res.headers.get("x-grs-settlement"));
+// s.rail === "svm"; s.verdict === "SETTLED"; s.svm.matched_transfer.amount_atomic
+```
+
 It **composes** the official Coinbase payer client (`@x402/fetch` → `wrapFetchWithPayment`, 670k+ downloads/mo) rather than replacing it. You keep your existing payment flow; you gain an independent audit of what actually moved.
 
 > **Honesty (Claims Law):** this confirms the on-chain settlement went to the right address for the right amount. It does **not** prove the off-chain resource was delivered or that its content is correct — later settlement failure or cache reuse is a separate failure mode. A `SETTLED` verdict is a payment proof, not a delivery guarantee.
