@@ -5317,6 +5317,17 @@ export function makeRoutes(payTo: string, extraNetworks: readonly string[] = [])
         output: { example: { pool: "747c1d2a-c668-4682-b9f9-296708a3dd90", project: "lido", chain: "Ethereum", symbol: "STETH", verdict: "SUSTAINABLE", risk_score: 0, reasons: [{ code: "stable_sustainable", detail: "Stable-or-up forecast, APY trend intact, adequate liquidity.", field: "predicted_class" }] } },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
     },
+    "GET /defi/yield-rotation": {
+      accepts: { scheme: "exact" as const, price: "$0.01", network: NETWORK, payTo },
+      description: "Rotate-or-stay DeFi yield decision: pass ?from=<poolId you hold>&to=<poolId you're considering> (both the 'pool' field from /defi/yields) and &notional=<usd> (default 10000) and get a packaged ROTATE|STAY|MARGINAL verdict net of a transparent roundtrip cost (bps) + the risk-score change, with breakeven days, first-year net gain and field-cited reasons. Never rotates into an AVOID/OUTLIER target. The repeat-query sibling to /defi/yield-entry-verdict: re-check an open LP position as APYs drift.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        method: "GET",
+        input: { from: "747c1d2a-c668-4682-b9f9-296708a3dd90", to: "aa70268e-4b52-42bf-a116-608b370f9501", notional: "25000" },
+        inputSchema: { type: "object", properties: { from: { type: "string", description: "DefiLlama poolId you currently hold" }, to: { type: "string", description: "DefiLlama poolId you're considering" }, notional: { type: "string", description: "position size in USD (default 10000)" } }, required: ["from", "to"] },
+        output: { example: { verdict: "ROTATE", apy_delta_pct: 8, risk_score_delta: 0, rotation_cost_usd: 7.5, breakeven_days: 3.4, net_gain_first_year_usd: 1992.5, reasons: [{ code: "pickup_pays_off", detail: "Target pays 8.00% more APY; the rotation cost is recouped in 4d with no material risk increase.", field: "breakeven_days" }] } },
+      } as Parameters<typeof declareDiscoveryExtension>[0]),
+    },
     "GET /ai/classify": {
       accepts: { scheme: "exact" as const, price: "$0.003", network: NETWORK, payTo },
       description: "Zero-shot text classification (Llama 3.2 3B): ?text=<up to 1000 chars>&labels=<comma-separated labels, 2-10> returns the single best label. Use when an agent needs to route or tag text (intent, sentiment, topic, spam) in one cheap call.",
