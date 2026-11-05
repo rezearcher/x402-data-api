@@ -1,14 +1,14 @@
-# Measured status (auto-generated 2026-11-04T18:05Z)
+# Measured status (auto-generated 2026-11-05T12:20Z)
 
-Source: `data/uptime_samples.jsonl`, 30872 samples from 2026-10-19T22:06:27.945628Z to 2026-11-04T18:00:01.850160Z, produced by `scripts/uptime_probe.py` hitting each free `/preview` path. Window is short; treat as a measurement, not an SLA.
+Source: `data/uptime_samples.jsonl`, 32656 samples from 2026-10-19T22:06:27.945628Z to 2026-11-05T12:15:01.496897Z, produced by `scripts/uptime_probe.py` hitting each free `/preview` path. Window is short; treat as a measurement, not an SLA.
 
 | endpoint | samples | success | p50 ms | p95 ms |
 |---|---|---|---|---|
-| /chain/gas-price/preview | 4572 | 100.0% | 289 | 1279 |
-| /chain/token-report/preview | 4572 | 99.5% | 1892 | 3422 |
-| /chain/token-security/preview | 4572 | 99.6% | 1264 | 2595 |
-| /crypto/funding/preview | 1910 | 99.1% | 2891 | 4037 |
-| /crypto/prices/preview | 4572 | 99.8% | 308 | 1036 |
-| /defi/yields/preview | 1910 | 98.7% | 396 | 752 |
-| /gate/swap/preview | 4572 | 99.3% | 2061 | 3466 |
-| /scan/mcp/preview | 4192 | 99.9% | 150 | 927 |
+| /chain/gas-price/preview | 4795 | 100.0% | 295 | 1277 |
+| /chain/token-report/preview | 4795 | 99.5% | 1906 | 3420 |
+| /chain/token-security/preview | 4795 | 99.6% | 1313 | 2622 |
+| /crypto/funding/preview | 2133 | 99.2% | 2879 | 4066 |
+| /crypto/prices/preview | 4795 | 99.8% | 299 | 1032 |
+| /defi/yields/preview | 2133 | 98.9% | 407 | 771 |
+| /gate/swap/preview | 4795 | 99.4% | 2064 | 3463 |
+| /scan/mcp/preview | 4415 | 99.9% | 163 | 921 |
