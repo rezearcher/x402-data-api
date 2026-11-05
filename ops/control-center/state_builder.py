@@ -444,13 +444,14 @@ def health(rt: dict, rev: dict, hist: dict, cfg: dict) -> dict:
     funding_ok = u.get("funding_detection_ok")  # 5-venue superset (/crypto/funding) — venue-null guard
     prices_ok = u.get("prices_detection_ok")  # #2 external-payer DATA route (/crypto/prices) — hollow-price guard
     verdict_ok = u.get("yield_verdict_detection_ok")  # MOAT route (/defi/yield-entry-verdict) — hollow-verdict guard
+    pm_ok = u.get("pm_markets_detection_ok")  # paid DATA route (/pm/markets) — hollow-market / cents-normalization guard
     degraded = u.get("degraded") or []
-    gate_degraded = [d for d in degraded if "/gate/swap" in d or "/scan/mcp" in d or "/chain/token-report" in d or "/chain/token-security" in d or "/defi/yields" in d or "/crypto/funding" in d or "/crypto/prices" in d or "/defi/yield-entry-verdict" in d]
-    corr_regressed = gate_ok is False or scan_ok is False or report_ok is False or security_ok is False or yields_ok is False or funding_ok is False or prices_ok is False or verdict_ok is False or bool(gate_degraded)
+    gate_degraded = [d for d in degraded if "/gate/swap" in d or "/scan/mcp" in d or "/chain/token-report" in d or "/chain/token-security" in d or "/defi/yields" in d or "/crypto/funding" in d or "/crypto/prices" in d or "/defi/yield-entry-verdict" in d or "/pm/markets" in d]
+    corr_regressed = gate_ok is False or scan_ok is False or report_ok is False or security_ok is False or yields_ok is False or funding_ok is False or prices_ok is False or verdict_ok is False or pm_ok is False or bool(gate_degraded)
     gate_health_ok = not corr_regressed       # inconclusive/missing => ok (degrade open)
-    _all_pass = gate_ok and scan_ok and report_ok and security_ok and yields_ok and funding_ok and prices_ok and verdict_ok
+    _all_pass = gate_ok and scan_ok and report_ok and security_ok and yields_ok and funding_ok and prices_ok and verdict_ok and pm_ok
     gate_why = ("; ".join(gate_degraded) if gate_degraded
-                else "money-gate + token-report + token-security + yields + funding + prices + yield-verdict + scanner canaries PASS" if _all_pass
+                else "money-gate + token-report + token-security + yields + funding + prices + yield-verdict + pm-markets + scanner canaries PASS" if _all_pass
                 else "correctness inconclusive (probe not run yet / unreachable) — not alarming")
     return {
         "green": {"ok": green_ok, "why": f"engine {'alive' if green_ok else 'DOWN'} (pid {rt.get('pid')})"},

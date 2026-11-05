@@ -159,3 +159,78 @@ def yield_verdict_ok(payload):
                    f"r0_code={r0.get('code')} r0_field={r0.get('field')} "
                    f"(null DefiLlama/prediction upstream or a resolver bug — the MOAT "
                    f"entry-decision route returning a hollow verdict)")
+
+
+def pm_markets_ok(payload):
+    """/pm/markets preview — a paid DATA route with real external payers (CDP Bazaar
+    demand sensor: /pm/markets, distinct payers in the 30d window).
+
+    Silent-degradation guard: /pm/markets is Polymarket Gamma-API-backed, the SAME
+    upstream class as prices/funding whose outage/geo-block/schema-drift returns an
+    empty list or null fields with a 200 — a paying agent then gets a hollow market
+    list (no prices, no clobTokenIds to trade on) and churns, and availability alone
+    (HTTP 200) never catches it. A second, distinct footgun on THIS route is a
+    normalization bug: Gamma can hand back outcomePrices as cents/strings, so a 0.951
+    probability silently becomes 95.1 — the number is present, non-null, and wrong.
+
+    The preview top-1 is ranked by volume24hr, so its CONTENT is not deterministic
+    (which market is #1 changes). Anchor on the structurally-stable *tradeable
+    envelope* every real Gamma market carries, never a specific question:
+      - a non-empty preview and total_available >= 1 (catches the empty-200 outage);
+      - question: a non-empty string;
+      - outcomes: a list of >= 2 non-empty strings (binary at minimum);
+      - outcomePrices: a list the same length as outcomes, each a number in [0,1]
+        (catches null prices AND the cents/decimals normalization bug), and — only
+        when the market is binary (2 outcomes), the stable invariant — summing to
+        ~1 (band 0.80..1.25, wide enough that book skew never flaps it, tight enough
+        to catch a 95.1-style inflation); multi-outcome markets skip the sum check so
+        they never false-alarm;
+      - volume24hr and liquidity: numbers >= 0 (volume24hr is the ranking key — null
+        there means the ranking collapsed);
+      - active is True (the preview advertises active markets);
+      - conditionId: a 0x-prefixed string and clobTokenIds: a non-empty list (without
+        these the row is not tradeable — i.e. a hollow answer on a paid route).
+    Degrade open on a missing payload.
+    """
+    if not isinstance(payload, dict):
+        return None, "no payload"
+
+    def numeric(x):
+        return isinstance(x, (int, float)) and not isinstance(x, bool)
+    pv = payload.get("preview") or []
+    top = pv[0] if pv else {}
+    q = top.get("question")
+    outs = top.get("outcomes") if isinstance(top.get("outcomes"), list) else []
+    prices = top.get("outcomePrices") if isinstance(top.get("outcomePrices"), list) else []
+    vol24 = top.get("volume24hr")
+    liq = top.get("liquidity")
+    cond = top.get("conditionId")
+    clob = top.get("clobTokenIds") if isinstance(top.get("clobTokenIds"), list) else []
+
+    outs_ok = len(outs) >= 2 and all(isinstance(o, str) and o.strip() for o in outs)
+    prices_ok_each = (len(prices) == len(outs) and len(prices) >= 2
+                      and all(numeric(p) and 0 <= p <= 1 for p in prices))
+    binary_sum_ok = True
+    if prices_ok_each and len(prices) == 2:
+        binary_sum_ok = 0.80 <= (prices[0] + prices[1]) <= 1.25
+
+    ok = bool(
+        len(pv) >= 1 and int(payload.get("total_available") or 0) >= 1
+        and isinstance(q, str) and q.strip()
+        and outs_ok and prices_ok_each and binary_sum_ok
+        and numeric(vol24) and vol24 >= 0
+        and numeric(liq) and liq >= 0
+        and top.get("active") is True
+        and isinstance(cond, str) and cond.startswith("0x") and len(cond) >= 10
+        and len(clob) >= 1)
+    if ok:
+        return True, "ok"
+    _psum = round(sum(p for p in prices if numeric(p)), 4) if prices else None
+    return False, (f"preview_len={len(pv)} total_available={payload.get('total_available')} "
+                   f"question={'set' if (isinstance(q, str) and q.strip()) else q!r} "
+                   f"outcomes={len(outs)} prices={prices!r} prices_sum={_psum} "
+                   f"volume24hr={vol24} liquidity={liq} active={top.get('active')} "
+                   f"conditionId={'set' if (isinstance(cond, str) and cond.startswith('0x')) else cond!r} "
+                   f"clobTokenIds={len(clob)} (empty/null Polymarket Gamma upstream — the "
+                   f"outage/geo-block hollow-200 footgun — or an outcomePrices cents/decimals "
+                   f"normalization bug; a paid DATA route returning an untradeable market)")

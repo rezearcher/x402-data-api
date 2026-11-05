@@ -10,7 +10,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
-from canary_predicates import yields_ok, funding_ok, prices_ok, yield_verdict_ok  # noqa: E402
+from canary_predicates import yields_ok, funding_ok, prices_ok, yield_verdict_ok, pm_markets_ok  # noqa: E402
 
 checks = []
 
@@ -109,6 +109,49 @@ expect("verdict: bool risk_score -> False", yield_verdict_ok({"preview": {**GOOD
 expect("verdict: list preview -> None", yield_verdict_ok({"preview": []})[0], None)
 # degrade open
 expect("verdict: no payload -> None", yield_verdict_ok(None)[0], None)
+
+# ---- /pm/markets (paid DATA route, real external payers) ----
+# Fixture mirrors a live Polymarket Gamma preview row (binary market).
+GOOD_PM = {"preview": [{
+    "question": "Will Mary Peltola win the Alaska Senate race in 2026?",
+    "slug": "will-mary-peltola-win", "outcomes": ["Yes", "No"],
+    "outcomePrices": [0.951, 0.049], "volume": 3702541.8, "volume24hr": 780815.9,
+    "volume1wk": 2542407.3, "liquidity": 225458.2, "endDate": "2026-11-04T04:59:00Z",
+    "active": True, "bestBid": 0.95, "bestAsk": 0.952, "spread": 0.002,
+    "clobTokenIds": ["72139607190315861034411702195742538105117960260100800877125381826122747504258",
+                     "38274379050640062523611849065721372699838119672720475300345842413156391540232"],
+    "conditionId": "0x19d2ff72e389d190c183e6b114817301d29eba651d67d75a38ee201a05188fd9",
+}], "total_available": 20}
+expect("pm: healthy binary market -> True", pm_markets_ok(GOOD_PM)[0], True)
+# multi-outcome market (3 legs) — per-price band holds, binary-sum check is skipped so no false alarm
+MULTI_PM = {"preview": [{**GOOD_PM["preview"][0], "outcomes": ["A", "B", "C"],
+                         "outcomePrices": [0.5, 0.3, 0.2]}], "total_available": 12}
+expect("pm: multi-outcome (sum check skipped) -> True", pm_markets_ok(MULTI_PM)[0], True)
+# THE primary regression: Gamma upstream empties with a 200 (hollow)
+expect("pm: empty preview (upstream outage) -> False", pm_markets_ok({"preview": [], "total_available": 0})[0], False)
+# cents/decimals normalization bug: 0.951 silently becomes 95.1 (present, non-null, WRONG)
+CENTS_PM = {"preview": [{**GOOD_PM["preview"][0], "outcomePrices": [95.1, 4.9]}], "total_available": 20}
+expect("pm: cents-normalization bug (prices>1) -> False", pm_markets_ok(CENTS_PM)[0], False)
+# null outcomePrices (schema regression)
+NULLP_PM = {"preview": [{**GOOD_PM["preview"][0], "outcomePrices": [None, None]}], "total_available": 20}
+expect("pm: null outcomePrices -> False", pm_markets_ok(NULLP_PM)[0], False)
+# binary prices present and in-band but wildly off-sum (book/resolver bug -> 0.9+0.9=1.8)
+BADSUM_PM = {"preview": [{**GOOD_PM["preview"][0], "outcomePrices": [0.9, 0.9]}], "total_available": 20}
+expect("pm: binary prices out-of-sum -> False", pm_markets_ok(BADSUM_PM)[0], False)
+# ranking key null (volume24hr) — the order collapsed
+expect("pm: null volume24hr -> False", pm_markets_ok({"preview": [{**GOOD_PM["preview"][0], "volume24hr": None}], "total_available": 20})[0], False)
+# empty clobTokenIds — market not tradeable (hollow)
+expect("pm: no clobTokenIds -> False", pm_markets_ok({"preview": [{**GOOD_PM["preview"][0], "clobTokenIds": []}], "total_available": 20})[0], False)
+# missing/short conditionId
+expect("pm: bad conditionId -> False", pm_markets_ok({"preview": [{**GOOD_PM["preview"][0], "conditionId": None}], "total_available": 20})[0], False)
+# inactive market leaked into an "active" preview (filter regression)
+expect("pm: inactive market -> False", pm_markets_ok({"preview": [{**GOOD_PM["preview"][0], "active": False}], "total_available": 20})[0], False)
+# single-outcome / malformed outcomes
+expect("pm: <2 outcomes -> False", pm_markets_ok({"preview": [{**GOOD_PM["preview"][0], "outcomes": ["Yes"], "outcomePrices": [1.0]}], "total_available": 20})[0], False)
+# bool volume24hr (isinstance(True,int) footgun)
+expect("pm: bool volume24hr -> False", pm_markets_ok({"preview": [{**GOOD_PM["preview"][0], "volume24hr": True}], "total_available": 20})[0], False)
+# degrade open
+expect("pm: no payload -> None", pm_markets_ok(None)[0], None)
 
 failed = [c for c in checks if not c[1]]
 print(f"\n{len(checks) - len(failed)}/{len(checks)} checks passed")

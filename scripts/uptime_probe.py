@@ -197,7 +197,7 @@ def _get(path):
     return json.loads(urllib.request.urlopen(urllib.request.Request(BASE + path, headers=ghdr), timeout=20).read())
 # Pure predicates live in canary_predicates.py (unit-tested with negative controls so the canary is
 # proven to TRIP on the exact silent-degradation it guards — not just pass on a healthy day).
-from canary_predicates import yields_ok, funding_ok, prices_ok, yield_verdict_ok  # noqa: E402
+from canary_predicates import yields_ok, funding_ok, prices_ok, yield_verdict_ok, pm_markets_ok  # noqa: E402
 # (1) /defi/yields — the #1 external-payer route; (2) /crypto/funding — the 5-venue superset whose
 # Binance+Bybit legs geo-block to null. Degrade OPEN: a probe error is inconclusive (None).
 yields_detection_ok = None
@@ -236,8 +236,20 @@ try:
         degraded.append("/defi/yield-entry-verdict MOAT REGRESSION: " + _yvr)
 except Exception:
     yield_verdict_detection_ok = None  # inconclusive — degrade open
+# (5) /pm/markets — a paid DATA route with real external payers (CDP Bazaar demand
+# sensor). Polymarket Gamma-backed => the same hollow-200 outage/geo-block footgun as
+# prices/funding, PLUS an outcomePrices cents/decimals normalization bug (a present,
+# non-null, WRONG probability). This completes correctness coverage on every paid DATA
+# route. Degrade OPEN: a probe error is inconclusive (None).
+pm_markets_detection_ok = None
+try:
+    pm_markets_detection_ok, _pmr = pm_markets_ok(_get("/pm/markets/preview"))
+    if pm_markets_detection_ok is False:
+        degraded.append("/pm/markets DATA REGRESSION: " + _pmr)
+except Exception:
+    pm_markets_detection_ok = None  # inconclusive — degrade open
 d = os.path.expanduser("~/.hermes/data/x402-data-api-uptime"); os.makedirs(d, exist_ok=True)
 alert = bool(degraded)
 summary = f"{len(S)} eps, n={sum(o['n'] for o in out.values())}" + (f" | ALERT degraded: {'; '.join(degraded)}" if degraded else "")
-json.dump({"fetched_at": now, "status": "ok", "summary": summary, "alert": alert, "degraded": degraded, "scan_detection_ok": detection_ok, "gate_detection_ok": gate_detection_ok, "report_detection_ok": report_detection_ok, "security_detection_ok": security_detection_ok, "yields_detection_ok": yields_detection_ok, "funding_detection_ok": funding_detection_ok, "prices_detection_ok": prices_detection_ok, "yield_verdict_detection_ok": yield_verdict_detection_ok, "tg_bot_ok": tg_bot_ok, "endpoints": out}, open(d + "/latest.json", "w"), indent=1)
+json.dump({"fetched_at": now, "status": "ok", "summary": summary, "alert": alert, "degraded": degraded, "scan_detection_ok": detection_ok, "gate_detection_ok": gate_detection_ok, "report_detection_ok": report_detection_ok, "security_detection_ok": security_detection_ok, "yields_detection_ok": yields_detection_ok, "funding_detection_ok": funding_detection_ok, "prices_detection_ok": prices_detection_ok, "yield_verdict_detection_ok": yield_verdict_detection_ok, "pm_markets_detection_ok": pm_markets_detection_ok, "tg_bot_ok": tg_bot_ok, "endpoints": out}, open(d + "/latest.json", "w"), indent=1)
 print(json.dumps(out, indent=1))

@@ -20,6 +20,7 @@ CORRECTNESS_GUARDS = {
     "/crypto/prices": ("prices_detection_ok", "Returns a live non-null USD price (guards the hollow-200 geo-block footgun)"),
     "/crypto/funding": ("funding_detection_ok", "Multi-venue funding rows stay numeric when a venue geo-blocks to null"),
     "/defi/yield-entry-verdict": ("yield_verdict_detection_ok", "Entry verdict keeps its APY/prediction substance, not a hollow label"),
+    "/pm/markets": ("pm_markets_detection_ok", "Markets stay tradeable — numeric outcomePrices in [0,1], clobTokenIds present (no hollow-200 or cents-normalization bug)"),
     "/gate/swap": ("gate_detection_ok", "A structural honeypot still blocks and a known-good token still passes (no false-SAFE)"),
     "/chain/token-report": ("report_detection_ok", "Honeypot screens AVOID, good token screens SAFE, DEX tax reads clean"),
     "/chain/token-security": ("security_detection_ok", "Metadata/sim decode correct on a known-good token (no fabricated risk)"),
