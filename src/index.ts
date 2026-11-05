@@ -7350,8 +7350,9 @@ export interface EpssMover {
 }
 export interface EpssMoversResult {
   as_of: string;
-  universe_scanned: number;      // CVEs evaluated this call (top-N by current EPSS)
-  total_scored_global: number;   // all CVEs FIRST scores (context)
+  universe_label: string;        // which CVE set we scanned, in words
+  universe_scanned: number;      // CVEs evaluated this call
+  universe_total: number;        // full count at/above the action level (context)
   thresholds: { rising_delta_7d: number; action_level: number };
   rising: EpssMover[];           // delta_7d ≥ threshold, biggest first
   crossed_action_level: EpssMover[]; // today ≥ level AND 7d-ago below it
@@ -7441,8 +7442,9 @@ export function computeEpssMovers(
       : `${parts.join("; ")}. Prioritize the top movers for patching before they are weaponized.`;
   return {
     as_of: new Date().toISOString().slice(0, 10),
+    universe_label: `CVEs with EPSS ≥ ${level}`,
     universe_scanned: movers.length,
-    total_scored_global: 0,
+    universe_total: 0,
     thresholds: { rising_delta_7d: risingDelta, action_level: level },
     rising: rising.slice(0, topN),
     crossed_action_level: crossed.slice(0, topN),
@@ -7452,15 +7454,22 @@ export function computeEpssMovers(
   };
 }
 
-// Fetch the top-N CVEs by current EPSS WITH their ≤30d time-series in one call.
-// Returns {rows,total}. Degrades to an empty set on upstream failure.
+// Fetch the action-relevant CVE universe (EPSS ≥ level) WITH each CVE's ≤30d
+// time-series in one call. FIRST's `order` param is a no-op on the live API, so
+// we select by the `epss-gt` FILTER (which does work) — this yields genuinely
+// high-EPSS CVEs rather than an id-sorted page. Returns {rows,total}; degrades
+// to an empty set on upstream failure.
 async function fetchEpssMovers(
   limit: number,
+  level: number,
 ): Promise<{ rows: EpssMoverRow[]; total: number }> {
   const n = Math.max(1, Math.min(limit, 200));
+  // epss-gt is an exclusive lower bound; nudge just below `level` so a CVE
+  // sitting exactly at the threshold is still in the scanned set.
+  const gt = Math.max(0, level - 0.0001).toFixed(4);
   try {
     const res = await fetch(
-      `https://api.first.org/data/v1/epss?order=!epss&scope=time-series&limit=${n}`,
+      `https://api.first.org/data/v1/epss?epss-gt=${gt}&scope=time-series&limit=${n}`,
       { headers: { accept: "application/json" } },
     );
     if (!res.ok) return { rows: [], total: 0 };
@@ -9244,13 +9253,13 @@ async function buildEpssMovers(
   risingDelta: number,
   level: number,
 ): Promise<EpssMoversResult> {
-  const { rows, total } = await fetchEpssMovers(limit);
+  const { rows, total } = await fetchEpssMovers(limit, level);
   const kev = await isInKev(rows.map((r) => r.cve));
   const result = computeEpssMovers(rows, kev, {
     risingDelta7d: risingDelta,
     actionLevel: level,
   });
-  result.total_scored_global = total;
+  result.universe_total = total;
   return result;
 }
 
