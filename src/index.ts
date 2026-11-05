@@ -8631,23 +8631,30 @@ async function archiveProvenance(
   id: string,
   value: number,
 ): Promise<ProvSummary | null> {
+  const kv = c.env?.API_KEYS;
+  if (!kv) return null;
+  const key = `arch:${series}:${id}`;
+  let rec: ProvRecord | null = null;
   try {
-    const kv = c.env?.API_KEYS;
-    if (!kv) return null;
-    const key = `arch:${series}:${id}`;
     const raw = await kv.get(key);
-    const rec: ProvRecord | null = raw ? JSON.parse(raw) : null;
-    const now = Date.now();
-    const { rec: updated, appended } = appendTick(rec, now, value);
-    if (appended) {
-      // Only spend a KV put() when a tick was actually added (throttle gate),
-      // so a hot series costs ≤4 writes/day, not one per request.
-      await kv.put(key, JSON.stringify({ v: ARCH_SCHEMA, ...updated }));
-    }
-    return summarizeProvenance(updated, now);
+    rec = raw ? (JSON.parse(raw) as ProvRecord) : null;
   } catch {
-    return null;
+    rec = null; // read failed → treat as fresh series; never lose the summary
   }
+  const now = Date.now();
+  const { rec: updated, appended } = appendTick(rec, now, value);
+  if (appended) {
+    // Only spend a KV put() when a tick was actually added (throttle gate), so a
+    // hot series costs ≤4 writes/day. A write failure (e.g. the free-tier daily
+    // put() limit) degrades PERSISTENCE only — the provenance block below is
+    // built from the in-memory record and is still returned for this request.
+    try {
+      await kv.put(key, JSON.stringify({ v: ARCH_SCHEMA, ...updated }));
+    } catch {
+      /* degrade-open: skip persisting this tick, keep serving the summary */
+    }
+  }
+  return summarizeProvenance(updated, now);
 }
 
 app.get("/crypto/prices", async (c) => {
