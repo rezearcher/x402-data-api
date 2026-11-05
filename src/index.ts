@@ -13,6 +13,7 @@ import { analyzeMcpTool, analyzeDirectoryReadiness, type ScanFinding } from "./m
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
+import { UptoEvmScheme } from "@x402/evm/upto/server";
 import { declareDiscoveryExtension as declareDiscoveryExtensionBase } from "@x402/extensions/bazaar";
 
 // Infer a JSON Schema (field names, types, required) from an example payload so
@@ -167,6 +168,11 @@ const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 // Multi-network route compilation is guarded with a fallback to the proven Base-only
 // config, so this can never regress the live money gate.
 const EXTRA_EVM_SETTLEMENT_NETWORKS = ["eip155:137", "eip155:42161"] as const;
+// Routes that ALSO advertise the canonical x402 "upto" scheme (scheme interoperability for
+// session-cap / variable-consumption clients). Deliberately the highest-frequency DATA
+// poller lanes — our recurring external payers live here (DEMAND_SNAPSHOT) and these are the
+// calls a standard upto/session client is most likely to make. See makeRoutes() expansion.
+const UPTO_INTEROP_ROUTES = ["GET /crypto/prices", "GET /crypto/funding", "GET /defi/yields"] as const;
 // Native USDC (asset + EIP-712 domain) per extra network, mirrored from @x402/evm's
 // DEFAULT_ASSETS so the static .well-known/x402 discovery manifest can advertise the same
 // multi-network offer the live 402 emits (keeps discovery and the live challenge honest
@@ -4095,16 +4101,23 @@ app.get("/pm/markets/preview", async (c) => {
 
 const facilitatorClient = new HTTPFacilitatorClient({ url: FACILITATOR_URL });
 const evmScheme = new ExactEvmScheme();
-let resourceServer = new x402ResourceServer(facilitatorClient).register(
-  NETWORK,
-  evmScheme as any,
-);
-// The ExactEvmScheme is network-generic (resolves the asset per network from its
-// DEFAULT_ASSETS table), so the same instance serves every EVM network we register.
+// The canonical x402 "upto" scheme (authorize a ceiling via Permit2, settle actual
+// consumption). CDP's facilitator reports it settleable on every EVM network we use
+// (live /x402/networks: eip155:8453/137/42161 -> ["exact","upto","batch-settlement"]),
+// so we can honor an upto offer end-to-end. Registered ALONGSIDE exact — the resource
+// server keys scheme servers by (network -> scheme), so this never displaces exact.
+// This lets a standard x402 client that natively constructs upto payments (e.g.
+// Cloudflare agents / AgentCore sessions) pay us without our proprietary session rail.
+const uptoScheme = new UptoEvmScheme();
+let resourceServer = new x402ResourceServer(facilitatorClient)
+  .register(NETWORK, evmScheme as any)
+  .register(NETWORK, uptoScheme as any);
+// The scheme instances are network-generic (resolve the asset per network from
+// @x402/evm DEFAULT_ASSETS), so the same instances serve every EVM network we register.
 // Registering an extra network is a pure map insert (never throws); whether a route may
 // actually use it is validated later at middleware-compile time, which we guard.
 for (const net of EXTRA_EVM_SETTLEMENT_NETWORKS) {
-  resourceServer = resourceServer.register(net, evmScheme as any);
+  resourceServer = resourceServer.register(net, evmScheme as any).register(net, uptoScheme as any);
 }
 
 // bazaarResourceServerExtension is intentionally NOT registered here: it uses
@@ -4125,12 +4138,11 @@ function selectResourceServer(env: Env): x402ResourceServer {
   if (activeResourceServer) return activeResourceServer;
   if (env.FACILITATOR_MODE === "cdp" && env.CDP_API_KEY_ID && env.CDP_API_KEY_SECRET) {
     const cdpFacilitator = createCdpFacilitator(env.CDP_API_KEY_ID, env.CDP_API_KEY_SECRET);
-    let srv = new x402ResourceServer(cdpFacilitator).register(
-      NETWORK,
-      evmScheme as any,
-    );
+    let srv = new x402ResourceServer(cdpFacilitator)
+      .register(NETWORK, evmScheme as any)
+      .register(NETWORK, uptoScheme as any);
     for (const net of EXTRA_EVM_SETTLEMENT_NETWORKS) {
-      srv = srv.register(net, evmScheme as any);
+      srv = srv.register(net, evmScheme as any).register(net, uptoScheme as any);
     }
     activeResourceServer = srv;
   } else {
@@ -5935,6 +5947,30 @@ export function makeRoutes(payTo: string, extraNetworks: readonly string[] = [])
       if (base.network !== NETWORK) continue;
       rc.accepts = [base, ...extraNetworks.map((net) => ({ ...base, network: net }))];
     }
+  }
+
+  // Scheme interoperability: on the highest-frequency DATA routes, ALSO advertise the
+  // canonical x402 "upto" scheme (authorize a ceiling, settle actual) at the SAME price as
+  // the "exact" offer. For a flat-priced route max == actual == price, so there is zero
+  // overcharge gap regardless of settle semantics — fully honest. "exact" stays accepts[0]
+  // (preferred, unchanged for every existing payer); the upto options are additive and only
+  // matter to a client whose x402 stack natively constructs upto payments (Cloudflare
+  // agents / AgentCore / session-cap clients), which today bounce off an exact-only gate.
+  // CDP settles upto on all these networks (live /x402/networks), and UptoEvmScheme is
+  // registered on the resource server, so the offer is honored end-to-end. Not applied to
+  // security/scan routes — the interop demand is on the recurring DATA-poller lanes.
+  // Gated on the same trigger as the network expansion: this runs for the live 402 money
+  // gate (always built WITH networks, line ~6871) but leaves the base-only example build
+  // byte-identical (single-object accepts), which the discovery-example path relies on.
+  if (extraNetworks.length) for (const key of UPTO_INTEROP_ROUTES) {
+    const rc = routes[key];
+    if (!rc || typeof rc !== "object" || !rc.accepts) continue;
+    const exactOpts: any[] = Array.isArray(rc.accepts) ? rc.accepts : [rc.accepts];
+    // Only EVM exact options get an upto sibling (upto is an EVM/Permit2 scheme).
+    const uptoOpts = exactOpts
+      .filter((o) => o && o.scheme === "exact" && typeof o.network === "string" && o.network.startsWith("eip155:"))
+      .map((o) => ({ ...o, scheme: "upto" as const }));
+    if (uptoOpts.length) rc.accepts = [...exactOpts, ...uptoOpts];
   }
   return routes;
 }

@@ -36,23 +36,28 @@ check("base-only: accepts is a single Base object (no regression)", () => {
 });
 
 // 2. With extra networks => accepts is an array; Base is FIRST (primary, unchanged).
+// /crypto/prices is also an upto-interop route, so filter to the EXACT options to assert the
+// multi-network contract in isolation (upto siblings are covered in test_upto_scheme_interop).
 check("multi-network: accepts[0] is Base, unchanged", () => {
   const routes = makeRoutes(PAY_TO, [POLY, ARB]);
   const r = routes["GET /crypto/prices"];
   assert.ok(Array.isArray(r.accepts), "accepts is an array");
-  assert.strictEqual(r.accepts.length, 3, "Base + Polygon + Arbitrum = 3 options");
+  const exact = r.accepts.filter((a) => a.scheme === "exact");
+  assert.strictEqual(exact.length, 3, "Base + Polygon + Arbitrum = 3 exact options");
   assert.strictEqual(r.accepts[0].network, BASE, "Base is accepts[0] (primary)");
+  assert.strictEqual(r.accepts[0].scheme, "exact", "accepts[0] is exact (preferred, unchanged)");
   assert.strictEqual(r.accepts[0].payTo, PAY_TO, "Base payTo preserved");
 });
 
 // 3. Extra options carry the right networks, same payTo, same dollar price, no stale asset.
-check("multi-network: extra options are Polygon + Arbitrum at same price, same payTo", () => {
+check("multi-network: extra exact options are Polygon + Arbitrum at same price, same payTo", () => {
   const routes = makeRoutes(PAY_TO, [POLY, ARB]);
   const r = routes["GET /crypto/prices"];
-  const nets = r.accepts.map((a) => a.network);
+  const exact = r.accepts.filter((a) => a.scheme === "exact");
+  const nets = exact.map((a) => a.network);
   assert.deepStrictEqual(nets, [BASE, POLY, ARB], "network order Base,Polygon,Arbitrum");
-  const price0 = r.accepts[0].price;
-  for (const a of r.accepts) {
+  const price0 = exact[0].price;
+  for (const a of exact) {
     assert.strictEqual(a.payTo, PAY_TO, "same payTo on every option (EVM address is chain-agnostic)");
     assert.strictEqual(a.price, price0, "same dollar price across networks");
     assert.strictEqual(a.scheme, "exact", "exact scheme");
