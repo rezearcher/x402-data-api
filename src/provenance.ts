@@ -57,6 +57,35 @@ export function appendTick(
   return { rec: { first_seen: rec.first_seen, ticks: trimmed }, appended: true };
 }
 
+// Merge two records of the SAME series+id into one honest history: union the
+// ticks (dedup by timestamp, oldest-first), keep the earliest first_seen, cap to
+// `cap`. Used to combine the git-committed archive (reliable, cron-written) with
+// a best-effort live KV record (fresher intraday ticks when writes succeed), so
+// the provenance block delivers maximum real history from whichever source has
+// it — and never double-counts a shared tick.
+export function mergeRecords(
+  a: ProvRecord | null | undefined,
+  b: ProvRecord | null | undefined,
+  cap: number = ARCH_TICK_CAP,
+): ProvRecord | null {
+  const ar = a && Array.isArray(a.ticks) ? a : null;
+  const br = b && Array.isArray(b.ticks) ? b : null;
+  if (!ar && !br) return null;
+  if (!ar) return br;
+  if (!br) return ar;
+  const byT = new Map<number, number>();
+  for (const t of ar.ticks) if (Number.isFinite(t.t) && Number.isFinite(t.v)) byT.set(t.t, t.v);
+  for (const t of br.ticks) if (Number.isFinite(t.t) && Number.isFinite(t.v)) byT.set(t.t, t.v);
+  const ticks = [...byT.entries()].map(([t, v]) => ({ t, v })).sort((x, y) => x.t - y.t);
+  const trimmed = ticks.length > cap ? ticks.slice(ticks.length - cap) : ticks;
+  const firstSeen = Math.min(
+    ar.first_seen ?? Number.POSITIVE_INFINITY,
+    br.first_seen ?? Number.POSITIVE_INFINITY,
+    trimmed.length ? trimmed[0].t : Number.POSITIVE_INFINITY,
+  );
+  return { first_seen: Number.isFinite(firstSeen) ? firstSeen : (trimmed[0]?.t ?? Date.now()), ticks: trimmed };
+}
+
 export type ProvSummary = {
   tracked_since: string; // ISO of first_seen
   tracked_hours: number; // age of the series in hours (1dp)

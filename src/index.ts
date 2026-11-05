@@ -57,7 +57,8 @@ import {
   type Route,
 } from "./usage.ts";
 import { makeUsageCounter, type UsageCounter } from "./usage_counter.ts";
-import { appendTick, summarizeProvenance, type ProvRecord, type ProvSummary } from "./provenance.ts";
+import { appendTick, summarizeProvenance, mergeRecords, type ProvRecord, type ProvSummary } from "./provenance.ts";
+import { PROVENANCE_SNAPSHOT } from "./provenance_snapshot.ts";
 
 // ---------------------------------------------------------------------------
 // Environment bindings
@@ -8625,33 +8626,54 @@ async function fetchTokenPrices(ids: string[]): Promise<TokenPrice[]> {
 // broken DATA answer (same discipline as trialQuota).
 const ARCH_SCHEMA = 1;
 
+// Look up the git-committed baked archive for a series+id (reliable, cron-written,
+// CI-deployed). Shape guard so a malformed snapshot never throws into a handler.
+function bakedRecord(series: string, id: string): ProvRecord | null {
+  try {
+    const s = (PROVENANCE_SNAPSHOT as any)?.series?.[series]?.[id];
+    if (s && Array.isArray(s.ticks)) return s as ProvRecord;
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
+
 async function archiveProvenance(
   c: any,
   series: string,
   id: string,
   value: number,
 ): Promise<ProvSummary | null> {
-  const kv = c.env?.API_KEYS;
-  if (!kv) return null;
-  const key = `arch:${series}:${id}`;
-  let rec: ProvRecord | null = null;
-  try {
-    const raw = await kv.get(key);
-    rec = raw ? (JSON.parse(raw) as ProvRecord) : null;
-  } catch {
-    rec = null; // read failed → treat as fresh series; never lose the summary
-  }
   const now = Date.now();
-  const { rec: updated, appended } = appendTick(rec, now, value);
-  if (appended) {
-    // Only spend a KV put() when a tick was actually added (throttle gate), so a
-    // hot series costs ≤4 writes/day. A write failure (e.g. the free-tier daily
-    // put() limit) degrades PERSISTENCE only — the provenance block below is
-    // built from the in-memory record and is still returned for this request.
+  const baked = bakedRecord(series, id);
+  const kv = c.env?.API_KEYS;
+  const key = `arch:${series}:${id}`;
+
+  // Best-effort live KV record — fresher intraday ticks when writes succeed, but
+  // we never depend on it (free-tier put() is daily-capped + eventually
+  // consistent). The committed snapshot is the reliable floor.
+  let kvRec: ProvRecord | null = null;
+  if (kv) {
+    try {
+      const raw = await kv.get(key);
+      kvRec = raw ? (JSON.parse(raw) as ProvRecord) : null;
+    } catch {
+      kvRec = null;
+    }
+  }
+
+  // Merge committed + live history, then append this request's live value as the
+  // newest tick (throttled vs the merged last). The summary returned to the
+  // buyer is built from this in-memory record, so it is correct even if the KV
+  // write below fails or never propagates.
+  const base = mergeRecords(baked, kvRec);
+  const { rec: updated, appended } = appendTick(base, now, value);
+
+  if (kv && appended) {
     try {
       await kv.put(key, JSON.stringify({ v: ARCH_SCHEMA, ...updated }));
     } catch {
-      /* degrade-open: skip persisting this tick, keep serving the summary */
+      /* degrade-open: persistence lives in the committed snapshot regardless */
     }
   }
   return summarizeProvenance(updated, now);

@@ -17,7 +17,7 @@ import { register } from "node:module";
 
 register(new URL("./cfw-hooks.mjs", import.meta.url));
 
-const { appendTick, summarizeProvenance, ARCH_TICK_CAP, ARCH_THROTTLE_MS } = await import(
+const { appendTick, summarizeProvenance, mergeRecords, ARCH_TICK_CAP, ARCH_THROTTLE_MS } = await import(
   "../src/provenance.ts"
 );
 
@@ -111,6 +111,29 @@ function check(name, cond) {
   const s = summarizeProvenance(cur, t0 + 40 * 6 * HOUR, 12);
   check("trajectory capped to 12 in payload", s.trajectory.length === 12);
   check("full series still in record", cur.ticks.length === Math.min(40, ARCH_TICK_CAP));
+}
+
+// --- mergeRecords: baked + live union, dedup, earliest first_seen ----------
+{
+  const t0 = Date.UTC(2026, 9, 1, 0, 0, 0);
+  const baked = { first_seen: t0, ticks: [{ t: t0, v: 10 }, { t: t0 + 6 * HOUR, v: 11 }] };
+  const live = { first_seen: t0 + 6 * HOUR, ticks: [{ t: t0 + 6 * HOUR, v: 11 }, { t: t0 + 12 * HOUR, v: 12 }] };
+  const m = mergeRecords(baked, live);
+  check("merge dedups shared tick", m.ticks.length === 3);
+  check("merge keeps earliest first_seen", m.first_seen === t0);
+  check("merge sorted ascending", m.ticks[0].t < m.ticks[1].t && m.ticks[1].t < m.ticks[2].t);
+  check("merge preserves newest value", m.ticks[m.ticks.length - 1].v === 12);
+
+  check("merge(null,null) → null", mergeRecords(null, null) === null);
+  check("merge(a,null) → a", mergeRecords(baked, null) === baked);
+  check("merge(null,b) → b", mergeRecords(null, live) === live);
+
+  // junk ticks are dropped from the union
+  const dirty = { first_seen: t0, ticks: [{ t: t0, v: NaN }, { t: t0 + HOUR, v: 5 }] };
+  const m2 = mergeRecords(dirty, null);
+  check("merge keeps dirty record ref when b is null", m2 === dirty);
+  const m3 = mergeRecords(dirty, { first_seen: t0 + 2 * HOUR, ticks: [{ t: t0 + 2 * HOUR, v: 6 }] });
+  check("merge drops NaN tick in union", m3.ticks.every((p) => Number.isFinite(p.v)));
 }
 
 if (fail.length) {
