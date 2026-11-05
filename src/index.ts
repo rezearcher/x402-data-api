@@ -2572,6 +2572,20 @@ export function buildAgentJson(origin: string, payTo: string): Record<string, un
             return { network: label, asset: "USDC", contract: meta ? meta.asset : "" };
           }),
         ],
+        // Payment schemes we honor. Every paid route settles the canonical "exact"
+        // scheme; the highest-frequency DATA poller lanes ALSO advertise the canonical
+        // "upto" scheme (Permit2 authorize-a-ceiling, settle-actual) at the same price,
+        // so a stock x402 client that natively constructs upto/session payments can pay
+        // us without the proprietary X-Session-Token rail. Routes derived from the live
+        // gate's interop set (no hand-kept list); verify per route in its 402 accepts[].
+        schemes: [
+          { scheme: "exact", routes: "all paid routes" },
+          {
+            scheme: "upto",
+            routes: UPTO_INTEROP_ROUTES.map((k) => k.replace(/^GET\s+/, "")),
+            note: "canonical x402 upto (Permit2 authorize-ceiling, settle-actual) at the same price as exact; CDP-facilitator settled on base/polygon/arbitrum",
+          },
+        ],
         // The prepaid session-cap rail (shipped): pay one USDC cap, then call any
         // paid route with an X-Session-Token header and NO per-call signature —
         // the capability a high-frequency polling agent is looking for. Surfaced

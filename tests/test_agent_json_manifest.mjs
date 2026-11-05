@@ -84,6 +84,18 @@ eq(sb.tiers.find((t) => t.endpoint === "/x402/session").cap.amount, 0.05, "defau
 eq(sb.tiers.find((t) => t.endpoint === "/x402/session/plus").cap.amount, 0.5, "plus cap $0.50");
 eq(sb.tiers.find((t) => t.endpoint === "/x402/session/max").cap.amount, 5.0, "max cap $5.00");
 
+// (3b) scheme interoperability: exact everywhere + canonical upto on the high-freq lanes.
+const schemes = m.payments.x402.schemes;
+ok(Array.isArray(schemes) && schemes.length >= 2, "payments.x402.schemes present (exact + upto)");
+const exactS = schemes.find((s) => s.scheme === "exact");
+const uptoS = schemes.find((s) => s.scheme === "upto");
+ok(exactS, "exact scheme declared");
+ok(uptoS && Array.isArray(uptoS.routes), "upto scheme declared with a routes list");
+for (const r of ["/crypto/prices", "/crypto/funding", "/defi/yields"]) {
+  ok(uptoS.routes.includes(r), `upto advertised on ${r}`);
+}
+ok(!uptoS.routes.some((r) => r.startsWith("GET ")), "upto route list is bare paths (no method prefix)");
+
 // (4) intents derived from the REAL catalog, one per route, with required fields.
 ok(Array.isArray(m.intents) && m.intents.length === ROUTE_CATALOG.length,
   `one intent per catalog route (got ${m.intents.length}, catalog ${ROUTE_CATALOG.length})`);
