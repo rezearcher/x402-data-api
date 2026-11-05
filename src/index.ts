@@ -3827,10 +3827,19 @@ app.get("/defi/yields/preview", async (c) => {
   if (!hasQuery) {
     try {
       const all = await fetchDefiYields(20, undefined, undefined, false);
+      // Lead the teaser with provenance too, so even the catalog/marketing-linked
+      // top-1 sample demonstrates the APY trajectory a point-in-time feed cannot.
+      const sample = await Promise.all(
+        all.slice(0, 1).map(async (p) => {
+          if (!p.pool || typeof p.apy !== "number" || !Number.isFinite(p.apy)) return p;
+          const prov = await archiveProvenance(c, "yield", p.pool, p.apy);
+          return prov ? { ...p, provenance: prov } : p;
+        }),
+      );
       return c.json({
-        preview: all.slice(0, 1),
+        preview: sample,
         total_available: all.length,
-        note: "Found a high-APY pool? Get the go/no-go no raw yield feed returns: pass its ?pool= to /defi/yield-entry-verdict for a packaged SUSTAINABLE|DECAYING|OUTLIER|AVOID verdict + 0-100 risk score ($0.01; see _greyridge.see_also for a one-click link to the pool above). Free top-1 sample here. Pass ?project=/?chain=/?stable=true/?limit= to pull the FULL ranked+filtered list free (3/IP/day), or GET /defi/yields?limit=20 ($0.001) — ranked APY trend+IL risk+stability forecast+TVL, keyless x402 on Base.",
+        note: "This pool carries a provenance archive (tracked_since / ticks / APY trajectory) no raw yield feed can reconstruct. Found a high-APY pool? Get the go/no-go: pass its ?pool= to /defi/yield-entry-verdict for a packaged SUSTAINABLE|DECAYING|OUTLIER|AVOID verdict + 0-100 risk score ($0.01; see _greyridge.see_also for a one-click link to the pool above). Free top-1 sample here. Pass ?project=/?chain=/?stable=true/?limit= to pull the FULL ranked+filtered list free (3/IP/day), or GET /defi/yields?limit=20 ($0.001) — ranked APY trend+IL risk+stability forecast+TVL, keyless x402 on Base.",
       });
     } catch (e) {
       return c.json({ error: (e as Error).message }, { status: 502 });
@@ -3848,13 +3857,23 @@ app.get("/defi/yields/preview", async (c) => {
       return c.json({ preview: all.slice(0, 1), total_available: all.length, trial: { full_pulls_left_today: 0 }, paid: paidUrl, price_usdc: "0.001", note: "Free full-list trial exhausted for today (3/IP/day); showing top-1 sample. Paid (unmetered): GET /defi/yields?limit=20&project=<p> ($0.001)." });
     }
     const pools = await fetchDefiYields(limit, project, chain, stable, sort);
+    // Write-through (throttled + degrade-open): the pools an agent actually
+    // queries get archived too, so the provenance it sees on the trial is the
+    // real compounding history — and the paid call it converts to inherits it.
+    const data = await Promise.all(
+      pools.map(async (p) => {
+        if (!p.pool || typeof p.apy !== "number" || !Number.isFinite(p.apy)) return p;
+        const prov = await archiveProvenance(c, "yield", p.pool, p.apy);
+        return prov ? { ...p, provenance: prov } : p;
+      }),
+    );
     return c.json({
-      data: pools,
+      data,
       total_available: pools.length,
       trial: t.left === null ? undefined : { full_pulls_left_today: t.left },
       paid: paidUrl,
       price_usdc: "0.001",
-      note: `Free full-list trial — the complete paid ranked+filtered result for your query${t.left === null ? "" : ` (${t.left} left today, 3/IP/day)`}. Wire it unmetered: GET /defi/yields?limit=20 ($0.001), keyless x402 on Base.`,
+      note: `Free full-list trial — the complete paid ranked+filtered result for your query${t.left === null ? "" : ` (${t.left} left today, 3/IP/day)`}, including the per-pool provenance archive (tracked_since / APY trajectory) no point-in-time feed can reconstruct. Wire it unmetered: GET /defi/yields?limit=20 ($0.001), keyless x402 on Base.`,
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
