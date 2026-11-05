@@ -8218,6 +8218,23 @@ app.get("/defi/yields", async (c) => {
   try {
     const pools = await fetchDefiYields(limit, project, chain, stable, sort);
 
+    // Lead with provenance — the one axis DefiLlama's free /pools and every x402
+    // yield seller (Yield.xyz, the clones) cannot match: they return the pool's
+    // APY right now; we return "we've tracked THIS pool since <t>, here is its APY
+    // trajectory and change-since-first". History you never stored cannot be
+    // reconstructed after the fact. Keyed by the stable DefiLlama poolId, value =
+    // live APY. Writes are throttled + degrade-open, so an enriched array is
+    // best-effort: a pool without `.provenance` still carries its full APY fields
+    // (never a breaking change to the array shape). Skipped when apy is non-finite
+    // (a junk reading must not seed a series — appendTick guards it too).
+    const enriched = await Promise.all(
+      pools.map(async (p) => {
+        if (!p.pool || typeof p.apy !== "number" || !Number.isFinite(p.apy)) return p;
+        const prov = await archiveProvenance(c, "yield", p.pool, p.apy);
+        return prov ? { ...p, provenance: prov } : p;
+      }),
+    );
+
     console.log(
       JSON.stringify({
         event: "paid_request",
@@ -8234,7 +8251,7 @@ app.get("/defi/yields", async (c) => {
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /defi/yields", rail, makeUsageCounter(c.env)));
 
-    return c.json(pools);
+    return c.json(enriched);
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
