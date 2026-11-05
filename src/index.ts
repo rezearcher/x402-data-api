@@ -44,6 +44,18 @@ import { keccak256, stringToHex } from "viem";
 import { DurableObject } from "cloudflare:workers";
 import { createCdpFacilitator } from "./facilitator";
 import {
+  isSolanaSignature,
+  isSolanaAddress,
+  computeSvmReconcile,
+  decodeSvmUsdcDeltas,
+  decodeSolanaMemos,
+  solanaGetTransaction,
+  DEFAULT_SOLANA_RPCS,
+  SOLANA_USDC_MINT,
+  SVM_USDC_DECIMALS,
+  type SvmReconcileResult,
+} from "./svm.ts";
+import {
   trackPaidRequest,
   getMetrics,
   trackFunnelEvent,
@@ -13976,13 +13988,96 @@ export async function x402ReceiptVerify(
   return { ...r, attack_class_map: computeAttackClassMap(r) };
 }
 
+// ── Solana (SVM) receipt-verify — cross-rail counterpart ────────────────────
+// Reads a Solana tx from two independent public RPC providers (keyless) and
+// cross-confirms the reconcile: if the two providers DISAGREE on the settlement
+// content (per-owner USDC delta fingerprint) we fail CLOSED (UNVERIFIED /
+// rpc-disagreement), the same integrity bar as the EVM path. A single reachable
+// provider degrades open but is disclosed (confirmation=single-source).
+//
+// payTo resolution for the SVM rail: a caller-supplied Solana owner wins;
+// otherwise the configured SOLANA_PAY_TO (self-config). Absent BOTH, the
+// reconcile returns UNVERIFIED-by-construction so we never emit a false Solana
+// settlement proof while no Solana payTo is advertised/configured.
+export async function x402SvmReceiptVerify(
+  signature: string,
+  env: Env,
+  callerPayTo: string | null = null,
+  callerExpectUsdc: string | null = null,
+): Promise<SvmReconcileResult & { confirmation: "dual-confirmed" | "single-source" | "rpc-disagreement"; rpc_sources: string[]; scope_note: string; checked_at: string }> {
+  const checked_at = new Date().toISOString();
+  const scope_note =
+    "reconciles a Solana-mainnet settlement tx against an advertised SPL-USDC payTo owner + amount using the per-owner USDC token-balance delta (meta.pre/postTokenBalances), across two independent public RPC providers and failing closed if they disagree; read-only, confirms what already settled — it does not move funds or guarantee off-chain delivery. A settlement bound to a recipient requires an advertised payTo owner; absent one the verdict is UNVERIFIED by construction.";
+  const payToOwner = callerPayTo && isSolanaAddress(callerPayTo) ? callerPayTo
+    : (env.SOLANA_PAY_TO && isSolanaAddress(env.SOLANA_PAY_TO) ? env.SOLANA_PAY_TO : null);
+  const advertisedSource: SvmReconcileResult["advertised"]["source"] =
+    callerPayTo && isSolanaAddress(callerPayTo) ? "caller" : (payToOwner ? "self-config" : null);
+  const expectAtomic = usdcDollarsToAtomic(callerExpectUsdc);
+  // The SVM USDC network we settle on via the CDP facilitator (see /x402/networks).
+  const network = env.SOLANA_PAY_TO ? `solana:${SOLANA_USDC_MINT}` : "solana:mainnet";
+
+  const rpcs = DEFAULT_SOLANA_RPCS;
+  const urlA = rpcs[0];
+  const urlB = rpcs.find((u) => u !== urlA) ?? null;
+  const host = (u: string) => { try { return new URL(u).host; } catch { return u; } };
+  const get = async (u: string): Promise<{ ok: true; tx: unknown | null } | { ok: false; err: string }> => {
+    try { return { ok: true, tx: await solanaGetTransaction(u, signature) }; }
+    catch (e) { return { ok: false, err: e instanceof Error ? e.message : String(e) }; }
+  };
+  const [ra, rb] = await Promise.all([get(urlA), urlB ? get(urlB) : Promise.resolve({ ok: false as const, err: "one provider" })]);
+
+  let txJson: unknown | null = null;
+  let confirmation: "dual-confirmed" | "single-source" | "rpc-disagreement" = "single-source";
+  let rpc_sources: string[] = [];
+
+  if (ra.ok && rb.ok && urlB) {
+    rpc_sources = [host(urlA), host(urlB)];
+    // Fingerprint the settlement-relevant facts from each provider and compare.
+    const fp = (t: unknown | null) => {
+      const r = computeSvmReconcile({ signature, network, txJson: t, payToOwner, expectAtomic, advertisedSource });
+      return `${r.verdict}|${r.tx_status}|${r.matched_transfer?.amount_atomic ?? "-"}|${r.matched_transfer?.owner ?? "-"}`;
+    };
+    if (fp(ra.tx) === fp(rb.tx)) { txJson = ra.tx; confirmation = "dual-confirmed"; }
+    else {
+      return { ...computeSvmReconcile({ signature, network, txJson: null, payToOwner, expectAtomic, advertisedSource }),
+        verdict: "UNVERIFIED", confirmation: "rpc-disagreement", rpc_sources, scope_note, checked_at,
+        note: `two independent Solana RPC providers returned DIFFERENT settlement content for this signature (${host(urlA)} vs ${host(urlB)}) — failing closed; do not treat as settled until they agree. Retry shortly.` };
+    }
+  } else if (ra.ok || rb.ok) {
+    const good = ra.ok ? ra : (rb as { ok: true; tx: unknown | null });
+    txJson = good.tx; confirmation = "single-source"; rpc_sources = [host(ra.ok ? urlA : (urlB as string))];
+  } else {
+    return { ...computeSvmReconcile({ signature, network, txJson: null, payToOwner, expectAtomic, advertisedSource }),
+      verdict: "UNVERIFIED", confirmation: "single-source", rpc_sources: [], scope_note, checked_at,
+      note: `could not read the transaction from Solana mainnet (${ra.ok ? "" : ra.err}) — NOT proven absent; retry shortly` };
+  }
+
+  const result = computeSvmReconcile({ signature, network, txJson, payToOwner, expectAtomic, advertisedSource });
+  return { ...result, confirmation, rpc_sources, scope_note, checked_at };
+}
+
 app.get(ATTACK_TAXONOMY_WELL_KNOWN, (c) =>
   c.json(buildAttackTaxonomyDoc(new URL(c.req.url).origin)));
 
 app.get("/x402/receipt-verify", async (c) => {
   const tx = c.req.query("tx") ?? "";
+  // Cross-rail: a base58 Solana tx signature routes to the SVM reconcile. Grey
+  // Ridge is the only independent x402 verifier that reconciles BOTH rails
+  // (Base USDC + Solana SPL-USDC); the live x402 growth surface is ~66% Solana.
+  if (isSolanaSignature(tx)) {
+    const sPayto = c.req.query("payto") ?? null;
+    if (sPayto !== null && !isSolanaAddress(sPayto)) {
+      return c.json({ error: "payto (optional) for a Solana signature must be a base58 32-byte owner address" }, { status: 400 });
+    }
+    const sExpect = c.req.query("expect") ?? null;
+    const sResult = await x402SvmReceiptVerify(tx, c.env, sPayto, sExpect);
+    console.log(JSON.stringify({ event: "paid_request", endpoint: "/x402/receipt-verify", rail: "svm", tx, verdict: sResult.verdict, settled: sResult.settled, tx_status: sResult.tx_status, confirmation: sResult.confirmation, ts: sResult.checked_at }));
+    const sRail = c.get("rail") ?? "x402-paid";
+    fireAndForget(c, trackPaidRequest("GET /x402/receipt-verify", sRail, makeUsageCounter(c.env)));
+    return c.json(sResult);
+  }
   if (!HASH_RE.test(tx)) {
-    return c.json({ error: "tx query param must be a 0x-prefixed 32-byte Base-mainnet transaction hash" }, { status: 400 });
+    return c.json({ error: "tx query param must be a 0x-prefixed 32-byte Base-mainnet transaction hash (or a base58 Solana tx signature)" }, { status: 400 });
   }
   const url = c.req.query("url") ?? null;
   if (url !== null && !/^https?:\/\//i.test(url)) {
