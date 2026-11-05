@@ -13961,7 +13961,7 @@ app.get("/x402/receipt-verify", async (c) => {
 // preflight preview).
 function receiptVerifySample(): ReceiptVerifyResult {
   const payTo = "0x2222222222222222222222222222222222222222";
-  return {
+  const s: ReceiptVerifyResult = {
     tx: "0x<your-settlement-tx-hash>",
     url: "https://seller.example/x402/data",
     verdict: "SETTLED",
@@ -14018,6 +14018,7 @@ function receiptVerifySample(): ReceiptVerifyResult {
     scope_note: RECEIPT_VERIFY_SCOPE_NOTE,
     checked_at: new Date().toISOString(),
   };
+  return { ...s, attack_class_map: computeAttackClassMap(s) };
 }
 // ---------------------------------------------------------------------------
 // x402 REPEAT-DEMAND (/x402/repeat-demand) — the "do this seller's payers come
