@@ -1615,6 +1615,7 @@ ${provisionMeta}
     <li><a href="/.well-known/agent-card.json">A2A Agent Card</a></li>
     <li><a href="/.well-known/erc-8004.json">ERC-8004 agent registration (x402-payable)</a></li>
     <li><a href="/.well-known/x402-settlement-attestation.json">x402 settlement attestation format (draft-hopley, JCS/RFC8785)</a></li>
+    <li><a href="/.well-known/x402-attack-taxonomy.json">x402 attack-class taxonomy map (USENIX Security 2026, arXiv:2607.19545)</a></li>
     <li><a href="/mcp">/mcp</a></li>
     <li><a href="/miniapp">Base Token Gate &mdash; free GO/HOLD/BLOCK honeypot check (Farcaster Mini App)</a></li>
     <li><a href="https://t.me/GreyRidgeGateBot">Telegram bot &mdash; paste a Base token, get GO/HOLD/BLOCK in-chat (@GreyRidgeGateBot)</a></li>
@@ -12971,6 +12972,10 @@ export interface ReceiptVerifyResult {
   // — present ONLY when the verdict is an attestable settlement (SETTLED/REVERTED);
   // null otherwise. This is the field ERC-8004/Vouch/TrustGate can consume.
   attestation?: SettlementAttestation | null;
+  // Grounds each verdict above in the peer-reviewed x402 security taxonomy
+  // (USENIX Security 2026 arXiv:2607.19545 + Ling et al + x402scope) — the
+  // credibility axis. Derived, no new data gathered. See buildAttackTaxonomyDoc.
+  attack_class_map?: AttackClassMapEntry[];
   basescan: string;
   note: string;
   scope_note: string;
@@ -13543,11 +13548,192 @@ async function fetchLive402PayTo(targetUrl: string): Promise<{ payTo: string | n
   } catch { return { payTo: null, atomic: null, fetched: false }; }
 }
 
+// ── USENIX-2026 ATTACK-CLASS TAXONOMY MAP ────────────────────────────────────
+// Ground every receipt-verify verdict in the PEER-REVIEWED x402 security ruleset
+// rather than reading as "another trust score". The reference work is USENIX
+// Security 2026 (arXiv:2607.19545): a study of 15 facilitators finding 49 rule
+// violations across 8 rules → FOUR attack classes — Free Shopping, Asset Theft,
+// Service Denial, Gas Abuse. The companion threat taxonomy (Ling et al,
+// "Free-Riding the Agentic Web", arXiv:2605.30998) adds cross-resource
+// substitution; the public reference test-suite is x402scope (HexHive), which
+// additionally exercises ERC-1271 / ERC-6492 signature validation.
+//
+// This map states, per published class, WHICH of our already-shipped on-chain
+// checks grounds it and the honest coverage status — including the classes we
+// do NOT actively verify in receipt-verify (out-of-scope-by-design, disclosed,
+// not hidden). It adds NO new data field: every status is derived from the
+// result we already computed. That traceability — not price, not coverage
+// breadth — is the axis competitors (ungrounded "signed opinions", GET-only
+// probes) do not hold. Exported pure for unit tests.
+export type AttackClassStatus =
+  | "verified-clean"          // our on-chain check ran and this axis is clean
+  | "flagged"                 // our on-chain check ran and FOUND a problem here
+  | "unverified"              // our check could not run (degrade-open, disclosed)
+  | "disclosed-weakness"      // a structural weakness of the x402 scheme itself
+  | "backstopped-by-design"   // we don't test it directly but our method can't be fooled by it
+  | "out-of-scope";           // not covered by receipt-verify (sibling pointer / honest none)
+
+export interface AttackClassMapEntry {
+  attack_class: string;       // human-readable class name
+  taxonomy: string;           // the published taxonomy + class identifier
+  rule_refs: string[];        // paper / ruleset citations
+  our_check: string;          // the ReceiptVerifyResult field grounding this class
+  status: AttackClassStatus;
+  verdict: string | null;     // the raw verdict from our_check, when applicable
+  note: string;
+}
+
+export const ATTACK_TAXONOMY_WELL_KNOWN = "/.well-known/x402-attack-taxonomy.json";
+
+// Pure: derive the taxonomy map from an already-assembled receipt result.
+export function computeAttackClassMap(r: ReceiptVerifyResult): AttackClassMapEntry[] {
+  const fc = r.facilitator_consistency;
+  const az = r.authorization;
+  const rb = r.resource_binding;
+
+  // Class I — Free Shopping (verify approves an amount the chain never settles).
+  const freeShopping: AttackClassMapEntry = {
+    attack_class: "Free Shopping",
+    taxonomy: "USENIX Security 2026 attack-class I",
+    rule_refs: ["arXiv:2607.19545", "x402scope: valid_before_offset / verify-ok-settle-fail sweep"],
+    our_check: "facilitator_consistency",
+    verdict: fc.verdict,
+    status: fc.verdict === "SETTLE_DIVERGENCE" ? "flagged" : fc.verdict === "CONSISTENT" ? "verified-clean" : "unverified",
+    note: fc.verdict === "SETTLE_DIVERGENCE"
+      ? `on-chain settled amount DIVERGES from the advertised/verify-approved amount (${fc.direction}) — the free-shopping signature. ${fc.note}`
+      : fc.verdict === "CONSISTENT"
+        ? "the amount settled on-chain matches the advertised amount a facilitator's /verify would approve — no verify/settle divergence on this payment"
+        : "verify/settle consistency could not be reconciled for this tx (no settled amount or no advertised amount to compare)",
+  };
+
+  // Class II — Asset Theft (a replayed / forged transfer authorization spends
+  // funds the payer never re-authorized). Our EIP-3009 AuthorizationUsed-nonce
+  // vs live authorizationState check is exactly this detector, fail-closed.
+  const assetTheft: AttackClassMapEntry = {
+    attack_class: "Asset Theft",
+    taxonomy: "USENIX Security 2026 attack-class II",
+    rule_refs: ["arXiv:2607.19545", "x402scope: nonce-consecutiveness / authorization-replay"],
+    our_check: "authorization",
+    verdict: az.status,
+    status: az.status === "consumed" ? "verified-clean"
+      : az.status === "state-mismatch" ? "flagged"
+      : "unverified",
+    note: az.status === "consumed"
+      ? "the EIP-3009 transfer authorization is CONSUMED in live USDC contract state, cryptographically binding this settlement to a single spent nonce — a replayed/forged authorization to the same payTo would not reconcile"
+      : az.status === "state-mismatch"
+        ? "FORGERY/REPLAY SIGNAL: the receipt's AuthorizationUsed log does not match live USDC authorizationState — failed closed (did not accept as a genuine settlement)"
+        : az.status === "not-eip3009"
+          ? "this tx did not settle via an EIP-3009 authorization (e.g. a direct ERC-20 transfer) — no authorization nonce to replay-check; the Transfer reconciliation still stands"
+          : "authorizationState could not be read / providers disagreed — not cross-confirmed",
+  };
+
+  // Cross-resource substitution — a payment proven for /cheap transplanted as
+  // proof-of-payment for /expensive sharing the same (payTo, amount).
+  const crossResource: AttackClassMapEntry = {
+    attack_class: "Cross-Resource Substitution",
+    taxonomy: "Ling et al. agentic-web taxonomy, 4th flaw class",
+    rule_refs: ["arXiv:2605.30998"],
+    our_check: "resource_binding",
+    verdict: rb.verdict,
+    status: rb.verdict === "DECLARED" ? "verified-clean"
+      : rb.verdict === "RESOURCE_MISMATCH" ? "flagged"
+      : rb.verdict === "SUBSTITUTABLE" ? "disclosed-weakness"
+      : "unverified",
+    note: rb.verdict === "RESOURCE_MISMATCH"
+      ? "the endpoint's live 402 declares a DIFFERENT resource than the paid url — failed closed, this settlement is not accepted as proof of the requested resource"
+      : rb.verdict === "SUBSTITUTABLE"
+        ? "the endpoint's 402 declares no resource, so the EIP-3009 exact scheme (which never signs the resource) leaves this settlement transplantable across any same-(payTo,amount) resource — a scheme-level weakness, disclosed"
+        : rb.verdict === "DECLARED"
+          ? "the endpoint's declared resource matches the paid url (a challenge-level declaration, not a cryptographic commitment — disclosed)"
+          : "no live 402 challenge or paid url available to check resource binding",
+  };
+
+  // ERC-1271 / ERC-6492 smart-wallet signature validation — the case x402scope
+  // specifically tests and a signature-only "trust layer" can mis-handle. We do
+  // not parse the wrapped signature at all: we read the REAL on-chain USDC
+  // Transfer log + the AuthorizationUsed/authorizationState, i.e. the settled
+  // ledger outcome. A contract-wallet (ERC-1271) or counterfactual-wallet
+  // (ERC-6492) signature that a facilitator's /verify mis-validates still either
+  // produces a real Transfer (which we reconcile) or does not (NO_TRANSFER) — so
+  // a signature-validation bug structurally cannot make us accept a non-settlement.
+  const smartWalletSig: AttackClassMapEntry = {
+    attack_class: "Smart-Wallet Signature Validation (ERC-1271/ERC-6492)",
+    taxonomy: "x402scope signature-validation ruleset",
+    rule_refs: ["ERC-1271", "ERC-6492", "x402scope"],
+    our_check: "on-chain Transfer + authorizationState (not the wrapped signature)",
+    verdict: r.tx_status,
+    status: "backstopped-by-design",
+    note: "we reconcile the settled on-chain USDC Transfer and live authorizationState, never the off-chain wrapped signature — a contract/counterfactual-wallet signature-validation bug cannot make us accept a payment that did not actually settle",
+  };
+
+  // Class III — Service Denial (facilitator verifies-ok then refuses/stalls
+  // settlement). receipt-verify is post-settlement, so a never-settled payment
+  // only appears here as NO_TRANSFER/NOT_FOUND; the dedicated pre-payment
+  // liveness/flapping check lives in /x402/preflight?samples=N.
+  const serviceDenial: AttackClassMapEntry = {
+    attack_class: "Service Denial",
+    taxonomy: "USENIX Security 2026 attack-class III",
+    rule_refs: ["arXiv:2607.19545"],
+    our_check: "verdict (terminal) + /x402/preflight reliability burst (pre-payment)",
+    verdict: r.verdict,
+    status: (r.verdict === "NO_TRANSFER" || r.verdict === "NOT_FOUND") ? "flagged" : "out-of-scope",
+    note: (r.verdict === "NO_TRANSFER" || r.verdict === "NOT_FOUND")
+      ? "no settlement is on-chain for this tx/url — the on-chain footprint of a denied settlement (this is receipt-verify's only view of the class)"
+      : "facilitator liveness/latency is not assessed post-settlement here — use /x402/preflight?samples=N for the pre-payment service-denial (flapping/latency) check",
+  };
+
+  // Class IV — Gas Abuse (facilitator griefs via relay gas). It does not change
+  // the USDC amount credited to payTo, so it cannot corrupt the amount we
+  // reconcile; out-of-scope-by-design and disclosed as such.
+  const gasAbuse: AttackClassMapEntry = {
+    attack_class: "Gas Abuse",
+    taxonomy: "USENIX Security 2026 attack-class IV",
+    rule_refs: ["arXiv:2607.19545"],
+    our_check: "n/a (settlement-amount reconcile is gas-independent)",
+    verdict: null,
+    status: "out-of-scope",
+    note: "facilitator gas griefing does not alter the USDC amount credited to payTo, so it cannot corrupt the settlement reconciliation — out of scope for an on-chain settlement verifier, disclosed",
+  };
+
+  return [freeShopping, assetTheft, crossResource, smartWalletSig, serviceDenial, gasAbuse];
+}
+
+// FREE reference document (no per-tx data): the static mapping of our checks →
+// the published rulesets, so any verdict is independently traceable to the
+// peer-reviewed taxonomy. Served at ATTACK_TAXONOMY_WELL_KNOWN. Exported pure.
+export function buildAttackTaxonomyDoc(origin: string) {
+  return {
+    format: "x402-attack-class-taxonomy-01",
+    issuer: CERT_ISSUER,
+    summary:
+      "How Grey Ridge's /x402/receipt-verify on-chain checks map to the peer-reviewed x402 facilitator-security taxonomy. Every live verdict carries an attack_class_map grounding it in these rules; this document is the static reference.",
+    primary_reference: {
+      title: "Security analysis of x402 payment facilitators (15 facilitators, 49 violations, 8 rules, 4 attack classes)",
+      id: "arXiv:2607.19545",
+      venue: "USENIX Security 2026",
+    },
+    additional_references: [
+      { title: "Free-Riding the Agentic Web (cross-resource substitution)", id: "arXiv:2605.30998" },
+      { title: "x402scope reference test-suite (verify/settle, EVM+Solana, ERC-1271/ERC-6492)", id: "github.com/HexHive/x402scope" },
+    ],
+    classes: [
+      { attack_class: "Free Shopping", taxonomy: "USENIX 2026 class I", our_check: "facilitator_consistency", coverage: "verified per-tx: reconciles real on-chain settled amount vs advertised/verify-approved amount; SETTLE_DIVERGENCE = flagged" },
+      { attack_class: "Asset Theft", taxonomy: "USENIX 2026 class II", our_check: "authorization (EIP-3009 AuthorizationUsed nonce vs live authorizationState)", coverage: "verified per-tx, fail-closed: a replayed/forged authorization to the same payTo does not reconcile against consumed-nonce state" },
+      { attack_class: "Cross-Resource Substitution", taxonomy: "Ling et al. 4th flaw class", our_check: "resource_binding", coverage: "verified per-tx: reconciles the endpoint's live-402 declared resource against the paid url; RESOURCE_MISMATCH = flagged, SUBSTITUTABLE = disclosed scheme weakness" },
+      { attack_class: "Smart-Wallet Signature Validation (ERC-1271/ERC-6492)", taxonomy: "x402scope ruleset", our_check: "on-chain Transfer + authorizationState (never the wrapped signature)", coverage: "backstopped-by-design: we read the settled ledger, so a signature-validation bug cannot make us accept a non-settlement" },
+      { attack_class: "Service Denial", taxonomy: "USENIX 2026 class III", our_check: "verdict (terminal) + /x402/preflight?samples=N (pre-payment)", coverage: "out-of-scope post-settlement; a denied settlement shows as NO_TRANSFER/NOT_FOUND; pre-payment liveness/flapping is checked in /x402/preflight" },
+      { attack_class: "Gas Abuse", taxonomy: "USENIX 2026 class IV", our_check: "n/a", coverage: "out-of-scope-by-design: gas griefing does not change the USDC amount credited to payTo, so it cannot corrupt the settlement reconcile" },
+    ],
+    live_endpoint: `${origin}/x402/receipt-verify`,
+    note: "Static reference only. 'clean' on an axis means our on-chain check found no divergence for the reconciled tx — it is not a guarantee of off-chain resource delivery. Classes marked out-of-scope are disclosed, not silently omitted.",
+  };
+}
+
 // I/O wrapper: read the receipt from Base mainnet and reconcile it against the
 // advertised payTo + amount. Degrade-open throughout — an RPC failure yields
 // UNVERIFIED (the tx is NOT proven absent), distinct from NOT_FOUND (the RPC
 // positively returned null for this hash).
-export async function x402ReceiptVerify(
+async function x402ReceiptVerifyCore(
   tx: string,
   url: string | null,
   callerPayTo: string | null = null,
@@ -13731,6 +13917,22 @@ export async function x402ReceiptVerify(
   }
   return { ...result0, attestation };
 }
+
+// Public wrapper: run the full reconcile, then attach the USENIX-2026
+// attack-class taxonomy map (pure, derived) so every verdict is traceable to
+// the peer-reviewed ruleset. Keeps the single public name tests/handlers call.
+export async function x402ReceiptVerify(
+  tx: string,
+  url: string | null,
+  callerPayTo: string | null = null,
+  callerExpectUsdc: string | null = null,
+): Promise<ReceiptVerifyResult> {
+  const r = await x402ReceiptVerifyCore(tx, url, callerPayTo, callerExpectUsdc);
+  return { ...r, attack_class_map: computeAttackClassMap(r) };
+}
+
+app.get(ATTACK_TAXONOMY_WELL_KNOWN, (c) =>
+  c.json(buildAttackTaxonomyDoc(new URL(c.req.url).origin)));
 
 app.get("/x402/receipt-verify", async (c) => {
   const tx = c.req.query("tx") ?? "";

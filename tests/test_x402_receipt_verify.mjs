@@ -33,6 +33,8 @@ const {
   extractResourceUrl,
   computeFacilitatorConsistency,
   preflightFacilitatorConsistency,
+  computeAttackClassMap,
+  buildAttackTaxonomyDoc,
   makeRoutes,
   ROUTE_CATALOG,
 } = await import("../src/index.ts");
@@ -643,6 +645,61 @@ await check("preflightFacilitatorConsistency: no price_accuracy -> bare post-pay
   assert.strictEqual(fc.verdict, "UNVERIFIED");
   assert.strictEqual(fc.advertised_atomic, null);
   assert.ok(/only observable AFTER payment/i.test(fc.note));
+});
+
+// ── USENIX-2026 attack-class taxonomy map ───────────────────────────────────
+function mkResult(over = {}) {
+  return {
+    tx: "0x" + "ab".repeat(32), url: "https://x.example/paid", verdict: "SETTLED", settled: true,
+    network: "eip155:8453", tx_status: "success",
+    advertised: { payTo: PAYTO, amount_atomic: 1000, amount_usdc: "0.001", source: "live-402" },
+    matched_transfer: null, usdc_transfers: [], block: 1, confirmation: "dual-confirmed", rpc_sources: ["a", "b"],
+    authorization: { status: "consumed", authorizer: PAYTO, nonce: "0x1", events: 1, confirmation: "dual-confirmed", note: "" },
+    resource_binding: { verdict: "DECLARED", scheme: "exact", scheme_binds_resource: false, challenge_resource: "https://x.example/paid", requested_url: "https://x.example/paid", matches: true, nonce_consumed: true, note: "" },
+    facilitator_consistency: { verdict: "CONSISTENT", phase: "post-payment", advertised_atomic: 1000, settled_atomic: 1000, delta_atomic: 0, direction: "match", attack_class: "", note: "" },
+    basescan: "", note: "", scope_note: "", checked_at: new Date().toISOString(),
+    ...over,
+  };
+}
+await check("attack_class_map: clean SETTLED maps all 6 published classes, class I/II/cross-resource verified-clean", () => {
+  const m = computeAttackClassMap(mkResult());
+  assert.strictEqual(m.length, 6);
+  const by = Object.fromEntries(m.map((e) => [e.attack_class, e]));
+  assert.strictEqual(by["Free Shopping"].status, "verified-clean");
+  assert.strictEqual(by["Asset Theft"].status, "verified-clean");
+  assert.strictEqual(by["Cross-Resource Substitution"].status, "verified-clean");
+  assert.strictEqual(by["Smart-Wallet Signature Validation (ERC-1271/ERC-6492)"].status, "backstopped-by-design");
+  assert.strictEqual(by["Gas Abuse"].status, "out-of-scope");
+  assert.ok(m.every((e) => e.rule_refs.length > 0 && e.taxonomy));
+  assert.ok(by["Free Shopping"].rule_refs.includes("arXiv:2607.19545"));
+});
+await check("attack_class_map: SETTLE_DIVERGENCE flags Free Shopping", () => {
+  const m = computeAttackClassMap(mkResult({ facilitator_consistency: { verdict: "SETTLE_DIVERGENCE", phase: "post-payment", advertised_atomic: 1000, settled_atomic: 500, delta_atomic: -500, direction: "under_settle", attack_class: "", note: "n" } }));
+  assert.strictEqual(m.find((e) => e.attack_class === "Free Shopping").status, "flagged");
+});
+await check("attack_class_map: authorization state-mismatch flags Asset Theft (forgery/replay)", () => {
+  const m = computeAttackClassMap(mkResult({ authorization: { status: "state-mismatch", authorizer: PAYTO, nonce: "0x1", events: 1, confirmation: "dual-confirmed", note: "" } }));
+  assert.strictEqual(m.find((e) => e.attack_class === "Asset Theft").status, "flagged");
+});
+await check("attack_class_map: resource_binding SUBSTITUTABLE is disclosed-weakness (scheme flaw, not a per-tx fail)", () => {
+  const m = computeAttackClassMap(mkResult({ resource_binding: { verdict: "SUBSTITUTABLE", scheme: "exact", scheme_binds_resource: false, challenge_resource: null, requested_url: "u", matches: null, nonce_consumed: true, note: "" } }));
+  assert.strictEqual(m.find((e) => e.attack_class === "Cross-Resource Substitution").status, "disclosed-weakness");
+});
+await check("attack_class_map: NO_TRANSFER verdict surfaces Service Denial on-chain footprint", () => {
+  const m = computeAttackClassMap(mkResult({ verdict: "NO_TRANSFER", settled: false }));
+  assert.strictEqual(m.find((e) => e.attack_class === "Service Denial").status, "flagged");
+});
+await check("attack_class_map: not-eip3009 authorization -> Asset Theft unverified (no nonce to replay-check)", () => {
+  const m = computeAttackClassMap(mkResult({ authorization: { status: "not-eip3009", authorizer: null, nonce: null, events: 0, confirmation: "n/a", note: "" } }));
+  assert.strictEqual(m.find((e) => e.attack_class === "Asset Theft").status, "unverified");
+});
+await check("buildAttackTaxonomyDoc: static reference cites USENIX + lists all 6 classes + live endpoint", () => {
+  const d = buildAttackTaxonomyDoc("https://api.example");
+  assert.strictEqual(d.primary_reference.id, "arXiv:2607.19545");
+  assert.strictEqual(d.classes.length, 6);
+  assert.ok(d.live_endpoint.endsWith("/x402/receipt-verify"));
+  assert.ok(d.additional_references.some((r) => r.id === "arXiv:2605.30998"));
+  assert.ok(/clean.*not a guarantee|not a guarantee of off-chain/i.test(d.note));
 });
 
 console.log(`\n${pass} passed`);
