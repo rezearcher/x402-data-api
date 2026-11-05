@@ -48,6 +48,42 @@ eq(net.network, "base", "network label is 'base' (not CAIP) per directory schema
 eq(net.asset, "USDC", "asset USDC");
 ok(/^0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913$/i.test(net.contract), "Base USDC contract");
 
+// (3b) multi-network discovery: the manifest advertises EVERY network we can
+// actually settle on (Base + the facilitator-supported extra EVM chains our same
+// payTo receives native USDC on), so a routing agent on Polygon/Arbitrum sees it
+// can pay here instead of bouncing off a Base-only manifest.
+const nets = m.payments.x402.networks;
+ok(Array.isArray(nets) && nets.length >= 3, `>=3 settlement networks advertised (got ${nets.length})`);
+const labels = nets.map((n) => n.network);
+ok(labels.includes("base"), "base network advertised");
+ok(labels.includes("polygon"), "polygon network advertised");
+ok(labels.includes("arbitrum"), "arbitrum network advertised");
+for (const n of nets) {
+  eq(n.asset, "USDC", `network ${n.network} settles USDC`);
+  ok(/^0x[0-9a-fA-F]{40}$/.test(n.contract), `network ${n.network} has a USDC contract`);
+}
+// extra networks carry the correct native USDC contract (no drift from settlement)
+const poly = nets.find((n) => n.network === "polygon");
+ok(/^0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359$/i.test(poly.contract), "Polygon native USDC contract");
+const arb = nets.find((n) => n.network === "arbitrum");
+ok(/^0xaf88d065e77c8cC2239327C5EDb3A432268e5831$/i.test(arb.contract), "Arbitrum native USDC contract");
+
+// (3c) the prepaid session-cap rail is surfaced at discovery time so a
+// high-frequency poller chooses it, not discovers it only after per-call friction.
+const sb = m.payments.x402.session_billing;
+ok(sb && typeof sb.description === "string" && sb.description.length > 0, "session_billing present with description");
+eq(sb.open_endpoint, "/x402/session", "session opener endpoint");
+eq(sb.balance_check, "/x402/session/status", "free session balance check");
+ok(Array.isArray(sb.tiers) && sb.tiers.length === 3, "three session tiers");
+for (const t of sb.tiers) {
+  ok(typeof t.endpoint === "string" && t.endpoint.startsWith("/x402/session"), `session tier endpoint: ${t.endpoint}`);
+  ok(t.cap && typeof t.cap.amount === "number" && t.cap.currency === "USDC", `session tier cap {amount,USDC}: ${t.endpoint}`);
+}
+// caps match the SESSION_TIERS source of truth
+eq(sb.tiers.find((t) => t.endpoint === "/x402/session").cap.amount, 0.05, "default cap $0.05");
+eq(sb.tiers.find((t) => t.endpoint === "/x402/session/plus").cap.amount, 0.5, "plus cap $0.50");
+eq(sb.tiers.find((t) => t.endpoint === "/x402/session/max").cap.amount, 5.0, "max cap $5.00");
+
 // (4) intents derived from the REAL catalog, one per route, with required fields.
 ok(Array.isArray(m.intents) && m.intents.length === ROUTE_CATALOG.length,
   `one intent per catalog route (got ${m.intents.length}, catalog ${ROUTE_CATALOG.length})`);

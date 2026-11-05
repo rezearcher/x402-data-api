@@ -175,6 +175,15 @@ const EXTRA_NETWORK_USDC: Record<string, { asset: string; name: string; version:
   "eip155:137": { asset: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", name: "USD Coin", version: "2", decimals: 6 },
   "eip155:42161": { asset: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", name: "USD Coin", version: "2", decimals: 6 },
 };
+// Human-readable network label for the agent.json discovery manifest (the spec's
+// `payments.x402.networks[].network` reads as a short name, not a CAIP-2 id).
+// Presentation only — degrades open to the raw eip155 id for any network added to
+// EXTRA_EVM_SETTLEMENT_NETWORKS without a label, so it can never omit a settleable
+// network from discovery.
+const AGENTJSON_NETWORK_LABEL: Record<string, string> = {
+  "eip155:137": "polygon",
+  "eip155:42161": "arbitrum",
+};
 
 // Short human-readable route name for Bazaar discovery (e.g. "/pm/markets" -> "PM Markets").
 function shortRouteName(p: string): string {
@@ -2521,9 +2530,36 @@ export function buildAgentJson(origin: string, payTo: string): Record<string, un
     payout_address: payTo,
     payments: {
       x402: {
+        // Derived from the SAME settlement constants that drive the live 402
+        // accepts[] and /x402/networks — never a hand-kept single-network list
+        // (the no-hardcoded-list law: discovery must not drift from what we can
+        // actually settle). Base is primary; the extra EVM networks are the
+        // facilitator-supported set our same payTo receives native USDC on, so a
+        // routing agent holding USDC on Polygon/Arbitrum sees it can pay us here
+        // instead of bouncing off a Base-only manifest.
         networks: [
           { network: "base", asset: "USDC", contract: USDC_BASE },
+          ...EXTRA_EVM_SETTLEMENT_NETWORKS.map((chain) => {
+            const label = AGENTJSON_NETWORK_LABEL[chain] || chain;
+            const meta = EXTRA_NETWORK_USDC[chain];
+            return { network: label, asset: "USDC", contract: meta ? meta.asset : "" };
+          }),
         ],
+        // The prepaid session-cap rail (shipped): pay one USDC cap, then call any
+        // paid route with an X-Session-Token header and NO per-call signature —
+        // the capability a high-frequency polling agent is looking for. Surfaced
+        // at discovery time so it is chosen, not discovered only after friction.
+        session_billing: {
+          description:
+            "Pay a USDC cap once, then call any paid route with an X-Session-Token header and no per-call signature (collapses the EIP-3009 handshake for high-frequency pollers). 24h TTL.",
+          open_endpoint: "/x402/session",
+          tiers: [
+            { endpoint: "/x402/session", cap: { amount: 0.05, currency: "USDC" } },
+            { endpoint: "/x402/session/plus", cap: { amount: 0.5, currency: "USDC" } },
+            { endpoint: "/x402/session/max", cap: { amount: 5.0, currency: "USDC" } },
+          ],
+          balance_check: "/x402/session/status",
+        },
       },
     },
     provider: "Grey Ridge Signals Group LLC",
