@@ -4181,6 +4181,38 @@ function bazaarTagsFor(routeKey: string): string[] {
 
 export function makeRoutes(payTo: string, extraNetworks: readonly string[] = []) {
   const routes: Record<string, any> = {
+    // Session-cap billing openers (friction-removal): pay the cap ONCE, then
+    // call any paid route behind an X-Session-Token with no per-call signature.
+    "POST /x402/session": {
+      accepts: { scheme: "exact" as const, price: "$0.05", network: NETWORK, payTo },
+      description:
+        "Open a prepaid session: pay a $0.05 USDC cap ONCE, then call any paid route with an `X-Session-Token` header — each call is debited its listed price from the cap with NO per-call signature (collapses the per-call EIP-3009 handshake for high-frequency pollers). Returns {session_token, cap_atomic, remaining_atomic, expires}. 24h TTL. Check balance at GET /x402/session/status.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        queryParams: {},
+        output: { example: { session_token: "grsess_…", cap_usdc: "0.05", cap_atomic: 50000, remaining_atomic: 50000, ttl_seconds: 86400 } },
+      }),
+    },
+    "POST /x402/session/plus": {
+      accepts: { scheme: "exact" as const, price: "$0.50", network: NETWORK, payTo },
+      description:
+        "Open a prepaid session with a $0.50 USDC cap (~500 calls @ $0.001) — one signature, then call any paid route behind an `X-Session-Token` with no per-call signature. Debited per-call at each route's listed price. 24h TTL.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        queryParams: {},
+        output: { example: { session_token: "grsess_…", cap_usdc: "0.5", cap_atomic: 500000, remaining_atomic: 500000, ttl_seconds: 86400 } },
+      }),
+    },
+    "POST /x402/session/max": {
+      accepts: { scheme: "exact" as const, price: "$5.00", network: NETWORK, payTo },
+      description:
+        "Open a prepaid session with a $5.00 USDC cap (bulk / enterprise) — one signature, then call any paid route behind an `X-Session-Token` with no per-call signature. Debited per-call at each route's listed price. 24h TTL.",
+      mimeType: "application/json",
+      extensions: declareDiscoveryExtension({
+        queryParams: {},
+        output: { example: { session_token: "grsess_…", cap_usdc: "5", cap_atomic: 5000000, remaining_atomic: 5000000, ttl_seconds: 86400 } },
+      }),
+    },
     "POST /mcp": {
       accepts: {
         scheme: "exact" as const,
@@ -5881,6 +5913,32 @@ export class CreditLedger extends DurableObject<Env> {
     return { deducted: true, remaining: next };
   }
 
+  /**
+   * Atomically deduct a VARIABLE atomic amount (session-cap billing).
+   *
+   * Sessions denominate the prepaid cap in atomic USDC micro-units (so one
+   * $0.05 cap = 50_000 units) and debit each call the called route's listed
+   * atomic price. Same per-instance serialization guarantee as deductCredit —
+   * concurrent calls on one session token can never over-spend the cap. Fails
+   * in the BUYER's favour: an invalid amount is a no-op (never a phantom
+   * charge), and a short balance denies the call rather than going negative.
+   *
+   * seedIfEmpty lazily seeds the cap the first time this session's DO is
+   * touched after mint (the opener seeds eagerly; this is the belt-and-braces
+   * path for the eventual-consistency window between mint and first use).
+   */
+  async deductAmount(amount: number, seedIfEmpty?: number): Promise<{ deducted: boolean; remaining: number }> {
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return { deducted: false, remaining: await this.getBalance() };
+    }
+    let remaining = await this.ctx.storage.get<number>("credits_remaining");
+    if (remaining === undefined) remaining = seedIfEmpty ?? 0;
+    if (remaining < amount) return { deducted: false, remaining };
+    const next = remaining - amount;
+    await this.ctx.storage.put("credits_remaining", next);
+    return { deducted: true, remaining: next };
+  }
+
   /** Current balance, no side effects. */
   async getBalance(): Promise<number> {
     return (await this.ctx.storage.get<number>("credits_remaining")) ?? 0;
@@ -6620,6 +6678,38 @@ app.use(async (c, next) => {
         }
       }
     }
+  }
+
+  // Session-cap bypass: a request carrying a valid `X-Session-Token` with
+  // remaining prepaid cap is ALREADY PAID — debit the called route's atomic
+  // price from the cap (atomic, via the CreditLedger DO) and serve with NO
+  // per-call signature. This is the friction-removal that collapses the
+  // per-call EIP-3009 handshake for high-frequency pollers. Fails closed and
+  // in the buyer's favour: missing binding / unknown-or-free route / expired
+  // session / exhausted cap all fall through to the normal x402 402 gate (the
+  // buyer re-opens or signs per-call), never serving unmetered. The opener
+  // routes themselves (/x402/session*) are excluded — they must be paid via
+  // x402 so the cap is a real on-chain settlement, not funded from another cap.
+  const sessionTok = c.req.header("X-Session-Token");
+  if (sessionTok && c.env.API_KEYS && c.env.CREDIT_LEDGER && !c.req.path.startsWith("/x402/session")) {
+    try {
+      const raw = await c.env.API_KEYS.get(`${SESSION_KV_PREFIX}${sessionTok}`);
+      if (raw) {
+        const rec = JSON.parse(raw) as SessionRecord;
+        if (rec.expires > Date.now()) {
+          const price = routePriceAtomic(c.req.path, c.req.method, c.env.PAY_TO);
+          if (price !== null && price > 0) {
+            const id = c.env.CREDIT_LEDGER.idFromName(`${SESSION_KV_PREFIX}${sessionTok}`);
+            const result = await c.env.CREDIT_LEDGER.get(id).deductAmount(price, rec.cap_atomic);
+            if (result.deducted) {
+              console.log(JSON.stringify({ evt: "SESSION_CALL", path: c.req.path, debited: price, remaining: result.remaining }));
+              c.set("rail", "x402-session");
+              return next();
+            }
+          }
+        }
+      }
+    } catch { /* session lookup/debit failed — fall through to the normal 402 gate */ }
   }
 
   // Fall through to x402 gate
@@ -10879,6 +10969,92 @@ export function usdcDollarsToAtomic(v: string | number | null | undefined, decim
   return Math.round(n * Math.pow(10, decimals));
 }
 
+// ---------------------------------------------------------------------------
+// Session-cap billing (friction-removal — beats the per-call-signature wall)
+// ---------------------------------------------------------------------------
+// A high-frequency agent (e.g. a yield-poller hitting /defi/yields or checking
+// 50 pools) must sign an EIP-3009 authorization on EVERY paid call under the
+// stock x402 handshake. A rival (ClawMerchants) collapses that to ONE signature
+// by pre-authorizing a USDC cap once, then serving every call debited against
+// the cap behind a session token. We match it with ZERO extra COGS: the opener
+// is itself a normal PAID x402 route (so the cap is a REAL on-chain USDC
+// settlement — fully oracle-aligned, no give-away), and each subsequent call
+// debits the called route's listed atomic price from the cap in the atomic
+// CreditLedger DO (keyed `sess:<token>`), presenting only an `X-Session-Token`
+// header — NO per-call signature. Exhaust or expire → fall through to the
+// normal 402 (re-open). Bounded downside (buyer can only ever consume what they
+// prepaid), uncapped upside (removes the only axis the rival beats us on).
+const SESSION_TTL_SECONDS = 24 * 60 * 60; // sessions live 24h
+const SESSION_KV_PREFIX = "sess:";
+// Opener route key -> prepaid cap in atomic USDC units (6 decimals). Each tier
+// is a fixed-price paid route; the credited cap equals the price paid, so the
+// buyer is never over- or under-credited. Range mirrors the rival's 0.05–50.
+const SESSION_TIERS: Record<string, number> = {
+  "POST /x402/session": 50_000,       // $0.05  — default / high-freq polling
+  "POST /x402/session/plus": 500_000, // $0.50  — ~500 calls @ $0.001
+  "POST /x402/session/max": 5_000_000, // $5.00 — bulk / enterprise
+};
+
+interface SessionRecord {
+  cap_atomic: number;
+  spent_hint?: number; // best-effort last-known debit total (DO is source of truth)
+  created: number;
+  expires: number; // epoch ms
+  payer?: string;
+  network?: string;
+  tier: string;
+}
+
+// Compile the paid-route price table once: "METHOD /path" -> {method, regexp,
+// atomic price}. `:param` segments become `[^/]+` so path-param routes match.
+// Cached per-process; makeRoutes is deterministic for a given payTo.
+let _routePriceCache: { payTo: string; entries: Array<{ method: string; re: RegExp; atomic: number }> } | null = null;
+function compileRoutePrices(payTo: string): Array<{ method: string; re: RegExp; atomic: number }> {
+  const routes = makeRoutes(payTo);
+  const entries: Array<{ method: string; re: RegExp; atomic: number }> = [];
+  for (const key of Object.keys(routes)) {
+    const sp = key.indexOf(" ");
+    if (sp < 0) continue;
+    const method = key.slice(0, sp);
+    const path = key.slice(sp + 1);
+    const acc = (routes as Record<string, any>)[key]?.accepts;
+    const priceStr = Array.isArray(acc) ? acc[0]?.price : acc?.price;
+    const atomic = usdcDollarsToAtomic(priceStr);
+    if (atomic === null || atomic <= 0) continue;
+    const pat =
+      "^" +
+      path
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&") // escape regex metachars (not ':' or '/')
+        .replace(/:([A-Za-z0-9_]+)/g, "[^/]+") + // :param -> one path segment
+      "$";
+    entries.push({ method, re: new RegExp(pat), atomic });
+  }
+  return entries;
+}
+
+// Resolve the atomic price a session call should debit for this request.
+// Returns null for free/unknown routes (no bypass — nothing to debit).
+// Exported for unit tests.
+export function routePriceAtomic(path: string, method: string, payTo: string): number | null {
+  if (!_routePriceCache || _routePriceCache.payTo !== payTo) {
+    _routePriceCache = { payTo, entries: compileRoutePrices(payTo) };
+  }
+  for (const r of _routePriceCache.entries) {
+    if (r.method === method && r.re.test(path)) return r.atomic;
+  }
+  return null;
+}
+
+// Mint an opaque session token (urlsafe, unguessable).
+function mintSessionToken(): string {
+  const b = new Uint8Array(24);
+  crypto.getRandomValues(b);
+  return (
+    "grsess_" +
+    btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
+  );
+}
+
 // Parse a raw atomic amount string/number ("1000") into an integer.
 function parseAtomicAmount(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;
@@ -11362,6 +11538,112 @@ export async function x402Preflight(url: string, samples = 1, advertisedUsdc: st
   else verdict = "PAY";
   return preflightResult(url, started, verdict, will_settle, checks, findings, reliability, priceAccuracy, delivery, liveness, priceTrap, cachePosture, facilitatorConsistency);
 }
+
+// ---------------------------------------------------------------------------
+// Session-cap billing — opener routes (PAID). See SESSION_TIERS / routePriceAtomic.
+// ---------------------------------------------------------------------------
+// Each tier is gated by the x402 middleware (it is in makeRoutes), so control
+// only reaches this handler AFTER a real USDC settlement of the cap amount. We
+// mint an opaque token, seed its atomic cap into the CreditLedger DO, and store
+// identity + expiry in KV. The buyer then calls any paid route debited against
+// that cap with just `X-Session-Token: <token>` — no further signature.
+async function handleSessionOpen(c: any): Promise<Response> {
+  const routeKey = `${c.req.method} ${c.req.path}`;
+  const cap = SESSION_TIERS[routeKey];
+  if (cap === undefined) {
+    return c.json({ error: "unknown_session_tier", known: Object.keys(SESSION_TIERS) }, 400);
+  }
+  if (!c.env.API_KEYS || !c.env.CREDIT_LEDGER) {
+    // Fail closed: without durable storage we cannot track the cap, so we must
+    // not mint a token (it would serve unmetered). The payment already settled;
+    // tell the buyer to retry (idempotency: a fresh call re-settles only if they
+    // re-sign — standard x402). This path only fires if a binding is missing.
+    return c.json({ error: "session_store_unavailable" }, 503);
+  }
+  // Decode the payer from the settled X-PAYMENT header (best-effort — the tx
+  // hash rides back on the response the gate sets AFTER us, so it is captured by
+  // the PAID logger, not here; the money is what the oracle reads either way).
+  let payer: string | undefined;
+  try {
+    const payHdr = c.req.header("x-payment") ?? c.req.header("payment-signature");
+    if (payHdr) {
+      const j = JSON.parse(atob(payHdr));
+      const from = j?.payload?.authorization?.from;
+      if (typeof from === "string") payer = from.toLowerCase();
+    }
+  } catch { /* undecodable header — payer stays undefined, never blocks */ }
+
+  const token = mintSessionToken();
+  const now = Date.now();
+  const rec: SessionRecord = {
+    cap_atomic: cap,
+    created: now,
+    expires: now + SESSION_TTL_SECONDS * 1000,
+    payer,
+    network: "base",
+    tier: routeKey,
+  };
+  // Seed the atomic cap into the DO (source of truth for the balance) and store
+  // identity/expiry in KV with a matching TTL so stale tokens self-evict.
+  try {
+    const id = c.env.CREDIT_LEDGER.idFromName(`${SESSION_KV_PREFIX}${token}`);
+    await c.env.CREDIT_LEDGER.get(id).seed(cap);
+    await c.env.API_KEYS.put(`${SESSION_KV_PREFIX}${token}`, JSON.stringify(rec), {
+      expirationTtl: SESSION_TTL_SECONDS,
+    });
+  } catch (e) {
+    return c.json({ error: "session_mint_failed", detail: String((e as Error)?.message ?? e) }, 500);
+  }
+  console.log(JSON.stringify({ evt: "SESSION_OPEN", tier: routeKey, cap_atomic: cap, payer }));
+  return c.json({
+    session_token: token,
+    cap_usdc: atomicToUsdcStr(cap),
+    cap_atomic: cap,
+    spent_atomic: 0,
+    remaining_atomic: cap,
+    expires: new Date(rec.expires).toISOString(),
+    ttl_seconds: SESSION_TTL_SECONDS,
+    network: "base",
+    payer: payer ?? null,
+    usage:
+      "Send `X-Session-Token: <session_token>` on any paid route. Each call is debited its listed atomic USDC price from the cap — NO per-call signature. When the cap is exhausted or the session expires, the route returns the normal 402 challenge; open a new session to continue.",
+    per_call_pricing: "the called route's advertised price (e.g. /defi/yields = $0.001 = 1000 atomic)",
+    balance_check: "GET /x402/session/status with the same X-Session-Token header",
+    tiers: Object.fromEntries(Object.entries(SESSION_TIERS).map(([k, v]) => [k, atomicToUsdcStr(v)])),
+  });
+}
+
+app.post("/x402/session", (c) => handleSessionOpen(c));
+app.post("/x402/session/plus", (c) => handleSessionOpen(c));
+app.post("/x402/session/max", (c) => handleSessionOpen(c));
+
+// FREE: check a session's remaining cap (so an agent can top up before it runs
+// dry mid-batch). Reads the DO (authoritative balance) + KV (identity/expiry).
+app.get("/x402/session/status", async (c) => {
+  const token = c.req.header("x-session-token") ?? c.req.query("token") ?? "";
+  if (!token || !c.env.API_KEYS || !c.env.CREDIT_LEDGER) {
+    return c.json({ error: "no_session", hint: "send X-Session-Token header" }, 400);
+  }
+  const raw = await c.env.API_KEYS.get(`${SESSION_KV_PREFIX}${token}`);
+  if (!raw) return c.json({ active: false, reason: "not_found_or_expired" }, 404);
+  let rec: SessionRecord;
+  try { rec = JSON.parse(raw); } catch { return c.json({ active: false, reason: "corrupt" }, 500); }
+  const id = c.env.CREDIT_LEDGER.idFromName(`${SESSION_KV_PREFIX}${token}`);
+  const remaining = await c.env.CREDIT_LEDGER.get(id).getBalance();
+  const expired = Date.now() >= rec.expires;
+  return c.json({
+    active: !expired && remaining > 0,
+    cap_atomic: rec.cap_atomic,
+    cap_usdc: atomicToUsdcStr(rec.cap_atomic),
+    remaining_atomic: remaining,
+    remaining_usdc: atomicToUsdcStr(remaining),
+    spent_atomic: Math.max(0, rec.cap_atomic - remaining),
+    expires: new Date(rec.expires).toISOString(),
+    expired,
+    tier: rec.tier,
+    network: rec.network ?? "base",
+  });
+});
 
 app.get("/x402/preflight", async (c) => {
   const url = c.req.query("url");

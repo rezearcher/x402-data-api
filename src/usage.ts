@@ -101,7 +101,7 @@ export type Route =
   | "GET /x402/cert"
   | "POST /mcp";
 
-export type Rail = "x402-paid" | "rapidapi-bypass" | "api-key" | "x402-browser-unlock";
+export type Rail = "x402-paid" | "rapidapi-bypass" | "api-key" | "x402-browser-unlock" | "x402-session";
 
 // Counter keys (mirrored in ARCHITECTURE.md and the 08-21 attribution card).
 export const ROUTE_KEY_PREFIX = "usage:paid:";
