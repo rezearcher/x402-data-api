@@ -458,6 +458,61 @@ export function buildSeeAlso(
   return out;
 }
 
+// Project the V2 top-level `resource` + `extensions.bazaar` discovery block DOWN
+// onto each accepts[] offer as the V1-style per-offer discovery fields that typed
+// catalog crawlers read: `resource` (URL string), `maxAmountRequired` (mirror of
+// `amount`), `mimeType`, and `outputSchema` with the input JSON Schema at
+// `outputSchema.input.schema` + example values. The @x402/hono V2 middleware only
+// emits these at the TOP level (resource) / inside extensions.bazaar — but x402scan's
+// TYPED search and CDP Bazaar quality-index resolve the input schema PER OFFER (the
+// v1 shape, where a found row needs outputSchema.input.schema, not a top-level
+// inputSchema). Named rivals in x402scan typed search (e.g. t54.ai x402-secure) carry
+// exactly these per-accept, which is WHY they surface and our 68 url-indexed routes
+// do not. This is PURE PROJECTION of facts already in the body (no new data) and is
+// settlement-safe: none of these fields enter the EIP-712 payload the client signs
+// (asset/payTo/amount/validity/nonce + domain{name,version}); a strict x402 client
+// zod-parses the offer with a closed object that simply ignores the extra keys
+// (same precedent as the decimals-in-extra and see_also enrichments). Mutates `pr`
+// in place and returns it; degrade-open (never throws on a missing bazaar block).
+export function enrichAcceptsWithV1Discovery(
+  pr: any,
+  path: string,
+  fallbackOrigin: string = CANONICAL_ORIGIN,
+): any {
+  if (!pr || !Array.isArray(pr.accepts)) return pr;
+  const bz = pr.extensions && typeof pr.extensions === "object" ? (pr.extensions as any).bazaar : undefined;
+  const resourceUrl =
+    pr.resource && typeof pr.resource === "object" && typeof (pr.resource as any).url === "string"
+      ? (pr.resource as any).url
+      : `${fallbackOrigin}${path}`;
+  const inputInfo = (bz && bz.info && typeof bz.info.input === "object" ? bz.info.input : {}) as Record<string, unknown>;
+  const inputSchema =
+    bz && bz.schema && bz.schema.properties && bz.schema.properties.input
+      ? { $schema: bz.schema.$schema ?? "https://json-schema.org/draft/2020-12/schema", ...(bz.schema.properties.input as Record<string, unknown>) }
+      : undefined;
+  const outputExample = bz && bz.info && bz.info.output ? (bz.info.output as any).example : undefined;
+  for (const offer of pr.accepts) {
+    if (!offer || typeof offer !== "object") continue;
+    if (offer.resource === undefined) offer.resource = resourceUrl;
+    if (offer.maxAmountRequired === undefined && offer.amount !== undefined) offer.maxAmountRequired = offer.amount;
+    if (offer.mimeType === undefined) offer.mimeType = "application/json";
+    if (offer.outputSchema === undefined && (inputSchema !== undefined || outputExample !== undefined)) {
+      offer.outputSchema = {
+        input: {
+          type: "http",
+          ...(typeof inputInfo.method === "string" ? { method: inputInfo.method } : {}),
+          ...(inputSchema !== undefined ? { schema: inputSchema } : {}),
+          ...(inputInfo.queryParams !== undefined ? { queryParams: inputInfo.queryParams } : {}),
+          ...(inputInfo.pathParams !== undefined ? { pathParams: inputInfo.pathParams } : {}),
+          ...(inputInfo.body !== undefined ? { body: inputInfo.body } : {}),
+        },
+        ...(outputExample !== undefined ? { output: outputExample } : {}),
+      };
+    }
+  }
+  return pr;
+}
+
 // Find the data rows inside a 200 body so a cross-sell can carry the exact
 // identifier the current response surfaced. Shape-derived, NOT a key list: the
 // body is either the row array itself (paid /defi/yields) or an envelope whose
@@ -6626,7 +6681,11 @@ app.use(async (c, next) => {
         let body = decoded;
         try {
           const pr = JSON.parse(decoded) as {
-            accepts?: Array<{ asset?: string; extra?: Record<string, unknown> }>;
+            resource?: unknown;
+            accepts?: Array<{
+              asset?: string; amount?: string; extra?: Record<string, unknown>;
+              resource?: string; maxAmountRequired?: string; mimeType?: string; outputSchema?: unknown;
+            }>;
             extensions?: Record<string, unknown>;
           };
           if (Array.isArray(pr.accepts)) {
@@ -6635,6 +6694,15 @@ app.use(async (c, next) => {
                 offer.extra = { ...(offer.extra ?? {}), decimals: 6 };
               }
             }
+            // Typed-search discovery projection: give each accepts[] offer the
+            // V1-style per-offer resource/maxAmountRequired/mimeType/outputSchema
+            // that x402scan typed search + CDP Bazaar quality-index read PER OFFER
+            // (the V2 middleware only emits them top-level / in extensions.bazaar).
+            // Pure projection of data already in the body; settlement-safe (not in
+            // the signed EIP-712 payload). Own try so it can never 500 a 402.
+            try {
+              enrichAcceptsWithV1Discovery(pr, c.req.path);
+            } catch { /* decimals-only body */ }
             // Additive in-protocol cross-sell (see buildSeeAlso). Own try so a
             // snapshot/catalog hiccup can never turn a 402 into a 500 — it falls
             // through to the decimals-only body. Never mutates accepts[] (the
