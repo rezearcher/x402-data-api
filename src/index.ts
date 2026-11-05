@@ -3372,13 +3372,41 @@ function canonicalOperationId(path: string, method: string): string {
   return words.length === 0 ? "root" : words.join("_").replace(/-/g, "_");
 }
 
-function withOperationIds<T extends Record<string, Record<string, any>>>(paths: T): T {
+// Pull every route's live 402 discovery example (declareDiscoveryExtension's
+// output.example in makeRoutes) out so the OpenAPI can carry the SAME shape its
+// payment challenge already advertises. Keyed by OpenAPI-normalised path
+// ("GET /dns/:domain" -> "/dns/{domain}"), GET only (the paid ops are all GET).
+// This is the single source of discovery examples both surfaces read from, so an
+// openapi-ingesting catalog (x402scan source:openapi, RapidAPI, OpenDexter) sees a
+// typed output per route instead of a url-only row. Degrades open: a route without
+// a discovery example simply isn't added.
+export function discoveryExamplesFromRoutes(routes: Record<string, any>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, def] of Object.entries(routes)) {
+    const sp = key.indexOf(" ");
+    if (sp < 0) continue;
+    const method = key.slice(0, sp);
+    if (method !== "GET") continue;
+    const rawPath = key.slice(sp + 1).replace(/:([A-Za-z0-9_]+)/g, "{$1}");
+    const ex = def?.extensions?.bazaar?.info?.output?.example;
+    if (ex !== undefined && !(rawPath in out)) out[rawPath] = ex;
+  }
+  return out;
+}
+
+function withOperationIds<T extends Record<string, Record<string, any>>>(
+  paths: T,
+  extraExamples: Record<string, unknown> = {},
+): T {
   for (const [path, item] of Object.entries(paths)) {
     for (const [method, op] of Object.entries(item)) {
       if (!op || typeof op !== "object") continue;
       // Tag + response example are added even when an operationId already exists.
       if (!op.tags) op.tags = [tagFor(path)];
-      const example = RESPONSE_EXAMPLES[path];
+      // Hand-curated RESPONSE_EXAMPLES win; otherwise fall back to the same example
+      // the route's live 402 payment challenge advertises (makeRoutes discovery ext),
+      // so OpenAPI and the 402 never disagree and no paid route is left url-only.
+      const example = RESPONSE_EXAMPLES[path] ?? extraExamples[path];
       const ok = op.responses?.["200"];
       if (path === "/chain/block-number" && ok) {
         ok.content = {
@@ -3395,8 +3423,13 @@ function withOperationIds<T extends Record<string, Record<string, any>>>(paths: 
           },
         };
       } else if (example !== undefined && ok && !ok.content) {
+        // Infer a real typed schema from the example (same inferSchema the 402
+        // discovery extension uses) so the row is schema-matched, not url-only.
+        const schema = (example && typeof example === "object")
+          ? inferSchema(example)
+          : { type: "object" };
         ok.content = {
-          "application/json": { schema: { type: "object" }, example },
+          "application/json": { schema, example },
         };
       }
       if (op.operationId) continue;
@@ -3597,7 +3630,7 @@ app.get("/openapi.json", (c) => {
       "/x402/clients": paid("WHO pays this x402 endpoint — payer roster + concentration. repeat-demand says IF payers return; this says who they ARE and whether volume is broad or one whale. Pass url=<x402 endpoint> or payto=<0x>: groups USDC settlements by payer -> roster (gross, share, first/last, is_repeat) + concentration (top_payer_share, HHI). DISTRIBUTED|CONCENTRATED|SINGLE_PAYER. Read-only.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to measure (its live 402 supplies the payTo)", required: false, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "payto", desc: "optional 0x payTo to scan directly (bind without fetching the endpoint)", required: false, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "limit", desc: "optional roster size 1-100 (default 20)", required: false, example: "20" }, { name: "pages", desc: "optional scan depth 1-10 (default 4, ~50 settlements/page)", required: false, example: "4" }]),
       "/dns": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "query", required: true, example: "stripe.com" }]),
       "/whois": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.01", [{ name: "domain", desc: "domain name to look up", in: "query", required: true, example: "cloudflare.com" }]),
-    })),
+    }, discoveryExamplesFromRoutes(makeRoutes(c.env.PAY_TO)))),
   });
 });
 
