@@ -2405,14 +2405,26 @@ app.get("/agent.json", agentJsonHandler);
 // genuine on-chain history, unlike every current top-scorer at txCount:0). The
 // endpoint we advertise is a route that returns a true 402 bound to PAY_TO (root
 // is a 200 landing page, so we point at the top converting data route), keeping
-// the price field honest at the route's real $0.001. Self-host consistent: the
-// endpoint is built from the serving origin so each host advertises itself.
+// the price field honest at the route's real $0.001.
+//
+// CRAWLER-REACHABLE HOST (measured 2026-11-04): the x402 Relay Manifest Scanner —
+// like every x402 directory crawler (CDP Bazaar's /validate confirmed this cycle:
+// brand host -> 403, workers.dev -> 402) — probes from a datacenter IP, and
+// Cloudflare bot-fight on the brand host api.greyridgesignals.ai serves those IPs
+// a 403 instead of our 402. An ai.txt served on the brand host that advertises a
+// brand-host endpoint therefore hands the scanner a URL it can never verify. So
+// the advertised x402-endpoint is PINNED to the crawler-reachable workers.dev host
+// regardless of which host serves ai.txt — matching the deliberate `BASE =
+// workers.dev` choice already used by every other crawler-facing manifest
+// (/.well-known/x402, agent.json discovery). `origin` is kept in the signature for
+// the serving-host record but intentionally does not set the probe endpoint.
 export function buildAiTxt(origin: string, _payTo: string): string {
+  void origin;
   // Point at a route that returns a genuine 402 on a bare GET (the scanner probes
   // this URL directly for the payment-required response); /crypto/prices is our
   // #1 external-payer route, 402s with no query params, and carries payTo in its
   // accepts[]. $0.001 = its real atomic price (1000 / 1e6 USDC), not a teaser.
-  const endpoint = `https://${origin}/crypto/prices`;
+  const endpoint = `https://x402-data-api.sigrunner.workers.dev/crypto/prices`;
   return [
     `x402-endpoint: ${endpoint}`,
     `x402-network: base`,

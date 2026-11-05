@@ -38,11 +38,16 @@ const PAYTO = "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10";
   ok(t.includes("/crypto/prices"), "advertises a real 402 route");
 }
 
-// (2) self-host consistency — brand host advertises itself.
+// (2) crawler-reachable host pinned — the brand host serves ai.txt but advertises
+// the workers.dev probe endpoint, because the Manifest Scanner is a datacenter
+// crawler and Cloudflare bot-fight 403s the brand host for datacenter IPs
+// (CDP /validate confirmed 2026-11-04: brand -> 403, workers.dev -> 402). An
+// endpoint the scanner cannot reach is unverifiable vaporware, so every host's
+// ai.txt points at the reachable host — matching /.well-known/x402 + agent.json.
 {
   const t = buildAiTxt("api.greyridgesignals.ai", PAYTO);
-  ok(t.startsWith("x402-endpoint: https://api.greyridgesignals.ai/crypto/prices"), "endpoint tracks serving origin");
-  ok(!t.includes("sigrunner.workers.dev"), "no cross-host leak");
+  ok(t.startsWith("x402-endpoint: https://x402-data-api.sigrunner.workers.dev/crypto/prices"), "endpoint pinned to crawler-reachable host even when served from the brand host");
+  ok(!t.includes("api.greyridgesignals.ai"), "brand host (403s datacenter crawlers) never advertised as the probe endpoint");
 }
 
 // (3) no price drift: the only price string present is 0.001 (the route's real atomic 1000/1e6).
