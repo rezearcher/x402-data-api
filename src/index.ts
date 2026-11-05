@@ -154,6 +154,27 @@ const NETWORK = "eip155:8453" as const; // Base mainnet
 // Native USDC on Base (the x402 settlement asset). 6 decimals — published in the
 // 402 offer's `extra` so a buyer can render the human amount without guessing.
 const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
+// Additional EVM networks whose NATIVE Circle USDC our SAME EVM payTo receives (an EVM
+// address is chain-agnostic) AND that the CDP facilitator settles — both confirmed live
+// at /x402/networks (facilitator_supports.evm includes 137 + 42161). Each is carried in
+// @x402/evm's maintained DEFAULT_ASSETS table with the correct USDC address + EIP-712
+// domain (name "USD Coin", version "2", EIP-3009, 6 decimals), so the scheme resolves the
+// asset per network with no manual asset config. We offer these as ADDITIONAL accepts[]
+// options (Base stays accepts[0], primary + byte-identical) so an agent holding USDC on
+// Polygon or Arbitrum — a large population invisible to a Base-only 402 — can pay us
+// instead of bouncing. Honest by our own capability rule: facilitator support ∩
+// receive-address coverage (the exact set /x402/networks already declares settleable).
+// Multi-network route compilation is guarded with a fallback to the proven Base-only
+// config, so this can never regress the live money gate.
+const EXTRA_EVM_SETTLEMENT_NETWORKS = ["eip155:137", "eip155:42161"] as const;
+// Native USDC (asset + EIP-712 domain) per extra network, mirrored from @x402/evm's
+// DEFAULT_ASSETS so the static .well-known/x402 discovery manifest can advertise the same
+// multi-network offer the live 402 emits (keeps discovery and the live challenge honest
+// and consistent). Base is handled separately via USDC_BASE.
+const EXTRA_NETWORK_USDC: Record<string, { asset: string; name: string; version: string; decimals: number }> = {
+  "eip155:137": { asset: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", name: "USD Coin", version: "2", decimals: 6 },
+  "eip155:42161": { asset: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", name: "USD Coin", version: "2", decimals: 6 },
+};
 
 // Short human-readable route name for Bazaar discovery (e.g. "/pm/markets" -> "PM Markets").
 function shortRouteName(p: string): string {
@@ -2267,14 +2288,31 @@ const x402ManifestHandler = (c: Context<AppEnv>) => {
     ...(PREVIEW_ROUTES.has(p) ? { preview_url: `${BASE}${p}/preview` } : {}),
     ...(sampleOf(p) !== undefined ? { outputExample: sampleOf(p) } : {}),
     tags,
-    accepts: [{
-      scheme: "exact", network: NETWORK, amount: units, maxAmountRequired: units,
-      asset: USDC, payTo, maxTimeoutSeconds: 300, resource: `${BASE}${p}`,
-      description: desc, mimeType: "application/json",
-      serviceName: bazaarServiceNameFor(p),
-      tags,
-      extra: { name: "USD Coin", version: "2", decimals: 6, serviceName: bazaarServiceNameFor(p), tags },
-    }],
+    accepts: [
+      {
+        scheme: "exact", network: NETWORK, amount: units, maxAmountRequired: units,
+        asset: USDC, payTo, maxTimeoutSeconds: 300, resource: `${BASE}${p}`,
+        description: desc, mimeType: "application/json",
+        serviceName: bazaarServiceNameFor(p),
+        tags,
+        extra: { name: "USD Coin", version: "2", decimals: 6, serviceName: bazaarServiceNameFor(p), tags },
+      },
+      // Additional EVM networks our same payTo settles via the CDP facilitator (Polygon,
+      // Arbitrum) — mirrors the live 402's multi-network accepts[] so a router reading the
+      // discovery doc sees every chain it can pay us on. Same dollar price; per-chain USDC
+      // asset + EIP-712 domain from @x402/evm DEFAULT_ASSETS.
+      ...EXTRA_EVM_SETTLEMENT_NETWORKS.map((net) => {
+        const a = EXTRA_NETWORK_USDC[net];
+        return {
+          scheme: "exact", network: net, amount: units, maxAmountRequired: units,
+          asset: a.asset, payTo, maxTimeoutSeconds: 300, resource: `${BASE}${p}`,
+          description: desc, mimeType: "application/json",
+          serviceName: bazaarServiceNameFor(p),
+          tags,
+          extra: { name: a.name, version: a.version, decimals: a.decimals, serviceName: bazaarServiceNameFor(p), tags },
+        };
+      }),
+    ],
   };
   };
   return c.json({
@@ -3983,10 +4021,17 @@ app.get("/pm/markets/preview", async (c) => {
 
 const facilitatorClient = new HTTPFacilitatorClient({ url: FACILITATOR_URL });
 const evmScheme = new ExactEvmScheme();
-const resourceServer = new x402ResourceServer(facilitatorClient).register(
+let resourceServer = new x402ResourceServer(facilitatorClient).register(
   NETWORK,
   evmScheme as any,
 );
+// The ExactEvmScheme is network-generic (resolves the asset per network from its
+// DEFAULT_ASSETS table), so the same instance serves every EVM network we register.
+// Registering an extra network is a pure map insert (never throws); whether a route may
+// actually use it is validated later at middleware-compile time, which we guard.
+for (const net of EXTRA_EVM_SETTLEMENT_NETWORKS) {
+  resourceServer = resourceServer.register(net, evmScheme as any);
+}
 
 // bazaarResourceServerExtension is intentionally NOT registered here: it uses
 // ajv code-generation (new Function) which CF Workers V8 sandbox blocks.
@@ -4006,10 +4051,14 @@ function selectResourceServer(env: Env): x402ResourceServer {
   if (activeResourceServer) return activeResourceServer;
   if (env.FACILITATOR_MODE === "cdp" && env.CDP_API_KEY_ID && env.CDP_API_KEY_SECRET) {
     const cdpFacilitator = createCdpFacilitator(env.CDP_API_KEY_ID, env.CDP_API_KEY_SECRET);
-    activeResourceServer = new x402ResourceServer(cdpFacilitator).register(
+    let srv = new x402ResourceServer(cdpFacilitator).register(
       NETWORK,
       evmScheme as any,
     );
+    for (const net of EXTRA_EVM_SETTLEMENT_NETWORKS) {
+      srv = srv.register(net, evmScheme as any);
+    }
+    activeResourceServer = srv;
   } else {
     activeResourceServer = resourceServer; // xpay default (unchanged)
   }
@@ -4130,7 +4179,7 @@ function bazaarTagsFor(routeKey: string): string[] {
   return out;
 }
 
-export function makeRoutes(payTo: string) {
+export function makeRoutes(payTo: string, extraNetworks: readonly string[] = []) {
   const routes: Record<string, any> = {
     "POST /mcp": {
       accepts: {
@@ -5743,6 +5792,22 @@ export function makeRoutes(payTo: string) {
       rc.accepts.price = `$${usd}`;
     }
   }
+  // Multi-network: after pricing is finalized, expand each Base route's single `accepts`
+  // object into an array [Base, ...extra-network variants at the same dollar price]. Base
+  // stays accepts[0] so every existing/Base-holding client is byte-identical; the extra
+  // options only matter to an agent that chooses to pay on that chain. The scheme resolves
+  // each network's USDC asset + EIP-712 domain from @x402/evm DEFAULT_ASSETS, so no asset
+  // config is needed here. RouteConfig.accepts natively accepts an array of PaymentOptions.
+  if (extraNetworks.length) {
+    for (const key of Object.keys(routes)) {
+      const rc = routes[key];
+      if (!rc || typeof rc !== "object") continue;
+      const base = rc.accepts;
+      if (!base || typeof base !== "object" || Array.isArray(base)) continue;
+      if (base.network !== NETWORK) continue;
+      rc.accepts = [base, ...extraNetworks.map((net) => ({ ...base, network: net }))];
+    }
+  }
   return routes;
 }
 
@@ -6606,14 +6671,20 @@ app.use(async (c, next) => {
   await ensureInitialized(c.env);
 
   if (!cachedMiddleware) {
-    const routes = makeRoutes(c.env.PAY_TO);
-    cachedMiddleware = paymentMiddleware(
-      routes,
-      selectResourceServer(c.env),
-      undefined,
-      undefined,
-      false,
-    );
+    const srv = selectResourceServer(c.env);
+    try {
+      // Preferred: multi-network accepts[] (Base + Polygon + Arbitrum) so agents holding
+      // USDC on another EVM chain can pay instead of bouncing off a Base-only 402.
+      const routes = makeRoutes(c.env.PAY_TO, EXTRA_EVM_SETTLEMENT_NETWORKS);
+      cachedMiddleware = paymentMiddleware(routes, srv, undefined, undefined, false);
+    } catch (e) {
+      // Route compilation rejected an extra network (e.g. the facilitator dropped support
+      // for it) — fall back to the proven Base-only config so the live money gate never
+      // regresses. Base is accepts[0] either way, so no payer is affected.
+      console.log(JSON.stringify({ evt: "multinet_middleware_fallback", error: String((e as Error)?.message ?? e) }));
+      const routes = makeRoutes(c.env.PAY_TO);
+      cachedMiddleware = paymentMiddleware(routes, srv, undefined, undefined, false);
+    }
   }
   // Fall-through rail: the request is about to pay (or has paid) via x402 —
   // the only rail that settles USDC on Base, so the only one that counts as
