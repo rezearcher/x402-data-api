@@ -10389,14 +10389,52 @@ interface PreflightResult {
   // UNVERIFIED pre-payment (no tx to read); cross-links the post-payment check at
   // /x402/receipt-verify and surfaces the pre-pay advertised-vs-wire cousin.
   facilitator_consistency?: FacilitatorConsistency;
+  // The one-line lead: this check's differentiator is the PAYMENT-SECURITY axis
+  // (will-it-settle + payTo OFAC/scam + price/delivery/cache reconcile) that the
+  // MCP/agent CONFIG scanners (Snyk Agent Scan, ShieldAPI, AgentTrust) do not
+  // cover. Verdict-aware so it never over-claims.
+  headline: string;
+  // Claims-Law honesty boundary on the LLM01/LLM08 result: it is STATIC, not
+  // adaptive-response proof. A clean injection scan is never "injection-proof".
+  injection_scan_limit: string;
   scope_note: string;
   checked_at: string;
 }
 const PREFLIGHT_SCOPE_NOTE =
   "static 402 wire-format + LIVE/ZOMBIE/DEAD liveness label + absolute price-trap flag + LLM01/LLM08 description scan + payTo OFAC/scam flag + advertised-vs-charged price-accuracy + delivery-readiness (broken-paywall / output-spec) check + Attack-III cache-leakage posture (no-store vs cacheable paid route) + the facilitator verify/settle-consistency axis (always pre-payment/UNVERIFIED here — the post-payment check is /x402/receipt-verify); read-only, never pays; not a settlement guarantee.";
 
+// Claims-Law scope boundary for our LLM01/LLM08 injection detection, shared by
+// /x402/preflight and /scan/mcp. The detection is STATIC pattern analysis of the
+// advertised tool/description text at scan time — NOT adaptive-response proof.
+// Adaptive tool-injection (TIP, arXiv:2603.24203) retains >50% attack success
+// even against defenses, so a clean result means "no KNOWN static-injection
+// pattern here now", never "injection-proof". We surface this so an agent never
+// reads a clean scan as a safety guarantee it is not.
+export const INJECTION_SCAN_LIMIT =
+  "static-pattern, point-in-time, not adaptive-response-proof: this flags KNOWN LLM01/LLM08 injection patterns in the advertised description/tools at scan time; adaptive tool-injection (TIP, arXiv:2603.24203) retains >50% success against defenses, so a clean result means no known static pattern here now — never injection-proof. Re-scan on every manifest change; combine with runtime output-constraining.";
+
+// The payment-security lead. Rival agent/MCP scanners (Snyk Agent Scan,
+// ShieldAPI, AgentTrust) audit CONFIG/tool-poisoning but do not answer "is it
+// safe to PAY" — settlement, payTo OFAC/scam, price/delivery/cache. This states
+// our verdict leading with that differentiated axis, and stays honest (the
+// headline tracks the verdict and the decisive reason, never asserts PAY on a
+// bad payTo or a non-settling endpoint).
+export function preflightHeadline(verdict: PreflightResult["verdict"], will_settle: boolean, checks: PreflightCheck[], findings: ScanFinding[]): string {
+  const has = (n: string, ok: boolean) => checks.some((c) => c.name === n && c.ok === ok);
+  const payToBad = has("payTo_safety", false);
+  const lead = "payment-security first (settlement + payTo OFAC/scam + price/delivery/cache) — the safe-to-PAY axis MCP/agent config scanners (Snyk Agent Scan, ShieldAPI, AgentTrust) do not cover";
+  if (!will_settle) return `AVOID — no valid x402 payment challenge to settle against. ${lead}.`;
+  if (payToBad) return `AVOID — payTo is on the OFAC SDN or a community scam/drainer list. ${lead}.`;
+  if (verdict === "AVOID") {
+    const crit = findings.some((f) => f.severity === "critical" || f.severity === "high");
+    return `AVOID — ${crit ? "a critical/high injection finding" : "a hard pay-safety failure"} blocks payment. ${lead}.`;
+  }
+  if (verdict === "CAUTION") return `CAUTION — settles and payTo is clear, but a soft pay-safety issue needs review (see checks). ${lead}.`;
+  return `PAY — settles, payTo clear of OFAC/scam, price/delivery/cache reconcile clean. ${lead}.`;
+}
+
 function preflightResult(url: string, started: number, verdict: PreflightResult["verdict"], will_settle: boolean, checks: PreflightCheck[], findings: ScanFinding[], reliability?: PreflightReliability, priceAccuracy?: PriceAccuracyVerdict, delivery?: PreflightDelivery, liveness?: PreflightLiveness, priceTrap?: PriceTrap, cachePosture?: PreflightCachePosture, facilitatorConsistency?: FacilitatorConsistency): PreflightResult {
-  return { url, verdict, will_settle, checks, findings, latency_ms: Date.now() - started, ...(reliability ? { reliability } : {}), ...(priceAccuracy ? { price_accuracy: priceAccuracy } : {}), ...(delivery ? { delivery } : {}), ...(liveness ? { liveness } : {}), ...(priceTrap ? { price_trap: priceTrap } : {}), ...(cachePosture ? { cache_posture: cachePosture } : {}), ...(facilitatorConsistency ? { facilitator_consistency: facilitatorConsistency } : {}), scope_note: PREFLIGHT_SCOPE_NOTE, checked_at: new Date().toISOString() };
+  return { url, headline: preflightHeadline(verdict, will_settle, checks, findings), verdict, will_settle, checks, findings, latency_ms: Date.now() - started, ...(reliability ? { reliability } : {}), ...(priceAccuracy ? { price_accuracy: priceAccuracy } : {}), ...(delivery ? { delivery } : {}), ...(liveness ? { liveness } : {}), ...(priceTrap ? { price_trap: priceTrap } : {}), ...(cachePosture ? { cache_posture: cachePosture } : {}), ...(facilitatorConsistency ? { facilitator_consistency: facilitatorConsistency } : {}), injection_scan_limit: INJECTION_SCAN_LIMIT, scope_note: PREFLIGHT_SCOPE_NOTE, checked_at: new Date().toISOString() };
 }
 
 // Pure Attack-III cache-leakage posture verdict. Exported for unit tests. Reads
@@ -11083,8 +11121,10 @@ app.get("/x402/preflight", async (c) => {
 function preflightSample(): PreflightResult {
   return {
     url: "https://<the-x402-endpoint-you-pass-in>",
+    headline: preflightHeadline("PAY", true, [], []),
     verdict: "PAY",
     will_settle: true,
+    injection_scan_limit: INJECTION_SCAN_LIMIT,
     checks: [
       { name: "reachability", ok: true, detail: "responded HTTP 402", fix: null },
       { name: "challenge", ok: true, detail: "HTTP 402 Payment Required", fix: null },
@@ -16057,7 +16097,7 @@ app.get("/scan/mcp", async (c) => {
     fireAndForget(c, trackPaidRequest("GET /scan/mcp", rail, makeUsageCounter(c.env)));
     const { tools: _rawTools, ...publicResult } = result;
     const grade = mcpGrade(result.risk_score, result.findings.some((f) => f.severity === "critical"));
-    return c.json({ ...publicResult, grade });
+    return c.json({ ...publicResult, grade, injection_scan_limit: INJECTION_SCAN_LIMIT });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
   }
@@ -16083,7 +16123,7 @@ app.post("/scan/mcp", async (c) => {
   const weight = { critical: 40, high: 20, medium: 8, low: 3 } as const;
   const risk_score = Math.min(100, findings.reduce((s, x) => s + weight[x.severity], 0));
   const { verdict, risk_summary } = mcpScanVerdict(findings, tools.length, risk_score);
-  const result: Record<string, unknown> = { target: "(pasted tools/list)", tools_scanned: tools.length, findings, risk_score, grade: mcpGrade(risk_score, findings.some((f) => f.severity === "critical")), verdict, risk_summary, scanned_at: new Date().toISOString() };
+  const result: Record<string, unknown> = { target: "(pasted tools/list)", tools_scanned: tools.length, findings, risk_score, grade: mcpGrade(risk_score, findings.some((f) => f.severity === "critical")), verdict, risk_summary, injection_scan_limit: INJECTION_SCAN_LIMIT, scanned_at: new Date().toISOString() };
 
   // OPT-IN Claude Connector Directory readiness check. Off by default so the
   // census / security scan output (and its carefully-tuned clean corpus) are

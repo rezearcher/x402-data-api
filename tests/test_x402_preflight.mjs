@@ -17,7 +17,7 @@ import { register } from "node:module";
 
 register(new URL("./cfw-hooks.mjs", import.meta.url));
 
-const { x402Preflight, makeRoutes, ROUTE_CATALOG, computePriceAccuracy, findManifestAdvertisedAtomic, usdcDollarsToAtomic, computeDelivery, computeLiveness, computePriceTrap, computeCachePosture } = await import("../src/index.ts");
+const { x402Preflight, makeRoutes, ROUTE_CATALOG, computePriceAccuracy, findManifestAdvertisedAtomic, usdcDollarsToAtomic, computeDelivery, computeLiveness, computePriceTrap, computeCachePosture, preflightHeadline, INJECTION_SCAN_LIMIT } = await import("../src/index.ts");
 
 let pass = 0;
 function check(name, fn) { return Promise.resolve(fn()).then(() => { pass++; console.log(`ok - ${name}`); }); }
@@ -568,6 +568,55 @@ await check("e2e: no-store paid route -> PAY + NO_STORE posture", async () => {
   restoreFetch();
   assert.strictEqual(r.cache_posture.verdict, "NO_STORE", `posture ${r.cache_posture.verdict}`);
   assert.strictEqual(r.verdict, "PAY", `verdict ${r.verdict}`);
+});
+
+// ---------------------------------------------------------------------------
+// injection_scan_limit (Claims Law) + payment-security headline
+// ---------------------------------------------------------------------------
+
+// 55. Every live result carries injection_scan_limit citing the static-vs-adaptive boundary.
+await check("result carries injection_scan_limit citing static-vs-adaptive (TIP)", async () => {
+  stubFetch(() => fakeRes(402, GOOD_402));
+  const r = await x402Preflight("https://seller.example/data");
+  restoreFetch();
+  assert.ok(typeof r.injection_scan_limit === "string" && r.injection_scan_limit.length > 20, "field present");
+  assert.strictEqual(r.injection_scan_limit, INJECTION_SCAN_LIMIT, "uses the shared constant");
+  assert.match(r.injection_scan_limit, /static-pattern/i, "says static-pattern");
+  assert.match(r.injection_scan_limit, /adaptive-response-proof/i, "names the adaptive boundary");
+  assert.match(r.injection_scan_limit, /2603\.24203/, "cites the TIP paper");
+  assert.match(r.injection_scan_limit, /never injection-proof/i, "never over-claims");
+});
+
+// 56. The headline LEADS with the payment-security / OFAC / settlement axis.
+await check("PAY headline leads with payment-security + OFAC + settlement", async () => {
+  stubFetch(() => fakeRes(402, GOOD_402));
+  const r = await x402Preflight("https://seller.example/data");
+  restoreFetch();
+  assert.strictEqual(r.verdict, "PAY", `verdict ${r.verdict}`);
+  assert.ok(typeof r.headline === "string", "headline present");
+  assert.match(r.headline, /^PAY/, "headline leads with the verdict");
+  assert.match(r.headline, /payment-security first/i, "leads with payment-security");
+  assert.match(r.headline, /OFAC/i, "names OFAC");
+  assert.match(r.headline, /settlement/i, "names settlement");
+  // the differentiator claim vs config-only scanners
+  assert.match(r.headline, /Snyk Agent Scan|ShieldAPI|AgentTrust/, "names the config-scanner rivals it beats");
+});
+
+// 57. A sanctioned/scam payTo makes the headline lead AVOID on the OFAC axis.
+await check("bad payTo -> headline leads AVOID on the OFAC/scam axis", async () => {
+  // pure headline check (verdict-aware, honest): simulate the payTo_safety fail.
+  const h = preflightHeadline("AVOID", true, [{ name: "payTo_safety", ok: false, detail: "", fix: null }], []);
+  assert.match(h, /^AVOID/, "leads AVOID");
+  assert.match(h, /OFAC SDN|scam\/drainer/i, "names the sanctions/scam reason");
+  assert.match(h, /payment-security first/i, "still leads with the payment-security axis");
+});
+
+// 58. will_settle=false -> headline leads AVOID on no-settle, never asserts PAY.
+await check("non-settling endpoint -> headline leads AVOID, no PAY claim", async () => {
+  const h = preflightHeadline("AVOID", false, [], []);
+  assert.match(h, /^AVOID/, "leads AVOID");
+  assert.match(h, /no valid x402 payment challenge/i, "names the settle failure");
+  assert.ok(!/^PAY/.test(h), "never claims PAY");
 });
 
 console.log(`\n${pass} checks passed`);
