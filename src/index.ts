@@ -14588,8 +14588,21 @@ app.get("/x402/receipt-verify/preview", async (c) => {
       upgrade: upgradeCTA(paidUrlFrom(c), "0.004", "Unmetered settlement verification for any tx (this free preview is capped at 3 real checks/IP/day)."),
     });
   }
+  // Cross-rail: a base58 Solana signature runs the SVM reconcile under the same trial.
+  if (isSolanaSignature(tx)) {
+    const sPayto = c.req.query("payto") ?? null;
+    if (sPayto !== null && !isSolanaAddress(sPayto)) {
+      return c.json({ error: "payto (optional) for a Solana signature must be a base58 32-byte owner address" }, { status: 400 });
+    }
+    const ts = await trialToken(c, "receipt:" + tx);
+    if (ts.exhausted) {
+      const pu = paidUrlFrom(c);
+      return c.json({ error: "free receipt-verify trial exhausted (3/day/IP) - this is NOT a result for the tx you asked about", trial: { real_checks_left_today: 0 }, paid: pu, paid_url: pu, price_usdc: "0.004" }, { status: 429 });
+    }
+    return c.json({ ...(await x402SvmReceiptVerify(tx, c.env, sPayto, c.req.query("expect") ?? null)), trial: { real_checks_left_today: ts.left } });
+  }
   if (!HASH_RE.test(tx)) {
-    return c.json({ error: "tx must be a 0x-prefixed 32-byte Base-mainnet transaction hash" }, { status: 400 });
+    return c.json({ error: "tx must be a 0x-prefixed 32-byte Base-mainnet transaction hash (or a base58 Solana tx signature)" }, { status: 400 });
   }
   const url = c.req.query("url") ?? null;
   if (url !== null && !/^https?:\/\//i.test(url)) {
