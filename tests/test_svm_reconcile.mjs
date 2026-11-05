@@ -181,4 +181,21 @@ await check("solanaGetTransaction returns result on 200, null on jsonrpc null, t
   await assert.rejects(() => solanaGetTransaction(DEFAULT_SOLANA_RPCS[0], SIG, fetch500), /503/);
 });
 
+await check("solanaGetTransaction retries once with a higher version on a version-not-supported error", async () => {
+  const okTx = txWith({ pre: [tb(4, PAYTO, 0)], post: [tb(4, PAYTO, ONE_USDC)] });
+  let calls = 0;
+  const bodies = [];
+  const fetchVer = async (_url, init) => {
+    calls++;
+    bodies.push(JSON.parse(init.body).params[1].maxSupportedTransactionVersion);
+    if (calls === 1) return { ok: true, json: async () => ({ jsonrpc: "2.0", id: 1, error: { message: "Transaction version (1) is not supported by the requesting client." } }) };
+    return { ok: true, json: async () => ({ jsonrpc: "2.0", id: 1, result: okTx }) };
+  };
+  const got = await solanaGetTransaction(DEFAULT_SOLANA_RPCS[0], SIG, fetchVer, 0);
+  assert.equal(calls, 2, "retried exactly once");
+  assert.equal(bodies[0], 0, "first attempt used the declared ceiling");
+  assert.equal(bodies[1], 1, "retry bumped to the version the error named");
+  assert.equal(got.slot, okTx.slot, "second attempt result returned");
+});
+
 console.log(`\n${pass} checks passed`);

@@ -230,24 +230,37 @@ export function computeSvmReconcile(args: {
 // maxSupportedTransactionVersion so versioned (v0) txs decode. Degrade-open: a
 // null result is a legitimate "not found", an exception is a reachability error.
 export const DEFAULT_SOLANA_RPCS = [
-  "https://api.mainnet-beta.solana.com",
   "https://solana-rpc.publicnode.com",
+  "https://api.mainnet-beta.solana.com",
 ];
 
 export async function solanaGetTransaction(
   rpcUrl: string,
   signature: string,
   fetchImpl: typeof fetch = fetch,
+  maxVer = 0,
 ): Promise<unknown | null> {
-  const body = {
-    jsonrpc: "2.0", id: 1, method: "getTransaction",
-    params: [signature, { encoding: "jsonParsed", commitment: "confirmed", maxSupportedTransactionVersion: 0 }],
+  const call = async (ver: number) => {
+    const body = {
+      jsonrpc: "2.0", id: 1, method: "getTransaction",
+      params: [signature, { encoding: "jsonParsed", commitment: "confirmed", maxSupportedTransactionVersion: ver }],
+    };
+    const resp = await fetchImpl(rpcUrl, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    });
+    if (!resp.ok) throw new Error(`solana rpc ${rpcUrl} http ${resp.status}`);
+    return (await resp.json()) as { result?: unknown; error?: { message?: string } };
   };
-  const resp = await fetchImpl(rpcUrl, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
-  });
-  if (!resp.ok) throw new Error(`solana rpc ${rpcUrl} http ${resp.status}`);
-  const j = (await resp.json()) as { result?: unknown; error?: { message?: string } };
+  let j = await call(maxVer);
+  // Some txs are a newer transaction version than the client declared it can
+  // parse; the RPC refuses rather than returning the tx. We read ONLY `meta`
+  // (pre/postTokenBalances), which is version-independent, so it is always safe
+  // to raise the ceiling and retry once. The error names the required version.
+  if (j.error && /version/i.test(j.error.message ?? "")) {
+    const m = (j.error.message ?? "").match(/version \((\d+)\)/);
+    const bump = m ? Math.max(Number(m[1]), maxVer + 1) : 128;
+    j = await call(bump);
+  }
   if (j.error) throw new Error(`solana rpc error: ${j.error.message ?? "unknown"}`);
   return j.result ?? null; // null = tx not found (not an error)
 }

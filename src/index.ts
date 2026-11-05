@@ -83,6 +83,12 @@ export type Env = {
   // solana `exact` kind), /x402/networks reports Solana as settleable and the challenge can
   // offer a Solana accepts[] option. Absent => Base-only, byte-identical behaviour.
   SOLANA_PAY_TO?: string;
+  // Solana JSON-RPC provider(s) for the SVM receipt-verify reconcile, comma-separated.
+  // OPTIONAL — defaults to the keyless public set (DEFAULT_SOLANA_RPCS). Public RPCs
+  // commonly block Cloudflare egress IPs, so a going-live Solana deployment should set
+  // this to a provider reachable from the Worker (pairs with SOLANA_PAY_TO). Degrade-open:
+  // unreachable providers yield an honest UNVERIFIED (disclosed), never a false proof.
+  SOLANA_RPC_URLS?: string;
   // CDP facilitator credentials (Worker secrets) — enable Bazaar discovery/settlement.
   CDP_API_KEY_ID?: string;
   CDP_API_KEY_SECRET?: string;
@@ -14016,7 +14022,8 @@ export async function x402SvmReceiptVerify(
   // The SVM USDC network we settle on via the CDP facilitator (see /x402/networks).
   const network = env.SOLANA_PAY_TO ? `solana:${SOLANA_USDC_MINT}` : "solana:mainnet";
 
-  const rpcs = DEFAULT_SOLANA_RPCS;
+  const configured = (env.SOLANA_RPC_URLS ?? "").split(",").map((s) => s.trim()).filter((s) => /^https?:\/\//i.test(s));
+  const rpcs = configured.length ? configured : DEFAULT_SOLANA_RPCS;
   const urlA = rpcs[0];
   const urlB = rpcs.find((u) => u !== urlA) ?? null;
   const host = (u: string) => { try { return new URL(u).host; } catch { return u; } };
