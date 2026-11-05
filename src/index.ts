@@ -3709,9 +3709,12 @@ app.get("/crypto/prices/preview", async (c) => {
     try {
       const all = await fetchTokenPrices(["bitcoin", "ethereum", "solana"]);
       const sample = all.slice(0, 1);
+      // Write-through (throttled ≤4/6h/series) so the flagship coins the 5-min
+      // uptime cron hits here continuously seed the archive — the moat compounds
+      // even with zero paid traffic. Bounded + degrade-open.
       const withProv = await Promise.all(
         sample.map(async (p) => {
-          const prov = await readProvenance(c, "price", p.id);
+          const prov = await archiveProvenance(c, "price", p.id, p.price);
           return prov ? { ...p, provenance: prov } : p;
         }),
       );
@@ -3738,11 +3741,12 @@ app.get("/crypto/prices/preview", async (c) => {
       return c.json({ preview: all.slice(0, 1), trial: { full_pulls_left_today: 0 }, paid: paidUrl, price_usdc: "0.001", note: "Free full-output trial exhausted for today (3/IP/day); showing 1-of-N sample. Paid (unmetered): GET /crypto/prices?coins=<ids> ($0.001)." });
     }
     const prices = await fetchTokenPrices(ids);
-    // Read-only provenance teaser (no KV write on a free call) — shows the agent
-    // the archive depth it unlocks when it wires the paid route.
+    // Write-through (throttled + degrade-open): the coins an agent actually
+    // queries get archived too, so the provenance it sees on the trial is the
+    // real compounding history — and the paid call it converts to inherits it.
     const data = await Promise.all(
       prices.map(async (p) => {
-        const prov = await readProvenance(c, "price", p.id);
+        const prov = await archiveProvenance(c, "price", p.id, p.price);
         return prov ? { ...p, provenance: prov } : p;
       }),
     );
@@ -8641,22 +8645,6 @@ async function archiveProvenance(
       await kv.put(key, JSON.stringify({ v: ARCH_SCHEMA, ...updated }));
     }
     return summarizeProvenance(updated, now);
-  } catch {
-    return null;
-  }
-}
-
-// Read-only provenance for free/preview surfaces: summarize whatever history we
-// already hold without appending or writing (zero KV puts). This is the
-// conversion teaser — it shows an agent the depth of archive a paid call unlocks.
-async function readProvenance(c: any, series: string, id: string): Promise<ProvSummary | null> {
-  try {
-    const kv = c.env?.API_KEYS;
-    if (!kv) return null;
-    const raw = await kv.get(`arch:${series}:${id}`);
-    if (!raw) return null;
-    const rec: ProvRecord = JSON.parse(raw);
-    return summarizeProvenance(rec, Date.now());
   } catch {
     return null;
   }
