@@ -15644,10 +15644,18 @@ async function trialToken(c: any, q: string | undefined): Promise<{ token: strin
   if (raw.toLowerCase() === GATE_CANARY_BLOCK_ADDR.toLowerCase()) return { token: raw, left: null };
   const ip = c.req.header("cf-connecting-ip") ?? "unknown";
   const key = `trial:${ip}:${new Date().toISOString().slice(0, 10)}`;
-  const used = parseInt((await c.env.API_KEYS.get(key)) ?? "0", 10) || 0;
-  if (used >= TRIAL_PER_DAY) return { token: previewToken(q), left: 0, exhausted: true };
-  await c.env.API_KEYS.put(key, String(used + 1), { expirationTtl: 90000 });
-  return { token: raw, left: TRIAL_PER_DAY - used - 1 };
+  // Degrade OPEN on any KV failure (daily put() limit hit / KV unreachable): the
+  // counter is a best-effort rate limiter, never a correctness gate. A thrown
+  // error here would 500 the whole security preview and drop a warm lead; serve
+  // the real-token check uncounted instead (bounded downside, KV resets daily).
+  try {
+    const used = parseInt((await c.env.API_KEYS.get(key)) ?? "0", 10) || 0;
+    if (used >= TRIAL_PER_DAY) return { token: previewToken(q), left: 0, exhausted: true };
+    await c.env.API_KEYS.put(key, String(used + 1), { expirationTtl: 90000 });
+    return { token: raw, left: TRIAL_PER_DAY - used - 1 };
+  } catch {
+    return { token: raw, left: null }; // serve the real token uncounted
+  }
 }
 
 // Full-depth 3/IP/day trial for the DATA routes — the oracle-proven converting
@@ -15665,10 +15673,20 @@ export async function trialQuota(c: any, scope: string): Promise<{ left: number 
   if (!c.env.API_KEYS) return { left: null, exhausted: false };
   const ip = c.req.header("cf-connecting-ip") ?? "unknown";
   const key = `trialq:${scope}:${ip}:${new Date().toISOString().slice(0, 10)}`;
-  const used = parseInt((await c.env.API_KEYS.get(key)) ?? "0", 10) || 0;
-  if (used >= TRIAL_PER_DAY) return { left: 0, exhausted: true };
-  await c.env.API_KEYS.put(key, String(used + 1), { expirationTtl: 90000 });
-  return { left: TRIAL_PER_DAY - used - 1, exhausted: false };
+  // Degrade OPEN on any KV failure. The counter is a best-effort rate limiter,
+  // never a correctness gate: when KV is unreachable or the daily put() limit is
+  // hit, a thrown error here used to 500 the whole preview — killing the warm-lead
+  // conversion path at exactly the busiest moment. A read/write miss must serve
+  // the (free) trial uncounted instead. Downside is bounded (a few extra free
+  // pulls on a high-traffic day; KV resets daily), never a dropped customer.
+  try {
+    const used = parseInt((await c.env.API_KEYS.get(key)) ?? "0", 10) || 0;
+    if (used >= TRIAL_PER_DAY) return { left: 0, exhausted: true };
+    await c.env.API_KEYS.put(key, String(used + 1), { expirationTtl: 90000 });
+    return { left: TRIAL_PER_DAY - used - 1, exhausted: false };
+  } catch {
+    return { left: null, exhausted: false }; // serve uncounted — never block on KV
+  }
 }
 
 // Give one trial back when the paid work couldn't be delivered (e.g. a typo'd
@@ -15677,8 +15695,10 @@ export async function refundTrial(c: any, scope: string): Promise<void> {
   if (!c.env.API_KEYS) return;
   const ip = c.req.header("cf-connecting-ip") ?? "unknown";
   const key = `trialq:${scope}:${ip}:${new Date().toISOString().slice(0, 10)}`;
-  const used = parseInt((await c.env.API_KEYS.get(key)) ?? "0", 10) || 0;
-  if (used > 0) await c.env.API_KEYS.put(key, String(used - 1), { expirationTtl: 90000 });
+  try {
+    const used = parseInt((await c.env.API_KEYS.get(key)) ?? "0", 10) || 0;
+    if (used > 0) await c.env.API_KEYS.put(key, String(used - 1), { expirationTtl: 90000 });
+  } catch { /* best-effort refund — a KV failure must never surface as an error */ }
 }
 
 app.get("/gate/swap/preview", async (c) => {

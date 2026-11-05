@@ -107,4 +107,33 @@ function check(name, cond) {
   check("refund with no KV is a no-op (no throw)", true);
 }
 
+// --- KV put() limit exceeded => degrade OPEN, never 500 the preview ---------
+// A failing KV (daily put limit hit, or KV unreachable) used to throw straight
+// out of trialQuota and surface as a top-level error on the verdict/preview —
+// killing the warm-lead conversion path at the busiest moment. It must now serve
+// the free trial uncounted (left:null) instead of throwing.
+{
+  const throwingKv = {
+    async get() { throw new Error("KV get() failure"); },
+    async put() { throw new Error("KV put() limit exceeded for the day."); },
+  };
+  const c = ctx(throwingKv);
+  let threw = false, q = null;
+  try { q = await trialQuota(c, "yieldverdict"); } catch { threw = true; }
+  check("trialQuota does not throw when KV fails", threw === false);
+  check("KV failure => degrade open (left:null, not exhausted)", q && q.left === null && q.exhausted === false);
+  // put-only failure (get works, put over limit) must also degrade open
+  const putOnlyKv = {
+    async get() { return "0"; },
+    async put() { throw new Error("KV put() limit exceeded for the day."); },
+  };
+  let threw2 = false, q2 = null;
+  try { q2 = await trialQuota(ctx(putOnlyKv), "yields"); } catch { threw2 = true; }
+  check("trialQuota degrades open on put-limit (get ok, put throws)", threw2 === false && q2.left === null);
+  // refundTrial must also swallow a KV failure
+  let threw3 = false;
+  try { await refundTrial(c, "yieldverdict"); } catch { threw3 = true; }
+  check("refundTrial swallows a KV failure (no throw)", threw3 === false);
+}
+
 console.log(`\n# test_data_trial_quota: ${pass} checks passed`);
