@@ -269,7 +269,7 @@ export const ROUTE_CATALOG_BASE: Array<[string, string, string, string, string, 
   ["/chain/token-security", "GET", "0.009", "9000", "Is this Base token a scam or rug pull? Honeypot detector for a Base ERC-20: EIP-1967 proxy + upgradeability check, bytecode scan for mint/pause/blacklist/fee-setter/ownership, owner() renouncement, contract source-verification (Sourcify), and a live eth_call state-override sim proving a real wallet can transfer() it. Returns risk_score (0-100) + verdict (clear/review/block) + honeypot/scam/rug flags. Use before an agent buys, holds or approves a token.", ["security", "rpc", "base", "onchain", "blockchain", "token", "honeypot", "token-security", "data", "scam", "rug", "rug-detection", "scam-detection"]],
   ["/pm/markets", "GET", "0.005", "5000", "Live Polymarket prediction markets — question, outcomes, bestBid/bestAsk/spread, volume24hr/volume1wk, oneDayPriceChange, clobTokenIds, conditionId, category tags, liquidity, end date. Ranked by volume24hr; filter by keyword.", ["prediction-markets", "polymarket", "markets", "crypto", "data"]],
   ["/crypto/funding", "GET", "0.004", "4000", "6-venue perp funding rates — Binance+Bybit+OKX+Hyperliquid+dYdX+Gate — top coins by 24h volume, per-venue funding + per-venue open interest (USD) + OI-weighted CEX↔DEX arb verdict (thin-book venues excluded so cheapest-long/richest-short is executable, not a mirage), premium/basis, annualized_hl/okx/binance/bybit/gate, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle prices.", ["crypto", "funding", "perps", "open-interest", "binance", "bybit", "hyperliquid", "okx", "dydx", "gate", "arbitrage", "defi", "market-data", "data"]],
-  ["/defi/yields", "GET", "0.001", "1000", "Top DeFi lending/LP yields — project, chain, symbol, pool id, APY breakdown + 1d/7d/30d APY trend, IL risk (incl. il7d), exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL. Filter by project (family name like aave/uniswap/curve resolves all versions, or an exact slug like aave-v3), chain (short names like eth/arb/op/avax/matic/sol/bnb resolve to the DefiLlama canonical name), or stablecoin-only; sort by TVL or risk-adjusted APY.", ["defi", "yield", "lending", "apy", "tvl", "defi-yields", "data"]],
+  ["/defi/yields", "GET", "0.001", "1000", "Decision-tagged DeFi lending/LP yields — every pool row carries a per-pool verdict (SUSTAINABLE|DECAYING|OUTLIER|AVOID) + 0-100 risk_score, so you rank by go/no-go not just raw APY (raw yield feeds don't). Plus project, chain, symbol, pool id, 1d/7d/30d APY trend, IL risk (il7d), reward/underlying tokens, outlier flag, mu/sigma, stability forecast, TVL. Filter by project (aave/uniswap/curve or exact slug), chain (eth/arb/op/avax/matic/sol/bnb) or stablecoin; sort by TVL or risk-adjusted APY.", ["defi", "yield", "lending", "apy", "tvl", "defi-yields", "data"]],
   ["/crypto/prices", "GET", "0.001", "1000", "Spot token prices from DefiLlama — pass comma-separated ticker symbols or CoinGecko ids, get price/change_24h/symbol/confidence/timestamp.", ["crypto", "prices", "token-price", "market-data", "defi", "data"]],
   ["/scan/mcp", "GET", "0.05", "50000", "Security scan of a target MCP server: audits every advertised tool for prompt-injection / tool-poisoning / exfiltration / dangerous-capability / hidden-unicode (OWASP LLM01/LLM08). Returns findings + risk score + verdict (clear/review/block).", ["security", "mcp", "audit", "prompt-injection"]],
   ["/enrich/tech-risk", "GET", "0.01", "10000", "Tech-stack fingerprint -> CVE (NVD) + EPSS + CISA-KEV attack-surface risk + verdict (clear/review/block) for a domain.", ["security", "cve", "risk"]],
@@ -3814,7 +3814,7 @@ app.get("/openapi.json", (c) => {
       },
       "/crypto/prices": paid("Spot token prices + change_24h (DefiLlama).", "0.001", [{ name: "coins", desc: "comma-separated ticker symbols or coingecko ids (max 25)", example: "ETH,BTC" }]),
       "/crypto/funding": paid("6-venue Binance+Bybit+OKX+Hyperliquid+dYdX+Gate funding rates + CEX↔DEX arb spread + premium/annualized/signal/next_funding_ts.", "0.004", [{ name: "limit", desc: "max coins (default 20, max 100)", example: "10" }]),
-      "/defi/yields": paid("Top DeFi lending/LP yields — APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast (DefiLlama).", "0.001", [{ name: "limit", desc: "max pools", example: "10" }, { name: "project", desc: "protocol filter — family name (aave, uniswap, curve) resolves all versions, or exact slug", example: "aave" }, { name: "chain", desc: "chain filter", example: "Base" }, { name: "stable", desc: "'true' = stablecoin only", example: "true" }, { name: "sort", desc: "'tvl' (default) or 'risk_adjusted' (apy/sigma)", example: "tvl" }]),
+      "/defi/yields": paid("Decision-tagged DeFi lending/LP yields — every row carries a per-pool verdict (SUSTAINABLE/DECAYING/OUTLIER/AVOID) + risk_score, plus APY trend, IL risk, reward/underlying tokens, mu/sigma and stability forecast (DefiLlama).", "0.001", [{ name: "limit", desc: "max pools", example: "10" }, { name: "project", desc: "protocol filter — family name (aave, uniswap, curve) resolves all versions, or exact slug", example: "aave" }, { name: "chain", desc: "chain filter (eth/arb/op/avax/matic/sol/bnb or canonical)", example: "arb" }, { name: "stable", desc: "'true' = stablecoin only", example: "true" }, { name: "sort", desc: "'tvl' (default) or 'risk_adjusted' (apy/sigma)", example: "tvl" }]),
       "/pm/markets": paid("Live Polymarket prediction markets, ranked by volume24hr, with bestBid/bestAsk/spread and category tags.", "0.005", [{ name: "query", desc: "keyword filter", example: "election" }, { name: "limit", desc: "max markets", example: "10" }]),
       "/scan/mcp": paid("Security audit of an MCP server (tool-poisoning / prompt-injection). Findings + risk score + verdict (clear/review/block).", "0.05", [{ name: "url", desc: "target MCP server URL", required: true, example: "https://x402-data-api.sigrunner.workers.dev/mcp" }]),
       "/enrich/tech-risk": paid("Tech-stack -> CVE + EPSS + CISA-KEV risk + verdict (clear/review/block).", "0.01", [{ name: "domain", desc: "target domain", required: true, example: "stripe.com" }]),
@@ -4019,15 +4019,20 @@ app.get("/defi/yields/preview", async (c) => {
       // top-1 sample demonstrates the APY trajectory a point-in-time feed cannot.
       const sample = await Promise.all(
         all.slice(0, 1).map(async (p) => {
-          if (!p.pool || typeof p.apy !== "number" || !Number.isFinite(p.apy)) return p;
-          const prov = await archiveProvenance(c, "yield", p.pool, p.apy);
-          return prov ? { ...p, provenance: prov } : p;
+          const v = yieldRowVerdict(p);
+          let row: YieldPool & { verdict?: YieldEntryVerdict; risk_score?: number; provenance?: unknown } =
+            v ? { ...p, verdict: v.verdict, risk_score: v.risk_score } : { ...p };
+          if (p.pool && typeof p.apy === "number" && Number.isFinite(p.apy)) {
+            const prov = await archiveProvenance(c, "yield", p.pool, p.apy);
+            if (prov) row = { ...row, provenance: prov };
+          }
+          return row;
         }),
       );
       return c.json({
         preview: sample,
         total_available: all.length,
-        note: "This pool carries a provenance archive (tracked_since / ticks / APY trajectory) no raw yield feed can reconstruct. Found a high-APY pool? Get the go/no-go: pass its ?pool= to /defi/yield-entry-verdict for a packaged SUSTAINABLE|DECAYING|OUTLIER|AVOID verdict + 0-100 risk score ($0.01; see _greyridge.see_also for a one-click link to the pool above). Free top-1 sample here. Pass ?project=/?chain=/?stable=true/?limit= to pull the FULL ranked+filtered list free (3/IP/day), or GET /defi/yields?limit=20 ($0.001) — ranked APY trend+IL risk+stability forecast+TVL, keyless x402 on Base.",
+        note: "Every row carries a per-pool decision tag — verdict (SUSTAINABLE|DECAYING|OUTLIER|AVOID) + 0-100 risk_score — so you can rank by decision, not just raw APY, before you pay (raw yield feeds don't). This pool also carries a provenance archive (tracked_since / ticks / APY trajectory) no point-in-time feed can reconstruct. Want the WHY — field-cited reasons + sizing? Pass its ?pool= to /defi/yield-entry-verdict ($0.01; see _greyridge.see_also). Free top-1 sample here. Pass ?project=/?chain=/?stable=true/?limit= to pull the FULL decision-tagged list free (3/IP/day), or GET /defi/yields?limit=20 ($0.001), keyless x402 on Base.",
       });
     } catch (e) {
       return c.json({ error: (e as Error).message }, { status: 502 });
@@ -4042,7 +4047,7 @@ app.get("/defi/yields/preview", async (c) => {
     const t = await trialQuota(c, "yields");
     if (t.exhausted) {
       const all = await fetchDefiYields(20, undefined, undefined, false);
-      return c.json({ preview: all.slice(0, 1), total_available: all.length, trial: { full_pulls_left_today: 0 }, paid: paidUrl, price_usdc: "0.001", note: "Free full-list trial exhausted for today (3/IP/day); showing top-1 sample. Paid (unmetered): GET /defi/yields?limit=20&project=<p> ($0.001)." });
+      return c.json({ preview: tagYieldRowsWithVerdict(all.slice(0, 1)), total_available: all.length, trial: { full_pulls_left_today: 0 }, paid: paidUrl, price_usdc: "0.001", note: "Free full-list trial exhausted for today (3/IP/day); showing top-1 decision-tagged sample. Paid (unmetered): GET /defi/yields?limit=20&project=<p> ($0.001)." });
     }
     const pools = await fetchDefiYields(limit, project, chain, stable, sort);
     // Write-through (throttled + degrade-open): the pools an agent actually
@@ -4050,9 +4055,14 @@ app.get("/defi/yields/preview", async (c) => {
     // real compounding history — and the paid call it converts to inherits it.
     const data = await Promise.all(
       pools.map(async (p) => {
-        if (!p.pool || typeof p.apy !== "number" || !Number.isFinite(p.apy)) return p;
-        const prov = await archiveProvenance(c, "yield", p.pool, p.apy);
-        return prov ? { ...p, provenance: prov } : p;
+        const v = yieldRowVerdict(p);
+        let row: YieldPool & { verdict?: YieldEntryVerdict; risk_score?: number; provenance?: unknown } =
+          v ? { ...p, verdict: v.verdict, risk_score: v.risk_score } : { ...p };
+        if (p.pool && typeof p.apy === "number" && Number.isFinite(p.apy)) {
+          const prov = await archiveProvenance(c, "yield", p.pool, p.apy);
+          if (prov) row = { ...row, provenance: prov };
+        }
+        return row;
       }),
     );
     return c.json({
@@ -4061,7 +4071,7 @@ app.get("/defi/yields/preview", async (c) => {
       trial: t.left === null ? undefined : { full_pulls_left_today: t.left },
       paid: paidUrl,
       price_usdc: "0.001",
-      note: `Free full-list trial — the complete paid ranked+filtered result for your query${t.left === null ? "" : ` (${t.left} left today, 3/IP/day)`}, including the per-pool provenance archive (tracked_since / APY trajectory) no point-in-time feed can reconstruct. Wire it unmetered: GET /defi/yields?limit=20 ($0.001), keyless x402 on Base.`,
+      note: `Free full-list trial — the complete paid ranked+filtered result for your query${t.left === null ? "" : ` (${t.left} left today, 3/IP/day)`}, each row decision-tagged with a per-pool verdict (SUSTAINABLE|DECAYING|OUTLIER|AVOID) + risk_score, plus the provenance archive (tracked_since / APY trajectory) no point-in-time feed can reconstruct. Want the field-cited WHY + sizing on a pool? GET /defi/yield-entry-verdict?pool=<id> ($0.01). Wire this list unmetered: GET /defi/yields?limit=20 ($0.001), keyless x402 on Base.`,
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, { status: 502 });
@@ -4735,6 +4745,8 @@ export function makeRoutes(payTo: string, extraNetworks: readonly string[] = [])
             risk_adjusted_apy: 78.75,
             predicted_probability: 64,
             volumeUsd1d: null,
+            verdict: "SUSTAINABLE",
+            risk_score: 0,
           },
         },
       } as Parameters<typeof declareDiscoveryExtension>[0]),
@@ -8790,9 +8802,17 @@ app.get("/defi/yields", async (c) => {
     // (a junk reading must not seed a series — appendTick guards it too).
     const enriched = await Promise.all(
       pools.map(async (p) => {
-        if (!p.pool || typeof p.apy !== "number" || !Number.isFinite(p.apy)) return p;
-        const prov = await archiveProvenance(c, "yield", p.pool, p.apy);
-        return prov ? { ...p, provenance: prov } : p;
+        // Decision tag first (pure, deterministic over the pool's own fields),
+        // then the provenance archive (throttled + degrade-open). A row keeps its
+        // full APY fields regardless of which enrichment is available.
+        const v = yieldRowVerdict(p);
+        let row: YieldPool & { verdict?: YieldEntryVerdict; risk_score?: number; provenance?: unknown } =
+          v ? { ...p, verdict: v.verdict, risk_score: v.risk_score } : { ...p };
+        if (p.pool && typeof p.apy === "number" && Number.isFinite(p.apy)) {
+          const prov = await archiveProvenance(c, "yield", p.pool, p.apy);
+          if (prov) row = { ...row, provenance: prov };
+        }
+        return row;
       }),
     );
 
@@ -8973,6 +8993,31 @@ export function computeYieldEntryVerdict(pool: YieldPool): YieldEntryVerdictResu
     predicted: { class: pClass, probability: pProb },
     tvlUsd: tvl,
   };
+}
+
+// Compact per-row decision tag for the /defi/yields list — the SUSTAINABLE |
+// DECAYING | OUTLIER | AVOID label + 0-100 risk_score ONLY (never the field-cited
+// reasons, predicted block, honeypot pointer or rotation math — those stay in the
+// paid $0.01 /defi/yield-entry-verdict and /defi/yield-rotation). This is the
+// eval-legible moat: a routing agent comparing yield feeds sees our rows already
+// carry a go/no-go decision, the raw rivals' (Askew, Yield.xyz, DefiLlama /pools)
+// don't. Pure, no network — reuses the pool's own DefiLlama fields. Returns null
+// when apy is non-finite (a junk reading must not emit a false decision).
+export function yieldRowVerdict(
+  p: YieldPool,
+): { verdict: YieldEntryVerdict; risk_score: number } | null {
+  if (typeof p.apy !== "number" || !Number.isFinite(p.apy)) return null;
+  const r = computeYieldEntryVerdict(p);
+  return { verdict: r.verdict, risk_score: r.risk_score };
+}
+
+// Attach the compact decision tag to each row of a /defi/yields result (degrade-open:
+// a row whose apy is non-finite keeps its full fields, just without a verdict).
+export function tagYieldRowsWithVerdict<T extends YieldPool>(rows: T[]): T[] {
+  return rows.map((p) => {
+    const v = yieldRowVerdict(p);
+    return v ? { ...p, verdict: v.verdict, risk_score: v.risk_score } : p;
+  });
 }
 
 // GET /defi/yield-entry-verdict — paid ($0.01). The per-pool go/no-go on the
