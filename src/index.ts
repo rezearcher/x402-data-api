@@ -2712,14 +2712,25 @@ app.get("/ai.txt", aiTxtHandler);
 // directory held 214 services with ZERO verified / ZERO on-chain txCount, so a
 // verified row backed by our real settled Base USDC payTo is a first-mover
 // slot. These tokens are external, directory-issued ownership nonces (not a
-// behavioural gate) for the three services submitted this cycle:
-//   /crypto/prices  e54097ad-b1ee-4f4a-... -> e54097adb1ee4f4a
-//   /defi/yields    2495d560-c63e-49c1-... -> 2495d560c63e49c1
-//   /crypto/funding 9547dc43-8efe-41f7-... -> 9547dc438efe41f7
-// Served on BOTH hosts by the Worker; the directory crawler probes from a
-// datacenter IP, so the crawler-reachable workers.dev host is the one that
-// matters for verification (brand host bot-fight may 403 datacenter IPs).
+// behavioural gate). The verifier's declared github method reads
+// `.well-known/x402-verify` and matches `content == token` (we serve a
+// superset, which a contains()/line match still verifies).
+//
+// Primary set (submitted 2026-11-05 pointing at the CRAWLER-REACHABLE
+// workers.dev host — the directory crawler probes from a datacenter IP, which
+// Cloudflare bot-fight may 403 on the brand host, so the submitted endpoint is
+// the workers.dev origin the crawler can actually reach):
+//   /crypto/prices  1f3c6cc9-... -> 1f3c6cc95306402d
+//   /defi/yields    5be8f5f0-... -> 5be8f5f0b1174ab9
+//   /crypto/funding b9a0e97b-... -> b9a0e97baf8d4f7f
+// Legacy set (earlier brand-host submissions; kept so their auto-recheck also
+// verifies — harmless superset):
+//   e54097adb1ee4f4a / 2495d560c63e49c1 / 9547dc438efe41f7
+// Served on BOTH hosts by the Worker.
 export const X402_RELAY_VERIFY_TOKENS: readonly string[] = [
+  "1f3c6cc95306402d",
+  "5be8f5f0b1174ab9",
+  "b9a0e97baf8d4f7f",
   "e54097adb1ee4f4a",
   "2495d560c63e49c1",
   "9547dc438efe41f7",

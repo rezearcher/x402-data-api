@@ -38,7 +38,10 @@ for (const [path, expected] of cases) {
 // x402 Relay directory ownership-proof file: the verifier does contains(token)
 // for EACH of the three submitted services, so lock all three tokens present on
 // both the canonical path and the bare alias, served text/plain.
-const RELAY_TOKENS = ["e54097adb1ee4f4a", "2495d560c63e49c1", "9547dc438efe41f7"];
+const RELAY_TOKENS = [
+  "1f3c6cc95306402d", "5be8f5f0b1174ab9", "b9a0e97baf8d4f7f",
+  "e54097adb1ee4f4a", "2495d560c63e49c1", "9547dc438efe41f7",
+];
 for (const path of ["/.well-known/x402-verify", "/x402-verify"]) {
   const res = await app.request(path, {}, {});
   eq(res.status, 200, `${path} serves 200`);
