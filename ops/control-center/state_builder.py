@@ -620,6 +620,22 @@ def _latest_brief() -> dict:
             "age_hours": age_h, "stale": age_h > 28}   # a brief older than ~a day is flagged, never passed as fresh
 
 
+def _board_state() -> dict:
+    # fail loud: a board that cannot be built is itself a fault, never an empty board
+    try:
+        import board
+        return board.build_board()
+    except Exception as e:
+        return {"faults": [{"name": "board", "status": "parse_error", "summary": f"{type(e).__name__}: {e}",
+                            "alert": True, "age_s": None}], "stale": [], "info": [],
+                "counts": {"faults": 1, "stale": 0, "info": 0, "retired_hidden": 0}}
+
+
+def _collapse(items: list) -> list:
+    import board
+    return board.collapse_inbox(items)
+
+
 def build() -> dict:
     """Multi-loop: build full state for EVERY armed chain so the page can tab between them.
     The active (running / most-recently-run) loop's state is also spread at the top level for
@@ -668,6 +684,8 @@ def build() -> dict:
     state["sentinel"] = _safe(sentinel, {})
     state["inbox"] = _safe(_inbox_snapshot, {"items": [], "counts": {}})
     state["brief"] = _safe(_latest_brief, {})
+    state["board"] = _board_state()
+    state["inbox_groups"] = _safe(lambda: _collapse(state["inbox"].get("items", [])), [])
     return state
 
 

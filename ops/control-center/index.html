@@ -183,6 +183,12 @@
     </div>
   </div>
 
+  <!-- BOARD — generic sensor status board: faults first, stale next, info collapsed -->
+  <div class="inbox" id="boardbox">
+    <div class="ihead"><span class="ititle">STATUS BOARD</span><span class="isub" id="bcounts"></span></div>
+    <div id="boardlist"></div>
+  </div>
+
   <!-- INBOX — the triage surface that REPLACES the mailbox: alerts + escalations land here, not email -->
   <div class="inbox" id="inboxbox">
     <div class="ihead">
@@ -372,6 +378,7 @@ function render(top){
   renderTabs(top);
   renderSentinel(top);
   renderInbox(top);
+  renderBoard(top);
   renderBrief(top);
   const d=(top.loops&&top.loops[TAB||top.active])||top;
   if(!d.engine){ return; }
@@ -483,24 +490,33 @@ function renderInbox(top){
   document.getElementById('isub').textContent = (c.open||0)
     ? `${c.open} open · ${c.crit_open||0} critical — the dashboard replaces your mailbox`
     : 'inbox clear — alerts arrive here instead of your mailbox';
-  let items=(ib.items||[]);
-  // 'open' shows unread+ack; 'all' would need resolved too — server sends only open, so filter is unread-only vs open
-  if(inboxFilter==='open') items=items.filter(i=>i.state==='unread'||i.state==='ack');
-  const html = items.map(i=>{
-    const sev=i.severity||'info';
-    const cnt=(i.count&&i.count>1)?`<span class="icount">×${i.count}</span>`:'';
-    const body=i.last_body||i.body||'';
-    const acts = i.state==='unread'
-      ? `<button class="iact" onclick="inboxAct('${i.id}','ack')">mark seen</button><button class="iact resolve" onclick="inboxAct('${i.id}','resolved')">resolve</button>`
-      : `<button class="iact resolve" onclick="inboxAct('${i.id}','resolved')">resolve</button>`;
-    return `<div class="irow ${sev} ${i.state}"><span class="idot"></span>
-      <div class="ibody"><div class="ititle2">${esc(i.title)}${cnt}</div>
-      ${body?`<div class="idesc">${esc(body.slice(0,400))}</div>`:''}
-      <div class="imeta"><span class="ichip">${esc(i.source||'')}</span><span class="itime">${relTime(i.ts)}</span>
-      ${i.state==='ack'?'<span class="ichip">seen</span>':''}</div></div>
+  const groups=(top&&top.inbox_groups)||[];
+  const html = groups.map(g=>{
+    const sev=g.severity||'info';
+    const cnt=(g.count>1)?`<span class="icount">×${g.count}</span>`:'';
+    const ids=JSON.stringify(g.ids||[]).replace(/"/g,'&quot;');
+    const acts=`<button class="iact resolve" onclick="inboxActMany(${ids},'resolved')">resolve${g.ids.length>1?' all':''}</button>`;
+    return `<div class="irow ${sev} ${g.unread?'unread':'ack'}"><span class="idot"></span>
+      <div class="ibody"><div class="ititle2">${esc(g.title)}${cnt}</div>
+      ${g.body?`<div class="idesc">${esc(g.body.slice(0,400))}</div>`:''}
+      <div class="imeta"><span class="ichip">${esc(g.source||'')}</span><span class="itime">last seen ${relTime(g.last_seen)}</span></div></div>
       <div class="iacts">${acts}</div></div>`;
   }).join('') || '<div class="inone">✓ inbox clear — nothing needs your eyes right now</div>';
   document.getElementById('inboxlist').innerHTML = html;
+}
+async function inboxActMany(ids,state){ try{ await Promise.all(ids.map(id=>fetch('/api/inbox',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id,state})}))); tick(); }catch(e){} }
+function boardRow(r,cls){
+  const age=r.age_s==null?'':` · ${relTime(new Date(Date.now()-r.age_s*1000).toISOString())}`;
+  return `<div class="irow ${cls}"><span class="idot"></span><div class="ibody"><div class="ititle2">${esc(r.name)} <span class="ichip">${esc(r.status)}</span></div>
+    ${r.summary?`<div class="idesc">${esc(r.summary.slice(0,300))}</div>`:''}<div class="imeta"><span class="itime">${age.slice(3)}</span></div></div></div>`;
+}
+function renderBoard(top){
+  const b=(top&&top.board)||{faults:[],stale:[],info:[],counts:{}}; const c=b.counts||{};
+  document.getElementById('bcounts').textContent=`${c.faults||0} faults · ${c.stale||0} stale · ${c.info||0} info · ${c.retired_hidden||0} retired hidden`;
+  const sect=(label,rows,cls)=>rows.length?`<div class="inone" style="font-weight:600">${label} (${rows.length})</div>`+rows.map(r=>boardRow(r,cls)).join(''):'';
+  const keep=[...document.querySelectorAll('#boardlist details')].map(d=>d.open);
+  const info=(b.info||[]).length?`<details ${keep[0]?'open':''}><summary class="inone">info (${b.info.length}) - not counted as alerts</summary>${b.info.map(r=>boardRow(r,'info')).join('')}</details>`:'';
+  document.getElementById('boardlist').innerHTML=(sect('FAULT',b.faults||[],'crit')+sect('STALE',b.stale||[],'warn')+info)||'<div class="inone">✓ board clear</div>';
 }
 async function inboxAct(id,state){ try{ await fetch('/api/inbox',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id,state})}); tick(); }catch(e){} }
 
