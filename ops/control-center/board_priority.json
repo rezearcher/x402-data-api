@@ -27,9 +27,17 @@
       "as": "info",
       "why": "claude-code is seeding; the hermes plugin has no writes on record, so it isn't a lost source."
     },
-    "kalshi-edge-crossvenue": {
+    "kalshi-edge-health": {
       "as": "info",
-      "why": "Optional scan; failures here don't affect the Kalshi paper test."
+      "why": "A kanban board stopped since August; Kalshi work now runs in the kalshi chain, reported by loop-kalshi and kalshi_maker_paper."
+    },
+    "capability_scan": {
+      "as": "info",
+      "why": "Runs weekly, so the board's 48-hour stale limit doesn't fit it."
+    },
+    "sentinel_adversarial": {
+      "as": "info",
+      "why": "Runs on a multi-day schedule, so the board's 48-hour stale limit doesn't fit it."
     }
   }
 }

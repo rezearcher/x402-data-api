@@ -602,6 +602,7 @@ def _inbox_snapshot() -> dict:
 _BRIEF_FILES = [
     HOME / ".hermes" / "profiles" / "vand" / "home" / "last-brief.md",
     Path("/tmp/house_morning_brief.md"),
+    Path("/tmp/daily_brief_last.md"),  # the evening brief; Slack is not configured, so this is its only reader
 ]
 
 
