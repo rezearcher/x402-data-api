@@ -853,7 +853,7 @@ function rpcMarkBad(url: string, ms = 30000): void {
 // @ts-ignore -- node:async_hooks has no types in @cloudflare/workers-types; the runtime provides it under nodejs_compat
 import { AsyncLocalStorage } from "node:async_hooks";
 
-export type SubrequestLane = "sim" | "core" | "optional";
+export type SubrequestLane = "sim" | "liquidity" | "core" | "optional";
 
 export interface SubrequestBudget {
   limit: number;
@@ -862,6 +862,10 @@ export interface SubrequestBudget {
   simUsed: number;
   simSettled: boolean;
   simRefused: boolean;
+  liqReserve: number;
+  liqUsed: number;
+  liqSettled: boolean;
+  liqRefused: boolean;
   exhausted: boolean;
   failedProviders: Set<string>;
   memo: Map<string, Promise<unknown>>;
@@ -876,6 +880,11 @@ const GATE_SIM_RESERVE = 14;
 const GATE_ATTEMPTS_CORE = 4;
 const GATE_ATTEMPTS_OPTIONAL = 2;
 const GATE_ATTEMPTS_SIM = 4;
+// Pool liquidity decides the verdict (a null reads as HOLD), so it owns a reserved slice
+// like the sim and may rotate through every provider once. It runs first, so the slice
+// is released (settled) before the heavier security fan-out starts.
+const GATE_LIQ_RESERVE = 8;
+const GATE_ATTEMPTS_LIQUIDITY = 8;
 
 type BudgetStore = { run<R>(store: SubrequestBudget, fn: () => R): R; getStore(): SubrequestBudget | undefined };
 // If the runtime ever lacks AsyncLocalStorage the worker must still boot: degrade to
@@ -888,8 +897,12 @@ const budgetStore: BudgetStore = (() => {
   }
 })();
 
-export function createSubrequestBudget(limit = GATE_SUBREQUEST_LIMIT, simReserve = GATE_SIM_RESERVE): SubrequestBudget {
-  return { limit, used: 0, simReserve, simUsed: 0, simSettled: false, simRefused: false, exhausted: false, failedProviders: new Set(), memo: new Map() };
+export function createSubrequestBudget(limit = GATE_SUBREQUEST_LIMIT, simReserve = GATE_SIM_RESERVE, liqReserve = 0): SubrequestBudget {
+  return {
+    limit, used: 0, simReserve, simUsed: 0, simSettled: false, simRefused: false,
+    liqReserve, liqUsed: 0, liqSettled: liqReserve <= 0, liqRefused: false,
+    exhausted: false, failedProviders: new Set(), memo: new Map(),
+  };
 }
 
 // Joins the enclosing budget when there is one (analyzeTokenSecurity called from
@@ -907,9 +920,9 @@ export function budgetRemaining(lane: SubrequestLane): number {
   const b = budgetStore.getStore();
   if (!b) return Infinity;
   const left = b.limit - b.used;
-  if (lane === "sim") return Math.max(0, left);
-  const held = b.simSettled ? 0 : Math.max(0, b.simReserve - b.simUsed);
-  return Math.max(0, left - held);
+  const simHeld = lane === "sim" || b.simSettled ? 0 : Math.max(0, b.simReserve - b.simUsed);
+  const liqHeld = lane === "liquidity" || b.liqSettled ? 0 : Math.max(0, b.liqReserve - b.liqUsed);
+  return Math.max(0, left - simHeld - liqHeld);
 }
 
 function budgetTake(lane: SubrequestLane): boolean {
@@ -918,11 +931,18 @@ function budgetTake(lane: SubrequestLane): boolean {
   if (budgetRemaining(lane) < 1) {
     b.exhausted = true;
     if (lane === "sim") b.simRefused = true;
+    if (lane === "liquidity") b.liqRefused = true;
     return false;
   }
   b.used++;
   if (lane === "sim") b.simUsed++;
+  if (lane === "liquidity") b.liqUsed++;
   return true;
+}
+
+function settleLiquidityBudget(): void {
+  const b = budgetStore.getStore();
+  if (b) b.liqSettled = true;
 }
 
 function settleSimBudget(): void {
@@ -953,7 +973,7 @@ function meteredFetch(url: string, init: RequestInit | undefined, lane: Subreque
 
 function attemptCap(lane: SubrequestLane): number {
   if (!budgetStore.getStore()) return Infinity;
-  return lane === "sim" ? GATE_ATTEMPTS_SIM : lane === "optional" ? GATE_ATTEMPTS_OPTIONAL : GATE_ATTEMPTS_CORE;
+  return lane === "sim" ? GATE_ATTEMPTS_SIM : lane === "liquidity" ? GATE_ATTEMPTS_LIQUIDITY : lane === "optional" ? GATE_ATTEMPTS_OPTIONAL : GATE_ATTEMPTS_CORE;
 }
 
 // Share one in-flight result per request for identical lookups (name/symbol/decimals/
@@ -16243,6 +16263,20 @@ interface WethLiquidity {
   pools: { fee_tier: number; pool: string; weth_raw: string; weth_side_usd: number | null }[];
   weth_pool_usd: number | null; // 2x WETH-side value of the deepest pool (v3 TVL proxy)
   note: string | null;
+  /** set only when depth could not be MEASURED (never when a pool was measured thin or absent) */
+  unavailable_cause?: LiquidityUnavailableCause | null;
+}
+
+// Why liquidity is unknown. "infra" = the RPC providers failed/rate-limited, "budget" = the
+// per-request subrequest budget ran out, "price" = pools were read but the ETH/USD price
+// needed to value them was unavailable, "implausible" = the read failed a sanity bound.
+export type LiquidityUnavailableCause = "infra" | "budget" | "price" | "implausible";
+
+function liquidityLookupCause(): LiquidityUnavailableCause {
+  return budgetStore.getStore()?.liqRefused ? "budget" : "infra";
+}
+function liquidityUnavailable(note: string): WethLiquidity {
+  return { checked: false, pools: [], weth_pool_usd: null, note, unavailable_cause: liquidityLookupCause() };
 }
 
 // One JSON-RPC batch = one subrequest (Workers cap subrequests per invocation),
@@ -16298,8 +16332,9 @@ async function getWethUsdcLiquidity(): Promise<WethLiquidity> {
       method: "eth_call",
       params: [{ to: UNIV3_FACTORY_BASE, data: `0x1698ee82${pad(BASE_WETH)}${pad(BASE_USDC)}${fee.toString(16).padStart(64, "0")}` }, "latest"],
     })),
+    { lane: "liquidity" },
   );
-  if (!lookups) return { checked: false, pools: [], weth_pool_usd: null, note: "WETH/USDC pool lookup unavailable" };
+  if (!lookups) return liquidityUnavailable("WETH/USDC pool lookup unavailable");
   const found = UNIV3_FEE_TIERS.map((fee, i) => {
     const r = lookups[i];
     const addr = r && r.length >= 66 ? `0x${r.slice(-40)}` : null;
@@ -16307,22 +16342,23 @@ async function getWethUsdcLiquidity(): Promise<WethLiquidity> {
   }).filter((p): p is { fee: number; addr: string } => p.addr !== null);
   if (found.length === 0) {
     const anyAnswered = lookups.some((r) => r !== null);
-    return {
-      checked: anyAnswered,
-      pools: [],
-      weth_pool_usd: null,
-      note: anyAnswered ? "no Uniswap v3 WETH/USDC pool found" : "WETH/USDC pool lookup unavailable",
-    };
+    return anyAnswered
+      ? { checked: true, pools: [], weth_pool_usd: null, note: "no Uniswap v3 WETH/USDC pool found" }
+      : liquidityUnavailable("WETH/USDC pool lookup unavailable");
   }
   // USDC balanceOf(pool): 6-decimals, read directly as USD.
-  const balances = await baseRpcBatch(found.map((p) => ({ method: "eth_call", params: [{ to: BASE_USDC, data: `0x70a08231${pad(p.addr)}` }, "latest"] })));
-  if (!balances) return { checked: false, pools: [], weth_pool_usd: null, note: "WETH/USDC pool liquidity read unavailable" };
+  const balances = await baseRpcBatch(found.map((p) => ({ method: "eth_call", params: [{ to: BASE_USDC, data: `0x70a08231${pad(p.addr)}` }, "latest"] })), { lane: "liquidity" });
+  if (!balances) return liquidityUnavailable("WETH/USDC pool liquidity read unavailable");
   const pools = found.flatMap((p, i) => {
     const r = balances[i];
     if (!r || r === "0x") return [];
     const raw = BigInt(r);
     return [{ fee_tier: p.fee, pool: p.addr, weth_raw: raw.toString(), weth_side_usd: Number(raw) / 1e6 }];
   });
+  if (pools.length === 0) {
+    // Pools exist but none of their balances could be read: a failed read, not an empty market.
+    return { checked: false, pools: [], weth_pool_usd: null, note: "WETH/USDC pool balance read unavailable", unavailable_cause: "infra" };
+  }
   const best = pools.reduce<number | null>(
     (m, p) => (p.weth_side_usd !== null && (m === null || p.weth_side_usd > m) ? p.weth_side_usd : m),
     null,
@@ -16330,13 +16366,13 @@ async function getWethUsdcLiquidity(): Promise<WethLiquidity> {
   const tvl = best !== null ? Math.round(best * 2) : null;
   if (tvl !== null && tvl > 1_000_000_000) {
     // Implausibly large — signals a decimals/scaling bug. Degrade rather than fabricate.
-    return { checked: true, pools: [], weth_pool_usd: null, note: "WETH/USDC liquidity read implausible (>$1e9); degraded" };
+    return { checked: false, pools: [], weth_pool_usd: null, note: "WETH/USDC liquidity read implausible (>$1e9); degraded", unavailable_cause: "implausible" };
   }
   return {
     checked: true,
     pools,
     weth_pool_usd: tvl,
-    note: pools.length === 0 ? "WETH/USDC pool balance read unavailable" : "canonical depth measured from the WETH/USDC pool (USDC side); weth_raw is the raw USDC balance",
+    note: "canonical depth measured from the WETH/USDC pool (USDC side); weth_raw is the raw USDC balance",
   };
 }
 
@@ -16350,8 +16386,9 @@ async function getWethLiquidity(token: string): Promise<WethLiquidity> {
       method: "eth_call",
       params: [{ to: UNIV3_FACTORY_BASE, data: `0x1698ee82${pad(token)}${pad(BASE_WETH)}${fee.toString(16).padStart(64, "0")}` }, "latest"],
     })),
+    { lane: "liquidity" },
   );
-  if (!lookups) return { checked: false, pools: [], weth_pool_usd: null, note: "pool lookup unavailable" };
+  if (!lookups) return liquidityUnavailable("pool lookup unavailable");
   const found = UNIV3_FEE_TIERS.map((fee, i) => {
     const r = lookups[i];
     const addr = r && r.length >= 66 ? `0x${r.slice(-40)}` : null;
@@ -16359,26 +16396,25 @@ async function getWethLiquidity(token: string): Promise<WethLiquidity> {
   }).filter((p): p is { fee: number; addr: string } => p.addr !== null);
   if (found.length === 0) {
     const anyAnswered = lookups.some((r) => r !== null);
-    return {
-      checked: anyAnswered,
-      pools: [],
-      weth_pool_usd: null,
-      note: anyAnswered ? "no Uniswap v3 WETH pool found (token may trade only on other pairs/DEXes)" : "pool lookup unavailable",
-    };
+    return anyAnswered
+      ? { checked: true, pools: [], weth_pool_usd: null, note: "no Uniswap v3 WETH pool found (token may trade only on other pairs/DEXes)" }
+      : liquidityUnavailable("pool lookup unavailable");
   }
   const [balances, ethUsd] = await Promise.all([
-    baseRpcBatch(found.map((p) => ({ method: "eth_call", params: [{ to: BASE_WETH, data: `0x70a08231${pad(p.addr)}` }, "latest"] }))),
+    baseRpcBatch(found.map((p) => ({ method: "eth_call", params: [{ to: BASE_WETH, data: `0x70a08231${pad(p.addr)}` }, "latest"] })), { lane: "liquidity" }),
     getEthUsd().catch(() => null),
   ]);
-  if (!balances) {
-    return { checked: false, pools: [], weth_pool_usd: null, note: "pool liquidity read unavailable" };
-  }
+  if (!balances) return liquidityUnavailable("pool liquidity read unavailable");
   const pools = found.flatMap((p, i) => {
     const r = balances[i];
     if (!r || r === "0x") return [];
     const raw = BigInt(r);
     return [{ fee_tier: p.fee, pool: p.addr, weth_raw: raw.toString(), weth_side_usd: ethUsd !== null ? (Number(raw) / 1e18) * ethUsd : null }];
   });
+  if (pools.length === 0) {
+    // Pools exist but none of their balances could be read: a failed read, not an empty market.
+    return { checked: false, pools: [], weth_pool_usd: null, note: "WETH pool balance read unavailable", unavailable_cause: "infra" };
+  }
   const best = pools.reduce<number | null>(
     (m, p) => (p.weth_side_usd !== null && (m === null || p.weth_side_usd > m) ? p.weth_side_usd : m),
     null,
@@ -16387,18 +16423,30 @@ async function getWethLiquidity(token: string): Promise<WethLiquidity> {
     checked: true,
     pools,
     weth_pool_usd: best !== null ? Math.round(best * 2) : null,
-    note: pools.length === 0 ? "WETH pool balance read unavailable" : ethUsd === null ? "ETH/USD price unavailable; see weth_raw" : null,
+    note: ethUsd === null ? "ETH/USD price unavailable; see weth_raw" : null,
+    unavailable_cause: best === null ? "price" : null,
   };
 }
 
+function liquidityCauseText(c: LiquidityUnavailableCause): string {
+  return c === "budget"
+    ? "per-request subrequest budget ran out; transient, retry shortly"
+    : c === "price"
+      ? "ETH/USD price unavailable"
+      : c === "implausible"
+        ? "read failed a sanity bound"
+        : "RPC providers failed or rate-limited the lookup; transient, retry shortly";
+}
+
 async function buildTokenReport(token: string) {
-  return withSubrequestBudget(() => buildTokenReportInBudget(token));
+  return withSubrequestBudget(() => buildTokenReportInBudget(token), createSubrequestBudget(GATE_SUBREQUEST_LIMIT, GATE_SIM_RESERVE, GATE_LIQ_RESERVE));
 }
 
 async function buildTokenReportInBudget(token: string) {
   // Liquidity first (2 batched subrequests) so the heavier security analysis can't
   // starve it of the per-invocation subrequest budget.
   const liqR = await Promise.allSettled([getWethLiquidity(token)]).then((r) => r[0]);
+  settleLiquidityBudget();
   const [secR, metaR] = await Promise.allSettled([analyzeTokenSecurity(token), getTokenMeta(token)]);
   const sec = secR.status === "fulfilled" ? secR.value : null;
   const meta = metaR.status === "fulfilled" ? metaR.value : null;
@@ -16411,6 +16459,10 @@ async function buildTokenReportInBudget(token: string) {
   const caps = sec?.capabilities ?? null;
   const ownerRenounced = sec ? sec.ownership.ownership_renounced : null;
   const liqUsd = liq?.weth_pool_usd ?? null;
+  // Depth that could not be MEASURED (lookup failed) is not depth that measured low:
+  // it is named with its cause and never feeds the risk score or the CAUTION verdict.
+  const liqCause: LiquidityUnavailableCause | null =
+    liq === null ? "infra" : (liq.unavailable_cause ?? (!liq.checked ? "infra" : null));
 
   // GoPlus-parity: measure pair-targeted buy/sell fee-on-transfer tax (fills the
   // previously-hard-null buyTaxBps/sellTaxBps). Only runs when a plain transfer
@@ -16466,7 +16518,9 @@ async function buildTokenReportInBudget(token: string) {
     reasons.push(`owner address holds ~${(ownerPctBps / 100).toFixed(1)}% of supply; concentrated holdings can be dumped`);
   }
 
-  if (liq?.checked) {
+  if (liqCause !== null) {
+    reasons.push(`pool liquidity not measured (${liquidityCauseText(liqCause)}); depth unknown, so this can't read SAFE`);
+  } else if (liq?.checked) {
     if (liqUsd === null && liq.pools.length === 0) {
       reasons.push("no Uniswap v3 WETH pool found");
       score += 10;
@@ -16477,8 +16531,6 @@ async function buildTokenReportInBudget(token: string) {
       reasons.push(`modest WETH-pool liquidity (~$${liqUsd.toLocaleString("en-US")}); slippage risk on size`);
       score += 10;
     }
-  } else if (liq === null || /unavailable/.test(liq.note ?? "")) {
-    reasons.push("liquidity check unavailable");
   }
 
   // Measured DEX fee-on-transfer — a high sell tax is an unambiguous scam signal even
@@ -16514,7 +16566,7 @@ async function buildTokenReportInBudget(token: string) {
   if (avoid) score = Math.max(score, 85);
   score = Math.max(0, Math.min(100, Math.round(score)));
 
-  const risky = (sellabilityUnverified && !deepLiquidity) || reasons.some((r) => /thin|no Uniswap|liquidity check unavailable|unavailable$/.test(r));
+  const risky = (sellabilityUnverified && !deepLiquidity) || reasons.some((r) => /thin|no Uniswap|liquidity check unavailable|unavailable$|pool liquidity not measured/.test(r)); // unmeasured depth adds no risk score, but it must never read SAFE
   const verdict: "SAFE" | "CAUTION" | "AVOID" = avoid ? "AVOID" : score >= 70 ? "AVOID" : score >= 30 || risky ? "CAUTION" : "SAFE";
   if (verdict === "SAFE" && reasons.length === 0) reasons.push("no honeypot, deep liquidity, no high-risk admin controls detected");
 
@@ -16551,8 +16603,8 @@ async function buildTokenReportInBudget(token: string) {
       sellabilityUnverified,
     },
     liquidity: liq
-      ? { wethPoolUsd: liq.weth_pool_usd, basis: "approx: 2x WETH-side balance of the deepest Uniswap v3 WETH pool", pools: liq.pools, dex: "uniswap-v3", note: liq.note }
-      : { wethPoolUsd: null, pools: [], dex: "uniswap-v3", note: "liquidity check unavailable" },
+      ? { wethPoolUsd: liq.weth_pool_usd, basis: "approx: 2x WETH-side balance of the deepest Uniswap v3 WETH pool", pools: liq.pools, dex: "uniswap-v3", note: liq.note, unavailableCause: liqCause }
+      : { wethPoolUsd: null, pools: [], dex: "uniswap-v3", note: "liquidity check unavailable", unavailableCause: liqCause },
     verdict,
     risk_score: score,
     reasons,
@@ -16618,6 +16670,8 @@ export interface SwapGateSignals {
   reasons: string[];
   /** approx USD in the deepest Uniswap v3 WETH pool; null = no verifiable pool */
   liquidity_usd: number | null;
+  /** set when the depth lookup FAILED (distinct from a measured absent/thin pool) */
+  liquidity_unavailable_cause?: LiquidityUnavailableCause | null;
   notional_usd: number;
 }
 
@@ -16672,6 +16726,12 @@ export function decideSwapGate(s: SwapGateSignals): SwapDecision {
   }
   // 4. Unknown liquidity fails closed to HOLD, never GO.
   if (noLiquidityEvidence) {
+    if (s.liquidity_unavailable_cause) {
+      return {
+        decision: "hold",
+        reason: `pool liquidity could not be measured (${liquidityCauseText(s.liquidity_unavailable_cause)}) — this is a failed lookup, not a measured low value; not safe to auto-trade until depth is verified`,
+      };
+    }
     return {
       decision: "hold",
       reason:
@@ -16733,7 +16793,7 @@ async function buildTokenReportCached(token: string): Promise<{ report: Awaited<
       new Response(JSON.stringify(fresh), {
         headers: {
           "content-type": "application/json",
-          "cache-control": `max-age=${fresh.security.sellabilityUnverified ? GATE_CACHE_DEGRADED_TTL_S : GATE_CACHE_TTL_S}`,
+          "cache-control": `max-age=${fresh.security.sellabilityUnverified || fresh.liquidity.unavailableCause ? GATE_CACHE_DEGRADED_TTL_S : GATE_CACHE_TTL_S}`,
         },
       }),
     );
@@ -16752,6 +16812,8 @@ async function buildSwapGate(token: string, side: "buy" | "sell", notional: numb
   // missing key must fail CLOSED (hold), never read as "verified", so fall back to
   // the exact fact buildTokenReport derives it from — the transfer sim did not run.
   const sellability_unverified = r.security.sellabilityUnverified ?? (r.security.simStatus !== "tested");
+  // Older cached payloads lack the field: null falls back to the generic fail-closed HOLD.
+  const liquidity_unavailable_cause = liq === null ? (r.liquidity.unavailableCause ?? null) : null;
   const { decision, reason } = decideSwapGate({
     side,
     verdict: r.verdict,
@@ -16760,6 +16822,7 @@ async function buildSwapGate(token: string, side: "buy" | "sell", notional: numb
     sellability_unverified,
     reasons: r.reasons,
     liquidity_usd: liq,
+    liquidity_unavailable_cause: liquidity_unavailable_cause,
     notional_usd: notional,
   });
   return {
@@ -16770,6 +16833,7 @@ async function buildSwapGate(token: string, side: "buy" | "sell", notional: numb
     // route a human to verify the token instead of silently retrying.
     sellability_unverified,
     sellability_unverified_cause: sellability_unverified ? (r.security.simUnavailableCause ?? null) : null,
+    liquidity_unavailable_cause,
     impact_pct_of_pool: impact === null ? null : Math.round(impact * 100) / 100,
     flags: r.reasons, token_meta: r.token_meta, analyzed_at: r.analyzed_at,
     cache_state,
