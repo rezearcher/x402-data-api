@@ -17,7 +17,7 @@ import { register } from "node:module";
 
 register(new URL("./cfw-hooks.mjs", import.meta.url));
 
-const { x402Preflight, makeRoutes, ROUTE_CATALOG, computePriceAccuracy, findManifestAdvertisedAtomic, usdcDollarsToAtomic, computeDelivery, computeLiveness, computePriceTrap, computeCachePosture, preflightHeadline, INJECTION_SCAN_LIMIT } = await import("../src/index.ts");
+const { x402Preflight, makeRoutes, ROUTE_CATALOG, computePriceAccuracy, findManifestAdvertisedAtomic, usdcDollarsToAtomic, computeDelivery, computeLiveness, computePriceTrap, computeCachePosture, preflightHeadline, INJECTION_SCAN_LIMIT, computePayToTrajectory, PAYTO_TRAJECTORY_THRESHOLDS } = await import("../src/index.ts");
 
 let pass = 0;
 function check(name, fn) { return Promise.resolve(fn()).then(() => { pass++; console.log(`ok - ${name}`); }); }
@@ -617,6 +617,99 @@ await check("non-settling endpoint -> headline leads AVOID, no PAY claim", async
   assert.match(h, /^AVOID/, "leads AVOID");
   assert.match(h, /no valid x402 payment challenge/i, "names the settle failure");
   assert.ok(!/^PAY/.test(h), "never claims PAY");
+});
+
+// ---------------------------------------------------------------------------
+// payTo BEHAVIOURAL TRAJECTORY (computePayToTrajectory) — the unlisted-honeypot
+// coverage axis. Pure, no I/O: fed the raw flow numbers a chain read produced.
+// ---------------------------------------------------------------------------
+const NOW = Date.UTC(2026, 10, 6, 12, 0, 0);
+const HOUR = 3600000;
+
+// 59. FRESH + sweeping (high drain ratio) => DRAINING + honeypot_risk true.
+await check("fresh wallet sweeping incoming USDC -> DRAINING, honeypot_risk", () => {
+  const t = computePayToTrajectory({
+    inCount: 3, inUsdc: 2400, outCount: 3, outUsdc: 2360, firstInMs: NOW - 2 * HOUR,
+    inboundCapped: false, balanceUsdc: 40, nowMs: NOW, source: "blockscout",
+  });
+  assert.strictEqual(t.verdict, "DRAINING", `verdict ${t.verdict}`);
+  assert.strictEqual(t.honeypot_risk, true, "honeypot_risk set");
+  assert.ok(t.drain_ratio >= PAYTO_TRAJECTORY_THRESHOLDS.drainRatio, "drain ratio above threshold");
+  assert.match(t.note, /unlisted-honeypot|sweeps|drains/i, "note names the honeypot signature");
+});
+
+// 60. FRESH but balance-based sweep (retained <= 10%) => DRAINING even if outbound scan missed txs.
+await check("fresh wallet holding ~none of what it received -> DRAINING (balance signal)", () => {
+  const t = computePayToTrajectory({
+    inCount: 2, inUsdc: 1000, outCount: 0, outUsdc: 0, firstInMs: NOW - 5 * HOUR,
+    inboundCapped: false, balanceUsdc: 5, nowMs: NOW, source: "blockscout",
+  });
+  assert.strictEqual(t.verdict, "DRAINING", `verdict ${t.verdict}`);
+  assert.strictEqual(t.honeypot_risk, true, "honeypot_risk set via retained_ratio");
+});
+
+// 61. FRESH but RETAINS funds => FRESH (informational, NOT a downgrade).
+await check("fresh wallet that keeps its funds -> FRESH, no honeypot_risk", () => {
+  const t = computePayToTrajectory({
+    inCount: 2, inUsdc: 800, outCount: 0, outUsdc: 0, firstInMs: NOW - 3 * HOUR,
+    inboundCapped: false, balanceUsdc: 800, nowMs: NOW, source: "blockscout",
+  });
+  assert.strictEqual(t.verdict, "FRESH", `verdict ${t.verdict}`);
+  assert.strictEqual(t.honeypot_risk, false, "new-but-holding is not flagged");
+});
+
+// 62. Aged history => ESTABLISHED (even if it sweeps — a treasury pattern, not fresh).
+await check("aged sweeping wallet -> ESTABLISHED (not fresh, not flagged)", () => {
+  const t = computePayToTrajectory({
+    inCount: 40, inUsdc: 50000, outCount: 38, outUsdc: 49000, firstInMs: NOW - 60 * 24 * HOUR,
+    inboundCapped: false, balanceUsdc: 1000, nowMs: NOW, source: "blockscout",
+  });
+  assert.strictEqual(t.verdict, "ESTABLISHED", `verdict ${t.verdict}`);
+  assert.strictEqual(t.honeypot_risk, false, "aged recipient not flagged on drain alone");
+});
+
+// 63. Deep (capped) history => ESTABLISHED even when the OBSERVED first-tx is recent.
+await check("capped scan (deep history) -> ESTABLISHED, never falsely FRESH", () => {
+  const t = computePayToTrajectory({
+    inCount: 150, inUsdc: 9000, outCount: 150, outUsdc: 8900, firstInMs: NOW - 1 * HOUR,
+    inboundCapped: true, balanceUsdc: 100, nowMs: NOW, source: "blockscout",
+  });
+  assert.strictEqual(t.verdict, "ESTABLISHED", `verdict ${t.verdict}`);
+  assert.strictEqual(t.honeypot_risk, false, "deep history overrides the recent observed first-tx");
+  assert.strictEqual(t.deep_history, true, "deep_history flag surfaced");
+});
+
+// 64. No readable inbound flow => UNKNOWN, degrade open (never penalizes).
+await check("no inbound history -> UNKNOWN (degrade open)", () => {
+  const t = computePayToTrajectory({
+    inCount: 0, inUsdc: 0, outCount: 0, outUsdc: 0, firstInMs: null,
+    inboundCapped: false, balanceUsdc: null, nowMs: NOW, source: "none",
+  });
+  assert.strictEqual(t.verdict, "UNKNOWN", `verdict ${t.verdict}`);
+  assert.strictEqual(t.honeypot_risk, false, "UNKNOWN is never a flag");
+});
+
+// 65. Dust inbound (< minInboundUsdc) is not judged "draining" even at 100% ratio.
+await check("dust-only fresh wallet not flagged as draining", () => {
+  const t = computePayToTrajectory({
+    inCount: 1, inUsdc: 0.5, outCount: 1, outUsdc: 0.5, firstInMs: NOW - 1 * HOUR,
+    inboundCapped: false, balanceUsdc: 0, nowMs: NOW, source: "blockscout",
+  });
+  assert.strictEqual(t.honeypot_risk, false, "dust inbound below minInboundUsdc is not meaningful draining");
+  assert.strictEqual(t.verdict, "FRESH", `verdict ${t.verdict} (fresh but not draining)`);
+});
+
+// 66. Headline names the drain-trajectory axis in its lead (the Vouch/AgentTrust beat).
+await check("headline lead names the live drain-trajectory axis", () => {
+  const h = preflightHeadline("PAY", true, [], []);
+  assert.match(h, /drain-trajectory/i, "lead names the drain-trajectory axis");
+});
+
+// 67. Honeypot-risk CAUTION headline explains the unlisted-honeypot reason.
+await check("honeypot-risk CAUTION headline explains the fresh-sweeper reason", () => {
+  const h = preflightHeadline("CAUTION", true, [{ name: "payTo_trajectory", ok: false, detail: "", fix: null }], []);
+  assert.match(h, /^CAUTION/, "leads CAUTION");
+  assert.match(h, /brand-new|sweeps|honeypot/i, "names the fresh-sweeper/honeypot reason");
 });
 
 console.log(`\n${pass} checks passed`);

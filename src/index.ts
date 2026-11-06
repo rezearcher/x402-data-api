@@ -5886,6 +5886,7 @@ export function makeRoutes(payTo: string, extraNetworks: readonly string[] = [])
               { name: "challenge", ok: true, detail: "HTTP 402 with a valid x402 accepts[] array", fix: null },
               { name: "accepts", ok: true, detail: "scheme=exact network=eip155:8453 asset=USDC payTo=0x… amount set", fix: null },
               { name: "payTo_safety", ok: true, detail: "payTo not on OFAC SDN nor community scam lists", fix: null },
+              { name: "payTo_trajectory", ok: true, detail: "payTo trajectory: ESTABLISHED — aged USDC inbound history, a long-lived recipient (not a throwaway honeypot the list screen would miss)", fix: null },
               { name: "resource_scan", ok: true, detail: "no LLM01/LLM08 prompt-injection patterns in resource/tools", fix: null },
               { name: "price_accuracy", ok: true, detail: "charged 0.001 USDC == advertised (source: self-manifest)", fix: null },
               { name: "liveness", ok: true, detail: "liveness: LIVE — reachable, presents a settle-complete 402, stable across 3 probes", fix: null },
@@ -11730,6 +11731,90 @@ export interface PreflightCachePosture {
   directives: string | null;     // the observed Cache-Control value, if any
   note: string;
 }
+// payTo BEHAVIORAL TRAJECTORY — the pre-pay honeypot-COVERAGE axis no rival
+// exposes keyless. Our payTo_safety is a LIST match (OFAC SDN + the 3182-addr
+// community scam/drainer set): structurally blind to a FRESH wallet draining
+// BEFORE anyone lists it — the UNLISTED-honeypot case (arXiv 2605.30998 /
+// dev.to/afx 20338-probe study: traps ≥$1k/call that a sanctions/scam catalog
+// cannot see because they are brand new). This reads the payTo's LIVE Base-USDC
+// flow (inbound age + in/out counts + drain ratio + current balance) and
+// classifies the recipient's behaviour. Honest, read-only, zero-capital,
+// degrades OPEN (UNKNOWN when the chain cannot be read — never a false flag).
+//   ESTABLISHED — aged / high-volume inbound history; a long-lived recipient.
+//   FRESH       — first seen very recently but RETAINS funds (new, not sweeping).
+//   DRAINING    — fresh AND sweeps nearly everything it receives: the honeypot
+//                 signature. Pre-payment you CANNOT tell a trap from a brand-new
+//                 legit service, so this downgrades PAY→CAUTION, never AVOID.
+//   UNKNOWN     — no readable inbound flow (degrade open; never penalizes).
+export interface PreflightPayToTrajectory {
+  verdict: "ESTABLISHED" | "FRESH" | "DRAINING" | "UNKNOWN";
+  honeypot_risk: boolean;         // FRESH && sweeping — the PAY→CAUTION trigger
+  inbound_count: number;
+  outbound_count: number;
+  inbound_usdc: number;
+  outbound_usdc: number;
+  drain_ratio: number | null;     // outbound_usdc / inbound_usdc (null: no inbound)
+  retained_ratio: number | null;  // balance / inbound_usdc (null: balance unknown)
+  balance_usdc: number | null;
+  age_hours: number | null;       // since first OBSERVED inbound (lower bound)
+  deep_history: boolean;          // scan was capped => more history than we read
+  source: string;                 // "blockscout" | "rpc" | "none"
+  note: string;
+}
+export const PAYTO_TRAJECTORY_THRESHOLDS = {
+  freshHours: 24,     // first inbound within 24h => FRESH window
+  drainRatio: 0.85,   // out/in >= 0.85 => sweeping
+  retainedFloor: 0.1, // holds <= 10% of gross inbound => sweeping (balance-based)
+  minInboundUsdc: 1,  // ignore dust; need >= $1 gross inbound to judge draining
+} as const;
+// Pure, exported, no I/O — fully unit-testable. Inputs are the raw flow numbers
+// a chain/indexer read produced; this never fetches.
+export function computePayToTrajectory(flow: {
+  inCount: number; inUsdc: number; outCount: number; outUsdc: number;
+  firstInMs: number | null; inboundCapped: boolean;
+  balanceUsdc: number | null; nowMs: number; source: string;
+}): PreflightPayToTrajectory {
+  const T = PAYTO_TRAJECTORY_THRESHOLDS;
+  const r2 = (x: number) => Math.round(x * 100) / 100;
+  const r4 = (x: number) => Math.round(x * 10000) / 10000;
+  const drain_ratio = flow.inUsdc > 0 ? flow.outUsdc / flow.inUsdc : null;
+  const retained_ratio = (flow.balanceUsdc !== null && flow.inUsdc > 0) ? flow.balanceUsdc / flow.inUsdc : null;
+  const age_hours = flow.firstInMs !== null ? Math.max(0, (flow.nowMs - flow.firstInMs) / 3600000) : null;
+  const fmtAge = (h: number) => h >= 48 ? `${Math.round(h / 24)}d` : `${Math.round(h * 10) / 10}h`;
+  const base = {
+    honeypot_risk: false,
+    inbound_count: flow.inCount, outbound_count: flow.outCount,
+    inbound_usdc: r2(flow.inUsdc), outbound_usdc: r2(flow.outUsdc),
+    drain_ratio: drain_ratio === null ? null : r4(drain_ratio),
+    retained_ratio: retained_ratio === null ? null : r4(retained_ratio),
+    balance_usdc: flow.balanceUsdc === null ? null : r2(flow.balanceUsdc),
+    age_hours: age_hours === null ? null : Math.round(age_hours * 10) / 10,
+    deep_history: flow.inboundCapped, source: flow.source,
+  };
+  // No readable inbound flow => cannot judge age/drain => degrade open.
+  if (flow.source === "none" || flow.inCount === 0) {
+    return { verdict: "UNKNOWN", ...base,
+      note: "could not read the payTo's inbound USDC history (indexer/RPC unavailable, or it has never been paid) — trajectory not scored; rely on the OFAC/scam list screen" };
+  }
+  // A capped scan means history beyond our page budget => NOT a throwaway wallet.
+  const fresh = !flow.inboundCapped && age_hours !== null && age_hours < T.freshHours;
+  const meaningfulIn = flow.inUsdc >= T.minInboundUsdc;
+  const sweeping = meaningfulIn && (
+    (drain_ratio !== null && drain_ratio >= T.drainRatio) ||
+    (retained_ratio !== null && retained_ratio <= T.retainedFloor)
+  );
+  if (fresh && sweeping) {
+    const pct = Math.round((drain_ratio ?? 1) * 100);
+    return { verdict: "DRAINING", ...base, honeypot_risk: true,
+      note: `the payTo first received USDC ~${fmtAge(age_hours as number)} ago and has already swept out ~${pct}% of it (balance ${base.balance_usdc ?? "unknown"} USDC) — a brand-new recipient that immediately drains incoming funds is the UNLISTED-honeypot signature a sanctions/scam-list match cannot see; pre-payment you cannot tell a trap from a new service` };
+  }
+  if (fresh) {
+    return { verdict: "FRESH", ...base,
+      note: `the payTo first received USDC ~${fmtAge(age_hours as number)} ago (new recipient) but retains its funds — new alone is not a fault, only new+sweeping is` };
+  }
+  return { verdict: "ESTABLISHED", ...base,
+    note: `the payTo has ${flow.inboundCapped ? "deep (>page-budget)" : "aged"} USDC inbound history (${flow.inCount} inbound transfer(s)${age_hours !== null ? `, first observed ~${fmtAge(age_hours)} ago` : ""}) — a long-lived recipient, not a throwaway` };
+}
 interface PreflightResult {
   url: string;
   verdict: "PAY" | "CAUTION" | "AVOID";
@@ -11747,6 +11832,9 @@ interface PreflightResult {
   // UNVERIFIED pre-payment (no tx to read); cross-links the post-payment check at
   // /x402/receipt-verify and surfaces the pre-pay advertised-vs-wire cousin.
   facilitator_consistency?: FacilitatorConsistency;
+  // payTo behavioural-trajectory axis — the UNLISTED-honeypot coverage case the
+  // OFAC/scam LIST match (payTo_safety) is structurally blind to.
+  payto_trajectory?: PreflightPayToTrajectory;
   // The one-line lead: this check's differentiator is the PAYMENT-SECURITY axis
   // (will-it-settle + payTo OFAC/scam + price/delivery/cache reconcile) that the
   // MCP/agent CONFIG scanners (Snyk Agent Scan, ShieldAPI, AgentTrust) do not
@@ -11759,7 +11847,7 @@ interface PreflightResult {
   checked_at: string;
 }
 const PREFLIGHT_SCOPE_NOTE =
-  "static 402 wire-format + LIVE/ZOMBIE/DEAD liveness label + absolute price-trap flag + LLM01/LLM08 description scan + payTo OFAC/scam flag + advertised-vs-charged price-accuracy + delivery-readiness (broken-paywall / output-spec) check + Attack-III cache-leakage posture (no-store vs cacheable paid route) + the facilitator verify/settle-consistency axis (always pre-payment/UNVERIFIED here — the post-payment check is /x402/receipt-verify); read-only, never pays; not a settlement guarantee.";
+  "static 402 wire-format + LIVE/ZOMBIE/DEAD liveness label + absolute price-trap flag + LLM01/LLM08 description scan + payTo OFAC/scam flag + payTo live drain-trajectory (the UNLISTED-honeypot case a list match cannot see: FRESH+sweeping => CAUTION) + advertised-vs-charged price-accuracy + delivery-readiness (broken-paywall / output-spec) check + Attack-III cache-leakage posture (no-store vs cacheable paid route) + the facilitator verify/settle-consistency axis (always pre-payment/UNVERIFIED here — the post-payment check is /x402/receipt-verify); read-only, never pays; not a settlement guarantee.";
 
 // Claims-Law scope boundary for our LLM01/LLM08 injection detection, shared by
 // /x402/preflight and /scan/mcp. The detection is STATIC pattern analysis of the
@@ -11780,19 +11868,21 @@ export const INJECTION_SCAN_LIMIT =
 export function preflightHeadline(verdict: PreflightResult["verdict"], will_settle: boolean, checks: PreflightCheck[], findings: ScanFinding[]): string {
   const has = (n: string, ok: boolean) => checks.some((c) => c.name === n && c.ok === ok);
   const payToBad = has("payTo_safety", false);
-  const lead = "payment-security first (settlement + payTo OFAC/scam + price/delivery/cache) — the safe-to-PAY axis MCP/agent config scanners (Snyk Agent Scan, ShieldAPI, AgentTrust) do not cover";
+  const honeypotRisk = has("payTo_trajectory", false);
+  const lead = "payment-security first (settlement + payTo OFAC/scam + live drain-trajectory + price/delivery/cache) — the safe-to-PAY axis MCP/agent config scanners (Snyk Agent Scan, ShieldAPI, AgentTrust) do not cover";
   if (!will_settle) return `AVOID — no valid x402 payment challenge to settle against. ${lead}.`;
   if (payToBad) return `AVOID — payTo is on the OFAC SDN or a community scam/drainer list. ${lead}.`;
   if (verdict === "AVOID") {
     const crit = findings.some((f) => f.severity === "critical" || f.severity === "high");
     return `AVOID — ${crit ? "a critical/high injection finding" : "a hard pay-safety failure"} blocks payment. ${lead}.`;
   }
+  if (verdict === "CAUTION" && honeypotRisk) return `CAUTION — settles and payTo is not list-flagged, but the payTo is a brand-new wallet that immediately sweeps incoming funds (unlisted-honeypot signature a list match misses) — verify before paying. ${lead}.`;
   if (verdict === "CAUTION") return `CAUTION — settles and payTo is clear, but a soft pay-safety issue needs review (see checks). ${lead}.`;
   return `PAY — settles, payTo clear of OFAC/scam, price/delivery/cache reconcile clean. ${lead}.`;
 }
 
-function preflightResult(url: string, started: number, verdict: PreflightResult["verdict"], will_settle: boolean, checks: PreflightCheck[], findings: ScanFinding[], reliability?: PreflightReliability, priceAccuracy?: PriceAccuracyVerdict, delivery?: PreflightDelivery, liveness?: PreflightLiveness, priceTrap?: PriceTrap, cachePosture?: PreflightCachePosture, facilitatorConsistency?: FacilitatorConsistency): PreflightResult {
-  return { url, headline: preflightHeadline(verdict, will_settle, checks, findings), verdict, will_settle, checks, findings, latency_ms: Date.now() - started, ...(reliability ? { reliability } : {}), ...(priceAccuracy ? { price_accuracy: priceAccuracy } : {}), ...(delivery ? { delivery } : {}), ...(liveness ? { liveness } : {}), ...(priceTrap ? { price_trap: priceTrap } : {}), ...(cachePosture ? { cache_posture: cachePosture } : {}), ...(facilitatorConsistency ? { facilitator_consistency: facilitatorConsistency } : {}), injection_scan_limit: INJECTION_SCAN_LIMIT, scope_note: PREFLIGHT_SCOPE_NOTE, checked_at: new Date().toISOString() };
+function preflightResult(url: string, started: number, verdict: PreflightResult["verdict"], will_settle: boolean, checks: PreflightCheck[], findings: ScanFinding[], reliability?: PreflightReliability, priceAccuracy?: PriceAccuracyVerdict, delivery?: PreflightDelivery, liveness?: PreflightLiveness, priceTrap?: PriceTrap, cachePosture?: PreflightCachePosture, facilitatorConsistency?: FacilitatorConsistency, payToTrajectory?: PreflightPayToTrajectory): PreflightResult {
+  return { url, headline: preflightHeadline(verdict, will_settle, checks, findings), verdict, will_settle, checks, findings, latency_ms: Date.now() - started, ...(reliability ? { reliability } : {}), ...(priceAccuracy ? { price_accuracy: priceAccuracy } : {}), ...(delivery ? { delivery } : {}), ...(liveness ? { liveness } : {}), ...(priceTrap ? { price_trap: priceTrap } : {}), ...(cachePosture ? { cache_posture: cachePosture } : {}), ...(facilitatorConsistency ? { facilitator_consistency: facilitatorConsistency } : {}), ...(payToTrajectory ? { payto_trajectory: payToTrajectory } : {}), injection_scan_limit: INJECTION_SCAN_LIMIT, scope_note: PREFLIGHT_SCOPE_NOTE, checked_at: new Date().toISOString() };
 }
 
 // Pure Attack-III cache-leakage posture verdict. Exported for unit tests. Reads
@@ -12403,6 +12493,28 @@ export async function x402Preflight(url: string, samples = 1, advertisedUsdc: st
     checks.push({ name: "payTo_safety", ok: false, detail: `payTo is not a 0x EVM address (${payTo ?? "absent"}) — cannot screen it`, fix: "verify the recipient address out of band before paying" });
   }
 
+  // (3b) payTo BEHAVIOURAL TRAJECTORY — the UNLISTED-honeypot coverage axis the
+  // list match above is structurally blind to. Only worth the chain reads when
+  // the payTo is a real EVM address that is NOT already list-blocked (a blocked
+  // payTo is AVOID regardless, no point spending subrequests). Reads the
+  // recipient's live Base-USDC in/out flow + balance; a FRESH wallet that
+  // immediately sweeps incoming funds (honeypot signature) downgrades PAY→CAUTION.
+  // Degrades OPEN (UNKNOWN never penalizes).
+  let payToTrajectory: PreflightPayToTrajectory | undefined;
+  let honeypotRisk = false;
+  if (payTo && ADDR_RE.test(payTo) && !payToBad) {
+    try {
+      const flow = await scanPayToUsdcFlow(payTo, 3);
+      payToTrajectory = computePayToTrajectory({ ...flow, nowMs: Date.now() });
+      honeypotRisk = payToTrajectory.honeypot_risk;
+      checks.push({ name: "payTo_trajectory", ok: !honeypotRisk, detail: `payTo trajectory: ${payToTrajectory.verdict} — ${payToTrajectory.note}`,
+        fix: honeypotRisk ? "a brand-new recipient that immediately drains incoming USDC cannot be told apart from a honeypot before you pay — verify the operator out of band first" : null });
+    } catch {
+      // Any unexpected error => don't block; the list screen already ran.
+      payToTrajectory = { verdict: "UNKNOWN", honeypot_risk: false, inbound_count: 0, outbound_count: 0, inbound_usdc: 0, outbound_usdc: 0, drain_ratio: null, retained_ratio: null, balance_usdc: null, age_hours: null, deep_history: false, source: "none", note: "payTo trajectory read failed — not scored (degrade open)" };
+    }
+  }
+
   // (4) LLM01/LLM08 scan of the advertised text (description/name/resource/tags
   // from the 402 body) plus, when the URL is an MCP endpoint, its tools/list.
   const scanParts: string[] = [];
@@ -12547,12 +12659,12 @@ export async function x402Preflight(url: string, samples = 1, advertisedUsdc: st
   const hasCritHigh = findings.some((f) => f.severity === "critical" || f.severity === "high");
   const flapping = reliability !== undefined && !reliability.stable;
   const priceTrapExtreme = priceTrap.tier === "extreme";
-  const anySoftIssue = checks.some((c) => !c.ok) || findings.length > 0 || nonUsdcAsset || flapping || overcharge || priceTrap.flagged;
+  const anySoftIssue = checks.some((c) => !c.ok) || findings.length > 0 || nonUsdcAsset || flapping || overcharge || priceTrap.flagged || honeypotRisk;
   let verdict: PreflightResult["verdict"];
   if (!will_settle || hasCritHigh || payToBad || priceTrapExtreme) verdict = "AVOID";
   else if (anySoftIssue) verdict = "CAUTION";
   else verdict = "PAY";
-  return preflightResult(url, started, verdict, will_settle, checks, findings, reliability, priceAccuracy, delivery, liveness, priceTrap, cachePosture, facilitatorConsistency);
+  return preflightResult(url, started, verdict, will_settle, checks, findings, reliability, priceAccuracy, delivery, liveness, priceTrap, cachePosture, facilitatorConsistency, payToTrajectory);
 }
 
 // ---------------------------------------------------------------------------
@@ -12699,6 +12811,7 @@ function preflightSample(): PreflightResult {
       { name: "accepts", ok: true, detail: "scheme=exact network=eip155:8453 asset=0x833589…USDC payTo=0x… amount=4000", fix: null },
       { name: "resource", ok: true, detail: "resource=https://seller.example/data", fix: null },
       { name: "payTo_safety", ok: true, detail: "payTo not on the OFAC SDN nor community scam/drainer lists", fix: null },
+      { name: "payTo_trajectory", ok: true, detail: "payTo trajectory: ESTABLISHED — aged USDC inbound history, a long-lived recipient (the unlisted-honeypot axis a sanctions/scam list match cannot see)", fix: null },
       { name: "reliability", ok: true, detail: "3/3 probes payable; latency median 210ms (max 240ms)", fix: null },
       { name: "price_accuracy", ok: true, detail: "charged 0.004 USDC == advertised (source: self-manifest)", fix: null },
       { name: "delivery", ok: true, detail: "the challenge declares the output shape (schema/example) so you know what the payment buys", fix: null },
@@ -12716,6 +12829,21 @@ function preflightSample(): PreflightResult {
       direction: null,
       attack_class: FACILITATOR_ATTACK_CLASS,
       note: "pre-payment, the live wire amount matches the advertised amount (price_accuracy=MATCH); verify/settle divergence is only observable AFTER payment — bring your Base settlement tx to /x402/receipt-verify?tx=…&url=… for the post-payment facilitator_consistency check (it reconciles the real on-chain settled amount against the advertised amount).",
+    },
+    payto_trajectory: {
+      verdict: "ESTABLISHED",
+      honeypot_risk: false,
+      inbound_count: 212,
+      outbound_count: 6,
+      inbound_usdc: 184.21,
+      outbound_usdc: 12.5,
+      drain_ratio: 0.0679,
+      retained_ratio: 0.9321,
+      balance_usdc: 171.71,
+      age_hours: null,
+      deep_history: true,
+      source: "blockscout",
+      note: "the payTo has deep (>page-budget) USDC inbound history (212 inbound transfer(s)) — a long-lived recipient, not a throwaway. With ?url= this is read LIVE from the recipient's Base-USDC flow; a FRESH wallet that immediately sweeps incoming funds (honeypot signature) downgrades PAY→CAUTION — the unlisted-honeypot case the OFAC/scam list match cannot see.",
     },
     delivery: {
       verdict: "SPECIFIED",
@@ -14573,6 +14701,59 @@ async function scanRepeatDemand(to: string, maxPages: number): Promise<{ payers:
     } catch { /* degrade open */ }
   }
   return { payers, total, gross, firstTs, lastTs, source, pages, capped };
+}
+
+// Live USDC flow for the payTo-trajectory axis. Reads BOTH directions of the
+// recipient's USDC transfers (Blockscout v2, CF-IP egress, newest-first) and its
+// current balance (one balanceOf). Bounded to `pages` per direction; a direction
+// that still has next_page_params after the budget is reported `capped` (deep
+// history => not a throwaway). Degrades OPEN: any failure returns what it has
+// (source "none" when the indexer gave nothing), so the pure classifier returns
+// UNKNOWN rather than a false flag. Zero capital, read-only.
+async function scanPayToUsdcFlow(addr: string, pages: number): Promise<{
+  inCount: number; inUsdc: number; outCount: number; outUsdc: number;
+  firstInMs: number | null; inboundCapped: boolean; balanceUsdc: number | null; source: string;
+}> {
+  const USDC = USDC_BASE.toLowerCase();
+  const base = `https://base.blockscout.com/api/v2/addresses/${addr}/token-transfers`;
+  const scanDir = async (filter: "to" | "from") => {
+    let count = 0, usdc = 0, firstMs: number | null = null, src = "none", capped = false;
+    let nextParams: Record<string, string | number> | null = null;
+    for (let p = 0; p < pages; p++) {
+      const qs = new URLSearchParams({ type: "ERC-20", filter });
+      if (nextParams) for (const [k, v] of Object.entries(nextParams)) qs.set(k, String(v));
+      let j: { items?: any[]; next_page_params?: Record<string, string | number> | null } | null = null;
+      try {
+        const res = await fetch(`${base}?${qs.toString()}`, { headers: { "User-Agent": "greyridge-x402/1", accept: "application/json" }, signal: AbortSignal.timeout(10000) });
+        if (!res.ok) break;
+        j = (await res.json()) as any;
+        src = "blockscout";
+      } catch { break; }
+      for (const it of j?.items ?? []) {
+        const tokAddr = String((it.token ?? {}).address ?? "").toLowerCase();
+        if (tokAddr && tokAddr !== USDC) continue;
+        const dec = parseInt(String((it.total ?? {}).decimals ?? "6")) || 6;
+        const val = Number((it.total ?? {}).value ?? "0") / 10 ** dec;
+        if (!Number.isFinite(val)) continue;
+        count++; usdc += val;
+        const ts = Date.parse(it.timestamp ?? "");
+        if (Number.isFinite(ts) && (firstMs === null || ts < firstMs)) firstMs = ts;
+      }
+      nextParams = j?.next_page_params ?? null;
+      if (!nextParams) break;
+      if (p === pages - 1 && nextParams) capped = true;
+    }
+    return { count, usdc, firstMs, src, capped };
+  };
+  const [inb, outb] = await Promise.all([scanDir("to"), scanDir("from")]);
+  let balanceUsdc: number | null = null;
+  try {
+    const data = `0x70a08231${addr.slice(2).toLowerCase().padStart(64, "0")}`;
+    const hex = (await baseRpc("eth_call", [{ to: USDC_BASE, data }, "latest"])) as string;
+    if (typeof hex === "string" && /^0x[0-9a-fA-F]*$/.test(hex) && hex.length > 2) balanceUsdc = Number(BigInt(hex)) / 1e6;
+  } catch { /* degrade open — balance stays null */ }
+  const source = (inb.src === "blockscout" || outb.src === "blockscout") ? "blockscout" : (balanceUsdc !== null ? "rpc" : "none");
+  return { inCount: inb.count, inUsdc: inb.usdc, outCount: outb.count, outUsdc: outb.usdc, firstInMs: inb.firstMs, inboundCapped: inb.capped, balanceUsdc, source };
 }
 
 export async function x402RepeatDemand(url: string | null, callerPayTo: string | null, ownPayTo: string | null, maxPages = 4): Promise<RepeatDemandResult> {
