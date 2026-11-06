@@ -3451,8 +3451,9 @@ app.get("/.well-known/agent-card.json", (c) => {
         id: "defi-yields",
         name: "DeFi Lending & LP Yields",
         description:
-          "Top DeFi lending/LP yields — project, chain, symbol, APY breakdown + 1d/7d/30d APY trend, IL risk, " +
-          "mu/sigma, DefiLlama stability forecast, TVL. Filter by project, chain, or stablecoin-only. Sort by TVL or risk-adjusted APY. " +
+          "Per-pool DeFi yield ENTRY VERDICT — every pool tagged SUSTAINABLE | DECAYING | OUTLIER | AVOID + a " +
+          "0-100 risk score (go/no-go on where to deploy, not just raw rows). Backed by APY breakdown, " +
+          "IL risk, mu/sigma, DefiLlama stability forecast, TVL. " +
           "Route: GET /defi/yields. Returns HTTP 402 (x402 v2, Base mainnet, USDC) until paid. " +
           "Price: $0.001. Free preview at GET /defi/yields/preview. " +
           "Machine-readable payment manifest: /.well-known/x402. MCP tool interface: /mcp (tool: defi_yields).",
@@ -4966,7 +4967,7 @@ export function makeRoutes(payTo: string, extraNetworks: readonly string[] = [])
         payTo,
       },
       description:
-        "Top DeFi lending/LP yields — project, chain, symbol, pool id, APY breakdown + 1d/7d/30d APY trend, IL risk (incl. il7d), exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL. Filter by project, chain, or stablecoin-only; sort by TVL (default) or risk-adjusted APY (apy/sigma).",
+        "Per-pool DeFi yield ENTRY VERDICT — every pool tagged SUSTAINABLE | DECAYING | OUTLIER | AVOID with a 0-100 risk score: a go/no-go on where to deploy, not just raw rows. Backed by APY breakdown + 1d/7d/30d APY trend, IL risk (il7d), exposure, mu/sigma, DefiLlama stability forecast, TVL, reward/underlying tokens, outlier flag. Filter by project, chain, or stablecoin-only; sort by TVL (default) or risk-adjusted APY (apy/sigma).",
       mimeType: "application/json",
       extensions: declareDiscoveryExtension({
         method: "GET",
@@ -22172,7 +22173,7 @@ const mcpHandler = createMcpHandler(() => {
     "crypto_funding",
     {
       description:
-        "Live 6-venue perpetual-futures funding rates from Binance+Bybit+OKX+Hyperliquid+dYdX+Gate (per-venue rate, per-venue open interest in USD, an OI-WEIGHTED CEX↔DEX arb verdict — funding_spread_bps + cheapest-long/richest-short venue computed over an OI-screened set so a thin-book outlier never names an unexecutable venue; excluded_thin_venues + oi_weighted flag report what was screened — premium/basis, annualized_hl/okx/binance/bybit/gate, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle price, day volume), ranked by volume. Venues unreachable or not listing a coin are omitted per-coin — Hyperliquid is always present. Cost: $0.004 USDC per call via x402.",
+        "Live 6-venue perpetual-futures funding rates from Binance+Bybit+OKX+Hyperliquid+dYdX+Gate (per-venue rate, per-venue open interest in USD, an OI-WEIGHTED CEX↔DEX arb verdict — funding_spread_bps + cheapest-long/richest-short venue computed over an OI-screened set so a thin-book outlier never names an unexecutable venue; excluded_thin_venues + oi_weighted flag report what was screened — premium/basis, annualized_hl/okx/binance/bybit/gate, LONGS_PAY/SHORTS_PAY/NEUTRAL signal, next_funding_ts, mark/oracle price, day volume), ranked by volume. Venues unreachable or not listing a coin are omitted per-coin — Hyperliquid is always present. Cost: $0.005 USDC per call via x402 on MCP tools/call (direct HTTP route: $0.004).",
       inputSchema: {
         limit: z.number().optional().describe("Number of results, default 20, max 100"),
       },
@@ -22220,7 +22221,7 @@ const mcpHandler = createMcpHandler(() => {
     "yield_entry_verdict",
     {
       description:
-        "Per-pool DeFi yield-entry go/no-go. Pass a DefiLlama poolId (the 'pool' field from defi_yields) and get a packaged SUSTAINABLE | DECAYING | OUTLIER | AVOID verdict + 0-100 risk score + field-cited reasons, built from the pool's APY trend (1d/7d/30d), DefiLlama stability forecast, impermanent loss (il7d), volatility (sigma), outlier flag and TVL. Optional token (0x underlying, Base) adds a honeypot-check pointer. The should-I-enter-THIS-pool call after defi_yields. Cost: $0.01 USDC per call via x402.",
+        "Per-pool DeFi yield-entry go/no-go. Pass a DefiLlama poolId (the 'pool' field from defi_yields) and get a packaged SUSTAINABLE | DECAYING | OUTLIER | AVOID verdict + 0-100 risk score + field-cited reasons, built from the pool's APY trend (1d/7d/30d), DefiLlama stability forecast, impermanent loss (il7d), volatility (sigma), outlier flag and TVL. Optional token (0x underlying, Base) adds a honeypot-check pointer. The should-I-enter-THIS-pool call after defi_yields. Cost: $0.005 USDC per call via x402 on MCP tools/call (direct HTTP route: $0.01).",
       inputSchema: {
         pool: z.string().describe("DefiLlama poolId — the 'pool' field from defi_yields (required)"),
         token: z.string().optional().describe("Optional underlying token (0x, Base) — adds a honeypot-check pointer"),
@@ -22629,7 +22630,7 @@ const mcpHandler = createMcpHandler(() => {
     "chain_wallet_screen",
     {
       description:
-        "Is this wallet sanctioned OR a known scammer? Pre-trade screen for a counterparty / recipient / token-spender address before an agent sends, swaps or approves: exact match against (1) the U.S. Treasury OFAC SDN crypto-address list and (2) community scam/phishing/wallet-drainer threat-intel (ScamSniffer + MEW darklist). Returns sanctioned (bool) + malicious (bool) + verdict (blocked/clear) + the list sources and snapshot dates. 'clear' means not on these lists — not a safety guarantee. Cost: $0.004 USDC per call via x402.",
+        "Is this wallet sanctioned OR a known scammer? Pre-trade screen for a counterparty / recipient / token-spender address before an agent sends, swaps or approves: exact match against (1) the U.S. Treasury OFAC SDN crypto-address list and (2) community scam/phishing/wallet-drainer threat-intel (ScamSniffer + MEW darklist). Returns sanctioned (bool) + malicious (bool) + verdict (blocked/clear) + the list sources and snapshot dates. 'clear' means not on these lists — not a safety guarantee. Cost: $0.005 USDC per call via x402 on MCP tools/call (direct HTTP route: $0.004).",
       inputSchema: {
         address: z.string().describe("0x-prefixed 20-byte address to screen (counterparty / recipient / spender)"),
       },
@@ -22647,7 +22648,7 @@ const mcpHandler = createMcpHandler(() => {
     "x402_preflight",
     {
       description:
-        "Should an agent pay this x402 endpoint? Pre-payment check of an UNKNOWN x402 URL: fetch it once (never pays) to validate the 402 challenge + accepts[] (scheme/network/payTo/amount/asset/resource = will it settle) AND label its LIVENESS (LIVE | ZOMBIE | DEAD — is it a working payable endpoint right now, or listed-active-but-broken) AND flag an absolute PRICE TRAP (a honeypot charging >= $1,000/call trips AVOID even when its advertised==live price looks self-consistent; pass max=<usdc> for your own budget ceiling) AND scan the resource + any advertised MCP tools for LLM01/LLM08 prompt-injection and screen payTo against the OFAC SDN + community scam lists (safe to pay) AND verify the PRICE — does the live accepts[].amount match the advertised price? pass advertised=<usdc> (the figure your catalog quoted) or it self-checks the endpoint's /.well-known/x402: MATCH | OVERCHARGE | UNDERCHARGE. Optional samples=N (1-5) runs a reliability/payability burst (settle-consistency + latency; a flapping endpoint downgrades PAY to CAUTION). Returns verdict PAY | CAUTION | AVOID + per-check fix hints + latency. Read-only, never a settlement guarantee. Cost: $0.001 USDC per call via x402.",
+        "Should an agent pay this x402 endpoint? Pre-payment check of an UNKNOWN x402 URL: fetch it once (never pays) to validate the 402 challenge + accepts[] (scheme/network/payTo/amount/asset/resource = will it settle) AND label its LIVENESS (LIVE | ZOMBIE | DEAD — is it a working payable endpoint right now, or listed-active-but-broken) AND flag an absolute PRICE TRAP (a honeypot charging >= $1,000/call trips AVOID even when its advertised==live price looks self-consistent; pass max=<usdc> for your own budget ceiling) AND scan the resource + any advertised MCP tools for LLM01/LLM08 prompt-injection and screen payTo against the OFAC SDN + community scam lists (safe to pay) AND verify the PRICE — does the live accepts[].amount match the advertised price? pass advertised=<usdc> (the figure your catalog quoted) or it self-checks the endpoint's /.well-known/x402: MATCH | OVERCHARGE | UNDERCHARGE. Optional samples=N (1-5) runs a reliability/payability burst (settle-consistency + latency; a flapping endpoint downgrades PAY to CAUTION). Returns verdict PAY | CAUTION | AVOID + per-check fix hints + latency. Read-only, never a settlement guarantee. Cost: $0.005 USDC per call via x402 on MCP tools/call (direct HTTP route: $0.001).",
       inputSchema: {
         url: z.string().describe("the x402 endpoint URL to pre-check before paying"),
         advertised: z.string().optional().describe("optional: the price (USDC dollars, e.g. 0.001) your catalog/listing quoted — returns MATCH/OVERCHARGE/UNDERCHARGE vs the live accepts[].amount; omit to self-check against the endpoint's own /.well-known/x402"),
@@ -22672,7 +22673,7 @@ const mcpHandler = createMcpHandler(() => {
     "x402_receipt_verify",
     {
       description:
-        "Did my x402 payment actually settle? POST-payment on-chain proof — the other half of x402_preflight (which checks BEFORE paying). Bring your Base settlement tx hash + the resource URL you paid, and this reads the tx receipt from Base mainnet, decodes its USDC Transfer events, and reconciles them against the endpoint's advertised payTo + amount (resolved from the resource's live 402, or pass payto/expect to bind it directly). Returns verdict SETTLED | UNDERPAID | WRONG_RECIPIENT | NO_TRANSFER | REVERTED | NOT_FOUND | UNVERIFIED, the matched transfer, and all USDC transfers in the tx. Read-only ground truth; confirms settlement to the right address + amount, not off-chain resource delivery. Cost: $0.004 USDC per call via x402.",
+        "Did my x402 payment actually settle? POST-payment on-chain proof — the other half of x402_preflight (which checks BEFORE paying). Bring your Base settlement tx hash + the resource URL you paid, and this reads the tx receipt from Base mainnet, decodes its USDC Transfer events, and reconciles them against the endpoint's advertised payTo + amount (resolved from the resource's live 402, or pass payto/expect to bind it directly). Returns verdict SETTLED | UNDERPAID | WRONG_RECIPIENT | NO_TRANSFER | REVERTED | NOT_FOUND | UNVERIFIED, the matched transfer, and all USDC transfers in the tx. Read-only ground truth; confirms settlement to the right address + amount, not off-chain resource delivery. Cost: $0.005 USDC per call via x402 on MCP tools/call (direct HTTP route: $0.004).",
       inputSchema: {
         tx: z.string().describe("0x-prefixed 32-byte Base-mainnet settlement transaction hash"),
         url: z.string().optional().describe("the x402 resource URL you paid — its live 402 challenge supplies the advertised payTo + amount to reconcile against"),
