@@ -16,13 +16,19 @@ acts on a decision, not a feed.
 No API key, no account, no SDK required. Free previews and a small daily trial
 are keyless; the full paid call settles inline in USDC on Base via x402.
 
-## The three routes
+## The four routes
 
 | Route | Price | What it returns |
 |-------|-------|-----------------|
-| `GET /defi/yields` | $0.001 | DeFi pool yields, each row tagged `verdict` (`SUSTAINABLE` / `DECAYING` / `OUTLIER` / `AVOID`) + `risk_score`, risk-adjusted APY, and a provenance trajectory (how the APY has actually moved since first tracked). Filter with `?chain=arbitrum` etc. |
+| `GET /defi/yields` | $0.001 | DeFi pool yields, each row tagged `verdict` (`SUSTAINABLE` / `DECAYING` / `OUTLIER` / `AVOID`) + `risk_score`, risk-adjusted APY, and a provenance trajectory (how the APY has actually moved since first tracked). Filter with `?chain=arbitrum` etc. Returns each pool's DefiLlama `pool` id — feed it to the next route. |
+| `GET /defi/yield-entry-verdict?pool=<id>` | $0.01 | The deep go/no-go for **one** pool you're about to enter: a packaged `SUSTAINABLE` / `DECAYING` / `OUTLIER` / `AVOID` verdict + `0-100 risk_score`, field-cited `reasons`, a `predicted` class with probability, risk-adjusted APY, IL risk, and σ. This is the "should I put capital in *this* LP" answer, not a list to re-judge. |
 | `GET /crypto/funding` | $0.004 | Perp funding across Hyperliquid, OKX, dYdX, Binance, Bybit, Gate — with `open_interest_usd` per venue, an **OI-weighted** `funding_spread_bps`, `best_long_venue` / `best_short_venue`, and a `signal` (`LONGS_PAY` / `SHORTS_PAY`). Thin venues are excluded from the arb verdict, not silently averaged in. |
 | `GET /crypto/prices` | $0.001 | Token spot prices with a `confidence`, 24h change, and a `provenance` block (tracked-since, tick count, and the recent value trajectory) so a price is auditable, not a bare number. |
+
+**The two-step yield decision:** `GET /defi/yields` lists the candidate pools
+(each tagged, each with its `pool` id); `GET /defi/yield-entry-verdict?pool=<id>`
+returns the full entry verdict for the one you pick. List cheap ($0.001), then
+commit the deep check ($0.01) only on the pool you're actually sizing into.
 
 Base host: `https://x402-data-api.sigrunner.workers.dev`
 (All USDC-on-Base, `eip155:8453`, asset `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`.)
@@ -40,13 +46,18 @@ curl -s https://x402-data-api.sigrunner.workers.dev/defi/yields/preview
 # Keyless trial — full filtered result, 3x/IP/day
 curl -s "https://x402-data-api.sigrunner.workers.dev/defi/yields/preview?chain=arbitrum"
 
+# Deep entry verdict for ONE pool — pass a pool id from /defi/yields (3x/IP/day free)
+curl -s "https://x402-data-api.sigrunner.workers.dev/defi/yield-entry-verdict/preview?pool=747c1d2a-c668-4682-b9f9-296708a3dd90"
+
 curl -s https://x402-data-api.sigrunner.workers.dev/crypto/funding/preview
 curl -s https://x402-data-api.sigrunner.workers.dev/crypto/prices/preview
 ```
 
 A real preview row already carries the edge, e.g. a Lido STETH pool comes back
 with `"verdict":"SUSTAINABLE","risk_score":0` alongside the APY and its
-trajectory; a decaying Arbitrum pool comes back `"verdict":"DECAYING"`.
+trajectory; a decaying Arbitrum pool comes back `"verdict":"DECAYING"`. The
+entry-verdict preview adds the `reasons` (field-cited) and a `predicted` class,
+e.g. `{"verdict":"SUSTAINABLE","risk_score":0,"predicted":{"class":"Stable/Up","probability":70}}`.
 
 ## Pay per call with x402 (no key, no account)
 
