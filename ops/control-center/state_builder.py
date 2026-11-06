@@ -463,6 +463,11 @@ def health(rt: dict, rev: dict, hist: dict, cfg: dict) -> dict:
         return bool(re.search(r"one-time|account|api[\s_-]?key|api[\s_-]?token|\btoken\b|credential|oauth|sign[\s_-]?up|register|passkey|2fa", a))
     atom_clean = all(_atom_clean(e.get("atom")) for e in builder_hist[:3]) if builder_hist else True
     super_ok = shipped and atom_clean
+    # A chain with no builder (arb researches and judges) ships nothing by design, so the rule doesn't apply.
+    _manifest = _safe(lambda: json.loads(_read(CHAIN_DIR / f"{cfg['name']}.chain.json")), {}) or {}
+    no_builder = bool(_manifest.get("agents")) and not any("build" in str(a.get("name", "")) for a in _manifest["agents"])
+    if no_builder:
+        super_ok = True
     # EVER-GREEN: is the loop looping CONSISTENTLY? Derived from the chain's OWN configured
     # pass_cooldown (not an x402-specific minute band): a pass has completed, the rest between passes
     # is ~the configured cooldown (so it's genuinely re-looping, not dead), and no pass is hung.
@@ -471,7 +476,8 @@ def health(rt: dict, rev: dict, hist: dict, cfg: dict) -> dict:
     have_passes = bool(runs) or (idle["rotating"] and idle["ok"])
     not_hung = (runs[-1] <= 60) if runs else True          # a pass grossly over ~1h signals a hang
     # a chain idling in the shared rotation rests for its siblings' turns, not its own cooldown
-    looping = True if idle["rotating"] else ((rests[-1] <= cooldown_min + 10) if rests else True)
+    shared_rotation = len(list(CHAIN_DIR.glob("*.enabled"))) > 1
+    looping = True if (idle["rotating"] or shared_rotation) else ((rests[-1] <= cooldown_min + 10) if rests else True)
     ever_ok = have_passes and not_hung and looping and (idle["ok"] or bool(rt.get("alive")))
     ever_idle_why = (f"{idle['why']}; rotation-aware" if idle["rotating"] and ever_ok else None)
     ever_why = (ever_idle_why or (f"looping on tempo (last run {runs[-1] if runs else '?'}m, rest {rests[-1] if rests else '?'}m ≈ {cooldown_min:.0f}m cooldown)"
@@ -484,7 +490,7 @@ def health(rt: dict, rev: dict, hist: dict, cfg: dict) -> dict:
                     if not cfg["is_x402"] else "correctness inconclusive (probe not run yet / unreachable) — not alarming")
         return {
             "green": {"ok": green_ok, "why": green_why},
-            "super_green": {"ok": super_ok, "why": ("builder shipped+verified; atom clear or a one-time account gate" if super_ok
+            "super_green": {"ok": super_ok, "why": (("research chain: shipping does not apply" if no_builder else "builder shipped+verified; atom clear or a one-time account gate") if super_ok
                             else ("no recently-verified shipped commit" if not shipped else "work parked on a non-account human atom"))},
             "ever_green": {"ok": ever_ok, "why": ever_why},
             "gate": {"ok": True, "why": gate_why},
@@ -508,7 +514,7 @@ def health(rt: dict, rev: dict, hist: dict, cfg: dict) -> dict:
                 else "correctness inconclusive (probe not run yet / unreachable) — not alarming")
     return {
         "green": {"ok": green_ok, "why": green_why},
-        "super_green": {"ok": super_ok, "why": ("builder shipped+verified; atom clear or a one-time account gate" if super_ok
+        "super_green": {"ok": super_ok, "why": (("research chain: shipping does not apply" if no_builder else "builder shipped+verified; atom clear or a one-time account gate") if super_ok
                         else ("no recently-verified shipped commit" if not shipped else "work parked on a non-account human atom"))},
         "ever_green": {"ok": ever_ok, "why": ever_why},
         "gate": {"ok": gate_health_ok, "why": gate_why},
@@ -698,7 +704,9 @@ def emit_sensor(state: dict):
     """Write the loop-<name> shared sensor so Daily Brief / self-heal see loop health.
     Also mirrors to loop-money when the x402 money loop is active (backward-compat consumers)."""
     h = state.get("health", {})
-    alerts = [k for k, v in h.items() if not v.get("ok")]
+    # super_green ("shipped recently") is a progress signal, not a fault: a daily or research chain can be
+    # healthy without one. Faults are: engine down, off tempo, or a failed money-route canary.
+    alerts = [k for k, v in h.items() if not v.get("ok") and k != "super_green"]
     disc = state.get("discoverability", {}) or {}
     disc_note = ""
     if disc:

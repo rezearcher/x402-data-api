@@ -42,6 +42,18 @@ def load_priority(path: Path | None = None) -> list[str]:
         return []
 
 
+def load_rules(path: Path | None = None) -> dict:
+    """Per-sensor reclassification from config: {name: {"as": "info"|"needs_you", "why": "..."}}.
+    A reason is required because a rule hides a sensor from the fault list. Bad config degrades to {}."""
+    p = path or PRIORITY_FILE
+    try:
+        rules = json.loads(p.read_text()).get("rules", {})
+        return {k: v for k, v in rules.items() if isinstance(v, dict) and v.get("why")}
+    except Exception as e:
+        log.warning("board rules in %s unusable (%s); showing every fault", p, e)
+        return {}
+
+
 def _rank(name: str, pats: list[str]) -> int:
     for i, pat in enumerate(pats):
         if fnmatch.fnmatchcase(name, pat):
@@ -57,11 +69,13 @@ def _interval(d: dict):
     return None
 
 
-def build_board(data_dir: Path | None = None, priority: list[str] | None = None, now: float | None = None) -> dict:
+def build_board(data_dir: Path | None = None, priority: list[str] | None = None, now: float | None = None,
+                rules: dict | None = None) -> dict:
     root = data_dir or DATA
     now = time.time() if now is None else now
     pats = load_priority() if priority is None else priority
-    faults, stale, info = [], [], []
+    rules = load_rules() if rules is None else rules
+    faults, stale, info, needs_you = [], [], [], []
     retired = 0
     files = sorted(root.glob("*/latest.json")) if root.exists() else []
     for f in files:
@@ -84,6 +98,11 @@ def build_board(data_dir: Path | None = None, priority: list[str] | None = None,
         status = str(d.get("status", "")).strip().lower()
         row = {"name": name, "status": status or "unknown", "summary": str(d.get("summary", "")),
                "alert": bool(d.get("alert")), "age_s": age_s}
+        rule = rules.get(name)
+        if rule:
+            row["why"] = rule.get("why", "")
+            (needs_you if rule.get("as") == "needs_you" else info).append(row)
+            continue
         limit = 3 * (_interval(d) or 0) or DEFAULT_STALE_S
         if status in FAULT_STATUSES:
             faults.append(row)
@@ -94,8 +113,9 @@ def build_board(data_dir: Path | None = None, priority: list[str] | None = None,
     faults.sort(key=lambda r: (_rank(r["name"], pats), r["name"]))
     stale.sort(key=lambda r: r["name"])
     info.sort(key=lambda r: r["name"])
-    return {"faults": faults, "stale": stale, "info": info,
-            "counts": {"faults": len(faults), "stale": len(stale), "info": len(info), "retired_hidden": retired}}
+    needs_you.sort(key=lambda r: r["name"])
+    return {"faults": faults, "stale": stale, "info": info, "needs_you": needs_you,
+            "counts": {"faults": len(faults), "needs_you": len(needs_you), "stale": len(stale), "info": len(info), "retired_hidden": retired}}
 
 
 _HEX = re.compile(r"0x[0-9a-fA-F]+|\b(?=[0-9a-fA-F]*\d)(?=[0-9a-fA-F]*[a-fA-F])[0-9a-fA-F]{6,}\b")

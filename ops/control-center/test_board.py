@@ -34,7 +34,7 @@ class BoardTest(unittest.TestCase):
             self.assertEqual([x["name"] for x in b["faults"]], ["op_budget", "loop-money", "broken", "zeta"])
             self.assertEqual([x["name"] for x in b["stale"]], ["old", "slow"])
             self.assertEqual([x["name"] for x in b["info"]], ["noisy"])
-            self.assertEqual(b["counts"], {"faults": 4, "stale": 2, "info": 1, "retired_hidden": 1})
+            self.assertEqual(b["counts"], {"faults": 4, "needs_you": 0, "stale": 2, "info": 1, "retired_hidden": 1})
             self.assertIn("JSONDecodeError", b["faults"][2]["summary"])
 
     def test_missing_config_alphabetical_with_warning(self):
@@ -57,6 +57,23 @@ class BoardTest(unittest.TestCase):
         self.assertEqual(len(g), 2)
         self.assertEqual(g[0]["title"], "Sensor # failed at #")
         self.assertEqual((g[0]["count"], g[0]["last_seen"], g[0]["severity"]), (3, "2026-11-05T12:00:00+00:00", "crit"))
+
+
+class RulesTest(unittest.TestCase):
+    def test_rules_reclassify_but_require_a_reason(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            for name in ("good_news", "owner", "broken", "no_reason"):
+                (root / name).mkdir()
+                (root / name / "latest.json").write_text(json.dumps({"status": "alert", "alert": True, "summary": "x"}))
+            cfg = root / "cfg.json"
+            cfg.write_text(json.dumps({"rules": {"good_news": {"as": "info", "why": "event"},
+                                                 "owner": {"as": "needs_you", "why": "keys"},
+                                                 "no_reason": {"as": "info"}}}))
+            b = board.build_board(root, priority=[], rules=board.load_rules(cfg))
+            self.assertEqual({r["name"] for r in b["faults"]}, {"broken", "no_reason"})
+            self.assertEqual([r["name"] for r in b["info"]], ["good_news"])
+            self.assertEqual([r["name"] for r in b["needs_you"]], ["owner"])
 
 
 if __name__ == "__main__":

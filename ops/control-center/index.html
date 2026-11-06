@@ -150,6 +150,14 @@
   .iact:hover{color:var(--txt);border-color:var(--jade)}
   .iact.resolve:hover{border-color:var(--jade);color:var(--jade)}
   .inone{font-size:12px;color:var(--muted);padding:10px 2px}
+  /* ---- foldable boxes and board sections ---- */
+  .foldhead{cursor:pointer;user-select:none}
+  .foldmark::before{content:'▾';color:var(--muted);margin-right:6px}
+  .folded .foldmark::before{content:'▸'}
+  .folded #boardlist,.folded #inboxlist{display:none}
+  .boardsect>summary{list-style:none;cursor:pointer;user-select:none;font-weight:600}
+  .boardsect>summary::-webkit-details-marker{display:none}
+  .boardsect>summary::before{content:'▸ '} .boardsect[open]>summary::before{content:'▾ '}
   /* ---- DAILY BRIEF (collapsible) ---- */
   .brief{margin-top:12px;border:1px solid var(--line);background:var(--panel);border-radius:10px;overflow:hidden}
   .brief>summary{list-style:none;cursor:pointer;padding:11px 14px;display:flex;align-items:center;gap:10px;user-select:none}
@@ -185,17 +193,18 @@
 
   <!-- BOARD — generic sensor status board: faults first, stale next, info collapsed -->
   <div class="inbox" id="boardbox">
-    <div class="ihead"><span class="ititle">STATUS BOARD</span><span class="isub" id="bcounts"></span></div>
+    <div class="ihead foldhead" onclick="toggleBox('boardbox')"><span class="foldmark"></span><span class="ititle">STATUS BOARD</span><span class="isub" id="bcounts"></span></div>
     <div id="boardlist"></div>
   </div>
 
   <!-- INBOX — the triage surface that REPLACES the mailbox: alerts + escalations land here, not email -->
   <div class="inbox" id="inboxbox">
-    <div class="ihead">
+    <div class="ihead foldhead" onclick="toggleBox('inboxbox')">
+      <span class="foldmark"></span>
       <span class="ititle">📥 INBOX</span>
       <span class="ibadge" id="ibadge"></span>
       <span class="isub" id="isub">the dashboard replaces your mailbox — alerts arrive here</span>
-      <span class="ifilter">
+      <span class="ifilter" onclick="event.stopPropagation()">
         <button class="iflt sel" data-f="open" onclick="setInboxFilter('open')">open</button>
         <button class="iflt" data-f="all" onclick="setInboxFilter('all')">all</button>
       </span>
@@ -508,15 +517,22 @@ async function inboxActMany(ids,state){ try{ await Promise.all(ids.map(id=>fetch
 function boardRow(r,cls){
   const age=r.age_s==null?'':` · ${relTime(new Date(Date.now()-r.age_s*1000).toISOString())}`;
   return `<div class="irow ${cls}"><span class="idot"></span><div class="ibody"><div class="ititle2">${esc(r.name)} <span class="ichip">${esc(r.status)}</span></div>
-    ${r.summary?`<div class="idesc">${esc(r.summary.slice(0,300))}</div>`:''}<div class="imeta"><span class="itime">${age.slice(3)}</span></div></div></div>`;
+    ${r.why?`<div class="idesc"><b>${esc(r.why)}</b></div>`:''}${r.summary?`<div class="idesc">${esc(r.summary.slice(0,300))}</div>`:''}<div class="imeta"><span class="itime">${age.slice(3)}</span></div></div></div>`;
 }
+// Fold state survives the 4s refresh; stored per box/section, falling back to each one's default.
+const foldState=(()=>{try{return JSON.parse(localStorage.getItem('foldState')||'{}')}catch(e){return {}}})();
+function saveFold(){ try{localStorage.setItem('foldState',JSON.stringify(foldState))}catch(e){} }
+function isOpen(key,dflt){ return key in foldState ? !!foldState[key] : dflt; }
+function setOpen(key,open){ foldState[key]=!!open; saveFold(); }
+function toggleBox(id){ const open=!isOpen(id,true); setOpen(id,open); applyBoxFolds(); }
+function applyBoxFolds(){ for(const id of ['boardbox','inboxbox']){ document.getElementById(id).classList.toggle('folded',!isOpen(id,true)); } }
 function renderBoard(top){
   const b=(top&&top.board)||{faults:[],stale:[],info:[],counts:{}}; const c=b.counts||{};
-  document.getElementById('bcounts').textContent=`${c.faults||0} faults · ${c.stale||0} stale · ${c.info||0} info · ${c.retired_hidden||0} retired hidden`;
-  const sect=(label,rows,cls)=>rows.length?`<div class="inone" style="font-weight:600">${label} (${rows.length})</div>`+rows.map(r=>boardRow(r,cls)).join(''):'';
-  const keep=[...document.querySelectorAll('#boardlist details')].map(d=>d.open);
-  const info=(b.info||[]).length?`<details ${keep[0]?'open':''}><summary class="inone">info (${b.info.length}) - not counted as alerts</summary>${b.info.map(r=>boardRow(r,'info')).join('')}</details>`:'';
-  document.getElementById('boardlist').innerHTML=(sect('FAULT',b.faults||[],'crit')+sect('STALE',b.stale||[],'warn')+info)||'<div class="inone">✓ board clear</div>';
+  document.getElementById('bcounts').textContent=`${c.faults||0} faults · ${c.needs_you||0} need you · ${c.stale||0} stale · ${c.info||0} info · ${c.retired_hidden||0} retired hidden`;
+  const sect=(key,label,rows,cls,dflt)=>rows.length?`<details class="boardsect" ${isOpen(key,dflt)?'open':''} ontoggle="setOpen('${key}',this.open)"><summary class="inone">${label} (${rows.length})</summary>${rows.map(r=>boardRow(r,cls)).join('')}</details>`:'';
+  const html=sect('bd_fault','FAULT',b.faults||[],'crit',true)+sect('bd_needs','NEEDS YOU',b.needs_you||[],'warn',true)+sect('bd_stale','STALE',b.stale||[],'warn',false)+sect('bd_info','INFO, not counted as alerts',b.info||[],'info',false);
+  document.getElementById('boardlist').innerHTML=html||'<div class="inone">✓ board clear</div>';
+  applyBoxFolds();
 }
 async function inboxAct(id,state){ try{ await fetch('/api/inbox',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id,state})}); tick(); }catch(e){} }
 

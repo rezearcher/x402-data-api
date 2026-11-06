@@ -1,3 +1,38 @@
 {
-  "priority": ["x402-revenue", "assetfactory_revenue", "kalshi_maker_paper", "cf_usage", "op_budget", "failure_ledger", "context_packs", "loop-*"]
+  "priority": [
+    "x402-revenue",
+    "assetfactory_revenue",
+    "kalshi_maker_paper",
+    "cf_usage",
+    "op_budget",
+    "failure_ledger",
+    "context_packs",
+    "loop-*"
+  ],
+  "rules": {
+    "x402-revenue": {
+      "as": "info",
+      "why": "This sensor's alert means first dollar received, a one-time good event, not a fault."
+    },
+    "x402_distribution": {
+      "as": "info",
+      "why": "Reports newly found buyers; news, not a fault."
+    },
+    "trends": {
+      "as": "info",
+      "why": "Digest of metric movements; each real fault has its own sensor."
+    },
+    "auto_seed_liveness": {
+      "as": "info",
+      "why": "claude-code is seeding; the hermes plugin has no writes on record, so it isn't a lost source."
+    },
+    "midas_alpaca": {
+      "as": "needs_you",
+      "why": "Needs Alpaca paper keys only Rez can create, stored as midas-APCA_API_KEY_ID and midas-APCA_API_SECRET_KEY."
+    },
+    "kalshi-edge-crossvenue": {
+      "as": "info",
+      "why": "Optional scan; failures here don't affect the Kalshi paper test."
+    }
+  }
 }
