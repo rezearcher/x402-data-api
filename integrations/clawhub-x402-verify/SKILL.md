@@ -105,12 +105,17 @@ import { wrapFetchWithPayment } from "@x402/fetch";
 
 const fetchWithVerify = wrapFetchWithVerifiedPayment(fetch, walletClient);
 const res = await fetchWithVerify("https://some-x402-api.example/paid");
-// res.settlement -> SETTLED | UNDERPAID | WRONG_RECIPIENT | ... (independently verified on-chain)
+// The verdict rides on a response header as JSON:
+const s = JSON.parse(res.headers.get("x-grs-settlement") ?? "{}");
+// s.verdict -> SETTLED | UNDERPAID | WRONG_RECIPIENT | ... (independently verified on-chain)
+// s.rail    -> "evm" (Base) | "svm" (Solana) — both rails reconciled client-side
 ```
 
 Unlike hosted verifiers, the wrapper also binds the *signed* payment payload to the
 nonce consumed on-chain and checks the settlement block against the authorization's
-validity window — two checks only the payer can make.
+validity window — two checks only the payer can make (a server-side verifier such as
+anchor-x402 or x402-trust-layer sees only the claimed parameters, never the signed
+payload or the exact resource fetched).
 
 ---
 
