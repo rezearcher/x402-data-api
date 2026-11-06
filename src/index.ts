@@ -14989,6 +14989,8 @@ interface HoneypotSim {
   transferable: boolean | null;
   revert_reason: string | null;
   transfer_tax_bps?: number | null;
+  /** only when sim_status="unavailable": "infra" = RPC calls failed/rate-limited, "layout" = no balance slot matched */
+  unavailable_cause?: "infra" | "layout";
   note: string;
 }
 
@@ -15238,6 +15240,7 @@ async function simulateTransferProbe(token: string): Promise<HoneypotSim> {
       slot_layout: null,
       transferable: null,
       revert_reason: null,
+      unavailable_cause: sawAnySuccess ? "layout" : "infra",
       note: sawAnySuccess
         ? `Could not locate this token's balance storage slot — probed integer slots 0-63 and the ERC-7201 "openzeppelin.storage.ERC20" namespace. Likely a non-standard layout (reflection/rebasing math, packed struct, or a custom namespace) — no tradeability signal available. This does NOT imply the token is safe or unsafe.`
         : "RPC state-override calls failed or were rate-limited on every attempt — simulation infra unavailable right now. This does NOT imply the token is safe or unsafe.",
@@ -15271,6 +15274,7 @@ async function simulateTransferProbe(token: string): Promise<HoneypotSim> {
       slot_layout: slotLayout,
       transferable: null,
       revert_reason: null,
+      unavailable_cause: "infra",
       note: "Balance slot located but the transfer-probe eth_call failed or was rate-limited on every RPC attempt.",
     };
   }
@@ -15540,10 +15544,32 @@ export function computeTokenRiskScore(inp: TokenRiskInputs): { score: number; fl
   return { score, flags, dampened };
 }
 
+// One RPC pass is not a verdict. Production showed the SAME token alternating
+// tested/unavailable on consecutive calls, and an unavailable sim makes /gate/swap
+// fail closed to HOLD (correct, and deliberately not loosened) — so a single flaky
+// pass false-HOLDs a known-good token. Re-run an unavailable sim exactly once after a
+// jittered pause so provider rotation can land on a healthy path. Only "unavailable"
+// is retried: a proven result (honeypot or transferable) is final and never overridden,
+// and a still-unavailable re-run keeps the fail-closed HOLD. A throw (e.g. subrequest
+// cap) degrades to the original result.
+export async function retryUnavailableSim<T extends { sim_status: string }>(
+  first: T,
+  rerun: () => Promise<T>,
+  pauseMs: number = 120 + Math.random() * 280,
+): Promise<T> {
+  if (first.sim_status !== "unavailable") return first;
+  try {
+    if (pauseMs > 0) await new Promise((r) => setTimeout(r, pauseMs));
+    return await rerun();
+  } catch {
+    return first;
+  }
+}
+
 async function analyzeTokenSecurity(token: string): Promise<TokenSecurityResult> {
   const analyzed_at = new Date().toISOString();
 
-  const [code, nameCall, totalSupplyCall, meta, proxy, owner, sim] = await Promise.all([
+  const [code, nameCall, totalSupplyCall, meta, proxy, owner, firstSim] = await Promise.all([
     baseRpc("eth_getCode", [token, "latest"]) as Promise<string>,
     baseRpcProbe("eth_call", [{ to: token, data: "0x06fdde03" }, "latest"]),
     baseRpcProbe("eth_call", [{ to: token, data: "0x18160ddd" }, "latest"]),
@@ -15552,6 +15578,7 @@ async function analyzeTokenSecurity(token: string): Promise<TokenSecurityResult>
     getOwnerInfo(token),
     simulateTransferProbe(token),
   ]);
+  const sim = await retryUnavailableSim(firstSim, () => simulateTransferProbe(token));
 
   const codeClass = classifyCode(code);
   // A proxy's OWN bytecode is just a thin delegatecall forwarder — mint/pause/
@@ -16038,10 +16065,15 @@ async function buildTokenReport(token: string) {
   const deepLiquidity = liqUsd !== null && liqUsd >= MIN_SAFE_LIQUIDITY_USD * 10;
   const sellabilityUnverified = !!sec && !simTested && !avoid;
   if (sellabilityUnverified) {
+    // Name the real cause: telling a caller "non-standard storage layout" when the RPC
+    // providers merely failed sends them hunting a token problem that does not exist.
+    const why = sim?.unavailable_cause === "infra"
+      ? "RPC providers failed or rate-limited the simulation; transient, retry shortly"
+      : "no balance storage slot matched; non-standard storage layout";
     reasons.push(
       deepLiquidity
-        ? "transfer simulation unavailable (non-standard storage layout); deep live WETH-pool liquidity indicates the token trades"
-        : "transfer simulation unavailable (non-standard storage layout); sellability unverified",
+        ? `transfer simulation unavailable (${why}); deep live WETH-pool liquidity indicates the token trades`
+        : `transfer simulation unavailable (${why}); sellability unverified`,
     );
   }
   // A measured high DEX tax must survive the deep-liquidity offset — a liquid token
@@ -16245,6 +16277,10 @@ export function decideSwapGate(s: SwapGateSignals): SwapDecision {
 // signals. Errors are never cached (a degraded snapshot must not pin for 60s).
 // Per-colo (Cloudflare Cache API), so a cold colo still pays one full build.
 const GATE_CACHE_TTL_S = 60;
+// A report whose sim did not run is a degraded snapshot: pinning it for the full TTL
+// would hold a good token for a minute per colo after one flaky RPC pass. Keep it
+// just long enough to absorb a burst without re-running the whole RPC fan-out.
+const GATE_CACHE_DEGRADED_TTL_S = 5;
 const GATE_CACHE_ORIGIN = "https://gate-cache.internal";
 
 async function buildTokenReportCached(token: string): Promise<{ report: Awaited<ReturnType<typeof buildTokenReport>>; cache_state: "hit" | "miss" | "bypass" }> {
@@ -16262,7 +16298,10 @@ async function buildTokenReportCached(token: string): Promise<{ report: Awaited<
     await cache.put(
       key,
       new Response(JSON.stringify(fresh), {
-        headers: { "content-type": "application/json", "cache-control": `max-age=${GATE_CACHE_TTL_S}` },
+        headers: {
+          "content-type": "application/json",
+          "cache-control": `max-age=${fresh.security.sellabilityUnverified ? GATE_CACHE_DEGRADED_TTL_S : GATE_CACHE_TTL_S}`,
+        },
       }),
     );
   } catch {
