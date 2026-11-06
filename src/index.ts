@@ -814,6 +814,191 @@ function rpcMarkBad(url: string, ms = 30000): void {
 }
 
 // ---------------------------------------------------------------------------
+// Per-request subrequest budget for the token-safety path.
+//
+// Cloudflare's free plan allows 50 subrequests per invocation, shared with the x402
+// facilitator init/verify/settle, KV and Cache API calls the same request makes. The
+// report builder fans out ~35 fetches on a healthy network, and every failed RPC
+// provider costs an extra one (the old rotation tried all 8 per call, 11 with the
+// retry pass), so one flaky provider pushed the transfer simulation — which runs
+// late and sequentially — past the cap, where it surfaced as a generic "RPC providers
+// failed". The budget makes that explicit and bounded:
+//   * every fetch on the path is metered against one per-request counter;
+//   * the simulation owns a reserved slice that lower-value lookups cannot spend
+//     while it is unfinished ("sim" lane), so it is the LAST thing to starve;
+//   * lookups are capped per call (GATE_ATTEMPTS_*), not per provider list;
+//   * when the budget is gone callers stop probing instead of rotating, and the sim
+//     reports unavailable_cause "budget" — still fail-closed, never a clean pass.
+// Outside a budget scope (every other route) metering is a no-op passthrough.
+// ---------------------------------------------------------------------------
+// @ts-ignore -- node:async_hooks has no types in @cloudflare/workers-types; the runtime provides it under nodejs_compat
+import { AsyncLocalStorage } from "node:async_hooks";
+
+export type SubrequestLane = "sim" | "core" | "optional";
+
+export interface SubrequestBudget {
+  limit: number;
+  used: number;
+  simReserve: number;
+  simUsed: number;
+  simSettled: boolean;
+  simRefused: boolean;
+  exhausted: boolean;
+  failedProviders: Set<string>;
+  memo: Map<string, Promise<unknown>>;
+}
+
+// 50 minus ~12 for what the same request spends outside this path (cold-isolate x402
+// facilitator init, free-trial KV get+put, traffic-log DO, gate-cache match+put, and on
+// the paid route the verify/settle + usage counter). Sim reserve covers cached-slot
+// verify+probe+tax with a retry pass, and a likely-tier cold discovery with one retry.
+const GATE_SUBREQUEST_LIMIT = 38;
+const GATE_SIM_RESERVE = 14;
+const GATE_ATTEMPTS_CORE = 4;
+const GATE_ATTEMPTS_OPTIONAL = 2;
+const GATE_ATTEMPTS_SIM = 4;
+
+type BudgetStore = { run<R>(store: SubrequestBudget, fn: () => R): R; getStore(): SubrequestBudget | undefined };
+// If the runtime ever lacks AsyncLocalStorage the worker must still boot: degrade to
+// "no budget scope" (every metered call becomes a plain passthrough, i.e. the old behaviour).
+const budgetStore: BudgetStore = (() => {
+  try {
+    return new AsyncLocalStorage() as BudgetStore;
+  } catch {
+    return { run: (_s, fn) => fn(), getStore: () => undefined };
+  }
+})();
+
+export function createSubrequestBudget(limit = GATE_SUBREQUEST_LIMIT, simReserve = GATE_SIM_RESERVE): SubrequestBudget {
+  return { limit, used: 0, simReserve, simUsed: 0, simSettled: false, simRefused: false, exhausted: false, failedProviders: new Set(), memo: new Map() };
+}
+
+// Joins the enclosing budget when there is one (analyzeTokenSecurity called from
+// buildTokenReport), so a nested call can never mint a second 50.
+export function withSubrequestBudget<T>(fn: () => Promise<T>, budget?: SubrequestBudget): Promise<T> {
+  if (budgetStore.getStore()) return fn();
+  return budgetStore.run(budget ?? createSubrequestBudget(), fn);
+}
+export function currentSubrequestBudget(): SubrequestBudget | undefined {
+  return budgetStore.getStore();
+}
+
+// Fetches this lane may still START. Infinity outside a budget scope.
+export function budgetRemaining(lane: SubrequestLane): number {
+  const b = budgetStore.getStore();
+  if (!b) return Infinity;
+  const left = b.limit - b.used;
+  if (lane === "sim") return Math.max(0, left);
+  const held = b.simSettled ? 0 : Math.max(0, b.simReserve - b.simUsed);
+  return Math.max(0, left - held);
+}
+
+function budgetTake(lane: SubrequestLane): boolean {
+  const b = budgetStore.getStore();
+  if (!b) return true;
+  if (budgetRemaining(lane) < 1) {
+    b.exhausted = true;
+    if (lane === "sim") b.simRefused = true;
+    return false;
+  }
+  b.used++;
+  if (lane === "sim") b.simUsed++;
+  return true;
+}
+
+function settleSimBudget(): void {
+  const b = budgetStore.getStore();
+  if (b) b.simSettled = true;
+}
+
+// True when the sim lane was refused for budget, or the platform itself refused a subrequest.
+function simStarvedForBudget(): boolean {
+  return !!budgetStore.getStore()?.simRefused;
+}
+
+function isPlatformSubrequestCap(e: unknown): boolean {
+  return /too many subrequests/i.test(String((e as Error)?.message ?? e));
+}
+
+class SubrequestBudgetError extends Error {
+  constructor() { super("subrequest budget exhausted"); }
+}
+
+// Metered fetch: passthrough outside a budget scope; inside one, spends one unit of
+// `lane` or throws SubrequestBudgetError (callers already treat a throw as "this
+// lookup failed", which is the correct degrade for a lookup we chose not to make).
+function meteredFetch(url: string, init: RequestInit | undefined, lane: SubrequestLane): Promise<Response> {
+  if (!budgetTake(lane)) return Promise.reject(new SubrequestBudgetError());
+  return fetch(url, init);
+}
+
+function attemptCap(lane: SubrequestLane): number {
+  if (!budgetStore.getStore()) return Infinity;
+  return lane === "sim" ? GATE_ATTEMPTS_SIM : lane === "optional" ? GATE_ATTEMPTS_OPTIONAL : GATE_ATTEMPTS_CORE;
+}
+
+// Share one in-flight result per request for identical lookups (name/symbol/decimals/
+// getCode were each fetched 2-3x per report). Only answers worth keeping are retained.
+function memoInRequest<T>(key: string, run: () => Promise<T>, keep: (v: T) => boolean = () => true): Promise<T> {
+  const b = budgetStore.getStore();
+  if (!b) return run();
+  const hit = b.memo.get(key) as Promise<T> | undefined;
+  if (hit) return hit;
+  const p = run().then(
+    (v) => { if (!keep(v)) b.memo.delete(key); return v; },
+    (e) => { b.memo.delete(key); throw e; },
+  );
+  b.memo.set(key, p);
+  return p;
+}
+
+// Provider capability learned at runtime (no hardcoded roster): a provider that answers a
+// method with "not available on this plan" / 401 / 403 / 400 is skipped for THAT method
+// for an hour, so it stops costing a subrequest per request. Isolate-local, degrades open.
+const rpcCapabilityMiss = new Map<string, number>();
+const RPC_CAPABILITY_MISS_MS = 3600_000;
+function rpcMarkUnsupported(url: string, cap: string): void {
+  rpcCapabilityMiss.set(`${url}|${cap}`, Date.now() + RPC_CAPABILITY_MISS_MS);
+}
+function rpcSupports(url: string, cap: string): boolean {
+  return (rpcCapabilityMiss.get(`${url}|${cap}`) ?? 0) <= Date.now();
+}
+const UNSUPPORTED_METHOD_RE = /not available|not supported|method not found|unsupported|upgrade|only core|plan/i;
+
+// Provider order for a call: rotation + isolate cooldown (rpcOrder) minus providers that
+// already failed IN THIS REQUEST, so a dead provider costs one fetch per request, not one
+// per call. Falls back to the full order if that would leave nothing.
+function rpcOrderForRequest(cap?: string): string[] {
+  const b = budgetStore.getStore();
+  let list = rpcOrder();
+  if (cap) {
+    const capable = list.filter((u) => rpcSupports(u, cap));
+    if (capable.length) list = capable;
+  }
+  if (b && b.failedProviders.size) {
+    const fresh = list.filter((u) => !b.failedProviders.has(u));
+    if (fresh.length) list = fresh;
+  }
+  return list;
+}
+function rpcFailedInRequest(url: string): void {
+  budgetStore.getStore()?.failedProviders.add(url);
+}
+
+// Providers for eth_simulateV1 (state-override simulation): the static, reliability-ordered
+// BASE_RPCS head, minus runtime-learned incapable/cooling providers. The old
+// `rpcOrder().slice(0, 3)` took the first 3 of a ROTATED list, so ~3 of 8 rotations
+// contained no simulate-capable provider and buyTaxBps/sellTaxBps came back null.
+function rpcSimOrder(): string[] {
+  const now = Date.now();
+  const b = budgetStore.getStore();
+  const ok = BASE_RPCS.filter(
+    (u) => rpcSupports(u, "eth_simulateV1") && (rpcCooldownUntil.get(u) ?? 0) <= now && !(b?.failedProviders.has(u)),
+  );
+  return (ok.length ? ok : BASE_RPCS.filter((u) => rpcSupports(u, "eth_simulateV1"))).slice(0, 3);
+}
+
+// ---------------------------------------------------------------------------
 // Base mainnet JSON-RPC helper — fixed host only (no user-supplied URL),
 // SSRF-safe by construction. Shared by all /chain/* endpoints.
 // ---------------------------------------------------------------------------
@@ -971,9 +1156,19 @@ export function resolveTokenQuery(raw: string | undefined): TokenQueryResolution
   };
 }
 
-async function baseRpc(method: string, params: unknown[]): Promise<any> {
+async function baseRpc(method: string, params: unknown[], opts?: { lane?: SubrequestLane }): Promise<any> {
+  const lane = opts?.lane ?? "core";
+  return memoInRequest(`rpc:${method}:${JSON.stringify(params)}`, () => baseRpcUncached(method, params, lane), () => true);
+}
+
+async function baseRpcUncached(method: string, params: unknown[], lane: SubrequestLane): Promise<any> {
   let lastErr = "no rpc tried";
-  for (const url of rpcOrder()) {
+  let attempts = 0;
+  const cap = attemptCap(lane);
+  for (const url of rpcOrderForRequest()) {
+    if (attempts >= cap) break;
+    if (!budgetTake(lane)) { lastErr = "subrequest budget exhausted"; break; }
+    attempts++;
     try {
       const res = await fetch(url, {
         method: "POST",
@@ -984,6 +1179,7 @@ async function baseRpc(method: string, params: unknown[]): Promise<any> {
       if (!res.ok) {
         lastErr = `${url} -> HTTP ${res.status}`;
         rpcMarkBad(url);
+        rpcFailedInRequest(url);
         continue; // 429 / 5xx → try the next provider
       }
       const j = (await res.json()) as { result?: unknown; error?: { message?: string } };
@@ -994,6 +1190,8 @@ async function baseRpc(method: string, params: unknown[]): Promise<any> {
       return j.result; // may be null (e.g. unknown tx hash) — a valid answer
     } catch (e) {
       lastErr = `${url} -> ${(e as Error).message}`;
+      if (isPlatformSubrequestCap(e)) { const b = budgetStore.getStore(); if (b) b.exhausted = true; break; }
+      rpcFailedInRequest(url);
     }
   }
   throw new Error(`Base RPC unavailable (all providers): ${lastErr}`);
@@ -9591,9 +9789,9 @@ async function fetchTokenPriceChanges(ids: string[]): Promise<Record<string, num
   const result: Record<string, number | null> = {};
   try {
     const path = ids.map((id) => `coingecko:${id}`).join(",");
-    const res = await fetch(`https://coins.llama.fi/percentage/${path}?period=24h`, {
+    const res = await meteredFetch(`https://coins.llama.fi/percentage/${path}?period=24h`, {
       headers: { accept: "application/json" },
-    });
+    }, "optional");
     if (!res.ok) return result;
     const raw = (await res.json()) as { coins: Record<string, number> };
     for (const id of ids) {
@@ -9606,11 +9804,13 @@ async function fetchTokenPriceChanges(ids: string[]): Promise<Record<string, num
   return result;
 }
 
-async function fetchTokenPrices(ids: string[]): Promise<TokenPrice[]> {
+async function fetchTokenPrices(ids: string[], opts?: { withChange?: boolean }): Promise<TokenPrice[]> {
   const path = ids.map((id) => `coingecko:${id}`).join(",");
+  // withChange:false skips the 24h-change lookup — a second subrequest whose value
+  // getEthUsd (spot price for liquidity USD) never reads.
   const [res, changes] = await Promise.all([
-    fetch(`https://coins.llama.fi/prices/current/${path}`, { headers: { accept: "application/json" } }),
-    fetchTokenPriceChanges(ids),
+    meteredFetch(`https://coins.llama.fi/prices/current/${path}`, { headers: { accept: "application/json" } }, "core"),
+    opts?.withChange === false ? Promise.resolve({} as Record<string, number | null>) : fetchTokenPriceChanges(ids),
   ]);
   if (!res.ok) {
     throw new Error(`DefiLlama prices upstream error: ${res.status}`);
@@ -9759,7 +9959,7 @@ async function getEthUsd(): Promise<number | null> {
   const now = Date.now();
   if (ethUsdCache && now - ethUsdCache.ts < USD_PRICE_TTL_MS) return ethUsdCache.price;
   try {
-    const [eth] = await fetchTokenPrices(["ethereum"]);
+    const [eth] = await fetchTokenPrices(["ethereum"], { withChange: false });
     if (!eth || !Number.isFinite(eth.price)) return ethUsdCache?.price ?? null;
     ethUsdCache = { price: eth.price, ts: now };
     return eth.price;
@@ -9965,6 +10165,13 @@ async function getTokenMeta(token: string): Promise<TokenMeta> {
   const key = token.toLowerCase();
   const cached = tokenMetaCache.get(key);
   if (cached) return cached;
+  // analyzeTokenSecurity and buildTokenReport both ask for the meta in the same request;
+  // share one lookup instead of paying for it twice.
+  return memoInRequest(`meta:${key}`, () => getTokenMetaUncached(token), (m) => m.symbol !== null && m.name !== null && m.decimals !== null);
+}
+
+async function getTokenMetaUncached(token: string): Promise<TokenMeta> {
+  const key = token.toLowerCase();
   const call = (data: string) =>
     (baseRpc("eth_call", [{ to: token, data }, "latest"]) as Promise<string>).catch(() => null);
   const [symbolHex, nameHex, decimalsHex] = await Promise.all([call("0x95d89b41"), call("0x06fdde03"), call("0x313ce567")]);
@@ -14716,13 +14923,15 @@ interface ProxyInfo {
 }
 
 async function detectProxy(token: string): Promise<ProxyInfo> {
-  const [implWord, adminWord, uupsWord, zosImplWord, zosAdminWord] = await Promise.all([
-    (baseRpc("eth_getStorageAt", [token, EIP1967_IMPLEMENTATION_SLOT, "latest"]).catch(() => null)) as Promise<string | null>,
-    (baseRpc("eth_getStorageAt", [token, EIP1967_ADMIN_SLOT, "latest"]).catch(() => null)) as Promise<string | null>,
-    (baseRpc("eth_getStorageAt", [token, EIP1822_PROXIABLE_SLOT, "latest"]).catch(() => null)) as Promise<string | null>,
-    (baseRpc("eth_getStorageAt", [token, ZOS_IMPLEMENTATION_SLOT, "latest"]).catch(() => null)) as Promise<string | null>,
-    (baseRpc("eth_getStorageAt", [token, ZOS_ADMIN_SLOT, "latest"]).catch(() => null)) as Promise<string | null>,
-  ]);
+  // One JSON-RPC batch instead of five calls (5 -> 1 subrequest). If no provider takes the
+  // batch, fall back to the individual calls so a batch-hostile provider set cannot make a
+  // proxy read as a plain contract.
+  const slots = [EIP1967_IMPLEMENTATION_SLOT, EIP1967_ADMIN_SLOT, EIP1822_PROXIABLE_SLOT, ZOS_IMPLEMENTATION_SLOT, ZOS_ADMIN_SLOT];
+  const batched = await baseRpcBatch(slots.map((slot) => ({ method: "eth_getStorageAt", params: [token, slot, "latest"] })));
+  const words: (string | null)[] = batched ?? (budgetRemaining("core") < 12 ? slots.map(() => null) : await Promise.all(
+    slots.map((slot) => (baseRpc("eth_getStorageAt", [token, slot, "latest"]).catch(() => null)) as Promise<string | null>),
+  ));
+  const [implWord, adminWord, uupsWord, zosImplWord, zosAdminWord] = words;
   const implAddr = implWord ? storageWordToAddress(implWord) : null;
   const adminAddr = adminWord ? storageWordToAddress(adminWord) : null;
   const uupsAddr = uupsWord ? storageWordToAddress(uupsWord) : null;
@@ -14837,6 +15046,8 @@ interface OwnerInfo {
 let rpcStormUntil = 0;
 const RPC_STORM_COOLDOWN_MS = 1500;
 
+type RpcProbeResult = { result?: string; error?: string; unavailable?: boolean; budget?: boolean };
+
 async function baseRpcProbe(
   method: string,
   params: unknown[],
@@ -14844,22 +15055,45 @@ async function baseRpcProbe(
   // behaviour, no extra subrequests. retries:1 adds at most ONE jittered retry
   // pass over 3 reliable providers — used only where the answer is the product
   // (slot discovery + the transfer probe), so a sub-second 429 burst does not
-  // silently degrade the verdict. Worst case per call is 8 + 3 = 11 subrequests
-  // and the common case is still 1.
-  opts?: { retries?: number },
-): Promise<{ result?: string; error?: string; unavailable?: boolean }> {
-  const passes = 1 + Math.max(0, Math.min(1, opts?.retries ?? 0));
+  // silently degrade the verdict. Outside a budget scope the worst case per call
+  // is 8 + 3 = 11 subrequests; inside one it is attemptCap(lane) (+3 only if the
+  // lane can still afford the retry pass) and the common case is still 1.
+  opts?: { retries?: number; lane?: SubrequestLane },
+): Promise<RpcProbeResult> {
+  const lane = opts?.lane ?? "core";
+  return memoInRequest(
+    `probe:${method}:${JSON.stringify(params)}`,
+    () => baseRpcProbeUncached(method, params, opts?.retries ?? 0, lane),
+    (r) => !r.unavailable,
+  );
+}
+
+async function baseRpcProbeUncached(method: string, params: unknown[], retriesWanted: number, lane: SubrequestLane): Promise<RpcProbeResult> {
+  const passes = 1 + Math.max(0, Math.min(1, retriesWanted));
+  const cap = attemptCap(lane);
+  let attempts = 0;
+  let refusedForBudget = false;
 
   for (let pass = 0; pass < passes; pass++) {
     if (pass > 0) {
+      // A retry pass that cannot fit the remaining budget is skipped outright: it
+      // would only spend the units a later, cheaper lookup needs and still fail.
+      if (budgetRemaining(lane) < 3) { refusedForBudget = true; break; }
       // Let the provider shed the burst; jitter so concurrent Workers don't
       // retry in lockstep.
       await new Promise((r) => setTimeout(r, 120 + Math.random() * 280));
     }
     const narrow = pass > 0 || Date.now() < rpcStormUntil;
-    const rpcList = narrow ? rpcReliableOrder().slice(0, 3) : rpcOrder();
+    const rpcList = narrow ? rpcReliableOrder().filter((u) => !budgetStore.getStore()?.failedProviders.has(u)).slice(0, 3) : rpcOrderForRequest();
+    const passCap = pass > 0 ? 3 : cap;
+    let passAttempts = 0;
+    let sawBudgetRefusal = false;
 
-    for (const url of rpcList) {
+    for (const url of rpcList.length ? rpcList : rpcReliableOrder().slice(0, 3)) {
+      if (passAttempts >= passCap) break;
+      if (!budgetTake(lane)) { sawBudgetRefusal = true; break; }
+      passAttempts++;
+      attempts++;
       try {
         const res = await fetch(url, {
           method: "POST",
@@ -14867,7 +15101,7 @@ async function baseRpcProbe(
           body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
           signal: AbortSignal.timeout(5000),
         });
-        if (!res.ok) { rpcMarkBad(url); continue; }
+        if (!res.ok) { rpcMarkBad(url); rpcFailedInRequest(url); continue; }
         const j = (await res.json()) as { result?: string; error?: { message?: string } };
         if (j.error) {
           const msg = j.error.message ?? "";
@@ -14877,26 +15111,31 @@ async function baseRpcProbe(
           // used to fall through to the revert check below and be misread.
           if (/rate limit|too many requests|429|quota|capacity|exceeded/i.test(msg)) {
             rpcMarkBad(url, 10000);
+            rpcFailedInRequest(url);
             continue;
           }
           // Only a genuine EVM revert is "the answer". Anything else is infra.
-          if (!/revert|invalid opcode|out of gas|stack|abort/i.test(msg)) { rpcMarkBad(url); continue; }
+          if (!/revert|invalid opcode|out of gas|stack|abort/i.test(msg)) { rpcMarkBad(url); rpcFailedInRequest(url); continue; }
           rpcStormUntil = 0;
           return { error: msg || "execution reverted" };
         }
         rpcStormUntil = 0; // egress is healthy again
         return { result: j.result };
-      } catch {
+      } catch (e) {
+        if (isPlatformSubrequestCap(e)) { const b = budgetStore.getStore(); if (b) { b.exhausted = true; if (lane === "sim") b.simRefused = true; } refusedForBudget = true; break; }
         rpcMarkBad(url);
+        rpcFailedInRequest(url);
         continue;
       }
     }
 
+    if (sawBudgetRefusal) { refusedForBudget = true; break; }
+    if (refusedForBudget) break;
     // Every provider in this pass failed transiently -> correlated storm.
     rpcStormUntil = Date.now() + RPC_STORM_COOLDOWN_MS;
   }
 
-  return { unavailable: true };
+  return refusedForBudget ? { unavailable: true, budget: true } : { unavailable: true };
 }
 
 async function getOwnerInfo(token: string): Promise<OwnerInfo> {
@@ -14972,6 +15211,58 @@ const CANDIDATE_SLOTS: bigint[] = [
   ...Array.from({ length: 64 }, (_, i) => BigInt(i)),
   ERC20_7201_BALANCES_SLOT,
 ];
+// Layout FAMILIES that cover almost every ERC-20 on Base, probed before the rest of the
+// range: plain OZ/solmate mapping at 0..3 (Ownable/Pausable shift it up by one or two),
+// WETH9 at 3, FiatToken (USDC/EURC/cbBTC) at 9, Coinbase bridged tokens at 51, and the
+// OZ v5 ERC-7201 namespace. A hit here is found in ~4 eth_calls instead of ~7; a miss
+// costs ONE extra call and falls through to the full range, so coverage is unchanged.
+// This is an ordering prior over layouts, not a per-token table.
+const LIKELY_SLOT_FAMILIES: bigint[] = [0n, 1n, 2n, 3n, 9n, 51n, ERC20_7201_BALANCES_SLOT];
+const REMAINING_SLOTS: bigint[] = CANDIDATE_SLOTS.filter((x) => !LIKELY_SLOT_FAMILIES.includes(x));
+
+// A token's discovered balance slot is a fact about its storage layout, so it is cached:
+// per isolate in memory, and across isolates/colos in the Cache API (NOT KV: the KV free
+// tier's 1,000 writes/day is already budgeted). Entries are never trusted blindly — each
+// use re-verifies with ONE balanceOf+stateDiff call (a proxy upgrade can move the layout),
+// and an unverified entry is simply rediscovered.
+const BALANCE_SLOT_TTL_S = 7 * 86400;
+const balanceSlotMemo = new Map<string, bigint>();
+function balanceSlotCacheKey(token: string): Request {
+  return new Request(`${GATE_CACHE_ORIGIN}/v1/balance-slot/${token.toLowerCase()}`);
+}
+async function readCachedBalanceSlot(token: string): Promise<bigint | null> {
+  const k = token.toLowerCase();
+  const mem = balanceSlotMemo.get(k);
+  if (mem !== undefined) return mem;
+  const cache = (globalThis as { caches?: { default?: Cache } }).caches?.default;
+  if (!cache || !budgetTake("sim")) return null;
+  try {
+    const hit = await cache.match(balanceSlotCacheKey(token));
+    if (!hit) return null;
+    const j = (await hit.json()) as { slot?: string };
+    if (typeof j.slot !== "string" || !/^[0-9]+$/.test(j.slot)) return null;
+    const slot = BigInt(j.slot);
+    balanceSlotMemo.set(k, slot);
+    return slot;
+  } catch {
+    return null;
+  }
+}
+async function writeCachedBalanceSlot(token: string, slot: bigint): Promise<void> {
+  balanceSlotMemo.set(token.toLowerCase(), slot);
+  const cache = (globalThis as { caches?: { default?: Cache } }).caches?.default;
+  if (!cache || !budgetTake("sim")) return;
+  try {
+    await cache.put(
+      balanceSlotCacheKey(token),
+      new Response(JSON.stringify({ slot: slot.toString() }), {
+        headers: { "content-type": "application/json", "cache-control": `max-age=${BALANCE_SLOT_TTL_S}` },
+      }),
+    );
+  } catch {
+    // best-effort: the slot was proven this request either way
+  }
+}
 
 // Solidity's mapping(address => X) slot derivation: keccak256(pad32(key) . pad32(slot)).
 // Slot is a full 256-bit value (ERC-7201 base slots are large), so take a bigint.
@@ -14989,8 +15280,8 @@ interface HoneypotSim {
   transferable: boolean | null;
   revert_reason: string | null;
   transfer_tax_bps?: number | null;
-  /** only when sim_status="unavailable": "infra" = RPC calls failed/rate-limited, "layout" = no balance slot matched */
-  unavailable_cause?: "infra" | "layout";
+  /** only when sim_status="unavailable": "infra" = RPC calls failed/rate-limited, "layout" = no balance slot matched, "budget" = the per-request subrequest budget ran out before the sim could finish */
+  unavailable_cause?: "infra" | "layout" | "budget";
   note: string;
 }
 
@@ -15016,20 +15307,7 @@ async function measureTransferTaxBps(token: string, key: string, amount: bigint)
       validation: false,
     }, "latest"],
   });
-  for (const url of rpcOrder().slice(0, 3)) {
-    try {
-      const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body, signal: AbortSignal.timeout(4000) });
-      if (!res.ok) continue;
-      const j = (await res.json()) as { result?: { calls?: { status?: string; returnData?: string }[] }[] };
-      const c = j.result?.[0]?.calls;
-      if (!c || c.length !== 3 || c[1].status !== "0x1") continue;
-      const before = BigInt(c[0].returnData || "0x0"), after = BigInt(c[2].returnData || "0x0");
-      const received = after - before;
-      if (received < 0n || received > amount) return null;
-      return Number(((amount - received) * 10000n) / amount);
-    } catch { continue; }
-  }
-  return null;
+  return simulateV1Tax(body, amount, "sim", (c) => !!c && c.length === 3 && c[1].status === "0x1", () => "continue");
 }
 
 // Pair-targeted fee-on-transfer measurement — the GoPlus buy_tax/sell_tax signal.
@@ -15066,19 +15344,53 @@ async function measurePairTransferTaxBps(
       validation: false,
     }, "latest"],
   });
-  for (const url of rpcOrder().slice(0, 3)) {
+  return simulateV1Tax(body, amount, "optional", (c) => !!c && c.length === 3, (c) => (c![1].status !== "0x1" ? "null" : "continue"));
+}
+
+// Shared eth_simulateV1 loop for the two tax measurements. Own fetch loop (no
+// rpcMarkBad): a provider lacking eth_simulateV1 is learned as incapable for that method
+// only, never demoted for other calls. `shape` accepts a well-formed 3-call answer;
+// `onBadStatus` lets the pair variant stop on a reverted pair transfer (a liquidity
+// signal, not a tax reading) while the plain-transfer variant tries the next provider.
+type SimCall = { status?: string; returnData?: string };
+async function simulateV1Tax(
+  body: string,
+  amount: bigint,
+  lane: SubrequestLane,
+  shape: (c: SimCall[] | undefined) => boolean,
+  onBadStatus: (c: SimCall[] | undefined) => "null" | "continue",
+): Promise<number | null> {
+  for (const url of rpcSimOrder()) {
+    if (!budgetTake(lane)) return null;
     try {
       const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body, signal: AbortSignal.timeout(4000) });
-      if (!res.ok) continue;
-      const j = (await res.json()) as { result?: { calls?: { status?: string; returnData?: string }[] }[] };
+      if (!res.ok) {
+        if (res.status === 400 || res.status === 401 || res.status === 403 || res.status === 404) rpcMarkUnsupported(url, "eth_simulateV1");
+        rpcFailedInRequest(url);
+        continue;
+      }
+      const j = (await res.json()) as { result?: { calls?: SimCall[] }[]; error?: { message?: string } };
+      if (j.error) {
+        if (UNSUPPORTED_METHOD_RE.test(j.error.message ?? "")) rpcMarkUnsupported(url, "eth_simulateV1");
+        rpcFailedInRequest(url);
+        continue;
+      }
       const c = j.result?.[0]?.calls;
-      if (!c || c.length !== 3) continue;
-      if (c[1].status !== "0x1") return null; // transfer to/from the pair reverted — not a clean tax reading
-      const before = BigInt(c[0].returnData || "0x0"), after = BigInt(c[2].returnData || "0x0");
+      if (!shape(c)) {
+        // pair variant: a well-formed 3-call answer whose transfer reverted is not a tax reading
+        if (c && c.length === 3 && onBadStatus(c) === "null") return null;
+        continue;
+      }
+      if (onBadStatus(c) === "null") return null;
+      const before = BigInt(c![0].returnData || "0x0"), after = BigInt(c![2].returnData || "0x0");
       const received = after - before;
       if (received < 0n || received > amount) return null;
       return Number(((amount - received) * 10000n) / amount);
-    } catch { continue; }
+    } catch (e) {
+      if (isPlatformSubrequestCap(e)) return null;
+      rpcFailedInRequest(url);
+      continue;
+    }
   }
   return null;
 }
@@ -15196,23 +15508,29 @@ async function simulateTransferProbe(token: string): Promise<HoneypotSim> {
   // WHOLE candidate set in one stateDiff and read balanceOf once — overriding
   // non-balance slots is harmless to a balanceOf read, so the call returns our
   // planted value iff the real slot is somewhere in the set. Then binary-narrow
-  // to the exact slot. This covers 65 candidate layouts in ~7 subrequests.
+  // to the exact slot. The likely layout families go first (~4 calls on a hit), then
+  // the rest of the range (~7), and a slot proven on an earlier request is verified
+  // with ONE call instead of rediscovered.
   //
-  // No retry on discovery: t_9daf3d13 (branch, unmerged) makes a repeat report
-  // skip discovery entirely via a re-confirmed SLOT_CACHE, which is the right fix
-  // for this cost — stacking retries here as well would only spend subrequests
-  // twice for the same failure. The single retry in this file is reserved for the
-  // transfer probe, which is the call production actually degraded on.
+  // subsetHoldsSlot is TRI-STATE on purpose: true = planted value read back, false = a
+  // provider answered and it was not there, null = no answer (infra / budget). A null
+  // must abort. The old boolean read it as "not in this half" and kept bisecting into
+  // the other half, which could land on an arbitrary wrong slot and then report the
+  // resulting "insufficient balance" revert as a HONEYPOT.
   let sawAnySuccess = false;
-  const subsetHoldsSlot = async (subset: bigint[]): Promise<boolean> => {
+  let sawBudgetRefusal = false;
+  const subsetHoldsSlot = async (subset: bigint[]): Promise<boolean | null> => {
     const stateDiff: Record<string, string> = {};
     for (const s of subset) stateDiff[mappingSlotKey(PROBE_HOLDER, s)] = PROBE_VALUE_HEX;
     const r = await baseRpcProbe("eth_call", [
       { to: token, data: balanceOfData(PROBE_HOLDER) },
       "latest",
       { [token]: { stateDiff } },
-    ]);
-    if (r.result === undefined) return false;
+    ], { lane: "sim" });
+    if (r.result === undefined) {
+      if (r.budget) sawBudgetRefusal = true;
+      return null;
+    }
     sawAnySuccess = true;
     try {
       return BigInt(r.result) === PROBE_VALUE;
@@ -15220,19 +15538,43 @@ async function simulateTransferProbe(token: string): Promise<HoneypotSim> {
       return false; // non-numeric result — ignore
     }
   };
-
-  let foundSlot: bigint | null = null;
-  if (await subsetHoldsSlot(CANDIDATE_SLOTS)) {
-    let pool = CANDIDATE_SLOTS.slice();
+  const narrow = async (candidates: bigint[]): Promise<bigint | null | "unknown"> => {
+    let pool = candidates.slice();
     while (pool.length > 1) {
       const mid = Math.ceil(pool.length / 2);
       const left = pool.slice(0, mid);
-      pool = (await subsetHoldsSlot(left)) ? left : pool.slice(mid);
+      const holds = await subsetHoldsSlot(left);
+      if (holds === null) return "unknown";
+      pool = holds ? left : pool.slice(mid);
     }
-    foundSlot = pool[0];
+    return pool[0] ?? null;
+  };
+
+  let foundSlot: bigint | null = null;
+  let discoveryAborted = false;
+  const cachedSlot = await readCachedBalanceSlot(token);
+  if (cachedSlot !== null) {
+    const verified = await subsetHoldsSlot([cachedSlot]);
+    if (verified === true) foundSlot = cachedSlot;
+    else if (verified === null) discoveryAborted = true;
+    else balanceSlotMemo.delete(token.toLowerCase()); // layout moved — rediscover below
+  }
+  if (foundSlot === null && !discoveryAborted) {
+    for (const tier of [LIKELY_SLOT_FAMILIES, REMAINING_SLOTS]) {
+      const inTier = await subsetHoldsSlot(tier);
+      if (inTier === null) { discoveryAborted = true; break; }
+      if (!inTier) continue;
+      const slot = await narrow(tier);
+      if (slot === "unknown") discoveryAborted = true;
+      else foundSlot = slot;
+      break;
+    }
+    if (foundSlot !== null) await writeCachedBalanceSlot(token, foundSlot);
   }
 
   if (foundSlot === null) {
+    const budgetCause = sawBudgetRefusal || simStarvedForBudget();
+    const layoutMiss = !discoveryAborted && sawAnySuccess;
     return {
       sim_status: "unavailable",
       method: HONEYPOT_SIM_METHOD,
@@ -15240,10 +15582,12 @@ async function simulateTransferProbe(token: string): Promise<HoneypotSim> {
       slot_layout: null,
       transferable: null,
       revert_reason: null,
-      unavailable_cause: sawAnySuccess ? "layout" : "infra",
-      note: sawAnySuccess
+      unavailable_cause: layoutMiss ? "layout" : budgetCause ? "budget" : "infra",
+      note: layoutMiss
         ? `Could not locate this token's balance storage slot — probed integer slots 0-63 and the ERC-7201 "openzeppelin.storage.ERC20" namespace. Likely a non-standard layout (reflection/rebasing math, packed struct, or a custom namespace) — no tradeability signal available. This does NOT imply the token is safe or unsafe.`
-        : "RPC state-override calls failed or were rate-limited on every attempt — simulation infra unavailable right now. This does NOT imply the token is safe or unsafe.",
+        : budgetCause
+          ? "The per-request subrequest budget ran out before the balance slot could be located — simulation not completed. This does NOT imply the token is safe or unsafe."
+          : "RPC state-override calls failed or were rate-limited on every attempt — simulation infra unavailable right now. This does NOT imply the token is safe or unsafe.",
     };
   }
 
@@ -15263,10 +15607,11 @@ async function simulateTransferProbe(token: string): Promise<HoneypotSim> {
       "latest",
       override,
     ],
-    { retries: 1 },
+    { retries: 1, lane: "sim" },
   );
 
   if (simResult.unavailable) {
+    const starved = !!simResult.budget || simStarvedForBudget();
     return {
       sim_status: "unavailable",
       method: HONEYPOT_SIM_METHOD,
@@ -15274,8 +15619,10 @@ async function simulateTransferProbe(token: string): Promise<HoneypotSim> {
       slot_layout: slotLayout,
       transferable: null,
       revert_reason: null,
-      unavailable_cause: "infra",
-      note: "Balance slot located but the transfer-probe eth_call failed or was rate-limited on every RPC attempt.",
+      unavailable_cause: starved ? "budget" : "infra",
+      note: starved
+        ? "Balance slot located but the per-request subrequest budget ran out before the transfer probe could complete."
+        : "Balance slot located but the transfer-probe eth_call failed or was rate-limited on every RPC attempt.",
     };
   }
   if (simResult.error) {
@@ -15345,10 +15692,10 @@ interface TokenSecurityResult {
 // error/timeout/non-200 -> null (never fabricate a verification claim).
 async function checkSourceVerified(address: string): Promise<boolean | null> {
   try {
-    const res = await fetch(`https://sourcify.dev/server/v2/contract/8453/${address.toLowerCase()}`, {
+    const res = await meteredFetch(`https://sourcify.dev/server/v2/contract/8453/${address.toLowerCase()}`, {
       headers: { "User-Agent": "greyridge-x402/1 (token-safety source-verification)", accept: "application/json" },
       signal: AbortSignal.timeout(2500),
-    });
+    }, "optional");
     if (res.status !== 200) return null; // 404 = not in Sourcify; do NOT claim unverified
     const d = (await res.json()) as { match?: string | null; runtimeMatch?: string | null; creationMatch?: string | null };
     const m = d.match ?? d.runtimeMatch ?? d.creationMatch ?? null;
@@ -15394,10 +15741,10 @@ export function parseHolderConcentration(rec: unknown, ownerAddr: string | null)
 
 async function getHolderConcentration(token: string, ownerAddr: string | null): Promise<HolderConcentration> {
   try {
-    const res = await fetch(`https://api.gopluslabs.io/api/v1/token_security/8453?contract_addresses=${token.toLowerCase()}`, {
+    const res = await meteredFetch(`https://api.gopluslabs.io/api/v1/token_security/8453?contract_addresses=${token.toLowerCase()}`, {
       headers: { "User-Agent": "greyridge-x402/1 (token-safety holder-concentration)", accept: "application/json" },
       signal: AbortSignal.timeout(2500),
-    });
+    }, "optional");
     if (res.status !== 200) return { holder_count: null, top_holder_pct_bps: null, source: null };
     const d = (await res.json()) as { result?: Record<string, unknown> };
     const rec = d?.result?.[token.toLowerCase()] ?? Object.values(d?.result ?? {})[0] ?? null;
@@ -15556,8 +15903,12 @@ export async function retryUnavailableSim<T extends { sim_status: string }>(
   first: T,
   rerun: () => Promise<T>,
   pauseMs: number = 120 + Math.random() * 280,
+  // A re-run that cannot fit the remaining request budget is skipped: it would burn the
+  // units the rest of the report needs and be refused mid-way anyway.
+  canAfford: () => boolean = () => true,
 ): Promise<T> {
   if (first.sim_status !== "unavailable") return first;
+  if (!canAfford()) return first;
   try {
     if (pauseMs > 0) await new Promise((r) => setTimeout(r, pauseMs));
     return await rerun();
@@ -15566,19 +15917,56 @@ export async function retryUnavailableSim<T extends { sim_status: string }>(
   }
 }
 
+// Cheapest possible re-run: a remembered slot needs verify + probe; otherwise the likely
+// tier (call, ~3 bisects) plus the probe.
+const SIM_RERUN_COST_CACHED = 3;
+const SIM_RERUN_COST_COLD = 6;
+function simRerunAffordable(token: string): boolean {
+  const need = balanceSlotMemo.has(token.toLowerCase()) ? SIM_RERUN_COST_CACHED : SIM_RERUN_COST_COLD;
+  return budgetRemaining("sim") >= need;
+}
+
 async function analyzeTokenSecurity(token: string): Promise<TokenSecurityResult> {
+  return withSubrequestBudget(() => analyzeTokenSecurityInBudget(token));
+}
+
+// Simulation + its single budget-aware retry as ONE unit, started first and settled
+// before the reserve is released. Cause "budget" is reported when the lane was refused
+// (or the retry was skipped for lack of budget) so a hold names what actually happened.
+async function simulateWithRetry(token: string): Promise<HoneypotSim> {
+  try {
+    const first = await simulateTransferProbe(token);
+    let skippedForBudget = false;
+    const sim = await retryUnavailableSim(
+      first,
+      () => simulateTransferProbe(token),
+      undefined,
+      () => { const ok = simRerunAffordable(token); if (!ok) skippedForBudget = true; return ok; },
+    );
+    if (sim.sim_status === "unavailable" && sim.unavailable_cause === "infra" && (skippedForBudget || simStarvedForBudget())) {
+      return {
+        ...sim,
+        unavailable_cause: "budget",
+        note: "The per-request subrequest budget ran out before the simulation (or its retry) could complete. This does NOT imply the token is safe or unsafe.",
+      };
+    }
+    return sim;
+  } finally {
+    settleSimBudget();
+  }
+}
+
+async function analyzeTokenSecurityInBudget(token: string): Promise<TokenSecurityResult> {
   const analyzed_at = new Date().toISOString();
 
-  const [code, nameCall, totalSupplyCall, meta, proxy, owner, firstSim] = await Promise.all([
+  const [code, totalSupplyCall, meta, proxy, owner, sim] = await Promise.all([
     baseRpc("eth_getCode", [token, "latest"]) as Promise<string>,
-    baseRpcProbe("eth_call", [{ to: token, data: "0x06fdde03" }, "latest"]),
     baseRpcProbe("eth_call", [{ to: token, data: "0x18160ddd" }, "latest"]),
     getTokenMeta(token),
     detectProxy(token),
     getOwnerInfo(token),
-    simulateTransferProbe(token),
+    simulateWithRetry(token),
   ]);
-  const sim = await retryUnavailableSim(firstSim, () => simulateTransferProbe(token));
 
   const codeClass = classifyCode(code);
   // A proxy's OWN bytecode is just a thin delegatecall forwarder — mint/pause/
@@ -15606,7 +15994,6 @@ async function analyzeTokenSecurity(token: string): Promise<TokenSecurityResult>
   }
   const { detected, categories } = scanBytecodeSelectors(scanCode);
   const decimals = meta?.decimals ?? 18;
-  const nameHex = nameCall.result ?? null;
   const totalSupplyHex = totalSupplyCall.result ?? null;
   let totalSupplyRaw: bigint | null = null;
   try {
@@ -15660,7 +16047,7 @@ async function analyzeTokenSecurity(token: string): Promise<TokenSecurityResult>
     is_eip7702_delegate: codeClass.is_eip7702_delegate,
     delegate_address: codeClass.delegate_address,
     meta: {
-      name: (nameHex ? decodeAbiString(nameHex) : "") || null,
+      name: meta?.name || null,
       symbol: meta?.symbol ?? null,
       decimals,
       total_supply_raw: totalSupplyRaw !== null ? totalSupplyRaw.toString() : null,
@@ -15840,23 +16227,39 @@ interface WethLiquidity {
 
 // One JSON-RPC batch = one subrequest (Workers cap subrequests per invocation),
 // rotating providers only on transport failure. Per-item failures come back null.
-async function baseRpcBatch(calls: { method: string; params: unknown[] }[]): Promise<(string | null)[] | null> {
+async function baseRpcBatch(calls: { method: string; params: unknown[] }[], opts?: { lane?: SubrequestLane }): Promise<(string | null)[] | null> {
+  const lane = opts?.lane ?? "core";
   const body = JSON.stringify(calls.map((c, i) => ({ jsonrpc: "2.0", id: i + 1, method: c.method, params: c.params })));
-  for (const url of [...rpcOrder(), ...rpcOrder()]) {
+  // Outside a budget scope: the legacy two full rotations. Inside one: a single rotation
+  // minus providers that rejected batching (400/403/429) earlier, capped per lane.
+  const inScope = !!budgetStore.getStore();
+  const order = inScope ? rpcOrderForRequest("batch") : [...rpcOrder(), ...rpcOrder()];
+  let attempts = 0;
+  const cap = attemptCap(lane);
+  for (const url of order) {
+    if (attempts >= cap) break;
+    if (!budgetTake(lane)) break;
+    attempts++;
     try {
       const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body });
-      if (!res.ok) continue;
+      if (!res.ok) {
+        if (res.status === 400 || res.status === 401 || res.status === 403) rpcMarkUnsupported(url, "batch");
+        rpcFailedInRequest(url);
+        continue;
+      }
       const j = (await res.json()) as unknown;
-      if (!Array.isArray(j)) continue;
+      if (!Array.isArray(j)) { rpcMarkUnsupported(url, "batch"); rpcFailedInRequest(url); continue; }
       const byId = new Map<number, { result?: string; error?: unknown }>();
       for (const item of j as { id: number; result?: string; error?: unknown }[]) byId.set(item.id, item);
       const out = calls.map((_, i) => {
         const it = byId.get(i + 1);
         return it && typeof it.result === "string" && !it.error ? it.result : null;
       });
-      if (out.every((r) => r === null)) continue;
+      if (out.every((r) => r === null)) { rpcFailedInRequest(url); continue; }
       return out;
-    } catch {
+    } catch (e) {
+      if (isPlatformSubrequestCap(e)) { const b = budgetStore.getStore(); if (b) b.exhausted = true; break; }
+      rpcFailedInRequest(url);
       continue;
     }
   }
@@ -15969,6 +16372,10 @@ async function getWethLiquidity(token: string): Promise<WethLiquidity> {
 }
 
 async function buildTokenReport(token: string) {
+  return withSubrequestBudget(() => buildTokenReportInBudget(token));
+}
+
+async function buildTokenReportInBudget(token: string) {
   // Liquidity first (2 batched subrequests) so the heavier security analysis can't
   // starve it of the per-invocation subrequest budget.
   const liqR = await Promise.allSettled([getWethLiquidity(token)]).then((r) => r[0]);
@@ -15997,7 +16404,9 @@ async function buildTokenReport(token: string) {
         try { return BigInt(b.weth_raw) > BigInt(a.weth_raw) ? b : a; } catch { return a; }
       })
     : null;
-  if (balSlot !== null && bestPool && sellable === true) {
+  // Optional lane: runs after the sim has settled (its reserve is released) and only if
+  // the two simulations fit what is left — otherwise the tax stays null, never fabricated.
+  if (balSlot !== null && bestPool && sellable === true && budgetRemaining("optional") >= 2) {
     const amt = PROBE_VALUE / 2n;
     const [st, bt] = await Promise.all([
       measurePairTransferTaxBps(token, mappingSlotKey(PROBE_HOLDER, balSlot), PROBE_HOLDER, bestPool.pool, amt),
@@ -16012,6 +16421,7 @@ async function buildTokenReport(token: string) {
   let score = sec ? sec.risk_score : 50;
 
   if (!sec) reasons.push("security analysis unavailable");
+  if (!sec && currentSubrequestBudget()?.exhausted) reasons.push("RPC providers failed or were slow and the per-request subrequest budget ran out before the security analysis completed; transient, retry shortly");
   if (sec && !sec.is_contract) {
     avoid = true;
     reasons.push("address is not a contract / not an ERC-20");
@@ -16067,9 +16477,11 @@ async function buildTokenReport(token: string) {
   if (sellabilityUnverified) {
     // Name the real cause: telling a caller "non-standard storage layout" when the RPC
     // providers merely failed sends them hunting a token problem that does not exist.
-    const why = sim?.unavailable_cause === "infra"
-      ? "RPC providers failed or rate-limited the simulation; transient, retry shortly"
-      : "no balance storage slot matched; non-standard storage layout";
+    const why = sim?.unavailable_cause === "budget"
+      ? "per-request subrequest budget ran out before the simulation finished; transient, retry shortly"
+      : sim?.unavailable_cause === "infra"
+        ? "RPC providers failed or rate-limited the simulation; transient, retry shortly"
+        : "no balance storage slot matched; non-standard storage layout";
     reasons.push(
       deepLiquidity
         ? `transfer simulation unavailable (${why}); deep live WETH-pool liquidity indicates the token trades`
@@ -16111,6 +16523,7 @@ async function buildTokenReport(token: string) {
       canPause: caps ? caps.can_pause : null,
       hasBlacklist: caps ? caps.has_blacklist : null,
       simStatus: sim?.sim_status ?? null,
+      simUnavailableCause: sim?.sim_status === "unavailable" ? (sim.unavailable_cause ?? null) : null,
       // Sellability is UNKNOWN, not "safe", whenever the transfer simulation could
       // not run. Surfaced as its own field (not folded into `verdict`) because a
       // consumer composing a go/no-go decision — /gate/swap — cannot recover it from
@@ -16336,6 +16749,7 @@ async function buildSwapGate(token: string, side: "buy" | "sell", notional: numb
     // exposes WHY a hold happened (unknown exit vs unknown depth) so an agent can
     // route a human to verify the token instead of silently retrying.
     sellability_unverified,
+    sellability_unverified_cause: sellability_unverified ? (r.security.simUnavailableCause ?? null) : null,
     impact_pct_of_pool: impact === null ? null : Math.round(impact * 100) / 100,
     flags: r.reasons, token_meta: r.token_meta, analyzed_at: r.analyzed_at,
     cache_state,
