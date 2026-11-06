@@ -1,6 +1,6 @@
 ---
 name: x402-verify-before-and-after-you-pay
-description: Protect an agent that pays x402 (HTTP 402) endpoints. Before paying, screen the endpoint — will it settle, is the recipient sanctioned or a known scam wallet, is the price what it claims, is the resource laced with prompt injection — and get a PAY / CAUTION / AVOID verdict. After paying, reconcile the real on-chain USDC settlement against the recipient and amount the endpoint advertised, so you know the payment actually landed where it was supposed to. Use when an agent is about to pay, or has just paid, an x402 service.
+description: Is this x402 (HTTP 402) endpoint safe to pay? Screen it before your agent spends and verify the settlement after. Before paying it checks whether the challenge will settle, screens the recipient against the OFAC sanctions list and a community scam and drainer wallet set, confirms the advertised price is the price you will be charged, and scans the resource and any advertised MCP tools for prompt injection, returning a PAY, CAUTION, or AVOID verdict. After paying it reconciles the real on-chain USDC settlement against the recipient and amount that were advertised, so you know the money landed where it should. A clean screen is not a safety guarantee, so screen every payment and reconcile every receipt. Built for agents that hold a wallet and pay x402 services on their own. Keywords: safe to pay, sanctions screening, OFAC, scam wallet, drainer, prompt injection, settlement proof, receipt verification.
 license: MIT
 ---
 
