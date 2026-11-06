@@ -33,6 +33,8 @@ jobs:
             name: "@grey-ridge/x402-data-api-mcp"
           - dir: integrations/elizaos-plugin-swap-gate
             name: "@grey-ridge/elizaos-plugin-swap-gate"
+          - dir: integrations/elizaos-plugin-defi-data
+            name: "@grey-ridge/elizaos-plugin-defi-data"
           - dir: integrations/langchain-swap-gate
             name: "@grey-ridge/langchain-swap-gate"
           - dir: integrations/vercel-ai-sdk-swap-gate

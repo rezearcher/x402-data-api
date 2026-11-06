@@ -1,0 +1,96 @@
+{
+  "name": "@grey-ridge/elizaos-plugin-defi-data",
+  "version": "0.1.0",
+  "description": "DeFi/market data for Base trading agents (ElizaOS) with a decision layer: ranked yields + risk score, per-pool SUSTAINABLE/DECAYING/OUTLIER/AVOID entry verdict, spot prices, cross-venue funding with OI-weighted arb verdict, and SAFE/CAUTION/AVOID token safety — paid inline with x402 USDC from $0.001/call, no API key.",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "plugin",
+    "elizaos",
+    "x402",
+    "base",
+    "defi",
+    "yield",
+    "funding-rates",
+    "token-price",
+    "trading-agent",
+    "defillama"
+  ],
+  "license": "MIT",
+  "author": "Grey Ridge Signals Group LLC",
+  "homepage": "https://x402-data-api.sigrunner.workers.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rezearcher/x402-data-api.git",
+    "directory": "integrations/elizaos-plugin-defi-data"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc -p tsconfig.check.json --noEmit",
+    "test": "node --test test/*.test.mjs",
+    "prepare": "tsup"
+  },
+  "dependencies": {
+    "@x402/core": "^2.15.0",
+    "@x402/evm": "^2.15.0",
+    "@x402/fetch": "^2.15.0",
+    "viem": "^2.21.0"
+  },
+  "peerDependencies": {
+    "@elizaos/core": ">=1.0.0"
+  },
+  "devDependencies": {
+    "@elizaos/core": "^1.7.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.5.0"
+  },
+  "agentConfig": {
+    "pluginType": "elizaos:plugin:1.0.0",
+    "pluginParameters": {
+      "DEFI_DATA_PRIVATE_KEY": {
+        "type": "string",
+        "description": "Hex private key of the agent's Base wallet; signs the per-call x402 USDC payment (from $0.001/call). Omit to run keyless on the free preview path (real data, limited depth).",
+        "required": false,
+        "sensitive": true
+      },
+      "DEFI_DATA_BASE_URL": {
+        "type": "string",
+        "description": "Override the Grey Ridge data endpoint base URL (defaults to the hosted Worker).",
+        "required": false
+      },
+      "DEFI_DATA_CHAIN": {
+        "type": "string",
+        "description": "Default chain filter for GET_DEFI_YIELDS, e.g. 'Base' or 'Ethereum'.",
+        "required": false
+      },
+      "DEFI_DATA_POOL": {
+        "type": "string",
+        "description": "Default DefiLlama pool id for YIELD_ENTRY_VERDICT when none is in the message.",
+        "required": false
+      },
+      "DEFI_DATA_TOKEN": {
+        "type": "string",
+        "description": "Default Base ERC-20 contract for CHECK_TOKEN when none is in the message.",
+        "required": false
+      },
+      "DEFI_DATA_COINS": {
+        "type": "string",
+        "description": "Default comma-separated coin ids/tickers for GET_CRYPTO_PRICES when none is in the message.",
+        "required": false
+      }
+    }
+  }
+}
