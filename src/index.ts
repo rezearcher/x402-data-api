@@ -22195,7 +22195,7 @@ const mcpHandler = createMcpHandler(() => {
     "defi_yields",
     {
       description:
-        "Live DeFi lending/LP yield pools (project, chain, symbol, pool id, APY breakdown incl. 1d/7d/30d trend + apyBase7d/apyMean30d, IL risk incl. il7d, exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL, stablecoin flag) from DefiLlama, ranked by TVL (or risk-adjusted APY = apy/sigma). Cost: $0.005 USDC per call via x402.",
+        "Live DeFi lending/LP yield pools, and every pool is tagged with an entry verdict (SUSTAINABLE | DECAYING | OUTLIER | AVOID) + a 0-100 risk_score right in the list — a go/no-go at the browse stage, not just raw rows. Each row carries project, chain, symbol, pool id, APY breakdown incl. 1d/7d/30d trend + apyBase7d/apyMean30d, IL risk incl. il7d, exposure, reward/underlying tokens, outlier flag, mu/sigma, DefiLlama stability forecast, TVL and a stablecoin flag, from DefiLlama, ranked by TVL (or risk-adjusted APY = apy/sigma). For the deep go/no-go on the one pool you're sizing into, pass its pool id to yield_entry_verdict. Cost: $0.005 USDC per call via x402.",
       inputSchema: {
         limit: z.number().optional().describe("Number of results, default 20, max 100"),
         project: z.string().optional().describe("Filter by protocol — the family name (aave, uniswap, curve) resolves all versions, or an exact DefiLlama slug (aave-v3)"),
