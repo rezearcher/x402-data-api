@@ -2701,6 +2701,42 @@ const aiTxtHandler = (c: Context<AppEnv>) => {
 app.get("/.well-known/ai.txt", aiTxtHandler);
 app.get("/ai.txt", aiTxtHandler);
 
+// ---------------------------------------------------------------------------
+// x402-verify — ownership-proof file for the x402 Relay directory
+// (api.x402-relay.com). When a service is submitted to the directory it is
+// "provisional" (not shown in the public /api/services index) until the
+// crawler confirms the submitter controls the endpoint host. The directory's
+// file-verifier fetches `<origin>/.well-known/x402-verify` and checks that it
+// CONTAINS each service's issued token (first 16 hex of the service UUID);
+// serving them flips provisional -> verified. Measured 2026-11-05: the
+// directory held 214 services with ZERO verified / ZERO on-chain txCount, so a
+// verified row backed by our real settled Base USDC payTo is a first-mover
+// slot. These tokens are external, directory-issued ownership nonces (not a
+// behavioural gate) for the three services submitted this cycle:
+//   /crypto/prices  e54097ad-b1ee-4f4a-... -> e54097adb1ee4f4a
+//   /defi/yields    2495d560-c63e-49c1-... -> 2495d560c63e49c1
+//   /crypto/funding 9547dc43-8efe-41f7-... -> 9547dc438efe41f7
+// Served on BOTH hosts by the Worker; the directory crawler probes from a
+// datacenter IP, so the crawler-reachable workers.dev host is the one that
+// matters for verification (brand host bot-fight may 403 datacenter IPs).
+export const X402_RELAY_VERIFY_TOKENS: readonly string[] = [
+  "e54097adb1ee4f4a",
+  "2495d560c63e49c1",
+  "9547dc438efe41f7",
+];
+export function buildX402RelayVerify(): string {
+  // Newline-separated plaintext: most file-verifiers do contains(token); the
+  // flagship /crypto/prices token is first in case a verifier wants line 1.
+  return X402_RELAY_VERIFY_TOKENS.join("\n") + "\n";
+}
+const x402VerifyHandler = (c: Context<AppEnv>) =>
+  c.text(buildX402RelayVerify(), 200, {
+    "content-type": "text/plain; charset=utf-8",
+    "cache-control": "public, max-age=300",
+  });
+app.get("/.well-known/x402-verify", x402VerifyHandler);
+app.get("/x402-verify", x402VerifyHandler);
+
 app.get("/.well-known/agent-capabilities.json", (c) => {
   const BASE = "https://x402-data-api.sigrunner.workers.dev";
   const q = (c.req.query("q") || "").toLowerCase().trim();

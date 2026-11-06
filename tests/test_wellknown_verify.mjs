@@ -35,4 +35,18 @@ for (const [path, expected] of cases) {
   ok((res.headers.get("content-type") || "").includes("text/plain"), `${path} is text/plain`);
 }
 
+// x402 Relay directory ownership-proof file: the verifier does contains(token)
+// for EACH of the three submitted services, so lock all three tokens present on
+// both the canonical path and the bare alias, served text/plain.
+const RELAY_TOKENS = ["e54097adb1ee4f4a", "2495d560c63e49c1", "9547dc438efe41f7"];
+for (const path of ["/.well-known/x402-verify", "/x402-verify"]) {
+  const res = await app.request(path, {}, {});
+  eq(res.status, 200, `${path} serves 200`);
+  const body = await res.text();
+  for (const tok of RELAY_TOKENS) {
+    ok(body.includes(tok), `${path} contains relay token ${tok}`);
+  }
+  ok((res.headers.get("content-type") || "").includes("text/plain"), `${path} is text/plain`);
+}
+
 console.log(`test_wellknown_verify: ${pass} checks passed`);
