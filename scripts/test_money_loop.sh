@@ -9,7 +9,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
-GOAL="$HOME/.claude/goal-loop-active/makemoney.goal"
+MONEY_CHAIN="$HOME/.claude/agent-chains/money.chain.json"  # goal files are discovered from the live chain manifest
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 fail=0; pass=0
@@ -96,15 +96,19 @@ echo "$top" | grep -q "pri 1" && ok "queue 'next' surfaces priority-1 first" || 
 unset MONEY_RESEARCH_QUEUE_STORE
 
 echo "== 4. goal-reference integrity =="
-if [ -f "$GOAL" ]; then
-  miss=0
-  for p in $(grep -oE '/home/rez/projects/x402-data-api/(scripts|outreach|docs)/[A-Za-z0-9_./-]+' "$GOAL" \
-            | sed -E 's/[.,;:]+$//' | sort -u); do        # strip trailing sentence punctuation
-    [ -e "$p" ] || { bad "goal references missing path: $p"; miss=$((miss+1)); }
-  done
-  [ "$miss" -eq 0 ] && ok "all goal-referenced paths exist"
+goals="$(jq -r '.agents[].goal_file' "$MONEY_CHAIN" 2>/dev/null)"
+if [ -z "$goals" ]; then
+  bad "no goal files readable from $MONEY_CHAIN"
 else
-  bad "goal file not found at $GOAL (loop paused/disarmed?)"
+  miss=0
+  for g in $goals; do
+    [ -f "$g" ] || { bad "chain references missing goal file: $g"; miss=$((miss+1)); continue; }
+    for p in $(grep -oE '/home/rez/projects/x402-data-api/(scripts|outreach|docs)/[A-Za-z0-9_./-]+' "$g" \
+              | sed -E 's/[.,;:]+$//' | sort -u); do        # strip trailing sentence punctuation
+      [ -e "$p" ] || { bad "$(basename "$g") references missing path: $p"; miss=$((miss+1)); }
+    done
+  done
+  [ "$miss" -eq 0 ] && ok "all money-chain goal files and their referenced paths exist"
 fi
 
 echo "== 5. real warm-lead ledger is valid JSON (the prod corruption mode) =="
