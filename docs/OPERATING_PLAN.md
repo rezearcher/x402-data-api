@@ -1,3 +1,5 @@
+> **2026-11-06:** Superseded by the current direction in the loop goal files. x402 is no longer the job; routes stay up and open windows keep running.
+
 # Grey Ridge x402 — Operating Plan (the loop runs BOTH lines; the thinking is DONE here)
 
 Decision (Rez, 2026-10-23, final): the money loop is the autonomous OPERATOR of one business, `x402-data-api`, with **two revenue lines**, and it grows **both** at a professional level. This plan SOLVES the how — specific buyer, specific funnel, move-by-move path to the first *repeat* dollar per line. The loop executes this backlog top-down; it does not re-invent strategy at runtime. Reads with [[NORTH_STAR]], SCOPE_AND_REPORT_STANDARD, AUTHORIZATION_STANDARD.
