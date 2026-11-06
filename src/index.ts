@@ -366,6 +366,25 @@ export const ROUTE_CATALOG_BASE: Array<[string, string, string, string, string, 
 export const ROUTE_CATALOG: Array<[string, string, string, string, string, string[]]> =
   applyWtpPriceFloor(ROUTE_CATALOG_BASE);
 
+// llms.txt endpoint lines are hand-written with literal prices, but the charged price is
+// ROUTE_CATALOG's (the WTP floor raises cold routes). Rewrite each "- METHOD <origin><path> — $X —"
+// line to the effective catalog price so the advertised price can never drift from the charged one.
+// Lines for paths not in the catalog are left untouched.
+export function syncAdvertisedPrices(
+  text: string,
+  catalog: readonly RouteCatalogRow[] = ROUTE_CATALOG,
+): string {
+  const price = new Map<string, string>();
+  for (const [path, method, usd] of catalog) price.set(`${method} ${path}`, usd);
+  return text.replace(
+    /^(- (GET|POST) https?:\/\/[^\s/]+(\/[^\s?]*)[^\n]*? — )\$(\d*\.\d+)( — )/gm,
+    (whole, head: string, method: string, path: string, _old: string, tail: string) => {
+      const usd = price.get(`${method} ${path}`);
+      return usd ? `${head}$${usd}${tail}` : whole;
+    },
+  );
+}
+
 // Order a copy of ROUTE_CATALOG by observed EXTERNAL per-route demand (descending),
 // read from the sensor-regenerated DEMAND_SNAPSHOT (external payers only, self
 // excluded). Every live arrival channel — the Agent402 router and CDP Bazaar —
@@ -3591,7 +3610,7 @@ app.get("/llms.txt", (c) => {
   const sessionOpeners = Object.entries(SESSION_TIERS)
     .map(([route, cap]) => `${route.replace("POST ", "")} ($${(cap / 1e6).toFixed(2)} cap)`)
     .join(", ");
-  return c.text(`# Grey Ridge Signals — MCP security scanning & on-chain data APIs
+  return c.text(syncAdvertisedPrices(`# Grey Ridge Signals — MCP security scanning & on-chain data APIs
 
 > Two ways to use us. HUMANS & TEAMS: scan any MCP server for prompt-injection / tool-poisoning (OWASP LLM01/LLM08) in your browser — free, read-only — and subscribe by card ($9.99/mo) to gate CI and get continuous re-scans. No wallet, no crypto. AGENTS: the same endpoints are agent-native, pay-per-call on Base (USDC via x402) — no account, no API key, pay inline.
 > Scan a server (free): ${BASE}/scan/mcp-scanner  |  Subscribe (card): ${BASE}/pricing  |  Landing: ${BASE}/  |  Agent discovery: ${BASE}/.well-known/x402  |  OpenAPI: ${BASE}/openapi.json
@@ -3749,7 +3768,7 @@ Featuring these endpoints in your MCP client, router, or agent? Append &ref=<you
 ## Where to buy (marketplaces / MCP buyer-adapters)
 These third-party x402 buyer tools let agents discover and purchase pay-per-call APIs (including ours) with Base USDC — useful if you want a ready-made buyer client instead of wiring x402-fetch yourself:
 - DopamineDesk x402 Marketplace (by Blaz Algo Systems) — plain-language product discovery, free previews, and capped Base-USDC purchases through one MCP adapter. Repo: https://github.com/jblaz6335/mcp-server-aidatamarketplace — integration partner; our token-safety gate (/gate/swap) and token report (/chain/token-report) pair with their token-audit and transaction-preflight tools.
-`);
+`));
 });
 
 // robots.txt — Instruct crawlers how to index the site. Allow everything; sitemap
