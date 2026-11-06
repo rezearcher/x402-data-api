@@ -4263,8 +4263,18 @@ app.get("/crypto/prices/preview", async (c) => {
   try {
     const t = await trialQuota(c, "prices");
     if (t.exhausted) {
-      const all = await fetchTokenPrices(["bitcoin", "ethereum", "solana"]);
-      return c.json({ preview: all.slice(0, 1), trial: { full_pulls_left_today: 0 }, paid: paidUrl, price_usdc: "0.001", note: "Free full-output trial exhausted for today (3/IP/day); showing 1-of-N sample. Paid (unmetered): GET /crypto/prices?coins=<ids> ($0.001)." });
+      // Price the caller's OWN coins for the teaser (not bitcoin) so an agent
+      // checking "does this feed have my token?" sees a real sample of its query.
+      const all = await fetchTokenPrices(ids);
+      return c.json({
+        preview: all.slice(0, 1),
+        trial: { full_pulls_left_today: 0 },
+        paid: paidUrl,
+        price_usdc: "0.001",
+        note: all.length === 0
+          ? "Free full-output trial exhausted for today (3/IP/day), and none of those coins resolved to a price — nothing to buy for this query. Check the ticker/id, or GET /crypto/prices?coins=<ids> ($0.001)."
+          : `Free full-output trial exhausted for today (3/IP/day); showing a 1-of-${ids.length} sample of YOUR coins. Paid (unmetered) returns all: GET ${paidUrl} ($0.001).`,
+      });
     }
     const prices = await fetchTokenPrices(ids);
     // Write-through (throttled + degrade-open): the coins an agent actually
@@ -4383,8 +4393,20 @@ app.get("/defi/yields/preview", async (c) => {
   try {
     const t = await trialQuota(c, "yields");
     if (t.exhausted) {
-      const all = await fetchDefiYields(20, undefined, undefined, false);
-      return c.json({ preview: tagYieldRowsWithVerdict(all.slice(0, 1)), total_available: all.length, trial: { full_pulls_left_today: 0 }, paid: paidUrl, price_usdc: "0.001", note: "Free full-list trial exhausted for today (3/IP/day); showing top-1 decision-tagged sample. Paid (unmetered): GET /defi/yields?limit=20&project=<p> ($0.001)." });
+      // Honor the caller's filter even when the free trial is spent: show a 1-row
+      // sample OF THEIR query (not a generic global pool) so they can preview-judge
+      // whether the paid call for their exact project/chain filter is worth $0.001.
+      const all = await fetchDefiYields(limit, project, chain, stable, sort);
+      return c.json({
+        preview: tagYieldRowsWithVerdict(all.slice(0, 1)),
+        total_available: all.length,
+        trial: { full_pulls_left_today: 0 },
+        paid: paidUrl,
+        price_usdc: "0.001",
+        note: all.length === 0
+          ? "Free full-list trial exhausted for today (3/IP/day), and no pools match that filter — nothing to buy for this query. Broaden project/chain, or GET /defi/yields ($0.001) unfiltered."
+          : `Free full-list trial exhausted for today (3/IP/day); showing a top-1 decision-tagged sample of YOUR filtered query. Paid (unmetered) returns all ${all.length}: GET ${paidUrl} ($0.001).`,
+      });
     }
     const pools = await fetchDefiYields(limit, project, chain, stable, sort);
     // Write-through (throttled + degrade-open): the pools an agent actually
@@ -4439,8 +4461,19 @@ app.get("/pm/markets/preview", async (c) => {
   try {
     const t = await trialQuota(c, "pm");
     if (t.exhausted) {
-      const all = await fetchPolymarketMarkets(undefined, 20);
-      return c.json({ preview: all.slice(0, 1), total_available: all.length, trial: { full_pulls_left_today: 0 }, paid: paidUrl, price_usdc: "0.005", note: "Free full-list trial exhausted for today (3/IP/day); showing top-1 sample. Paid (unmetered): GET /pm/markets?query=&limit=20 ($0.005)." });
+      // Honor the caller's ?query= in the teaser so the sample market is one that
+      // matches what they searched for, not the global top-volume market.
+      const all = await fetchPolymarketMarkets(query, limit);
+      return c.json({
+        preview: all.slice(0, 1),
+        total_available: all.length,
+        trial: { full_pulls_left_today: 0 },
+        paid: paidUrl,
+        price_usdc: "0.005",
+        note: all.length === 0
+          ? "Free full-list trial exhausted for today (3/IP/day), and no open markets match that query — nothing to buy. Broaden the query, or GET /pm/markets?limit=20 ($0.005)."
+          : `Free full-list trial exhausted for today (3/IP/day); showing a top-1 sample of YOUR query. Paid (unmetered) returns all ${all.length}: GET ${paidUrl} ($0.005).`,
+      });
     }
     const markets = await fetchPolymarketMarkets(query, limit);
     return c.json({
