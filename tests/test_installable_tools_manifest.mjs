@@ -45,8 +45,14 @@ for (const t of tools) {
   ok(typeof t.package === "string" && t.package.length > 0, `${t.framework}: has a package name`);
   ok(/^github\.com\/rezearcher\//.test(t.repository.replace(/^https?:\/\//, "")),
     `${t.framework}: repository is a rezearcher public mirror (${t.repository})`);
-  // Install command is runnable: npm git-install for TS, pip git-install for Python.
-  if (t.language === "Python") {
+  // Install command is runnable AND points at a rezearcher-owned source — the
+  // real invariant (no vaporware, no third-party source), not a fixed channel.
+  // Three legitimate channels: a keyless `npx skills add` agent skill, a pip
+  // git-install / published PyPI name, or an npm git-install mirror.
+  if (/^npx skills add /.test(t.install)) {
+    ok(/^npx skills add rezearcher\//.test(t.install),
+      `${t.framework}: npx-skills install from a rezearcher skill (${t.install})`);
+  } else if (t.language === "Python") {
     // Either a git-install from a rezearcher mirror OR a published PyPI name.
     ok(/^pip install (git\+https:\/\/github\.com\/rezearcher\/|greyridge-x402-tools)/.test(t.install),
       `${t.framework}: pip install command (${t.install})`);

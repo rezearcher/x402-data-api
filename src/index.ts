@@ -2333,6 +2333,16 @@ const INSTALLABLE_TOOLS: Array<{
   note: string;
 }> = [
   {
+    framework: "Any agent (Claude Code, Cursor, 79+ frameworks) — keyless skill, no login, no npm",
+    language: "Agent skill (SKILL.md)",
+    package: "x402-defi-data",
+    install: "npx skills add rezearcher/x402-defi-data",
+    repository: "https://github.com/rezearcher/x402-defi-data",
+    tool_count: 4,
+    wraps: ["/defi/yields", "/defi/yield-entry-verdict", "/crypto/funding", "/crypto/prices"],
+    note: "Lowest-friction install: one `npx skills add` (skills.sh registry) drops the four decision-tagged DATA earners into any agent with no account, no API key and no package manager — the skill is a SKILL.md the agent reads, so it works across every framework, not one. Leads with the per-row edge (yield verdict + 0-100 risk_score, OI-weighted funding arb verdict, price confidence+provenance). Keyless free preview and a 3-calls/day full-output trial need no wallet; the paid call settles inline in USDC on Base via x402. Start here if you just want the data in your agent fast; use the framework packages below for typed tool objects.",
+  },
+  {
     framework: "Vercel AI SDK",
     language: "TypeScript",
     package: "@grey-ridge/vercel-ai-defi-data",
