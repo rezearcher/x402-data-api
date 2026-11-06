@@ -4563,6 +4563,20 @@ const BAZAAR_SERVICE_NAME_OVERRIDES: Record<string, string> = {
   "/x402/clients": "x402 Payer Roster & Concentration",
   "/scan/mcp": "MCP Server Security Scan",
   "/enrich/tech-risk": "Domain & Tech Risk (CVE/EPSS)",
+  "/enrich/domain": "Domain Risk & Tech Enrichment",
+  "/security/epss-movers": "EPSS Exploit-Probability Feed",
+  // Proprietary verdict + settlement-proof routes. These are UNINDEXED in the
+  // CDP Bazaar (never settled → never crawled), so their live-402 serviceName is
+  // what CDP will FREEZE at first settlement (measured 2026-11-06: CDP captures
+  // serviceName/description once and never re-reads them — /defi/yields still
+  // shows its pre-override frozen title though the live 402 now emits a newer one).
+  // Giving each its buyer-query noun NOW is the only way they freeze discoverable
+  // for the lanes rivals currently own ("payment receipt verify", "defi yield
+  // verdict", "exploit probability"). <=32 chars, verified.
+  "/defi/yield-entry-verdict": "DeFi Yield Entry Verdict",
+  "/defi/yield-rotation": "DeFi Yield Rotate-or-Stay",
+  "/x402/receipt-verify": "x402 Payment Receipt Verify",
+  "/x402/cert": "x402 Settlement Certificate",
   "/crypto/funding": "Cross-Venue Perp Funding Rates",
   "/defi/yields": "Top DeFi Yields & APY",
   "/pm/markets": "Polymarket Prediction Markets",
@@ -4573,7 +4587,7 @@ const BAZAAR_SERVICE_NAME_OVERRIDES: Record<string, string> = {
 // Resolve the serviceName for a route key like "GET /chain/token-report".
 // Override wins; otherwise the provider brand. Hard-capped at 32 chars (CDP
 // schema) so a too-long override degrades to a truncation, never a dropped field.
-function bazaarServiceNameFor(routeKey: string): string {
+export function bazaarServiceNameFor(routeKey: string): string {
   const path = routeKey.replace(/^\w+\s+/, "").replace(/:\w+/g, "").replace(/\/+$/, "");
   // Override (buyer-query-matched) wins; else a route-specific name derived from
   // the path (e.g. "Base Block Number") — strictly more discoverable than the same
@@ -4594,6 +4608,11 @@ const BAZAAR_TAG_OVERRIDES: Record<string, string[]> = {
   "/scan/mcp": ["mcp", "security", "prompt-injection", "audit", "tool-poisoning"],
   "/enrich/tech-risk": ["security", "cve", "risk", "epss", "attack-surface"],
   "/enrich/domain": ["domain", "enrichment", "security", "dns", "risk"],
+  "/security/epss-movers": ["security", "epss", "cve", "exploit", "kev"],
+  "/defi/yield-entry-verdict": ["defi", "yield", "entry-verdict", "risk-score", "apy"],
+  "/defi/yield-rotation": ["defi", "yield", "rotation", "rebalance", "apy"],
+  "/x402/receipt-verify": ["x402", "receipt", "settlement", "verify", "payment"],
+  "/x402/cert": ["x402", "certificate", "settlement", "receipt", "trust"],
   "/crypto/funding": ["funding", "funding-rates", "perps", "arbitrage", "crypto"],
   "/defi/yields": ["defi", "yield", "apy", "tvl", "lending"],
   "/pm/markets": ["prediction-markets", "polymarket", "markets", "crypto", "data"],
@@ -4606,7 +4625,7 @@ const BAZAAR_CATEGORY: Record<string, string> = {
   whois: "whois", v1: "ai", brief: "crypto",
 };
 // Derive up to 5 valid tags for a route key like "GET /chain/gas-price".
-function bazaarTagsFor(routeKey: string): string[] {
+export function bazaarTagsFor(routeKey: string): string[] {
   const path = routeKey.replace(/^\w+\s+/, "").replace(/:\w+/g, "").replace(/\/+$/, "");
   const override = BAZAAR_TAG_OVERRIDES[path];
   if (override) return override.slice(0, 5);
