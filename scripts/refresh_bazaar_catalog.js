@@ -196,9 +196,9 @@ const ROUTES = [
   },
   {
     route: '/crypto/funding',
-    desc: 'Cross-venue Hyperliquid+OKX+dYdX perp funding rates — top coins by 24h notional volume, per-venue funding + arb spread (bps) + cheapest-long/richest-short venue, premium/basis, annualized rates, LONGS_PAY/SHORTS_PAY/NEUTRAL signal.',
+    desc: '6-venue perp funding rates — Binance+Bybit+OKX+Hyperliquid+dYdX+Gate — top coins by 24h volume, per-venue funding + per-venue open interest (USD) + an OI-WEIGHTED CEX↔DEX arb verdict (thin-book venues screened out so the cheapest-long/richest-short venue is executable size, not an empty-book mirage), premium/basis, annualized rates, LONGS_PAY/SHORTS_PAY/NEUTRAL signal.',
     serviceName: 'Cross-Venue Perp Funding Rates',
-    tags: ['crypto', 'funding', 'perps', 'hyperliquid', 'okx', 'dydx', 'arbitrage', 'defi', 'data'],
+    tags: ['crypto', 'funding', 'funding-rates', 'perps', 'arbitrage'],
     disc: {
       method: 'GET',
       input: { limit: '20' },
@@ -211,8 +211,8 @@ const ROUTES = [
       output: {
         example: {
           coin: 'BTC',
-          funding: { hyperliquid: 0.0000125, okx: 0.0000492, dydx: -0.00000875 },
-          funding_spread_bps: 0.37, best_long_venue: 'hyperliquid', best_short_venue: 'okx',
+          funding: { binance: 0.0000100, bybit: 0.0000110, okx: 0.0000492, hyperliquid: 0.0000125, dydx: -0.00000875, gate: 0.0000090 },
+          funding_spread_bps: 0.37, best_long_venue: 'dydx', best_short_venue: 'okx', arb_verdict: 'EXECUTABLE',
           annualized_hl: 0.1095, signal: 'LONGS_PAY', next_funding_ts: 1784304000000,
           markPx: 63730, oraclePx: 63750, openInterest: 37519.86, dayNtlVlm: 1670654479.06,
         },

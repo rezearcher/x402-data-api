@@ -450,6 +450,12 @@ export function buildSeeAlso(
   catalog: readonly RouteRow[] = ROUTE_CATALOG,
   byRoute: Record<string, number> = (DEMAND_SNAPSHOT && DEMAND_SNAPSHOT.external_by_route) || {},
 ): SeeAlsoEntry[] {
+  // Degrade-open on a null/garbage demand snapshot: the default param only
+  // covers `undefined`, so an explicit null (or any non-object) would make the
+  // demand lookups below throw. Coerce to an empty map — the cross-sell still
+  // works off catalog order, it just loses demand ranking — so a snapshot hiccup
+  // can never turn a 402/200 into a 500.
+  if (!byRoute || typeof byRoute !== "object") byRoute = {};
   // A free /preview rides on the SAME warm traffic as its paid parent but was
   // never in ROUTE_CATALOG, so buildSeeAlso used to fail-closed on it and 100%
   // of preview callers (our warmest leads — 407 ext preview calls/30d) leaked
@@ -1368,6 +1374,23 @@ app.use("*", async (c, next) => {
 // 200 JSON OBJECT body of a known catalog route is touched; 402 bodies, errors,
 // arrays, HTML/SVG pages and non-catalog routes pass through byte-for-byte.
 // injectSeeAlso is pure and never throws.
+//
+// The see_also cross-sell is a FUNCTIONAL url an agent will CALL to pay — unlike
+// an SEO signal (<link rel=canonical>) it must stay on the SAME host the buyer
+// already completed its x402 handshake on. Our proven payers all transact on the
+// workers.dev host (every CDP-Bazaar-indexed row is workers.dev); canonicalizing
+// the upsell to the brand host forces the buyer onto a host it never used — a
+// fresh DNS resolve, a fresh 402 handshake, and the documented bot-fight 403 risk
+// for datacenter-IP agents — right at the 10x upgrade step. Mirror the serving
+// origin when it is one of our own hosts; otherwise fall back to the canonical
+// brand origin (degrade-open, and guards against a spoofed Host header).
+export function upsellOriginFor(reqUrl: string): string {
+  try {
+    const u = new URL(reqUrl);
+    if (OWN_PREFLIGHT_HOSTS.has(u.host)) return u.origin;
+  } catch { /* fall through to canonical */ }
+  return CANONICAL_ORIGIN;
+}
 // ---------------------------------------------------------------------------
 app.use("*", async (c, next) => {
   await next();
@@ -1380,7 +1403,7 @@ app.use("*", async (c, next) => {
     // no upsell, so skip the reparse entirely for health/pages/manifests/etc.
     if (buildSeeAlso(c.req.path).length === 0) return;
     const original = await res.text(); // consumes the stream; rebuilt below either way
-    const injected = injectSeeAlso(original, c.req.path);
+    const injected = injectSeeAlso(original, c.req.path, upsellOriginFor(c.req.url));
     const headers = new Headers(res.headers);
     headers.delete("content-length"); // body length changed on inject (no-op if unchanged)
     c.res = new Response(injected, { status: 200, statusText: res.statusText, headers });
@@ -4561,7 +4584,7 @@ const BAZAAR_TAG_OVERRIDES: Record<string, string[]> = {
   "/scan/mcp": ["mcp", "security", "prompt-injection", "audit", "tool-poisoning"],
   "/enrich/tech-risk": ["security", "cve", "risk", "epss", "attack-surface"],
   "/enrich/domain": ["domain", "enrichment", "security", "dns", "risk"],
-  "/crypto/funding": ["funding", "perps", "arbitrage", "crypto", "defi"],
+  "/crypto/funding": ["funding", "funding-rates", "perps", "arbitrage", "crypto"],
   "/defi/yields": ["defi", "yield", "apy", "tvl", "lending"],
   "/pm/markets": ["prediction-markets", "polymarket", "markets", "crypto", "data"],
   "/v1/chat/completions": ["llm", "chat", "inference", "openai-compat", "ai"],
@@ -7339,7 +7362,10 @@ app.use(async (c, next) => {
             // through to the decimals-only body. Never mutates accepts[] (the
             // EIP-712 domain the client signs), only pr.extensions.
             try {
-              const seeAlso = buildSeeAlso(c.req.path);
+              // Same-origin as the serving host (see upsellOriginFor): keep the
+              // cross-sell on the host the buyer is already paying on, not the
+              // canonical brand host.
+              const seeAlso = buildSeeAlso(c.req.path, upsellOriginFor(c.req.url));
               if (seeAlso.length > 0) {
                 pr.extensions = { ...(pr.extensions ?? {}), greyridge: { see_also: seeAlso } };
               }
