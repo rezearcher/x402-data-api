@@ -1667,8 +1667,17 @@ app.get("/api-key", async (c) => {
     return c.json({ error: "API key already redeemed for this session" }, 410);
   }
 
-  // Mark as redeemed
-  await c.env.API_KEYS.put(dedup_key, JSON.stringify({ ...dedup, redeemed: true }));
+  // Mark as redeemed — best-effort. If the account-wide KV write cap is
+  // exhausted this put can throw; a paying Stripe customer must still receive
+  // their key, so we never let a failed bookkeeping write 502 the delivery.
+  // Re-redemption is idempotent: the lookup returns the SAME key (never a new
+  // one, never duplicated credits), so delivering without a confirmed mark is
+  // safe. Mirrors the degrade-open persistence the /x402/cert issuer uses.
+  try {
+    await c.env.API_KEYS.put(dedup_key, JSON.stringify({ ...dedup, redeemed: true }));
+  } catch (e) {
+    console.log(JSON.stringify({ event: "api_key_mark_redeemed_failed", session_id: sessionId, err: (e as Error).message }));
+  }
 
   // Return the API key
   const apiKey = dedup.api_key;
@@ -7462,6 +7471,31 @@ function fireAndForget(c: { executionCtx?: { waitUntil(p: Promise<void>): void }
   }
 }
 
+// Best-effort daily-counter bump that NEVER aborts the response. The AI-route
+// daily caps are a soft spend-guard (keep Workers AI inside the free allowance),
+// NOT a correctness invariant. When the account-wide KV write cap is exhausted
+// — a live free-tier risk (a sibling worker regularly pushes the shared 1,000
+// puts/day limit) — losing one increment is strictly better than 502-ing a
+// request the caller ALREADY PAID for (x402 settled upstream) and whose answer
+// was already computed. Runs detached and swallows its own error, mirroring the
+// degrade-open persistence the /x402/cert issuer already uses.
+export function bumpDailyCap(
+  c: { env: Env; executionCtx?: { waitUntil(p: Promise<void>): void } },
+  key: string,
+  used: number,
+): void {
+  fireAndForget(
+    c,
+    (async () => {
+      try {
+        await c.env.API_KEYS?.put(key, String(used + 1), { expirationTtl: 172800 });
+      } catch (e) {
+        console.log(JSON.stringify({ event: "cap_bump_failed", key, err: (e as Error).message }));
+      }
+    })(),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // DNS enrichment endpoint  ($0.01)
 // ---------------------------------------------------------------------------
@@ -11357,7 +11391,7 @@ app.get("/ai/ask", async (c) => {
       messages: [{ role: "system", content: "Context: x402 is Coinbase's open HTTP 402 micropayment protocol where API callers pay per request in USDC on Base. Base is Coinbase's Ethereum L2. Answer concisely and accurately in under 120 words." }, { role: "user", content: q }],
       max_tokens: 200,
     })) as { response?: string };
-    await c.env.API_KEYS?.put(key, String(used + 1), { expirationTtl: 172800 });
+    bumpDailyCap(c, key, used);
     console.log(JSON.stringify({ event: "paid_request", endpoint: "/ai/ask", ts: new Date().toISOString() }));
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /ai/ask", rail, makeUsageCounter(c.env)));
@@ -11498,7 +11532,7 @@ app.post("/v1/chat/completions", async (c) => {
         r = (await c.env.AI.run("@cf/meta/llama-3.2-3b-instruct", params)) as { response?: string };
       }
     }
-    await c.env.API_KEYS?.put(key, String(used + 1), { expirationTtl: 172800 });
+    bumpDailyCap(c, key, used);
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("POST /v1/chat/completions", rail, makeUsageCounter(c.env)));
     const text = r.response ?? "";
@@ -11530,7 +11564,7 @@ app.get("/ai/classify", async (c) => {
     })) as { response?: string };
     const out = (r.response ?? "").trim().toLowerCase();
     const label = labels.find((l) => out === l.toLowerCase()) ?? labels.find((l) => out.includes(l.toLowerCase())) ?? null;
-    await c.env.API_KEYS?.put(key, String(used + 1), { expirationTtl: 172800 });
+    bumpDailyCap(c, key, used);
     console.log(JSON.stringify({ event: "paid_request", endpoint: "/ai/classify", ts: new Date().toISOString() }));
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /ai/classify", rail, makeUsageCounter(c.env)));
@@ -11553,7 +11587,7 @@ app.get("/ai/summarize", async (c) => {
       messages: [{ role: "system", content: "Summarize the user's text in 1-3 sentences. Reply with ONLY the summary." }, { role: "user", content: text }],
       max_tokens: 150,
     })) as { response?: string };
-    await c.env.API_KEYS?.put(key, String(used + 1), { expirationTtl: 172800 });
+    bumpDailyCap(c, key, used);
     console.log(JSON.stringify({ event: "paid_request", endpoint: "/ai/summarize", ts: new Date().toISOString() }));
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /ai/summarize", rail, makeUsageCounter(c.env)));
@@ -11578,7 +11612,7 @@ app.get("/ai/translate", async (c) => {
       messages: [{ role: "system", content: "Translate the user's text into " + to + ". Reply with ONLY the translation, no notes or quotes." }, { role: "user", content: text }],
       max_tokens: 400,
     })) as { response?: string };
-    await c.env.API_KEYS?.put(key, String(used + 1), { expirationTtl: 172800 });
+    bumpDailyCap(c, key, used);
     console.log(JSON.stringify({ event: "paid_request", endpoint: "/ai/translate", ts: new Date().toISOString() }));
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /ai/translate", rail, makeUsageCounter(c.env)));
@@ -11642,7 +11676,7 @@ app.get("/ai/extract", async (c) => {
     try { parsed = m ? JSON.parse(m[0]) : {}; } catch { return c.json({ error: "model returned unparseable output, retry" }, { status: 502 }); }
     const data: Record<string, unknown> = {};
     for (const f of fields) data[f] = parsed[f] ?? null;
-    await c.env.API_KEYS?.put(key, String(used + 1), { expirationTtl: 172800 });
+    bumpDailyCap(c, key, used);
     console.log(JSON.stringify({ event: "paid_request", endpoint: "/ai/extract", ts: new Date().toISOString() }));
     const rail = c.get("rail") ?? "x402-paid";
     fireAndForget(c, trackPaidRequest("GET /ai/extract", rail, makeUsageCounter(c.env)));
