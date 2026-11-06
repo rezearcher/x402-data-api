@@ -14116,8 +14116,10 @@ app.get(ATTACK_TAXONOMY_WELL_KNOWN, (c) =>
 app.get("/x402/receipt-verify", async (c) => {
   const tx = c.req.query("tx") ?? "";
   // Cross-rail: a base58 Solana tx signature routes to the SVM reconcile. Grey
-  // Ridge is the only independent x402 verifier that reconciles BOTH rails
-  // (Base USDC + Solana SPL-USDC); the live x402 growth surface is ~66% Solana.
+  // Ridge reconciles BOTH rails (Base USDC + Solana SPL-USDC) full-fidelity;
+  // the live x402 growth surface is ~66% Solana. (Hosted rivals anchor-x402 /
+  // x402-trust-layer read Solana "best-effort"; our client-side wrapper adds
+  // payer-bound checks a hosted verifier structurally cannot run.)
   if (isSolanaSignature(tx)) {
     const sPayto = c.req.query("payto") ?? null;
     if (sPayto !== null && !isSolanaAddress(sPayto)) {

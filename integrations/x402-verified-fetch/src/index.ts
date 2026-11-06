@@ -148,8 +148,10 @@ export interface VerifiedSettlement {
    * USDC (the default). "svm" = Solana-mainnet SPL-USDC — reconciled by reading
    * the Solana chain directly (keyless public getTransaction, dual-RPC
    * cross-confirmed), so the wrapper never has to trust a Solana facilitator's
-   * /verify (cf. GHSA-qr2g-p6q7-w82m). This makes it the only x402 fetch wrapper
-   * that reconciles both rails on-chain.
+   * /verify (cf. GHSA-qr2g-p6q7-w82m). Hosted verifiers that read Solana
+   * (anchor-x402, x402-trust-layer) run server-side and self-describe their
+   * Solana reconcile as "best-effort"; this wrapper reconciles client-side at
+   * full fidelity on both rails.
    */
   rail: "evm" | "svm";
   /**

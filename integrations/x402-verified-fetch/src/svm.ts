@@ -2,13 +2,15 @@
  * Cross-rail (Solana / SVM) settlement reconcile for the verified-fetch wrapper.
  *
  * The live x402 growth surface (x402.direct, 2026-11-05) is 65.6% Solana (2,637
- * services vs 1,273 Base), yet every named independent x402 verify wrapper
- * (t54 x402-secure, x402-trust.com, TrustBench, BlockRun) is EVM-only. This
- * module makes @grey-ridge/x402-verified-fetch the ONLY x402 fetch wrapper that
- * reconciles both rails on-chain — and it is especially timely given
- * GHSA-qr2g-p6q7-w82m (a Solana x402 facilitator signature-bypass, fixed in
- * @x402/svm 2.6.0): a client that reads the Solana chain itself does not have to
- * trust any facilitator's /verify.
+ * services vs 1,273 Base). The named independent x402 verify *wrappers* (t54
+ * x402-secure, x402-trust.com, TrustBench, BlockRun) are EVM-only; the hosted
+ * verifiers that do read Solana (anchor-x402, x402-trust-layer) self-describe
+ * their Solana reconcile as "best-effort" and run server-side, so a client must
+ * trust their report of what was paid. This module reconciles Solana
+ * client-side at full fidelity (per-owner SPL-USDC balance delta, dual-RPC
+ * cross-confirmed) — timely given GHSA-qr2g-p6q7-w82m (a Solana x402
+ * facilitator signature-bypass, fixed in @x402/svm 2.6.0): a client that reads
+ * the Solana chain itself does not have to trust any facilitator's /verify.
  *
  * The reconcile is a faithful port of the verdict core that powers Grey Ridge's
  * hosted /x402/receipt-verify, so a local SVM reconcile agrees with the hosted
