@@ -134,3 +134,12 @@ stranded and rescued it. In the interim, cards `t_5c08554f` and `t_913952c8` ind
 reconfirmed the same finding (probe-likelihood addendum, `probe_likely: true`, $0.00 organic
 revenue) and landed a smaller duplicate version of this file in `main`; this rescue restores
 the fuller original audit and folds the duplicate content back into one canonical document.
+
+---
+
+## Update 2026-11-07
+
+The current payer/endpoint breakdown, the unscanned-window check and the market-number caveats are in
+[`docs/findings/x402_payer_truth_2026-11-07.md`](findings/x402_payer_truth_2026-11-07.md). Headline: the sensor's
+"431 external" is 431 transfers from ~44 wallets, 75% from three bot bursts, 0 real customers. The Worker-ledger
+term requested by card t_83bb9ad7 is now `scripts/worker_ledger_revenue.py`.
