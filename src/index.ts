@@ -1630,7 +1630,7 @@ of law rules.</p>
 
 <footer>Grey Ridge Signals Group LLC &middot;
 <a href="https://greyridgesignals.ai">greyridgesignals.ai</a> &middot;
-<a href="/">API home</a> &middot; <a href="/openapi.json">OpenAPI spec</a></footer>
+<a href="/">API home</a> &middot; <a href="/openapi.json">OpenAPI spec</a> &middot; <a href="https://claimfinder.greyridgesignals.ai/settlements">Open class action settlements</a></footer>
 </body></html>`),
 );
 
