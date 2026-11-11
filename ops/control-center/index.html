@@ -69,6 +69,20 @@
         background:var(--cyan);color:var(--ink);font-weight:600;font-size:11.5px;border:none;border-radius:999px;
         padding:5px 14px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4)}
   .pill.show{display:block}
+  /* ACCOUNT BALANCE — per-venue balances, P&L and the reasons behind them */
+  .acct{border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin-top:8px;background:var(--panel)}
+  .acct .ah{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .acct .al{font-weight:600}
+  .acct .am{font-size:11px;color:var(--muted)}
+  .acct .at{margin-left:auto;font-size:20px;font-weight:600}
+  .acct .ac{display:flex;justify-content:space-between;gap:12px;font-size:12.5px;padding:2px 0;color:var(--txt)}
+  .acct .ac span:first-child{color:var(--muted)}
+  .acct .ap{font-size:12.5px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)}
+  .acct .an{font-size:12px;color:var(--amber);margin-top:3px}
+  .acct .ae{font-size:12px;color:var(--rust);margin-top:3px;font-weight:600}
+  .acct .neg{color:var(--rust)} .acct .pos{color:var(--jade)}
+  .acct .tag{font-size:10px;letter-spacing:.08em;border:1px solid var(--line);border-radius:999px;padding:1px 7px;color:var(--muted)}
+  .acct .tag.live{color:var(--amber);border-color:#5a4720} .acct .tag.stale{color:var(--rust);border-color:#5a2a1c}
   /* Needs-Rez atoms (account/identity gates — his checklist) */
   .atoms{margin-top:12px;border:1px solid #3a3320;background:#1b1a12;border-radius:10px;padding:10px 14px}
   .ahead{font-size:11px;letter-spacing:.1em;color:var(--amber);font-weight:600;margin-bottom:6px}
@@ -189,6 +203,12 @@
       <span style="font-size:12px;color:var(--muted)">monitor</span>
       <div class="toggle" id="toggle" onclick="toggleMon()"><div class="knob"></div></div>
     </div>
+  </div>
+
+  <!-- ACCOUNT BALANCE — what each venue actually holds and what we have made or lost there -->
+  <div class="inbox" id="acctbox">
+    <div class="ihead foldhead" onclick="toggleBox('acctbox')"><span class="foldmark"></span><span class="ititle">ACCOUNT BALANCE</span><span class="isub" id="acctsub"></span></div>
+    <div id="acctlist"></div>
   </div>
 
   <!-- BOARD — generic sensor status board: faults first, stale next, info collapsed -->
@@ -338,6 +358,7 @@ function renderTabs(top){
     const running=(n===top.active)&&e.alive;
     const bal = r.balance_usd!=null ? ('$'+Number(r.balance_usd).toFixed(2))
               : r.line_a_balance_usdc!=null ? ('$'+Number(r.line_a_balance_usdc).toFixed(2))
+              : (L.account&&L.account.total_usd!=null) ? ('acct '+usd(L.account.total_usd))
               : '';
     const daily = L.daily ? '<span class="daily">1×/day</span>' : '';
     const pw = `<button class="pw ${enabled?'on':'offc'}" title="${enabled?'on — click to turn OFF':'off — click to turn ON'}" onclick="event.stopPropagation();toggleLoop('${n}',${!enabled})">⏻</button>`;
@@ -387,6 +408,7 @@ function render(top){
   renderTabs(top);
   renderSentinel(top);
   renderInbox(top);
+  renderAccounts(top);
   renderBoard(top);
   renderBrief(top);
   const d=(top.loops&&top.loops[TAB||top.active])||top;
@@ -409,10 +431,14 @@ function render(top){
   const r=d.revenue||{}, pos=v=>v&&v>0?'pos':'';
   // Each loop surfaces its OWN money shape: x402 => Line A (usdc) / Line B (fiat);
   // a marketplace loop (assetfactory) => settled balance + metered runs + external payers.
+  const acc=d.account;   // venue balance published by a sensor whose account_summary.chain == this loop
   document.getElementById('rev').innerHTML = ('balance_usd' in r)
-    ? `<span>Balance <b class="mono ${pos(r.balance_usd)}">$${Number(r.balance_usd??0).toFixed(2)}</b></span>`
-     +`<span>Runs <b class="mono">${r.metered_invocations??0}</b></span>`
-     +`<span>Payers <b class="mono ${pos(r.external_payers)}">${r.external_payers??0}</b></span>`
+    ? (r.balance_usd==null
+        ? `<span title="${esc(r.revenue_error||'')}">Earned <b class="mono">—</b> <small style="color:var(--muted)">no oracle</small></span>`
+        : `<span>Balance <b class="mono ${pos(r.balance_usd)}">$${Number(r.balance_usd).toFixed(2)}</b></span>`)
+      +(acc?`<span>Account <b class="mono">${usd(acc.total_usd)}</b> <small class="mono ${tone((acc.pnl||{}).total_pnl_usd)}">${sgn((acc.pnl||{}).total_pnl_usd)} P&amp;L</small></span>`:'')
+     +(r.metered_invocations!=null?`<span>Runs <b class="mono">${r.metered_invocations}</b></span>`:'')
+     +(r.external_payers!=null?`<span>Payers <b class="mono ${pos(r.external_payers)}">${r.external_payers}</b></span>`:'')
     : `<span>Line A <b class="mono ${pos(r.line_a_external_usdc)}">$${(r.line_a_external_usdc??0).toFixed(3)}</b> ext</span>`
      +`<span>Line B <b class="mono ${pos(r.line_b_fiat_usd)}">$${(r.line_b_fiat_usd??0).toFixed(2)}</b></span>`;
   // atoms — Rez's checklist (account/identity gates)
@@ -525,7 +551,40 @@ function saveFold(){ try{localStorage.setItem('foldState',JSON.stringify(foldSta
 function isOpen(key,dflt){ return key in foldState ? !!foldState[key] : dflt; }
 function setOpen(key,open){ foldState[key]=!!open; saveFold(); }
 function toggleBox(id){ const open=!isOpen(id,true); setOpen(id,open); applyBoxFolds(); }
-function applyBoxFolds(){ for(const id of ['boardbox','inboxbox']){ document.getElementById(id).classList.toggle('folded',!isOpen(id,true)); } }
+function applyBoxFolds(){ for(const id of ['acctbox','boardbox','inboxbox']){ document.getElementById(id).classList.toggle('folded',!isOpen(id,true)); } }
+// ---- ACCOUNT BALANCE: one card per venue (discovered from sensors' account_summary blocks) ----
+const _n2=(v)=>Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const usd=v=>v==null?'—':(v<0?'−':'')+'$'+_n2(v);
+const sgn=v=>v==null?'—':(v<0?'−':'+')+'$'+_n2(v);
+const tone=v=>v==null?'':(v<0?'neg':(v>0?'pos':''));
+function acctCard(a){
+  const p=a.pnl||{}, errs=a.errors||[], notes=a.notes||[];
+  const comps=(a.components||[]).map(c=>`<div class="ac"><span>${esc(c.label)}${c.meaning?' · '+esc(c.meaning):''}</span><b class="mono">${usd(c.usd)}</b></div>`).join('');
+  const ro=a.resting_orders&&a.resting_orders.count!=null?`<div class="ac"><span>resting orders</span><b class="mono">${a.resting_orders.count} · ${usd(a.resting_orders.notional_usd)} at limit</b></div>`:'';
+  let pl='';
+  if(p.total_pnl_usd!=null){
+    const parts=[];
+    if(p.realized_usd!=null) parts.push(`realized <b class="mono ${tone(p.realized_usd)}">${sgn(p.realized_usd)}</b>`);
+    if(p.unrealized_usd!=null) parts.push(`unrealized <b class="mono ${tone(p.unrealized_usd)}">${sgn(p.unrealized_usd)}</b>`);
+    if(p.unexplained_usd!=null && Math.abs(p.unexplained_usd)>=0.005) parts.push(`<b class="mono ${tone(p.unexplained_usd)}">UNEXPLAINED ${sgn(p.unexplained_usd)}</b>`);
+    const base=p.net_deposits_usd!=null?` since ${usd(p.net_deposits_usd)} put in${p.withdrawals_usd?` (net of ${usd(p.withdrawals_usd)} withdrawn)`:''}`:'';
+    pl=`<div class="ap">P&amp;L${base}: <b class="mono ${tone(p.total_pnl_usd)}">${sgn(p.total_pnl_usd)}</b>${parts.length?' = '+parts.join(' + '):''}</div>`;
+  } else if(a.total_usd!=null){
+    pl='<div class="ap">P&amp;L: not available (see errors)</div>';
+  }
+  const tags=`<span class="tag ${a.kind==='live'?'live':''}">${esc((a.money||a.kind||'').toUpperCase())}</span>`+(a.stale?'<span class="tag stale">STALE</span>':'');
+  const age=a.age_s!=null?` · read ${a.age_s<3600?Math.round(a.age_s/60)+'m':(a.age_s/3600).toFixed(1)+'h'} ago`:'';
+  return `<div class="acct"><div class="ah"><span class="al">${esc(a.label||a.venue)}</span>${tags}<span class="am">${esc(a.total_meaning||'')}${age}</span><span class="at mono">${usd(a.total_usd)}</span></div>`
+    +comps+ro+pl+notes.map(n=>`<div class="an">⚠ ${esc(n)}</div>`).join('')+errs.map(e=>`<div class="ae">✖ ${esc(e)}</div>`).join('')+'</div>';
+}
+function renderAccounts(top){
+  const a=(top&&top.accounts)||[];
+  const live=a.filter(x=>x.kind==='live'&&x.total_usd!=null);
+  const tot=live.reduce((t,x)=>t+x.total_usd,0), pnl=live.reduce((t,x)=>t+((x.pnl||{}).total_pnl_usd||0),0);
+  document.getElementById('acctsub').textContent=a.length?(live.length?`real money ${usd(tot)} · P&L ${sgn(pnl)}`:'no live venue reporting')+` · ${a.length} venue${a.length>1?'s':''}`:'no venue publishes an account_summary';
+  document.getElementById('acctlist').innerHTML=a.map(acctCard).join('')||'<div class="inone">✖ no account sensors found under ~/.hermes/data/*/latest.json</div>';
+  applyBoxFolds();
+}
 function renderBoard(top){
   const b=(top&&top.board)||{faults:[],stale:[],info:[],counts:{}}; const c=b.counts||{};
   document.getElementById('bcounts').textContent=`${c.faults||0} faults · ${c.needs_you||0} need you · ${c.stale||0} stale · ${c.info||0} info · ${c.retired_hidden||0} retired hidden`;

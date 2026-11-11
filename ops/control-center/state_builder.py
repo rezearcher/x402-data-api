@@ -231,18 +231,74 @@ def revenue(cfg: dict) -> dict:
             "line_a_first_dollar": a.get("first_dollar_seen"),
             "line_b_fiat_usd": bfiat,
         }
-    # generic chain: read its oracle_file
-    o = _safe(lambda: json.loads(_read(cfg["oracle"])), {}) if cfg["oracle"] else {}
-    bal = o.get("balance_usd", o.get("balance_usdc", 0))
+    # generic chain: read its oracle_file. A chain with NO oracle (or an unreadable one, or one that
+    # carries no balance key) has NO earnings figure: report None + the reason, never a fabricated 0.
+    # (2026-11-10: the kalshi chain has oracle_file "" and the page showed "Kalshi $0.00" while the
+    # account held $172; venue balances live in accounts(), not here.)
+    o, why = {}, ""
+    if not cfg["oracle"]:
+        why = "no oracle_file configured for this chain: no earnings figure (venue balances: ACCOUNT BALANCE section)"
+    else:
+        try:
+            o = json.loads(_read(cfg["oracle"]))
+        except Exception as e:
+            why = f"oracle_file unreadable ({cfg['oracle']}): {type(e).__name__}: {e}"
+    bal = o.get("balance_usd", o.get("balance_usdc"))
+    if bal is None and not why:
+        why = "oracle_file has no balance_usd/balance_usdc key"
     return {
         "balance_usd": bal,
+        "revenue_error": why or None,
         "metered_invocations": o.get("metered_invocations"),
         "assets_published": o.get("assets_published"),
         "external_payers": o.get("external_payers"),
-        "oracle_note": o.get("note", ""),
+        "oracle_note": o.get("note", "") or why,
         # keep the keys the UI expects so it renders cleanly (no x402 revenue for this chain yet)
         "line_a_external_usdc": None, "line_b_fiat_usd": None,
     }
+
+
+DATA = HOME / ".hermes" / "data"
+ACCOUNT_STALE_S = 6 * 3600   # kalshi_balance_sensor runs every 4h; older than 6h means a missed run
+
+
+def accounts() -> list:
+    """Per-venue account balances for the ACCOUNT BALANCE section.
+
+    DISCOVERED, not listed: any ~/.hermes/data/<sensor>/latest.json that carries an `account_summary`
+    block (written by kalshi_balance_sensor.py, midas_alpaca_fetch.py, ...) becomes a venue, so a new
+    venue appears by emitting the block. Each venue keeps its own `errors`/`notes`; a missing file or
+    a failed read is surfaced as an error row, never as a 0 balance. Live (real-money) venues sort first."""
+    rows = []
+    now = time.time()
+    for f in sorted(DATA.glob("*/latest.json")):
+        try:
+            if f.stat().st_size > 2_000_000 or '"account_summary"' not in f.read_text(errors="replace"):
+                continue
+        except Exception:
+            continue
+        try:
+            d = json.loads(f.read_text())
+            a = dict(d["account_summary"])
+        except Exception as e:
+            rows.append({"venue": f.parent.name, "label": f.parent.name, "kind": "unknown", "total_usd": None,
+                         "components": [], "pnl": {}, "notes": [],
+                         "errors": [f"{f}: account_summary unreadable: {type(e).__name__}: {e}"], "stale": True})
+            continue
+        if not isinstance(a, dict):
+            continue
+        age = now - f.stat().st_mtime
+        a["sensor"] = f.parent.name
+        a["age_s"] = round(age)
+        a["stale"] = bool(a.get("stale")) or age > ACCOUNT_STALE_S or d.get("status") == "error"
+        a.setdefault("errors", [])
+        if d.get("status") == "error" and d.get("reason"):
+            a["errors"] = list(a["errors"]) + [f"sensor status=error: {d['reason']}"]
+        if age > ACCOUNT_STALE_S:
+            a["errors"] = list(a["errors"]) + [f"sensor file is {age / 3600:.1f}h old (expected < {ACCOUNT_STALE_S // 3600}h)"]
+        rows.append(a)
+    rows.sort(key=lambda r: (r.get("kind") != "live", r.get("label") or ""))
+    return rows
 
 
 def discoverability(cfg: dict) -> dict:
@@ -682,10 +738,14 @@ def build() -> dict:
             agg_runs += float(rv.get("metered_invocations") or 0)
         loops["arb"]["revenue"] = {"balance_usd": round(agg_usd, 2), "external_payers": int(agg_pay),
                                    "metered_invocations": int(agg_runs), "aggregate": True}
+    accts = _safe(accounts, [])
+    for n2, L in loops.items():   # a chain whose venue publishes an account shows its balance on its tab
+        L["account"] = next((a for a in accts if a.get("chain") == n2), None)
     active = running_name(armed) if armed else show[0]
     base = loops.get(active) or (next(iter(loops.values())) if loops else {})
     state = dict(base)  # backward-compat: active loop's fields at top level
     state["loops"] = loops
+    state["accounts"] = accts
     state["loop_names"] = show
     state["active"] = active
     state["sentinel"] = _safe(sentinel, {})
