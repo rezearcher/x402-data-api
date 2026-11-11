@@ -104,6 +104,7 @@ Per-venue balances and P&L, above the STATUS BOARD. **Discovered, not listed**: 
 `~/.hermes/data/<sensor>/latest.json` that carries an `account_summary` block into a venue card (today: `kalshi_account`
 from `~/.hermes/scripts/kalshi_balance_sensor.py`, `midas_alpaca` from `midas_alpaca_fetch.py`). A new venue appears by emitting the block
 (`venue, label, kind live|paper, total_usd, total_meaning, components[], pnl{}, notes[], errors[]`; optional `chain` ties the card to a loop tab).
+The Kalshi card covers BOTH Kalshi accounts: predictions (`/portfolio/balance`, shards 0 and 2) and "invest" = the perps/margin account (`GET /margin/balance`, funded by a transfer to destination `margined`).
 Rules: a failed read is an error row (`errors`), never a 0; Kalshi P&L = live equity minus API deposits/withdrawals, split into realized
 (settlements) + unrealized + an explicit UNEXPLAINED residual; `loops.<chain>.revenue.balance_usd` is `null` (not 0) when a chain has no oracle.
 Tests: `python3 -m unittest test_accounts test_board`.
