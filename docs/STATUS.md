@@ -1,21 +1,21 @@
-# Measured status (auto-generated 2026-11-12T12:20Z)
+# Measured status (auto-generated 2026-11-13T12:20Z)
 
-Source: `data/uptime_samples.jsonl`, 48800 samples from 2026-10-19T22:06:27.945628Z to 2026-11-12T12:15:01.570944Z, produced by `scripts/uptime_probe.py` hitting each free `/preview` path. Window is short; treat as a measurement, not an SLA.
+Source: `data/uptime_samples.jsonl`, 51104 samples from 2026-10-19T22:06:27.945628Z to 2026-11-13T12:15:01.538518Z, produced by `scripts/uptime_probe.py` hitting each free `/preview` path. Window is short; treat as a measurement, not an SLA.
 
 | endpoint | samples | success | p50 ms | p95 ms |
 |---|---|---|---|---|
-| /chain/gas-price/preview | 6813 | 99.5% | 330 | 1381 |
-| /chain/token-report/preview | 6813 | 98.7% | 1960 | 4821 |
-| /chain/token-security/preview | 6813 | 98.1% | 1358 | 3828 |
-| /crypto/funding/preview | 4151 | 97.9% | 2891 | 3955 |
-| /crypto/prices/preview | 6813 | 99.4% | 336 | 1032 |
-| /defi/yields/preview | 4151 | 97.7% | 474 | 874 |
-| /gate/swap/preview | 6813 | 98.5% | 2096 | 4986 |
-| /scan/mcp/preview | 6433 | 99.5% | 192 | 886 |
+| /chain/gas-price/preview | 7101 | 99.5% | 327 | 1429 |
+| /chain/token-report/preview | 7101 | 98.8% | 1996 | 4855 |
+| /chain/token-security/preview | 7101 | 97.9% | 1361 | 3878 |
+| /crypto/funding/preview | 4439 | 98.0% | 2921 | 3991 |
+| /crypto/prices/preview | 7101 | 99.4% | 328 | 1021 |
+| /defi/yields/preview | 4439 | 97.8% | 464 | 865 |
+| /gate/swap/preview | 7101 | 98.6% | 2133 | 5017 |
+| /scan/mcp/preview | 6721 | 99.5% | 190 | 875 |
 
 ## Data correctness (canary probes)
 
-Method: canary probes with proven negative controls (scripts/uptime_probe.py + canary_predicates.py); availability (HTTP 200) is NOT correctness. Point-in-time measurement, not an SLA. 'inconclusive' = the probe could not conclude (degrade-open), not a failure. Last checked: 2026-11-12T12:15:01.570944Z (fresh: True).
+Method: canary probes with proven negative controls (scripts/uptime_probe.py + canary_predicates.py); availability (HTTP 200) is NOT correctness. Point-in-time measurement, not an SLA. 'inconclusive' = the probe could not conclude (degrade-open), not a failure. Last checked: 2026-11-13T12:15:01.538518Z (fresh: True).
 
 | route | correctness | guards |
 |---|---|---|
@@ -25,6 +25,6 @@ Method: canary probes with proven negative controls (scripts/uptime_probe.py + c
 | /defi/yield-entry-verdict | passing | Entry verdict keeps its APY/prediction substance, not a hollow label |
 | /pm/markets | passing | Markets stay tradeable — numeric outcomePrices in [0,1], clobTokenIds present (no hollow-200 or cents-normalization bug) |
 | /gate/swap | passing | A structural honeypot still blocks and a known-good token still passes (no false-SAFE) |
-| /chain/token-report | passing | Honeypot screens AVOID, good token screens SAFE, DEX tax reads clean |
+| /chain/token-report | regressed | Honeypot screens AVOID, good token screens SAFE, DEX tax reads clean |
 | /chain/token-security | passing | Metadata/sim decode correct on a known-good token (no fabricated risk) |
 | /scan/mcp | passing | A poisoned MCP canary is still flagged (prompt-injection detection not regressed) |
