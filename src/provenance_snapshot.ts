@@ -5,16 +5,12 @@ import type { ProvRecord } from "./provenance.ts";
 export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series: Record<string, Record<string, ProvRecord>> } =
 {
   "schema": 1,
-  "generated_at": "2026-11-18T00:40:01Z",
+  "generated_at": "2026-11-18T06:40:01Z",
   "series": {
     "price": {
       "bitcoin": {
         "first_seen": 1793884981363,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 75662.71725
-          },
           {
             "t": 1793968801597,
             "v": 76125.80122
@@ -202,16 +198,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 64748.554836300005
+          },
+          {
+            "t": 1794984001240,
+            "v": 64599.3
           }
         ]
       },
       "ethereum": {
         "first_seen": 1793884981363,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 2229.725801
-          },
           {
             "t": 1793968801597,
             "v": 2242.8106442
@@ -399,16 +395,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 1818.3622682999999
+          },
+          {
+            "t": 1794984001240,
+            "v": 1809.8400068
           }
         ]
       },
       "solana": {
         "first_seen": 1793884981363,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 89.838554
-          },
           {
             "t": 1793968801597,
             "v": 90.5848202
@@ -596,16 +592,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 75.17
+          },
+          {
+            "t": 1794984001240,
+            "v": 74.7923904
           }
         ]
       },
       "usd-coin": {
         "first_seen": 1793884981363,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 0.9997185555
-          },
           {
             "t": 1793968801597,
             "v": 0.9997783992
@@ -793,16 +789,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 0.9997990690999999
+          },
+          {
+            "t": 1794984001240,
+            "v": 0.9997888768000001
           }
         ]
       },
       "tether": {
         "first_seen": 1793884981363,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 0.99863
-          },
           {
             "t": 1793968801597,
             "v": 0.99862
@@ -990,16 +986,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 0.9989699999999999
+          },
+          {
+            "t": 1794984001240,
+            "v": 0.99883
           }
         ]
       },
       "binancecoin": {
         "first_seen": 1793884981363,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 690.16202175
-          },
           {
             "t": 1793968801597,
             "v": 696.487519
@@ -1187,16 +1183,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 596.79
+          },
+          {
+            "t": 1794984001240,
+            "v": 591.31
           }
         ]
       },
       "ripple": {
         "first_seen": 1793884981363,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 1.1949845900000002
-          },
           {
             "t": 1793968801597,
             "v": 1.194649106
@@ -1384,16 +1380,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 0.982647441
+          },
+          {
+            "t": 1794984001240,
+            "v": 0.98326
           }
         ]
       },
       "cardano": {
         "first_seen": 1793884981363,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 0.18435079
-          },
           {
             "t": 1793968801597,
             "v": 0.18691
@@ -1581,16 +1577,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 0.1545444603
+          },
+          {
+            "t": 1794984001240,
+            "v": 0.1535701125
           }
         ]
       },
       "dogecoin": {
         "first_seen": 1793884981363,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 0.07166312400000001
-          },
           {
             "t": 1793968801597,
             "v": 0.0726293163
@@ -1778,16 +1774,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 0.05984604815
+          },
+          {
+            "t": 1794984001240,
+            "v": 0.059350239299999996
           }
         ]
       },
       "avalanche-2": {
         "first_seen": 1793884981363,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 8.301777450000001
-          },
           {
             "t": 1793968801597,
             "v": 8.39939282
@@ -1975,6 +1971,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 7.2637
+          },
+          {
+            "t": 1794984001240,
+            "v": 7.1735970600000005
           }
         ]
       }
@@ -1984,10 +1984,6 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
         "first_seen": 1793886744350,
         "ticks": [
           {
-            "t": 1793947201420,
-            "v": 2.26242
-          },
-          {
             "t": 1793968801597,
             "v": 2.26242
           },
@@ -2173,6 +2169,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           },
           {
             "t": 1794962401396,
+            "v": 2.24336
+          },
+          {
+            "t": 1794984001240,
             "v": 2.24336
           }
         ]
@@ -2181,10 +2181,6 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
         "first_seen": 1793886744350,
         "ticks": [
           {
-            "t": 1793947201420,
-            "v": 2.18708
-          },
-          {
             "t": 1793968801597,
             "v": 2.75137
           },
@@ -2371,16 +2367,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 2.20205
+          },
+          {
+            "t": 1794984001240,
+            "v": 2.20205
           }
         ]
       },
       "46bd2bdf-6d92-4066-b482-e885ee172264": {
         "first_seen": 1793886744350,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 3.15492
-          },
           {
             "t": 1793968801597,
             "v": 3.22922
@@ -2568,16 +2564,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 2.36684
+          },
+          {
+            "t": 1794984001240,
+            "v": 2.36612
           }
         ]
       },
       "d8c4eff5-c8a9-46fc-a888-057c4c668e72": {
         "first_seen": 1793886744350,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 3.8
-          },
           {
             "t": 1793968801597,
             "v": 3.8
@@ -2764,6 +2760,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           },
           {
             "t": 1794962401396,
+            "v": 3.8
+          },
+          {
+            "t": 1794984001240,
             "v": 3.8
           }
         ]
@@ -2772,10 +2772,6 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
         "first_seen": 1793886744350,
         "ticks": [
           {
-            "t": 1793947201420,
-            "v": 0.0
-          },
-          {
             "t": 1793968801597,
             "v": 0.0
           },
@@ -2961,6 +2957,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           },
           {
             "t": 1794962401396,
+            "v": 0.0
+          },
+          {
+            "t": 1794984001240,
             "v": 0.0
           }
         ]
@@ -2969,10 +2969,6 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
         "first_seen": 1793886744350,
         "ticks": [
           {
-            "t": 1793947201420,
-            "v": 2e-05
-          },
-          {
             "t": 1793968801597,
             "v": 2e-05
           },
@@ -3158,6 +3154,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           },
           {
             "t": 1794962401396,
+            "v": 2e-05
+          },
+          {
+            "t": 1794984001240,
             "v": 2e-05
           }
         ]
@@ -3166,10 +3166,6 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
         "first_seen": 1793886744350,
         "ticks": [
           {
-            "t": 1793947201420,
-            "v": 0.0
-          },
-          {
             "t": 1793968801597,
             "v": 0.0
           },
@@ -3356,16 +3352,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 0.0
+          },
+          {
+            "t": 1794984001240,
+            "v": 0.0
           }
         ]
       },
       "7e382157-b1bc-406d-b17b-facba43b716e": {
         "first_seen": 1793886744350,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 0.00317
-          },
           {
             "t": 1793968801597,
             "v": 0.00317
@@ -3553,16 +3549,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 0.00319
+          },
+          {
+            "t": 1794984001240,
+            "v": 0.0032
           }
         ]
       },
       "43641cf5-a92e-416b-bce9-27113d3c0db6": {
         "first_seen": 1793886744350,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 5.10309
-          },
           {
             "t": 1793968801597,
             "v": 5.06764
@@ -3749,6 +3745,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           },
           {
             "t": 1794962401396,
+            "v": 5.2347
+          },
+          {
+            "t": 1794984001240,
             "v": 5.2347
           }
         ]
@@ -3757,10 +3757,6 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
         "first_seen": 1793886744350,
         "ticks": [
           {
-            "t": 1793947201420,
-            "v": 0.00018
-          },
-          {
             "t": 1793968801597,
             "v": 0.00018
           },
@@ -3946,6 +3942,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           },
           {
             "t": 1794962401396,
+            "v": 0.00012
+          },
+          {
+            "t": 1794984001240,
             "v": 0.00012
           }
         ]
@@ -3954,10 +3954,6 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
         "first_seen": 1793886744350,
         "ticks": [
           {
-            "t": 1793947201420,
-            "v": 3.44813
-          },
-          {
             "t": 1793968801597,
             "v": 3.44813
           },
@@ -4144,16 +4140,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 3.65081
+          },
+          {
+            "t": 1794984001240,
+            "v": 3.65081
           }
         ]
       },
       "b1986007-81f3-4150-9565-94d5a4066ce4": {
         "first_seen": 1793886744350,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 0.00101
-          },
           {
             "t": 1793968801597,
             "v": 0.00101
@@ -4341,16 +4337,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 0.00061
+          },
+          {
+            "t": 1794984001240,
+            "v": 0.00061
           }
         ]
       },
       "ac61ee82-2fe4-4f9b-a9cd-7fb33f598859": {
         "first_seen": 1793886744350,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 3.75
-          },
           {
             "t": 1793968801597,
             "v": 3.75
@@ -4537,6 +4533,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           },
           {
             "t": 1794962401396,
+            "v": 3.75
+          },
+          {
+            "t": 1794984001240,
             "v": 3.75
           }
         ]
@@ -4545,10 +4545,6 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
         "first_seen": 1793886744350,
         "ticks": [
           {
-            "t": 1793947201420,
-            "v": 0.0
-          },
-          {
             "t": 1793968801597,
             "v": 0.0
           },
@@ -4734,6 +4730,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           },
           {
             "t": 1794962401396,
+            "v": 0.0
+          },
+          {
+            "t": 1794984001240,
             "v": 0.0
           }
         ]
@@ -4811,10 +4811,6 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
         "first_seen": 1793886744350,
         "ticks": [
           {
-            "t": 1793947201420,
-            "v": 0.00027
-          },
-          {
             "t": 1793968801597,
             "v": 0.00027
           },
@@ -5000,6 +4996,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           },
           {
             "t": 1794962401396,
+            "v": 0.00057
+          },
+          {
+            "t": 1794984001240,
             "v": 0.00057
           }
         ]
@@ -5008,10 +5008,6 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
         "first_seen": 1793886744350,
         "ticks": [
           {
-            "t": 1793947201420,
-            "v": 2.26981
-          },
-          {
             "t": 1793968801597,
             "v": 2.26298
           },
@@ -5198,16 +5194,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 1.84459
+          },
+          {
+            "t": 1794984001240,
+            "v": 1.84459
           }
         ]
       },
       "66985a81-9c51-46ca-9977-42b4fe7bc6df": {
         "first_seen": 1793886744350,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 5.29546
-          },
           {
             "t": 1793968801597,
             "v": 5.29484
@@ -5395,16 +5391,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 5.34207
+          },
+          {
+            "t": 1794984001240,
+            "v": 5.34614
           }
         ]
       },
       "9e709e57-84eb-496b-82ce-2e8f6a17db1b": {
         "first_seen": 1793886744350,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 4.53725
-          },
           {
             "t": 1793968801597,
             "v": 4.53725
@@ -5592,16 +5588,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 4.59526
+          },
+          {
+            "t": 1794984001240,
+            "v": 4.59526
           }
         ]
       },
       "0e7d0722-9054-4907-8593-567b353c0900": {
         "first_seen": 1793886744350,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 4.9
-          },
           {
             "t": 1793968801597,
             "v": 4.9
@@ -5789,16 +5785,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 4.92
+          },
+          {
+            "t": 1794984001240,
+            "v": 4.92
           }
         ]
       },
       "bd0f5a2a-5d74-40bd-a7db-bf1538b314a2": {
         "first_seen": 1793886744350,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 3.84905
-          },
           {
             "t": 1793968801597,
             "v": 3.84905
@@ -5986,16 +5982,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 3.87104
+          },
+          {
+            "t": 1794984001240,
+            "v": 3.87786
           }
         ]
       },
       "33c732f6-a78d-41da-af5b-ccd9fa5e52d5": {
         "first_seen": 1793886744350,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 3.61
-          },
           {
             "t": 1793968801597,
             "v": 3.61
@@ -6183,16 +6179,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 2.77
+          },
+          {
+            "t": 1794984001240,
+            "v": 2.81
           }
         ]
       },
       "9f25a954-db87-4bb2-a8b2-4be0b843a44c": {
         "first_seen": 1793886744350,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 1.86727
-          },
           {
             "t": 1793968801597,
             "v": 1.86681
@@ -6380,16 +6376,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 1.82473
+          },
+          {
+            "t": 1794984001240,
+            "v": 1.81293
           }
         ]
       },
       "d3be212c-f337-40e2-87fc-fb636a3de38f": {
         "first_seen": 1793886744350,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 0.0
-          },
           {
             "t": 1793968801597,
             "v": 0.0
@@ -6576,6 +6572,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           },
           {
             "t": 1794962401396,
+            "v": 0.0
+          },
+          {
+            "t": 1794984001240,
             "v": 0.0
           }
         ]
@@ -6584,10 +6584,6 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
         "first_seen": 1793886744350,
         "ticks": [
           {
-            "t": 1793947201420,
-            "v": 0.00236
-          },
-          {
             "t": 1793968801597,
             "v": 0.00236
           },
@@ -6773,6 +6769,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           },
           {
             "t": 1794962401396,
+            "v": 0.00237
+          },
+          {
+            "t": 1794984001240,
             "v": 0.00237
           }
         ]
@@ -6781,10 +6781,6 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
         "first_seen": 1793886744350,
         "ticks": [
           {
-            "t": 1793947201420,
-            "v": 4.86169
-          },
-          {
             "t": 1793968801597,
             "v": 4.93638
           },
@@ -6970,6 +6966,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           },
           {
             "t": 1794962401396,
+            "v": 4.87455
+          },
+          {
+            "t": 1794984001240,
             "v": 4.87455
           }
         ]
@@ -6978,10 +6978,6 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
         "first_seen": 1793886744350,
         "ticks": [
           {
-            "t": 1793947201420,
-            "v": 0.0
-          },
-          {
             "t": 1793968801597,
             "v": 0.0
           },
@@ -7167,6 +7163,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           },
           {
             "t": 1794962401396,
+            "v": 0.0
+          },
+          {
+            "t": 1794984001240,
             "v": 0.0
           }
         ]
@@ -7175,10 +7175,6 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
         "first_seen": 1793886744350,
         "ticks": [
           {
-            "t": 1793947201420,
-            "v": 0.55807
-          },
-          {
             "t": 1793968801597,
             "v": 0.55807
           },
@@ -7365,6 +7361,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 0.609
+          },
+          {
+            "t": 1794984001240,
+            "v": 0.61683
           }
         ]
       },
@@ -7372,10 +7372,6 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
         "first_seen": 1793886744350,
         "ticks": [
           {
-            "t": 1793947201420,
-            "v": 0.0
-          },
-          {
             "t": 1793968801597,
             "v": 0.0
           },
@@ -7562,16 +7558,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 0.0
+          },
+          {
+            "t": 1794984001240,
+            "v": 0.0
           }
         ]
       },
       "e880e828-ca59-4ec6-8d4f-27182a4dc23d": {
         "first_seen": 1793886744350,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 1.44998
-          },
           {
             "t": 1793968801597,
             "v": 1.44732
@@ -7759,16 +7755,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 1.43461
+          },
+          {
+            "t": 1794984001240,
+            "v": 1.43558
           }
         ]
       },
       "8edfdf02-cdbb-43f7-bca6-954e5fe56813": {
         "first_seen": 1793886744350,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 4.91702
-          },
           {
             "t": 1793968801597,
             "v": 4.8988
@@ -7955,6 +7951,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           },
           {
             "t": 1794962401396,
+            "v": 4.95231
+          },
+          {
+            "t": 1794984001240,
             "v": 4.95231
           }
         ]
@@ -7963,10 +7963,6 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
         "first_seen": 1793886744350,
         "ticks": [
           {
-            "t": 1793947201420,
-            "v": 0.0
-          },
-          {
             "t": 1793968801597,
             "v": 0.0
           },
@@ -8153,16 +8149,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 0.0
+          },
+          {
+            "t": 1794984001240,
+            "v": 0.0
           }
         ]
       },
       "465d177e-3d0d-42c0-b5f5-31c857567135": {
         "first_seen": 1793886744350,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 4.0933
-          },
           {
             "t": 1793968801597,
             "v": 4.0933
@@ -8349,6 +8345,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           },
           {
             "t": 1794962401396,
+            "v": 2.34087
+          },
+          {
+            "t": 1794984001240,
             "v": 2.34087
           }
         ]
@@ -9020,10 +9020,6 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
         "first_seen": 1793904001471,
         "ticks": [
           {
-            "t": 1793947201420,
-            "v": 3.75
-          },
-          {
             "t": 1793968801597,
             "v": 3.75
           },
@@ -9210,16 +9206,16 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 3.75
+          },
+          {
+            "t": 1794984001240,
+            "v": 3.75
           }
         ]
       },
       "28470287-2c5b-5744-bc13-b9f1c0190b7b": {
         "first_seen": 1793904001471,
         "ticks": [
-          {
-            "t": 1793947201420,
-            "v": 5.1243
-          },
           {
             "t": 1793968801597,
             "v": 5.17851
@@ -9407,6 +9403,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 4.51141
+          },
+          {
+            "t": 1794984001240,
+            "v": 4.51148
           }
         ]
       },
@@ -9592,6 +9592,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 0.10468
+          },
+          {
+            "t": 1794984001240,
+            "v": 0.09627
           }
         ]
       },
@@ -9745,6 +9749,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 6.96144
+          },
+          {
+            "t": 1794984001240,
+            "v": 6.98724
           }
         ]
       },
@@ -9842,6 +9850,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 0.14146
+          },
+          {
+            "t": 1794984001240,
+            "v": 0.14058
           }
         ]
       },
@@ -9871,6 +9883,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 0.41362
+          },
+          {
+            "t": 1794984001240,
+            "v": 0.41466
           }
         ]
       },
@@ -9892,6 +9908,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 0.00124
+          },
+          {
+            "t": 1794984001240,
+            "v": 0.00123
           }
         ]
       },
@@ -9966,6 +9986,10 @@ export const PROVENANCE_SNAPSHOT: { schema: number; generated_at: string; series
           {
             "t": 1794962401396,
             "v": 5.24719
+          },
+          {
+            "t": 1794984001240,
+            "v": 5.40516
           }
         ]
       },
