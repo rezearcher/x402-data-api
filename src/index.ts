@@ -7354,37 +7354,32 @@ app.use(async (c, next) => {
     const settledRes = mwRes ?? c.res;
     const st = settledRes?.status;
     if (payHdr && st && st < 400 && c.env.TRAFFIC_LOG) {
-      let payer = "unknown";
-      try {
-        const j = JSON.parse(atob(payHdr));
-        payer = String(j?.payload?.authorization?.from ?? "unknown").toLowerCase();
-      } catch { /* undecodable header */ }
-      // The facilitator rides the settled on-chain txHash back on the
-      // PAYMENT-RESPONSE header (base64 JSON: {success, transaction, network,
-      // payer}). Capture it so the PAID row self-documents its settlement — a
-      // registry/buyer trust-ask ("prove a real Base mainnet settlement") is then
-      // answered from our own store, not a manual chain scan. Prefer the settled
-      // payer (authoritative) over the request-header decode when present.
-      let tx = "";
-      try {
-        const prHdr = settledRes?.headers.get("payment-response") ?? settledRes?.headers.get("x-payment-response");
-        if (prHdr) {
-          const pr = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(prHdr), (ch) => ch.charCodeAt(0))));
-          if (pr?.transaction) tx = String(pr.transaction);
-          if (pr?.payer) payer = String(pr.payer).toLowerCase();
-        }
-      } catch { /* settle header absent/undecodable — log payer-only, never break the paid response */ }
-      // Referral attribution: a partner featuring our endpoints wires ?ref=<tag>
-      // into the call URL (survives the 402→sign→retry round-trip since the retry
-      // re-requests the same URL). Sanitised to a short opaque slug so it can't be
-      // used to smuggle data into the log. Lets a pilot's settled calls be
-      // reconciled per-partner (traced sale), which is what referral partners ask
-      // for before they feature a seller. Empty when absent — fully backward-compat.
-      const ref = (c.req.query("ref") ?? "").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 40);
+      // Build the seller-side delivery record. Historically this logged only the
+      // payer (authorization.from) + settled txHash, discarding the SIGNED
+      // EIP-3009 nonce and authorized value. Those two fields are vet402's
+      // disambiguation key for binding a settlement to a specific delivery when
+      // several same-price transfers are candidates in one window
+      // (https://vet402.com/observatory/methodology), and the join field the
+      // prospective /x402/preflight attribution adapter was still missing on the
+      // SELLER side (candidate x402-prepay-trust-screen). Capturing them (plus a
+      // stable delivery_id) lets a downstream offline collector join each PAID
+      // delivery to its on-chain settlement by nonce WITHOUT inferring the amount
+      // from the catalog price — which scripts/preflight_attribution.py forbids.
+      // This does NOT prove settlement: log_index + the finalized on-chain amount
+      // still require the collector's independent receipt read; auth_value is the
+      // signed authorized amount (atomic USDC), a cross-check against the on-chain
+      // USDC Transfer, not the settled figure. Pure + fail-open — never breaks the
+      // paid response. Referral ?ref=<tag> survives the 402→sign→retry round-trip.
+      const paidRec = buildPaidDeliveryRecord({
+        payHeader: payHdr,
+        paymentResponseHeader: settledRes?.headers.get("payment-response") ?? settledRes?.headers.get("x-payment-response"),
+        path: c.req.path,
+        ref: c.req.query("ref"),
+      });
       // Workers Logs line survives the TrafficLog DO daily-limit outage.
-      console.log(JSON.stringify({ evt: "PAID", path: c.req.path, payer, tx, ref }));
+      console.log(JSON.stringify(paidRec));
       const stub = c.env.TRAFFIC_LOG.get(c.env.TRAFFIC_LOG.idFromName("default"));
-      fireAndForget(c, stub.logHit(c.req.path, "PAID", payer, tx, ref).catch(() => {}));
+      fireAndForget(c, stub.logHit(c.req.path, "PAID", paidRec.payer, paidRec.tx, paidRec.ref).catch(() => {}));
     }
   } catch { /* telemetry must never break a paid response */ }
   // x402 v2 carries the challenge only in the payment-required header and sends
@@ -13932,6 +13927,69 @@ export function decodeUsdcTransfers(logs: unknown[], token = USDC_BASE.toLowerCa
 // protocol constants, not a guessed list.
 const USDC_AUTH_USED_TOPIC = "0x98de503528ee59b575ef0c0a2576a82497bfc029a5685b209e9ec333479b10a5";
 const USDC_AUTH_STATE_SELECTOR = "0xe94a0102"; // authorizationState(address,bytes32)
+
+// --- Seller-side PAID delivery record (prospective settlement↔delivery join) ---
+// The x402 exact-EVM payment header carries the signed EIP-3009 authorization
+// {from,to,value,validAfter,validBefore,nonce}. The paid-call middleware logged
+// only `from` (payer) + the facilitator's settled txHash, discarding the nonce
+// and authorized value. buildPaidDeliveryRecord captures all three so a
+// downstream offline collector can bind each PAID delivery to its on-chain
+// settlement by nonce (vet402's disambiguation method) without inferring the
+// amount from the catalog price. Pure + fail-open: any undecodable header
+// degrades to safe defaults and never throws. It does not prove settlement —
+// log_index + the finalized on-chain amount still require the collector's
+// receipt read; `auth_value` is the signed authorized amount (atomic USDC units,
+// cross-check against the on-chain Transfer), not the settled figure.
+export interface PaidDeliveryRecord {
+  evt: "PAID";
+  path: string;
+  payer: string;
+  tx: string;
+  nonce: string;       // signed EIP-3009 authorization.nonce (32-byte hex) — join/disambiguation key
+  auth_value: string;  // signed authorization.value (atomic USDC) — cross-check, NOT proof of settlement
+  delivery_id: string; // stable unique id for THIS delivery (never empty)
+  ts: number;          // integer UTC seconds the delivery was recorded (seller clock)
+  ref: string;         // sanitised referral slug ("" when absent)
+}
+export function buildPaidDeliveryRecord(args: {
+  payHeader?: string | null;
+  paymentResponseHeader?: string | null;
+  path: string;
+  ref?: string | null;
+  nowMs?: number;
+  deliveryId?: string;
+}): PaidDeliveryRecord {
+  let payer = "unknown";
+  let nonce = "";
+  let auth_value = "";
+  let tx = "";
+  try {
+    const j = JSON.parse(atob(String(args.payHeader ?? "")));
+    const a = j?.payload?.authorization ?? {};
+    if (a?.from != null) payer = String(a.from).toLowerCase();
+    if (a?.nonce != null) nonce = String(a.nonce);
+    if (a?.value != null) auth_value = String(a.value);
+  } catch { /* undecodable payment header — degrade open, keep defaults */ }
+  try {
+    // Facilitator rides the settled txHash (+ authoritative payer) back on the
+    // PAYMENT-RESPONSE header (base64 JSON: {success, transaction, network, payer}).
+    if (args.paymentResponseHeader) {
+      const pr = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(args.paymentResponseHeader), (ch) => ch.charCodeAt(0))));
+      if (pr?.transaction) tx = String(pr.transaction);
+      if (pr?.payer) payer = String(pr.payer).toLowerCase();
+    }
+  } catch { /* settle header absent/undecodable — keep payer-only, never break the paid response */ }
+  const ref = String(args.ref ?? "").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 40);
+  const nowMs = args.nowMs ?? Date.now();
+  // delivery_id uniquely identifies THIS delivery. The signed nonce is unique per
+  // authorization, so it is a stable, reproducible delivery id; fall back to a
+  // random id (then a clock-derived id) so the field the adapter requires is never
+  // empty even if the header could not be decoded.
+  let randomId = "";
+  try { randomId = crypto.randomUUID(); } catch { randomId = `${args.path}:${nowMs}`; }
+  const delivery_id = args.deliveryId ?? (nonce || randomId);
+  return { evt: "PAID", path: args.path, payer, tx, nonce, auth_value, delivery_id, ts: Math.floor(nowMs / 1000), ref };
+}
 
 export interface AuthorizationUsedEvent { authorizer: string; nonce: string }
 
