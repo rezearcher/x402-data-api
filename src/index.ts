@@ -1908,6 +1908,7 @@ ${provisionMeta}
     <li><a href="https://t.me/GreyRidgeGateBot">Telegram bot &mdash; paste a Base token, get GO/HOLD/BLOCK in-chat (@GreyRidgeGateBot)</a></li>
     <li><a href="/for-agents">Data API for agents &mdash; keyless x402 Base RPC, DeFi yields & crypto prices</a></li>
     <li><a href="/partners">Partner program &mdash; resell our verdicts</a></li>
+    <li><a href="/research">Research &mdash; x402 settlement, pre-pay safety &amp; MCP security notes</a></li>
   </ul>
 
   <footer>Grey Ridge Signals Group LLC &middot; Base mainnet (eip155:8453), USDC via x402</footer>
