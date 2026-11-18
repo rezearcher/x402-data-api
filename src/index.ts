@@ -1630,7 +1630,7 @@ of law rules.</p>
 
 <footer>Grey Ridge Signals Group LLC &middot;
 <a href="https://greyridgesignals.ai">greyridgesignals.ai</a> &middot;
-<a href="/">API home</a> &middot; <a href="/openapi.json">OpenAPI spec</a> &middot; <a href="https://claimfinder.greyridgesignals.ai/settlements">Open class action settlements</a></footer>
+<a href="/">API home</a> &middot; <a href="/openapi.json">OpenAPI spec</a> &middot; <a href="/research">Research</a> &middot; <a href="https://claimfinder.greyridgesignals.ai/settlements">Open class action settlements</a></footer>
 </body></html>`),
 );
 
@@ -3850,10 +3850,11 @@ Sitemap: ${CANONICAL_ORIGIN}/sitemap.xml
 
 // sitemap.xml — XML sitemap for SEO crawlers. Links canonical pages + key discovery
 // routes so crawlers prioritize indexing the public API docs over transient queries.
-app.get("/sitemap.xml", (c) => {
+app.get("/sitemap.xml", async (c) => {
   const lastmod = new Date().toISOString().split("T")[0];
   const pages = [
     { path: "/", priority: "1.0", changefreq: "daily" },
+    { path: "/research", priority: "0.7", changefreq: "daily" },
     { path: "/.well-known/x402", priority: "0.9", changefreq: "weekly" },
     { path: "/.well-known/ai.txt", priority: "0.8", changefreq: "weekly" },
     { path: "/x402/networks", priority: "0.8", changefreq: "weekly" },
@@ -3886,9 +3887,31 @@ app.get("/sitemap.xml", (c) => {
     priority: "0.6",
     changefreq: "weekly",
   }));
+  // Research/blog pages (served at /research/<slug>, content in KV) are our owned
+  // buyer-intent content. They were orphaned from the sitemap, so crawlers never
+  // indexed them (IndexNow-alone left them "Discovered – not indexed" for 2 weeks).
+  // Enumerate them from the ground-truth KV index: the slug IS the key-name suffix of
+  // research:index:<slug>, so we need no per-key GET (zero extra subrequest cost) and
+  // no hardcoded list. Cursor-paginate past 1000; on any KV error, degrade to the
+  // static sitemap rather than 500.
+  const researchPages: { path: string; priority: string; changefreq: string }[] = [];
+  try {
+    const PREFIX = "research:index:";
+    let cursor: string | undefined;
+    do {
+      const listed = await c.env.API_KEYS?.list({ prefix: PREFIX, cursor });
+      for (const k of listed?.keys ?? []) {
+        const slug = k.name.slice(PREFIX.length).replace(/[^a-z0-9-]/gi, "");
+        if (slug) {
+          researchPages.push({ path: `/research/${slug}`, priority: "0.6", changefreq: "monthly" });
+        }
+      }
+      cursor = listed && !listed.list_complete ? listed.cursor : undefined;
+    } while (cursor);
+  } catch { /* KV unavailable — serve the static sitemap, never fail the crawler */ }
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${[...pages, ...reportPages].map((p) => `  <url>
+${[...pages, ...reportPages, ...researchPages].map((p) => `  <url>
     <loc>${CANONICAL_ORIGIN}${p.path.replace(/&/g, "&amp;")}</loc>
     <lastmod>${lastmod}</lastmod>
     <changefreq>${p.changefreq}</changefreq>
