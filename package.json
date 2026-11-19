@@ -8,7 +8,7 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "node tests/mcp_scan.test.mjs && node tests/test_openapi_post_routes.mjs && node tests/test_integration_readme_install.mjs",
+    "test": "node tests/mcp_scan.test.mjs && node tests/test_openapi_post_routes.mjs && node tests/test_integration_readme_install.mjs && node tests/test_discovery_example_honesty.mjs",
     "test:contract": "node tests/test_openapi_post_routes.mjs"
   },
   "dependencies": {
