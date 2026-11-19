@@ -18,6 +18,22 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
 
+  contract-tests:
+    name: Contract tests (offline)
+    # Non-blocking for deploy by design: deploy only needs [typecheck,
+    # build-mcp-client]. This job surfaces a loud red signal if a deterministic
+    # offline contract regresses (e.g. a billable POST route drops out of
+    # /openapi.json) without ever being able to block a ship.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
   build-mcp-client:
     name: Build (mcp-client)
     runs-on: ubuntu-latest
