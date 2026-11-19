@@ -22,13 +22,13 @@ read, and a SAFE/CAUTION/AVOID token verdict.
 ## Install
 
 ```bash
-npm i @grey-ridge/elizaos-plugin-defi-data
+npm install github:rezearcher/elizaos-plugin-defi-data
 ```
 
-Or build from source — the package lives at
-`integrations/elizaos-plugin-defi-data/` in
-[rezearcher/x402-data-api](https://github.com/rezearcher/x402-data-api); clone,
-`cd` into that directory and run `npm install` (its `prepare` step builds `dist/`).
+The install runs the package's `prepare` step (`tsup`) to build `dist/`, so a
+git install is a complete install — no extra build step. The source also lives in
+the monorepo at `integrations/elizaos-plugin-defi-data/` in
+[rezearcher/x402-data-api](https://github.com/rezearcher/x402-data-api).
 
 Register the plugin with your ElizaOS character/agent:
 
