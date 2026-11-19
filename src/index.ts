@@ -97,6 +97,9 @@ export type Env = {
   STRIPE_API_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRICE_ID?: string;
+  // Google Search Console FILE verification token (public, non-secret filename like
+  // "google<hex>.html"); set in wrangler.toml [vars] by scripts/search_console.py bring-up.
+  GSC_VERIFICATION_TOKEN?: string;
   // Telegram bot — the Base token gate where memecoin traders already live.
   // TELEGRAM_BOT_TOKEN is the @BotFather token (one-time Rez setup); the webhook
   // handler stays INERT until it is set. TELEGRAM_WEBHOOK_SECRET authenticates
@@ -3836,6 +3839,20 @@ These third-party x402 buyer tools let agents discover and purchase pay-per-call
 
 // robots.txt — Instruct crawlers how to index the site. Allow everything; sitemap
 // tells them where the canonical discovery/documentation routes are.
+// Google Search Console FILE verification. GSC_VERIFICATION_TOKEN is a public (non-secret)
+// filename like "google<hex>.html"; Google fetches it at the site root and expects the body
+// "google-site-verification: <filename>". We own api.greyridgesignals.ai, so serving it here
+// self-verifies the property for the shared Grey Ridge service account (scripts/search_console.py)
+// with no human step. The route pattern only matches google-verification filenames, so it can
+// never shadow another route, and it 404s unless the path matches the configured token exactly.
+app.get("/:gverify{google[0-9a-f]+\\.html}", (c) => {
+  const tok = c.env.GSC_VERIFICATION_TOKEN;
+  if (tok && c.req.param("gverify") === tok) {
+    return c.text(`google-site-verification: ${tok}`);
+  }
+  return c.notFound();
+});
+
 app.get("/robots.txt", (c) => {
   // Content Signals (contentsignals.org / Cloudflare): declare how AI systems may
   // use this content. We WANT agents to read our data at request time (ai-input=yes)

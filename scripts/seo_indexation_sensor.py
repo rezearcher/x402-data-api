@@ -93,12 +93,46 @@ def bing_presence(queries=None, timeout=20, fetch=None):
     )
 
 
+def google_indexation():
+    """Google Search Console per-URL verdict for the research/money pages, via the shared GR
+    service account (scripts/search_console.py). Degrades OPEN: any failure (no SA, quota, network)
+    returns an error dict, never a false 0 and never aborts the Bing probe. Google is ~90% of
+    search and every other x402 SEO sensor sees only Bing, so this closes the dominant blind spot."""
+    try:
+        # Make the sibling importable regardless of invocation (cron/systemd/-I may not put the
+        # script dir on sys.path). os.path.dirname(__file__) is this script's own directory.
+        _here = os.path.dirname(os.path.abspath(__file__))
+        if _here not in sys.path:
+            sys.path.insert(0, _here)
+        import search_console  # sibling module in scripts/
+        rep = search_console.save_report()  # never raises; writes its own state file too
+        insp = (rep or {}).get("inspection") or {}
+        return {
+            "ok": bool(rep.get("ok")),
+            "indexed": int(insp.get("indexed", 0) or 0),
+            "discovered_not_indexed": int(insp.get("discovered_not_indexed", 0) or 0),
+            "checked": int(insp.get("checked", 0) or 0),
+            "buckets": insp.get("buckets"),
+            "diagnosis": insp.get("diagnosis"),
+            "sitemap_submitted": int(rep.get("submitted", 0) or 0),
+            "clicks": int(rep.get("clicks", 0) or 0),
+            "impressions": int(rep.get("impressions", 0) or 0),
+            "error": rep.get("error"),
+        }
+    except Exception as e:  # noqa: BLE001 — degrade open; the Bing probe must still publish
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"[:200], "indexed": 0}
+
+
 def main():
     res = bing_presence()
+    gsc = google_indexation()
     out = {
         "fetched_at": iso(),
         "sensor": "x402-seo-indexation",
         "research_indexation": res,
+        # Google Search Console (the ~90% search channel; Bing block above is the AI-retrieval set):
+        "google_indexation": gsc,
+        "search": {"inspection": {"indexed": gsc.get("indexed", 0)}},
         # headline field the ledger reads:
         "serp_hits": res.get("serp_hits", 0),
     }

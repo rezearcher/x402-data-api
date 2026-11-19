@@ -52,6 +52,11 @@ NETWORK = "eip155:8453"
 # /health confirms facilitator:"cdp" and declared-route 402s + bazaar extension
 # serve fine. $0 external revenue is a demand/discovery problem, not a settle bug.
 FACILITATOR_MODE = "cdp"
+# Google Search Console FILE verification token (public, non-secret). Served at the site root by
+# the /:gverify route so the shared Grey Ridge service account self-verifies the property with no
+# human step. Set by scripts/search_console.py bring-up; makes Google-side indexation of the 167
+# /research buyer-intent pages measurable (every other x402 SEO sensor only sees Bing).
+GSC_VERIFICATION_TOKEN = "googlec18e33644620df63.html"
 
 # === REQUIRED Worker secrets (set via `wrangler secret put <NAME>`) ===
 # CDP_API_KEY_ID          - CDP API Key ID for JWT auth with CDP x402 facilitator
