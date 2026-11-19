@@ -4013,7 +4013,9 @@ function canonicalOperationId(path: string, method: string): string {
 // Pull every route's live 402 discovery example (declareDiscoveryExtension's
 // output.example in makeRoutes) out so the OpenAPI can carry the SAME shape its
 // payment challenge already advertises. Keyed by OpenAPI-normalised path
-// ("GET /dns/:domain" -> "/dns/{domain}"), GET only (the paid ops are all GET).
+// ("GET /dns/:domain" -> "/dns/{domain}"), GET only — Bazaar discovery examples
+// are authored for the GET data routes; billable POST ops (chat + session
+// openers) carry their request/response examples inline in the paths block.
 // This is the single source of discovery examples both surfaces read from, so an
 // openapi-ingesting catalog (x402scan source:openapi, RapidAPI, OpenDexter) sees a
 // typed output per route instead of a url-only row. Degrades open: a route without
@@ -4133,6 +4135,67 @@ app.get("/openapi.json", (c) => {
       },
     },
   });
+  // POST sibling of paid(). Billable POST routes (the OpenAI-compatible chat
+  // route + the prepaid-session openers) are advertised in /.well-known/x402 but
+  // were ABSENT from this OpenAPI, which AgentCash and other wallet clients treat
+  // as the canonical discovery format (GET /openapi.json, fallback = runtime 402).
+  // An openapi-first buyer adapter marks an operation buyable only when it sees
+  // the operation here with x-billable + responses.402 + a requestBody schema, so
+  // the chat route (our only route in the top repeat-purchase category) was
+  // undiscoverable to exactly the clients that buy that category. Emit a real POST
+  // op with input + output schema; reconcilePaidPrices forces its price to the
+  // charged amount so advertised == 402. Degrades open: adapters that ignore
+  // these fields still read a valid OpenAPI POST operation.
+  const paidPost = (
+    summary: string,
+    price: string,
+    opts: {
+      requestSchema?: Record<string, unknown>;
+      requestExample?: unknown;
+      requestRequired?: boolean;
+      responseSchema?: Record<string, unknown>;
+      responseExample?: unknown;
+    } = {},
+  ) => ({
+    post: {
+      summary,
+      description: `${summary} Paid via x402 (USDC on Base, eip155:8453). Returns HTTP 402 with a payment-required challenge until paid. Price: $${price}.`,
+      ...(opts.requestSchema || opts.requestExample !== undefined
+        ? {
+            requestBody: {
+              required: opts.requestRequired ?? true,
+              content: {
+                "application/json": {
+                  ...(opts.requestSchema ? { schema: opts.requestSchema } : {}),
+                  ...(opts.requestExample !== undefined ? { example: opts.requestExample } : {}),
+                },
+              },
+            },
+          }
+        : {}),
+      "x-payment-info": { protocols: ["x402"], price: { mode: "fixed", currency: "USD", amount: price } },
+      "x-billable": true,
+      "x-availability": "operational",
+      "x-price-usdc": Number(price),
+      "x-data-mode": "live",
+      responses: {
+        "200": {
+          description: "Success — JSON data",
+          ...(opts.responseSchema || opts.responseExample !== undefined
+            ? {
+                content: {
+                  "application/json": {
+                    ...(opts.responseSchema ? { schema: opts.responseSchema } : {}),
+                    ...(opts.responseExample !== undefined ? { example: opts.responseExample } : {}),
+                  },
+                },
+              }
+            : {}),
+        },
+        "402": { description: `Payment required ($${price} USDC via x402)` },
+      },
+    },
+  });
   // ROUTE_CATALOG is the single source of truth for price (it generates the live 402
   // challenge amount the buyer is actually charged). The paid() entries above still
   // pass a price arg for readability, but a drifted arg (e.g. "0.01" on a route the
@@ -4142,19 +4205,26 @@ app.get("/openapi.json", (c) => {
   const CANONICAL_USDC: Record<string, string> = Object.fromEntries(
     ROUTE_CATALOG.map(([p, , usd]) => [p, usd]),
   );
+  // Force one operation's advertised price back to the catalog (the amount the
+  // live 402 actually charges). Shared by GET and POST so neither method can
+  // advertise a price the challenge does not charge (Claims-Law/trust invariant).
+  const reconcileOp = (op: any, usd: string) => {
+    if (!op) return;
+    if (typeof op.description === "string") {
+      op.description = op.description.replace(/Price: \$[0-9.]+\./, `Price: $${usd}.`);
+    }
+    if (op["x-payment-info"]?.price) op["x-payment-info"].price.amount = usd;
+    op["x-price-usdc"] = Number(usd);
+    if (op.responses?.["402"]) {
+      op.responses["402"].description = `Payment required ($${usd} USDC via x402)`;
+    }
+  };
   const reconcilePaidPrices = <T extends Record<string, any>>(paths: T): T => {
     for (const [p, def] of Object.entries(paths)) {
       const usd = CANONICAL_USDC[p];
-      const op = def?.get;
-      if (!usd || !op) continue;
-      if (typeof op.description === "string") {
-        op.description = op.description.replace(/Price: \$[0-9.]+\./, `Price: $${usd}.`);
-      }
-      if (op["x-payment-info"]?.price) op["x-payment-info"].price.amount = usd;
-      op["x-price-usdc"] = Number(usd);
-      if (op.responses?.["402"]) {
-        op.responses["402"].description = `Payment required ($${usd} USDC via x402)`;
-      }
+      if (!usd) continue;
+      reconcileOp(def?.get, usd);
+      reconcileOp(def?.post, usd);
     }
     return paths;
   };
@@ -4271,6 +4341,86 @@ app.get("/openapi.json", (c) => {
       "/x402/cert": paid("Deep-verified certificate for YOUR x402 endpoint: pay once ($1 USDC, no account); if the audit returns PAY you get a dated HMAC-signed 30-day certificate + an embeddable badge that re-audits live each render and flips to 'degraded' if it breaks. Certifies price accuracy, delivery, LLM01/LLM08 injection safety and payTo OFAC/scam screen. Free re-check at /x402/cert/verify.", "1.00", [{ name: "url", desc: "the x402 endpoint URL to deep-audit and certify", required: true, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "advertised", desc: "optional USDC-dollars price your catalog quotes, verified against the live charge", required: false, example: "0.001" }]),
       "/dns": paid("Resolve DNS records (A/AAAA/MX/NS/TXT) for a domain via Cloudflare DoH.", "0.01", [{ name: "domain", desc: "domain name to resolve", in: "query", required: true, example: "stripe.com" }]),
       "/whois": paid("WHOIS / RDAP lookup: registrar, created, expiry, registrant for a domain.", "0.01", [{ name: "domain", desc: "domain name to look up", in: "query", required: true, example: "cloudflare.com" }]),
+      // Billable POST routes — advertised in /.well-known/x402 but previously absent
+      // here. The chat route is our only route in the measured top repeat-purchase
+      // category (LLM chat); openapi-first wallet clients could not discover it.
+      "/v1/chat/completions": paidPost(
+        "OpenAI-compatible chat completions (Llama 3.3 70B fp8 on Workers AI; set model=llama-3.2-3b-instruct for the small model). Drop-in for any chat-completions client — point an OpenAI SDK base URL here with an x402 fetch wrapper, pay per call, no API key. Free real-model trial: POST /v1/chat/completions/preview (3/day/IP).",
+        "0.002",
+        {
+          requestRequired: true,
+          requestSchema: {
+            type: "object",
+            required: ["messages"],
+            properties: {
+              model: { type: "string", enum: ["llama-3.3-70b", "llama-3.2-3b-instruct"], description: "optional; default llama-3.3-70b-instruct-fp8-fast (any value containing '3b' selects the small model)" },
+              messages: {
+                type: "array",
+                description: "OpenAI-style messages; total content across all messages <= 8000 chars",
+                items: {
+                  type: "object",
+                  required: ["role", "content"],
+                  properties: {
+                    role: { type: "string", enum: ["system", "user", "assistant"] },
+                    content: { type: "string" },
+                  },
+                },
+              },
+              max_tokens: { type: "integer", description: "1-400, default 256" },
+              stream: { type: "boolean", description: "true -> text/event-stream (SSE) response" },
+            },
+          },
+          requestExample: { model: "llama-3.3-70b", messages: [{ role: "user", content: "Explain x402 in one sentence." }], max_tokens: 256 },
+          responseSchema: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              object: { type: "string" },
+              created: { type: "integer" },
+              model: { type: "string" },
+              choices: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    index: { type: "integer" },
+                    message: { type: "object", properties: { role: { type: "string" }, content: { type: "string" } } },
+                    finish_reason: { type: "string" },
+                  },
+                },
+              },
+              usage: {
+                type: "object",
+                properties: {
+                  prompt_tokens: { type: "integer" },
+                  completion_tokens: { type: "integer" },
+                  total_tokens: { type: "integer" },
+                },
+              },
+            },
+          },
+          responseExample: {
+            id: "chatcmpl-8f1c2b7a", object: "chat.completion", created: 1795100000, model: "llama-3.3-70b-instruct-fp8-fast",
+            choices: [{ index: 0, message: { role: "assistant", content: "x402 lets a client pay for an HTTP request per call in USDC on Base, with no account or API key." }, finish_reason: "stop" }],
+            usage: { prompt_tokens: 8, completion_tokens: 20, total_tokens: 28 },
+          },
+        },
+      ),
+      "/x402/session": paidPost(
+        "Open a prepaid session cap: pay a $0.05 USDC cap ONCE, then call any paid route with an `X-Session-Token` header (or `Authorization: Bearer <token>`) debited at each route's listed price — NO per-call signature. 24h TTL. Larger caps: /x402/session/plus ($0.50), /x402/session/max ($5.00). Free balance check: GET /x402/session/status.",
+        "0.05",
+        { requestRequired: false, responseExample: { session_token: "grsess_9d4c…", cap_usdc: "0.05", cap_atomic: 50000, spent_atomic: 0, remaining_atomic: 50000, expires: "2026-11-20T06:00:00.000Z", ttl_seconds: 86400, network: "base" } },
+      ),
+      "/x402/session/plus": paidPost(
+        "Open a prepaid session cap (plus tier): pay a $0.50 USDC cap once (~500 calls @ $0.001), then call any paid route with an `X-Session-Token` header debited at each route's listed price — NO per-call signature. 24h TTL. Free balance check: GET /x402/session/status.",
+        "0.50",
+        { requestRequired: false, responseExample: { session_token: "grsess_9d4c…", cap_usdc: "0.50", cap_atomic: 500000, spent_atomic: 0, remaining_atomic: 500000, expires: "2026-11-20T06:00:00.000Z", ttl_seconds: 86400, network: "base" } },
+      ),
+      "/x402/session/max": paidPost(
+        "Open a prepaid session cap (max/enterprise tier): pay a $5.00 USDC cap once, then call any paid route with an `X-Session-Token` header debited at each route's listed price — NO per-call signature. 24h TTL. Free balance check: GET /x402/session/status.",
+        "5.00",
+        { requestRequired: false, responseExample: { session_token: "grsess_9d4c…", cap_usdc: "5.00", cap_atomic: 5000000, spent_atomic: 0, remaining_atomic: 5000000, expires: "2026-11-20T06:00:00.000Z", ttl_seconds: 86400, network: "base" } },
+      ),
     }, discoveryExamplesFromRoutes(makeRoutes(c.env.PAY_TO)))),
   });
 });
