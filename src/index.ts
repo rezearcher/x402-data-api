@@ -3750,8 +3750,8 @@ Our own payment hardening (the posture we hold to, and screen others for): every
 - GET ${BASE}/defi/yields?limit=20&project=&chain=&stable=&sort=tvl|risk_adjusted — $0.001 — top DeFi lending/LP yields, APY trend + IL risk + reward/underlying tokens + mu/sigma + stability forecast + TVL (DefiLlama).
 - GET ${BASE}/pm/markets?query=&limit=20 — $0.005 — live Polymarket prediction markets, ranked by volume24hr (bestBid/bestAsk/spread, clobTokenIds, category tags, liquidity).
 - GET ${BASE}/scan/mcp?url=<mcp-server> — $0.05 — security audit of an MCP server (tool-poisoning / prompt-injection, OWASP LLM01/LLM08); findings + risk score + verdict (clear/review/block).
-- GET ${BASE}/enrich/tech-risk?domain=<domain> — $0.01 — tech-stack -> CVE (NVD) + EPSS + CISA-KEV risk + verdict (clear/review/block).
-- GET ${BASE}/enrich/domain?domain=<domain> — $0.01 — firmographic + tech-stack enrichment, incl. subdomain enumeration (crt.sh) + verdict (clear/review/block, domain age).
+- GET ${BASE}/enrich/tech-risk?domain=<domain> — $0.01 — tech-stack -> CVE (NVD) + EPSS + CISA-KEV risk + verdict (clear/review/block). Free try: ${BASE}/enrich/tech-risk/preview?domain=stripe.com (verdict + CVE/KEV counts + top CVE).
+- GET ${BASE}/enrich/domain?domain=<domain> — $0.01 — firmographic + tech-stack enrichment, incl. subdomain enumeration (crt.sh) + verdict (clear/review/block, domain age). Free try: ${BASE}/enrich/domain/preview?domain=stripe.com (verdict + firmographics + subdomain sample, 3/day/IP).
 - GET ${BASE}/chain/block-number — $0.002 — current Base mainnet block number.
 - GET ${BASE}/chain/gas-price — $0.002 — current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd — no price oracle on ETH-only competitors.
 - GET ${BASE}/chain/balance?address=<0x…> — $0.002 — ETH balance of a Base address, incl. balance_usd.
@@ -4273,8 +4273,8 @@ app.get("/openapi.json", (c) => {
       "/defi/yields": paid("Decision-tagged DeFi lending/LP yields — every row carries a per-pool verdict (SUSTAINABLE/DECAYING/OUTLIER/AVOID) + risk_score, plus APY trend, IL risk, reward/underlying tokens, mu/sigma and stability forecast (DefiLlama).", "0.001", [{ name: "limit", desc: "max pools", example: "10" }, { name: "project", desc: "protocol filter — family name (aave, uniswap, curve) resolves all versions, or exact slug", example: "aave" }, { name: "chain", desc: "chain filter (eth/arb/op/avax/matic/sol/bnb or canonical)", example: "arb" }, { name: "stable", desc: "'true' = stablecoin only", example: "true" }, { name: "sort", desc: "'tvl' (default) or 'risk_adjusted' (apy/sigma)", example: "tvl" }]),
       "/pm/markets": paid("Live Polymarket prediction markets, ranked by volume24hr, with bestBid/bestAsk/spread and category tags.", "0.005", [{ name: "query", desc: "keyword filter", example: "election" }, { name: "limit", desc: "max markets", example: "10" }]),
       "/scan/mcp": paid("Security audit of an MCP server (tool-poisoning / prompt-injection). Findings + risk score + verdict (clear/review/block).", "0.05", [{ name: "url", desc: "target MCP server URL", required: true, example: "https://x402-data-api.sigrunner.workers.dev/mcp" }]),
-      "/enrich/tech-risk": paid("Tech-stack -> CVE + EPSS + CISA-KEV risk + verdict (clear/review/block).", "0.01", [{ name: "domain", desc: "target domain", required: true, example: "stripe.com" }]),
-      "/enrich/domain": paid("Firmographic + tech-stack enrichment, incl. subdomain enumeration + verdict (clear/review/block, domain age).", "0.01", [{ name: "domain", desc: "target domain", required: true, example: "stripe.com" }]),
+      "/enrich/tech-risk": paid("Tech-stack -> CVE + EPSS + CISA-KEV risk + verdict (clear/review/block). Free preview at GET /enrich/tech-risk/preview (verdict + CVE/KEV counts + top CVE).", "0.01", [{ name: "domain", desc: "target domain", required: true, example: "stripe.com" }]),
+      "/enrich/domain": paid("Firmographic + tech-stack enrichment, incl. subdomain enumeration + verdict (clear/review/block, domain age). Free preview at GET /enrich/domain/preview (verdict + firmographics + subdomain sample, 3/day/IP).", "0.01", [{ name: "domain", desc: "target domain", required: true, example: "stripe.com" }]),
       "/chain/block-number": paid("Current Base mainnet block number.", "0.01", []),
       "/chain/gas-price": paid("Current Base mainnet gas price (wei/gwei), EIP-1559 base_fee_gwei/priority_fee_gwei, gas_price_usd.", "0.01", []),
       "/chain/balance": paid("ETH balance of a Base mainnet address, incl. balance_usd.", "0.01", [{ name: "address", desc: "0x-prefixed Base address", required: true, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }]),
@@ -4333,6 +4333,8 @@ app.get("/openapi.json", (c) => {
       "/gate/swap": paid("Pre-trade GO/HOLD/BLOCK gate for Base trading agents: token safety + liquidity-vs-size price-impact check in one call.", "0.008", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }, { name: "side", desc: "buy or sell", required: false, example: "buy" }, { name: "notional_usd", desc: "intended trade size in USD", required: false, example: "500" }]),
       "/gate/swap/preview": { get: { summary: "FREE live sample of /gate/swap (no payment).", description: "Free go/hold/block sample for a demo token (?token=degen) OR any real Base 0x address, 3 free real-token checks per IP per day. Paid /gate/swap accepts ANY Base ERC-20 ($0.008). Honors side and notional_usd.", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-report/preview": { get: { summary: "FREE live sample of /chain/token-report (no payment).", description: "Free full trade-safety report for a demo token. Try ?token=aero. Paid /chain/token-report accepts ANY Base ERC-20 ($0.01).", parameters: [{ name: "token", in: "query", required: false, schema: { type: "string", enum: ["usdc", "weth", "cbbtc", "aero", "degen"] }, description: "demo token" }], responses: { "200": { description: "Free sample JSON" } } } },
+      "/enrich/domain/preview": { get: { summary: "FREE live sample of /enrich/domain (no payment).", description: "Free domain enrichment sample: verdict (clear/review/block) + firmographics (org, registrar, created, DNS) + the first 8 certificate-transparency subdomains with the true total count. 3 free real-domain checks per IP per day. Paid /enrich/domain ($0.01) returns every subdomain, certificate (with validity windows), and the full tech stack.", parameters: [{ name: "domain", in: "query", required: false, schema: { type: "string" }, description: "target domain (default stripe.com)", example: "stripe.com" }], responses: { "200": { description: "Free sample JSON" } } } },
+      "/enrich/tech-risk/preview": { get: { summary: "FREE live sample of /enrich/tech-risk (no payment).", description: "Free tech-risk sample: verdict (clear/review/block) + tech stack + CVE/KEV counts + the single top-severity CVE. Paid /enrich/tech-risk ($0.01) returns the full CVE list with EPSS + CISA-KEV flags.", parameters: [{ name: "domain", in: "query", required: true, schema: { type: "string" }, description: "target domain", example: "stripe.com" }], responses: { "200": { description: "Free sample JSON" } } } },
       "/chain/token-security": paid("Token security / honeypot detector: EIP-1967/1822 proxy + upgradeability detection, bytecode scan for mint/pause/blacklist/fee-setter/ownership selectors, owner() renouncement check, contract source-verification (Sourcify), live eth_call state-override transfer simulation. Returns risk_score + verdict (clear/review/block) + flags.", "0.009", [{ name: "token", desc: "0x-prefixed ERC-20 contract address on Base mainnet", required: true, example: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }]),
       "/x402/preflight": paid("x402 pre-payment check: fetch an unknown URL once (never pays) -> PAY|CAUTION|AVOID. Validates 402+accepts[] (will it settle), liveness LIVE|ZOMBIE|DEAD, >=$1000 price-trap, LLM01/LLM08 + OFAC/scam payTo screen, live-vs-advertised price, delivery readiness, Attack-III cache-leakage, facilitator verify/settle-divergence axis. Not a settlement guarantee.", "0.001", [{ name: "url", desc: "the x402 endpoint URL to pre-check before paying", required: true, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "advertised", desc: "optional USDC-dollars price your catalog quoted (e.g. 0.001) to verify against the live charge", required: false, example: "0.001" }, { name: "max", desc: "optional per-call budget ceiling in USDC dollars; flags the live charge if it exceeds this", required: false, example: "0.05" }]),
       "/x402/receipt-verify": paid("x402 POST-payment settlement proof: bring your Base settlement tx + the resource URL you paid for on-chain proof it settled — reads the receipt, reconciles its USDC Transfers vs the endpoint's advertised payTo + amount, cross-confirmed on 2 independent RPCs (fails closed on disagreement). SETTLED|UNDERPAID|WRONG_RECIPIENT|NO_TRANSFER|REVERTED|NOT_FOUND|UNVERIFIED. Read-only.", "0.004", [{ name: "tx", desc: "0x-prefixed 32-byte Base-mainnet settlement transaction hash", required: true, example: "0x65484d751686091cf5b7417b533372ab1e7548ca63825c746ffbd275fb4448ba" }, { name: "url", desc: "the x402 resource URL you paid (its live 402 supplies the advertised payTo+amount)", required: false, example: "https://api.greyridgesignals.ai/crypto/prices" }, { name: "payto", desc: "optional 0x payTo to reconcile against (bind without fetching the endpoint)", required: false, example: "0x5765ae06a52dc7A0BB71c36A11db512c7ea9ed10" }, { name: "expect", desc: "optional advertised amount in USDC dollars to verify the settled amount against", required: false, example: "0.004" }]),
@@ -8565,6 +8567,90 @@ app.get("/enrich/domain", async (c) => {
   fireAndForget(c, trackPaidRequest("GET /enrich/domain", rail, makeUsageCounter(c.env)));
 
   return c.json(result);
+});
+
+// The machine-readable reason an enrichment-consuming agent should spend $0.01
+// here: the free preview proves the route works (live verdict + firmographics +
+// a SAMPLE of the certificate-transparency subdomain enumeration with its true
+// total count), but the paid /enrich/domain call returns the COMPLETE dataset an
+// agent wires into a pipeline — every enumerated subdomain, every certificate
+// with its validity window, and the full resolved tech stack. We name the gated
+// value precisely in the agent's terms but the free path emits only a capped
+// sample + the total, so the teaser never leaks the full enumeration it gates.
+const ENRICH_PREVIEW_SUBDOMAIN_SAMPLE = 8;
+function paidEnrichAdds(subdomainsTotal: number, certsTotal: number, techTotal: number) {
+  return {
+    full_subdomain_enumeration: `all ${subdomainsTotal} certificate-transparency-derived subdomains for this domain (this free sample shows the first ${Math.min(ENRICH_PREVIEW_SUBDOMAIN_SAMPLE, subdomainsTotal)}) — the complete attack-surface / asset inventory, deduped and sorted`,
+    full_certificates: `all ${certsTotal} certificates with issuer + valid_from/valid_to windows (free preview returns the count only) — lets you flag expiring or mis-issued certs`,
+    full_tech_stack: `the complete resolved tech-stack fingerprint (${techTotal} signal${techTotal === 1 ? "" : "s"}; free preview returns the count only)`,
+    why_pay: `$${(0.01).toFixed(2)} for the complete, pipeline-ready firmographic + attack-surface record — the free preview proves the data is live and shows the verdict; the paid call returns every subdomain, certificate, and tech signal so you never re-crawl crt.sh/RDAP/DoH yourself`,
+  };
+}
+
+// GET /enrich/domain/preview — FREE live sample of /enrich/domain (no payment).
+// Addresses the conversion-entrance gap for the work-input (enrichment) route
+// family: an evaluating agent can now see a real, partial enrichment — verdict +
+// firmographics + a capped subdomain sample with the true total — before paying.
+// Rate-limited 3/day/IP (degrades OPEN if KV is unbound, since enrichDomain has
+// no model COGS, only free upstream reads). Strictly additive: never gated by the
+// x402 paywall, serves a subset of the same engine the paid route runs.
+app.get("/enrich/domain/preview", async (c) => {
+  const domain = (c.req.query("domain") ?? "stripe.com").trim().toLowerCase();
+  // Validate before consuming a trial: a malformed request must not burn one of
+  // the 3 free checks/day/IP, and enrichDomain must only ever see a hostname.
+  if (!/^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain)) {
+    return c.json({ error: "domain must be a valid hostname, e.g. ?domain=stripe.com" }, { status: 400 });
+  }
+  // IP-day trial counter (same shape as the /ai/* and /gate previews). Degrades
+  // OPEN: if API_KEYS KV is unbound the preview still serves (no COGS to protect).
+  const ip = c.req.header("cf-connecting-ip") ?? "unknown";
+  const day = new Date().toISOString().slice(0, 10);
+  const ipKey = `enrichprev:${day}:${ip}`;
+  const pu = paidUrlFrom(c);
+  let left: number | null = null;
+  if (c.env.API_KEYS) {
+    const ipUsed = parseInt((await c.env.API_KEYS.get(ipKey)) ?? "0", 10);
+    if (ipUsed >= 3) {
+      return c.json({ error: "free preview limit reached (3/day/IP) — this is NOT a result for the domain you asked about", trial: { real_checks_left_today: 0 }, paid: pu, paid_url: pu, price_usdc: "0.01", pay_with: `x402: npm i x402-fetch viem; const f=wrapFetchWithPayment(fetch, walletClient); await f("${pu}?domain=${domain}") - pays USDC on Base automatically. Docs: https://api.greyridgesignals.ai/llms.txt` }, { status: 429 });
+    }
+    left = 3 - (ipUsed + 1);
+  }
+  try {
+    const result = await enrichDomain(domain);
+    if (c.env.API_KEYS) {
+      const ipUsed = parseInt((await c.env.API_KEYS.get(ipKey)) ?? "0", 10);
+      fireAndForget(c, c.env.API_KEYS.put(ipKey, String(ipUsed + 1), { expirationTtl: 172800 }));
+    }
+    const subTotal = result.subdomains.length;
+    const certTotal = result.certificates.length;
+    const techTotal = result.tech_stack.length;
+    const preview = {
+      domain: result.domain,
+      verdict: result.verdict,
+      organization: result.organization,
+      registrar: result.registrar,
+      created: result.created,
+      dns: result.dns,
+      subdomains_total: subTotal,
+      subdomains_sample: result.subdomains.slice(0, ENRICH_PREVIEW_SUBDOMAIN_SAMPLE),
+      certificates_total: certTotal,
+      tech_stack_total: techTotal,
+      generated_at: result.generated_at,
+      disclaimer: "Heuristic enrichment signal, not a security guarantee.",
+    };
+    const upgrade = upgradeCTA(
+      pu,
+      "0.01",
+      `Adds the COMPLETE record: all ${subTotal} subdomains (this sample shows ${Math.min(ENRICH_PREVIEW_SUBDOMAIN_SAMPLE, subTotal)}), all ${certTotal} certificates with validity windows, and the full tech stack — the pipeline-ready data this free sample only counts. Any domain (free preview capped at 3/day/IP).`,
+      { paid_adds: paidEnrichAdds(subTotal, certTotal, techTotal) },
+    );
+    const note = left === null
+      ? `Free live sample (verdict + firmographics + first ${ENRICH_PREVIEW_SUBDOMAIN_SAMPLE} of ${subTotal} subdomains). Full: GET /enrich/domain?domain=${domain} ($0.01) returns every subdomain, certificate, and tech signal.`
+      : `Free real-domain trial (${left} left today). Full: GET /enrich/domain?domain=<domain> ($0.01) returns the complete subdomain/certificate/tech-stack record.`;
+    return c.json({ ...preview, ...(left !== null ? { trial: { real_checks_left_today: left } } : {}), paid_route: { url: pu, price_usdc: "0.01" }, upgrade, note });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, { status: 502 });
+  }
 });
 
 // ---------------------------------------------------------------------------
