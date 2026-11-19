@@ -32,9 +32,13 @@ try {
     }
   }
 } catch {}
+// --dry-run (or DRY_RUN=1): build + sign the full CDP payload and print it, but
+// SKIP the settle POST — moves ZERO on-chain funds. Lets anyone verify a route's
+// discovery metadata/payload is valid before the human-gated real seed.
+const DRY_RUN = process.argv.includes('--dry-run') || process.env.DRY_RUN === '1';
 const RAPIDAPI_PROXY_SECRET = process.env.RAPIDAPI_PROXY_SECRET;
-if (!RAPIDAPI_PROXY_SECRET) {
-  console.error('FATAL: RAPIDAPI_PROXY_SECRET is required (audit-q3 F1 gates /internal/cdp-settle-raw). Add it to ' + path.join(projectDir, '.env') + ' or export it.');
+if (!RAPIDAPI_PROXY_SECRET && !DRY_RUN) {
+  console.error('FATAL: RAPIDAPI_PROXY_SECRET is required (audit-q3 F1 gates /internal/cdp-settle-raw). Add it to ' + path.join(projectDir, '.env') + ' or export it. (Use --dry-run to build+sign the payload without settling.)');
   process.exit(1);
 }
 
@@ -358,11 +362,109 @@ const ROUTES = {
     },
     example: { question: 'Will X happen by 2026?', slug: 'will-x-happen-by-2026', outcomes: ['Yes', 'No'], outcomePrices: [0.65, 0.35], volume: 1234567.89, volume24hr: 84213.45, volume1wk: 412987.6, liquidity: 45678.12, endDate: '2026-12-31T12:00:00Z', active: true, bestBid: 0.64, bestAsk: 0.66, spread: 0.02, oneDayPriceChange: 0.01, clobTokenIds: ['264852...', '884780...'], conditionId: '0xb6d6f15a1b5d08753653f1867ccd6126badfbe182a75159a330dc7b15336b30', tags: ['Crypto', 'Bitcoin'] },
   },
+
+  // --- Line-A TRUST/SAFETY WEDGE routes (metadata from each route's LIVE 402 body) ---
+  // These are the differentiated routes invisible in the CDP Bazaar because none has
+  // had a settled CDP call yet (the 6 commodity rows did). Adding them here makes each
+  // one-command seedable so the wedge surfaces where funded agents actually browse.
+  '/x402/preflight': {
+    description: 'Should an agent pay this x402 endpoint? One read-only call (never pays): validates the 402 + accepts[] (will it settle), labels liveness LIVE|ZOMBIE|DEAD, flags a >=$1000 price-trap honeypot (=> AVOID), scans resource + MCP tools for LLM01/LLM08 injection, screens payTo vs OFAC/scam, checks price (live vs advertised: MATCH|OVERCHARGE|UNDERCHARGE) and cache-leakage posture. Returns PAY|CAUTION|AVOID + fix hints. Not a settlement guarantee.',
+    serviceName: 'x402 Pre-Payment Safety Check',
+    tags: ['x402', 'preflight', 'safe-to-pay', 'verify', 'payment'],
+    input: { url: 'https://api.greyridgesignals.ai/crypto/prices' },
+    inputSchema: {
+      type: 'object',
+      required: ['url'],
+      properties: {
+        url: { type: 'string', description: 'the x402 endpoint URL to pre-check before paying' },
+        advertised: { type: 'string', description: 'optional: the price (USDC dollars) your catalog quoted — returns MATCH/OVERCHARGE/UNDERCHARGE vs the live accepts[].amount' },
+        max: { type: 'string', description: 'optional: your per-call budget ceiling in USDC dollars — flags price_trap if the live charge exceeds it' },
+        samples: { type: 'integer', description: 'optional reliability burst: sample the 402 challenge N times (1-5)' },
+      },
+    },
+    example: { url: 'https://api.greyridgesignals.ai/crypto/prices', verdict: 'PAY', will_settle: true, checks: [{ name: 'challenge', ok: true }, { name: 'payTo_safety', ok: true }, { name: 'price', ok: true, detail: 'MATCH' }] },
+  },
+  '/x402/cert': {
+    description: 'Mint a DEEP VERIFIED certificate for YOUR x402 endpoint ($1 USDC, no account). Certifies the depth axis a liveness-only verified badge cannot: price accuracy, delivery readiness, LLM01/LLM08 injection safety, payTo OFAC/scam screening. Pass &tx=<a Base settlement hash> to also PROVE it settled USDC to its advertised payTo on-chain, dual-RPC confirmed. HMAC-signed 30-day cert + embeddable badge that re-audits live. Fails honest: no cert unless the audit returns PAY.',
+    serviceName: 'x402 Settlement Certificate',
+    tags: ['x402', 'certificate', 'settlement', 'receipt', 'trust'],
+    input: { url: 'https://api.greyridgesignals.ai/crypto/prices' },
+    inputSchema: {
+      type: 'object',
+      required: ['url'],
+      properties: {
+        url: { type: 'string', description: 'the x402 endpoint URL to certify' },
+        advertised: { type: 'string', description: 'optional: advertised price (USDC dollars) to assert against the live 402' },
+        tx: { type: 'string', description: 'optional: a Base settlement tx hash to additionally prove on-chain USDC settlement to the advertised payTo' },
+      },
+    },
+    example: { url: 'https://api.greyridgesignals.ai/crypto/prices', verdict: 'PAY', cert_id: 'grsg-cert-...', issued_at: '2026-11-18T00:00:00Z', expires_at: '2026-12-18T00:00:00Z', badge_url: 'https://x402-data-api.sigrunner.workers.dev/x402/badge?...', signature: 'hmac-...' },
+  },
+  '/x402/receipt-verify': {
+    description: 'Did my x402 payment actually settle? POST-payment on-chain proof (the other half of /x402/preflight): bring your Base settlement tx + the resource URL you paid, and this reads the tx receipt, decodes its USDC Transfer events, and reconciles them against the endpoint advertised payTo + amount (from its live 402, or pass payto/expect). Verdict SETTLED | UNDERPAID | WRONG_RECIPIENT | NO_TRANSFER | REVERTED | NOT_FOUND | UNVERIFIED. Read-only; confirms settlement, not off-chain delivery.',
+    serviceName: 'x402 Payment Receipt Verify',
+    tags: ['x402', 'receipt', 'settlement', 'verify', 'payment'],
+    input: { tx: '0x0000000000000000000000000000000000000000000000000000000000000000', url: 'https://api.greyridgesignals.ai/crypto/prices' },
+    inputSchema: {
+      type: 'object',
+      required: ['tx'],
+      properties: {
+        tx: { type: 'string', description: '0x-prefixed 64-hex Base settlement tx hash to verify' },
+        url: { type: 'string', description: 'optional: the resource URL you paid (its live 402 supplies expected payTo + amount)' },
+        payto: { type: 'string', description: 'optional: expected recipient address if not deriving from url' },
+        expect: { type: 'string', description: 'optional: expected USDC amount (dollars) to reconcile against' },
+      },
+    },
+    example: { tx: '0x...', verdict: 'SETTLED', paid_to: '0x...', amount_usdc: 0.001, expected_usdc: 0.001, confirmations: 32 },
+  },
+  '/chain/wallet-screen': {
+    description: 'Is this wallet sanctioned OR a known scammer? Pre-trade screen for a counterparty / recipient / token-spender address before an agent sends, swaps or approves — exact match against (1) the U.S. Treasury OFAC SDN crypto-address list and (2) community scam/phishing/wallet-drainer threat-intel (ScamSniffer + MEW darklist). Returns sanctioned + malicious + verdict (blocked/clear) + the list sources and snapshot dates. clear = not on these lists, not a safety guarantee.',
+    serviceName: 'OFAC Wallet Sanctions Screen',
+    tags: ['sanctions', 'ofac', 'compliance', 'scam', 'phishing'],
+    input: { address: '0x4200000000000000000000000000000000000006' },
+    inputSchema: {
+      type: 'object',
+      required: ['address'],
+      properties: {
+        address: { type: 'string', description: '0x-prefixed wallet/recipient/spender address to screen' },
+      },
+    },
+    example: { address: '0x4200000000000000000000000000000000000006', sanctioned: false, malicious: false, verdict: 'clear', sources: ['OFAC-SDN', 'ScamSniffer', 'MEW-darklist'] },
+  },
+  '/chain/token-report': {
+    description: 'Is this Base token safe to buy? One call returns a decision-grade trade-safety verdict — SAFE | CAUTION | AVOID — with risk_score (0-100) and reasons: honeypot/sellability simulation, owner-renounced + mint/pause/blacklist/fee-setter/upgradeable-proxy checks, symbol/name/decimals, and Uniswap v3 WETH-pool liquidity (USD). Replaces many RPC calls and prevents a bad trade. Use when an agent is about to buy or swap a Base ERC-20 and needs a SAFE/CAUTION/AVOID decision.',
+    serviceName: 'Base Token Safety & Rug Check',
+    tags: ['token-safety', 'honeypot', 'rug-check', 'base', 'erc20'],
+    input: { token: '0x4200000000000000000000000000000000000006' },
+    inputSchema: {
+      type: 'object',
+      required: ['token'],
+      properties: {
+        token: { type: 'string', description: '0x-prefixed Base mainnet ERC-20 contract address' },
+      },
+    },
+    example: { token: '0x4200000000000000000000000000000000000006', verdict: 'SAFE', risk_score: 5, reasons: ['owner renounced', 'sellable in simulation'], liquidity_usd: 12500000, chain: 'base' },
+  },
+  '/defi/yield-entry-verdict': {
+    description: 'Per-pool DeFi yield-entry verdict: pass ?pool=<DefiLlama poolId from /defi/yields> and get a packaged SUSTAINABLE|DECAYING|OUTLIER|AVOID go/no-go + 0-100 risk score + field-cited reasons, built from the pool APY trend (1d/7d/30d), DefiLlama stability forecast, impermanent loss (il7d), volatility (sigma), outlier flag and TVL. Optional ?token=<0x underlying, Base> adds a honeypot-check pointer. Use after /defi/yields finds a high-APY pool to get a go/no-go on THAT pool before funding.',
+    serviceName: 'DeFi Yield Entry Verdict',
+    tags: ['defi', 'yield', 'entry-verdict', 'risk-score', 'apy'],
+    input: { pool: '747c1d2c-f1bc-4b32-aab0-4c80b7a1e2cf' },
+    inputSchema: {
+      type: 'object',
+      required: ['pool'],
+      properties: {
+        pool: { type: 'string', description: 'DefiLlama poolId (from /defi/yields) to score for entry' },
+        token: { type: 'string', description: 'optional: 0x underlying token (Base) to add a honeypot-check pointer' },
+      },
+    },
+    example: { pool: '747c1d2c-f1bc-4b32-aab0-4c80b7a1e2cf', verdict: 'SUSTAINABLE', risk_score: 22, reasons: ['apy stable 1d/7d/30d', 'TVL > $10M', 'il7d low'], apy: 4.2, tvlUsd: 12345678 },
+  },
 };
 
-const route = process.argv[2];
+const route = process.argv.slice(2).find((a) => !a.startsWith('--'));
 if (!route || !ROUTES[route]) {
-  console.error('usage: node seed_endpoint.js <route>');
+  console.error('usage: node seed_endpoint.js <route> [--dry-run]');
   console.error('known routes:', Object.keys(ROUTES).join(', '));
   process.exit(2);
 }
@@ -440,6 +542,15 @@ async function main() {
     tags: cfg.tags,
     extensions: { bazaar },
   };
+
+  if (DRY_RUN) {
+    console.log(`--- DRY RUN for ${route}: payload built + signed, NOT settling (zero funds move) ---`);
+    console.log('resource:', JSON.stringify(paymentPayload.resource));
+    console.log('bazaar.routeTemplate:', bazaar.routeTemplate, '| serviceName:', paymentRequirements.serviceName, '| tags:', JSON.stringify(paymentRequirements.tags));
+    console.log('paymentRequirements amount/asset/payTo:', paymentRequirements.amount, paymentRequirements.asset, paymentRequirements.payTo);
+    console.log('DRY RUN OK — this route is seed-ready. Run without --dry-run (human-gated) to settle + publish.');
+    return;
+  }
 
   console.log(`--- POSTing raw settle for ${route} ---`);
   const res = await fetch(`${BASE}/internal/cdp-settle-raw`, {
