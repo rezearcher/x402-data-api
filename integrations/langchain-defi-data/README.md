@@ -26,10 +26,13 @@ balance (never a stub); a funded wallet moves the read onto the metered paid rou
 ## Install
 
 ```bash
-npm i @grey-ridge/langchain-defi-data
-# or straight from git:
 npm i github:rezearcher/langchain-defi-data
 ```
+
+The install runs the package's `prepare` step (`tsup`) to build `dist/`, so a git
+install is a complete install — no extra build step. The source also lives in the
+monorepo at `integrations/langchain-defi-data/` in
+[rezearcher/x402-data-api](https://github.com/rezearcher/x402-data-api).
 
 Peer deps: `@langchain/core` (>=0.2) and `zod` (>=3.23) — your agent already has them.
 
