@@ -70,6 +70,20 @@ def add(text: str, agent: str = "agent", steps: list[str] | None = None) -> str 
                 "they", "them", "loop", "grey", "ridge", "will", "make", "makes", "already",
                 "pushed", "done", "ready", "creates", "create", "so", "the", "and", "for"}
         return {w for w in re.findall(r"[a-z0-9@._/+-]{4,}", t) if w not in stop}
+    # SAME SUBJECT: loops phrase an ask as "<idea-id>: what is missing". The arb loop re-raised one idea's
+    # data need up to four times under new wording (the fuzzy test below needs 70% word overlap and the
+    # reasons differed). If an OPEN atom of this loop leads with the same identifier, it is the same ask.
+    def _lead(t: str) -> str:
+        m = re.match(r"\s*([a-z0-9][a-z0-9-]{5,})\s*(?:/[^:]*)?:", (t or "").lower())
+        return m.group(1) if m and "-" in m.group(1) else ""
+    lead = _lead(text)
+    if lead:
+        for a in store["atoms"]:
+            if not a.get("done") and (a.get("loop") or loop) == loop and _lead(a.get("text", "")) == lead:
+                if steps and not a.get("steps"):
+                    a["steps"] = steps
+                    ATOMS.write_text(json.dumps(store, indent=0))
+                return a["id"]
     nsig = _sig(text)
     if nsig:
         for a in store["atoms"]:

@@ -31,6 +31,15 @@
   .lamps{display:flex;gap:18px;margin-left:auto;align-items:center}
   .lamp{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
   .lamp b{color:var(--txt);font-weight:500}
+  .lamp .lampcopy{display:flex;flex-direction:column;gap:2px;max-width:220px}
+  .lamp small{font-size:10px;line-height:1.3}.lamp .lampstate{text-transform:uppercase;letter-spacing:.04em}
+  .lamp.pending .lampstate{color:var(--amber)}.lamp.failed .lampstate{color:var(--rust)}
+  .lamp.on .lampstate{color:var(--jade)}
+  .lamps{align-items:flex-start;flex-wrap:wrap}
+  .chain{flex-wrap:wrap}
+  .col.failed{opacity:1;border-color:var(--rust)}.badge.failed{color:var(--rust);border-color:var(--rust)}
+  .badge.waiting{color:var(--amber)}.now .executor{display:block;font-size:10.5px;color:var(--cyan);margin:0 0 6px}
+
   .dot{width:11px;height:11px;border-radius:50%;background:#33404f}
   .lamp.on .dot{background:var(--jade);box-shadow:0 0 10px rgba(84,185,138,.7)}
   .ring{width:14px;height:14px;border-radius:50%;border:2px solid #33404f;position:relative}
@@ -199,6 +208,7 @@
     <div class="chain" id="chain"></div>
     <div class="lamps" id="lamps"></div>
     <div class="rev" id="rev"></div>
+    <div id="trading"></div>
     <div class="mon">
       <span style="font-size:12px;color:var(--muted)">monitor</span>
       <div class="toggle" id="toggle" onclick="toggleMon()"><div class="knob"></div></div>
@@ -206,6 +216,11 @@
   </div>
 
   <!-- ACCOUNT BALANCE — what each venue actually holds and what we have made or lost there -->
+  <div class="inbox" id="econbox">
+    <div class="ihead foldhead" onclick="toggleBox('econbox')"><span class="foldmark"></span><span class="ititle">PORTFOLIO ECONOMICS</span><span class="isub" id="econsub"></span></div>
+    <div id="econlist"></div>
+  </div>
+
   <div class="inbox" id="acctbox">
     <div class="ihead foldhead" onclick="toggleBox('acctbox')"><span class="foldmark"></span><span class="ititle">ACCOUNT BALANCE</span><span class="isub" id="acctsub"></span></div>
     <div id="acctlist"></div>
@@ -279,7 +294,10 @@ function agentsOf(d){
 let monOn=false, built=false;
 const counts={};  // scroll-id -> last item count
 
-function esc(s){return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+// Accepts anything. It used to call .replace on the raw value, so a NUMBER (trading age in seconds) threw, the
+// throw was swallowed by tick(), and the whole page silently stopped redrawing (2026-11-22: checked atoms stayed
+// on screen although the server had cleared them).
+function esc(s){return String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
 
 function waveSVG(runs,rests){
   const seq=[]; const n=Math.max(runs.length,rests.length);
@@ -356,7 +374,7 @@ function renderTabs(top){
     const L=(top.loops||{})[n]||{}, r=L.revenue||{}, e=L.engine||{};
     const enabled = L.enabled!==false;  // undefined (legacy) treated as on
     const running=(n===top.active)&&e.alive;
-    const bal = r.balance_usd!=null ? ('$'+Number(r.balance_usd).toFixed(2))
+    const bal = r.money_counter ? ('recovery '+(r.recovery_fees?.net_receipts_usd==null?'?':usd(r.recovery_fees.net_receipts_usd))) : r.balance_usd!=null ? ('$'+Number(r.balance_usd).toFixed(2))
               : r.line_a_balance_usdc!=null ? ('$'+Number(r.line_a_balance_usdc).toFixed(2))
               : (L.account&&L.account.total_usd!=null) ? ('acct '+usd(L.account.total_usd))
               : '';
@@ -398,17 +416,81 @@ function renderSentinel(top){
   const ago=ts=>{ if(!ts)return '—'; const m=Math.round((Date.now()-new Date(ts))/60000); return m<60?m+'m ago':(Math.round(m/60)+'h ago'); };
   document.getElementById('sentinelrows').innerHTML = Object.entries(S.chains||{}).map(([n,c])=>{
     const v=c.halted?'HALT':(c.verdict==='VIOLATION'?'VIOL':'SOV'); const cl=c.halted?'halt':(c.verdict==='VIOLATION'?'viol':'sov');
-    const vt=c.halted?'HALTED':(c.verdict||'—');
+    const r=n==='kalshi'?c.recovery:null;
+    const repair=c.halted && r && (['repair_waiting','repair_required','repair_pending'].includes(r.status) || (r.status==='repairing' && r.process_verified_alive===true));
+    const historical=n==='kalshi' && !c.halted && c.verdict==='VIOLATION';
+    const vt=repair?r.status.replaceAll('_',' ').toUpperCase():(c.halted?'HALTED':(historical?'LAST AUDIT: VIOLATION':(c.verdict||'—')));
+    const action=c.halted?(repair?(' · '+esc(r.reason||'')+' · next: '+esc(r.next_action||'Await controller')):(n==='kalshi'?' · owner review required':' · needs Rez')):'';
+    const checks=n==='kalshi'?`${(c.checks||[]).length} checks`:`${(c.checks||[]).length}/4 checks`;
+    const audit=historical?` · audit ${ago(c.ts)} · no active halt; awaiting next audit`:'';
     return `<div class="schip"><span class="snm">${n}</span><span class="sv ${cl}" title="${esc(c.halt_reason||'')}">${vt}</span>
-      <span class="smeta">autonomous ${ago(c.last_autonomous)} · ${(c.checks||[]).length}/4 checks${c.halted?' · needs Rez':''}</span></div>`;
+      <span class="smeta">autonomous ${ago(c.last_autonomous)} · ${checks}${action}${audit}</span></div>`;
   }).join('') || '<span style="color:#64707f;font-size:11px">no verdicts yet</span>';
 }
 
+function healthLampsHTML(h,rhythm={}){
+  const specs=[['green','green','Runtime / activity','dot'],['super_green','super-green','Verified work quality','ring'],['ever_green','ever-green','Scheduling continuity','wave']];
+  return specs.map(([id,name,label,icon])=>{
+    const item=h[id]||{};
+    const status=item.status||(item.ok===true?'healthy':item.ok===false?'unconfirmed':'unknown');
+    const failure=['failed','halted','down','overdue'].includes(status);
+    const cls=item.ok===true?'on':failure?'failed':'pending';
+    const mark=icon==='wave'?(waveSVG(rhythm.runs||[],rhythm.rests||[])||'<span class="dot"></span>'):`<span class="${icon}"></span>`;
+    return `<div class="lamp ${cls}" title="${esc(item.why||'No evidence yet')}" data-health="${id}">${mark}<span class="lampcopy"><b>${name} · ${label}</b><small class="lampstate">${esc(status.replaceAll('_',' '))}</small><small>${esc(item.why||'No evidence yet')}</small></span></div>`;
+  }).join('');
+}
+function tradingHTML(t){
+  if(!t||!t.status)return '';
+  const rows=(t.ideas||[]).map(r=>{
+    const deferred=(r.deferred_signals||[]).map(x=>`${x.ticker}: ${x.reason}`).join('; ');
+    const errors=(r.order_errors||[]).map(x=>`${x.ticker}: ${x.code||'error'} (${x.operation||'order'}, shard ${x.exchange_index??'unknown'}, subaccount ${x.subaccount??'unknown'}${x.recovery==='succeeded'?' — recovered':''})`).join('; ');
+    return `<div>${esc(r.idea)} · ${esc(r.status||'unknown')}${deferred?'<br>'+esc(deferred):''}${errors?'<br>'+esc(errors):''}${(r.errs||[]).length?'<br>'+esc(r.errs.join('; ')):''}</div>`;
+  }).join('');
+  return `<details><summary>Trading · ${esc(t.status)}${t.age_s!=null?' · '+esc(t.age_s)+'s old':''}${t.deferred_count?' · '+esc(t.deferred_count)+' signals deferred':''}</summary><small>${esc(t.mode||t.why||'')}. ${esc(t.meaning||'')}</small>${rows}</details>`;
+}
+function agentView(d,a){
+  const ag=(d.agents||{})[a]||{}, receipt=(((d.execution||{}).stages)||{})[a]||{};
+  const status=ag.status||receipt.status||'unknown';
+  const active=!!(d.engine&&d.engine.alive&&d.engine.stage===a);
+  let phase='waiting',label='waiting for turn';
+  if(active){phase='working';label='working';}
+  else if(status==='failed'){phase='failed';label='handoff failed';}
+  else if(status==='waiting'){label='waiting for evidence';}
+  else if(status==='halted'){phase='failed';label='research halted';}
+  else if(status==='completed'&&(receipt.handoff_valid===true||ag.handoff_valid===true)){phase='done';label='✓ handed off';}
+  else if(status==='running'){label='activity unconfirmed';}
+  else if(status==='unknown'){label='no current receipt';}
+  const engine=ag.engine||receipt.engine,model=ag.model||receipt.model;
+  const executor=[engine,model].filter(Boolean).join(' · ')+(receipt.fallback_active?' · fallback':'');
+  let text=ag.now||'';
+  if(!text)text=active?'Agent active; waiting for visible narration or tool activity.':label;
+  const activity=ag.source_kind==='tool_activity'?'TOOL ACTIVITY':active?'NOW':'LATEST';
+  const freshness=ag.age_s!=null?` · ${Math.max(0,Math.round(ag.age_s))}s since update`:'';
+  const nowHTML=`<span class="k">${activity}${esc(freshness)}</span><span class="executor">${esc(executor||'executor not yet observed')}</span>${esc(text)}`;
+  return {phase,label,nowHTML,executor};
+}
+function agentHistoryHTML(entries){
+  return entries.map(e=>`<div class="ev"><div class="t mono">${esc((e.ts||'').replace('T',' ').replace('Z',''))}${e.engine||e.model?' · '+esc([e.engine,e.model].filter(Boolean).join(' · ')):''}</div>
+    <div class="d">${esc(e.did)||'—'}</div>${e.next?`<div class="n">→ ${esc(e.next)}</div>`:''}
+    ${e.atom&&!/^none/i.test(e.atom)?`<div class="atom">ATOM: ${esc(e.atom)}</div>`:''}</div>`).join('')
+    || '<div class="off" style="padding:12px 14px">no visible activity yet</div>';
+}
+
+function claimfinderMoneyHTML(r){
+  const m=r.money_counter||{}, f=r.recovery_fees||{};
+  const money=v=>v==null?'unknown':'$'+Number(v).toFixed(2);
+  return `<span>Stripe net proxy <b class="mono">${money(m.stripe_reported_net_usd)}</b></span>`
+    +`<span title="${esc(f.reason||'')}">Recovery fees received <b class="mono">${money(f.net_receipts_usd)}</b> <small>${esc(f.status||'not connected')}</small></span>`
+    +`<span>Recovery contribution <b class="mono">${money(f.contribution_usd)}</b></span>`
+    +`<span title="${esc(m.note||r.balance_basis||'')}">Combined profit: unknown · partial coverage</span>`
+    +`<small>Source updated: ${esc(r.source_fetched_at||'unknown')}${f.window_start?' · recovery window '+esc(f.window_start)+' to '+esc(f.window_end):''}</small>`;
+}
 function render(top){
   renderTabs(top);
   renderSentinel(top);
   renderInbox(top);
   renderAccounts(top);
+  renderEconomics(top);
   renderBoard(top);
   renderBrief(top);
   const d=(top.loops&&top.loops[TAB||top.active])||top;
@@ -418,29 +500,31 @@ function render(top){
   const hasSentinel=((d.chain||[]).some(c=>c.stage==='sentinel'))||('sentinel' in (d.agents||{}));
   // chain (no scroll — safe to replace)
   document.getElementById('chain').innerHTML = AG.map((a,i)=>
-    `<span class="node ${d.engine.stage===a?'active':''}">${a}</span>${i<AG.length-1?'<span class="arrow">▸</span>':''}`
-  ).join('') + (hasSentinel?`<span class="arrow">▸</span><span class="node ${d.engine.stage==='sentinel'?'active':''}">🛡 sentinel</span>`:'')
+    `<span class="node ${d.engine.alive&&d.engine.stage===a?'active':''}">${a}</span>${i<AG.length-1?'<span class="arrow">▸</span>':''}`
+  ).join('') + (hasSentinel?`<span class="arrow">▸</span><span class="node ${d.engine.alive&&d.engine.stage==='sentinel'?'active':''}">🛡 sentinel</span>`:'')
     + `<span class="arrow">▸</span><span class="node rest ${d.engine.stage==='rest'?'active':''}">rest ∿</span>`
     + ` <span style="color:var(--muted);font-size:11px" class="mono">pass ${d.engine.pass??'—'}</span>`;
   const h=d.health||{};
-  const lamp=(id,el)=>`<div class="lamp ${h[id]&&h[id].ok?'on':''}" title="${esc(h[id]&&h[id].why)}">${el}</div>`;
-  document.getElementById('lamps').innerHTML =
-     lamp('green',`<span class="dot"></span><b>green</b>`)
-   + lamp('super_green',`<span class="ring"></span><b>super-green</b>`)
-   + `<div class="lamp ${h.ever_green&&h.ever_green.ok?'on':''}" title="${esc(h.ever_green&&h.ever_green.why)}">${waveSVG(d.rhythm.runs,d.rhythm.rests)||'<span class="dot"></span>'}<b>ever-green</b></div>`;
+  document.getElementById('lamps').innerHTML = healthLampsHTML(h,d.rhythm||{});
   const r=d.revenue||{}, pos=v=>v&&v>0?'pos':'';
   // Each loop surfaces its OWN money shape: x402 => Line A (usdc) / Line B (fiat);
   // a marketplace loop (assetfactory) => settled balance + metered runs + external payers.
   const acc=d.account;   // venue balance published by a sensor whose account_summary.chain == this loop
-  document.getElementById('rev').innerHTML = ('balance_usd' in r)
+  document.getElementById('rev').innerHTML = r.money_counter ? claimfinderMoneyHTML(r) : ('balance_usd' in r)
     ? (r.balance_usd==null
-        ? `<span title="${esc(r.revenue_error||'')}">Earned <b class="mono">—</b> <small style="color:var(--muted)">no oracle</small></span>`
+        ? `<span title="${esc(r.revenue_error||'')}">Earnings <b class="mono">—</b> <small style="color:var(--muted)">unestablished</small></span>`
         : `<span>Balance <b class="mono ${pos(r.balance_usd)}">$${Number(r.balance_usd).toFixed(2)}</b></span>`)
       +(acc?`<span>Account <b class="mono">${usd(acc.total_usd)}</b> <small class="mono ${tone((acc.pnl||{}).total_pnl_usd)}">${sgn((acc.pnl||{}).total_pnl_usd)} P&amp;L</small></span>`:'')
      +(r.metered_invocations!=null?`<span>Runs <b class="mono">${r.metered_invocations}</b></span>`:'')
      +(r.external_payers!=null?`<span>Payers <b class="mono ${pos(r.external_payers)}">${r.external_payers}</b></span>`:'')
-    : `<span>Line A <b class="mono ${pos(r.line_a_external_usdc)}">$${(r.line_a_external_usdc??0).toFixed(3)}</b> ext</span>`
-     +`<span>Line B <b class="mono ${pos(r.line_b_fiat_usd)}">$${(r.line_b_fiat_usd??0).toFixed(2)}</b></span>`;
+    : `<span>Observed transfers <b class="mono ${pos(r.line_a_external_usdc)}">${r.line_a_external_usdc==null?'—':'$'+Number(r.line_a_external_usdc).toFixed(3)}</b></span>`
+     +`<span>Reported fiat <b class="mono ${pos(r.line_b_fiat_usd)}">${usd(r.line_b_fiat_usd)}</b></span>`;
+  const exec=(d.execution||{}).stages||{}, current=exec[d.engine.stage];
+  document.getElementById('trading').innerHTML=tradingHTML(d.trading);
+  if(current){
+    document.getElementById('chain').insertAdjacentHTML('beforeend',
+      `<span class="chip" title="${esc(current.reason||'')}">${esc(current.engine||'unknown')} · ${esc(current.model||'unknown model')}${current.fallback_active?' · fallback':''}${current.stale?' · stale receipt':''}</span>`);
+  }
   // atoms — Rez's checklist (account/identity gates)
   const at=d.atoms||{open:[],cleared:[]};
   document.getElementById('acount').textContent = at.open.length?`· ${at.open.length} open`:'· clear';
@@ -456,27 +540,14 @@ function render(top){
   }
   document.getElementById('atomlist').innerHTML = ahtml;
   // agents — NOW replaced freely; history updated IN PLACE (scroll preserved)
-  const cur=AG.indexOf(d.engine.stage);
-  AG.forEach((a,i)=>{
-    const ag=d.agents[a]||{};
-    // phase is driven by the ENGINE's real current stage — only ONE agent is ever "working"
-    let phase,label;
-    if(d.engine.stage===a){phase='working';label='<i></i>working';}
-    else if(d.engine.stage==='rest'){phase='done';label='done';}
-    else if(i<cur){phase='done';label='✓ handed off';}
-    else {phase='waiting';label='waiting';}
-    document.getElementById('col-'+a).className='col '+phase;
-    const b=document.getElementById('badge-'+a); b.className='badge '+phase; b.innerHTML=label;
-    const nowtxt = phase==='working' ? (esc(ag.now)||'working…')
-                 : phase==='waiting' ? '<span class="off">waiting for its turn</span>'
-                 : `<span class="off">handed off — ${esc((ag.now||'').slice(0,110))||'done this pass'}</span>`;
-    document.getElementById('now-'+a).innerHTML = `<span class="k">NOW</span>${nowtxt}`;
-    const chrono=(ag.history||[]).slice();  // oldest→newest (newest at bottom)
-    const html = chrono.map(e=>`<div class="ev"><div class="t mono">${esc((e.ts||'').replace('T',' ').replace('Z',''))}</div>
-      <div class="d">${esc(e.did)||'—'}</div>${e.next?`<div class="n">→ ${esc(e.next)}</div>`:''}
-      ${e.atom&&!/^none/i.test(e.atom)?`<div class="atom">ATOM: ${esc(e.atom)}</div>`:''}</div>`).join('')
-      || '<div class="off" style="padding:12px 14px">no history yet</div>';
-    setScroll('hist-'+a, html, chrono.length);
+  AG.forEach(a=>{
+    const ag=d.agents[a]||{}, view=agentView(d,a);
+    document.getElementById('col-'+a).className='col '+view.phase;
+    const b=document.getElementById('badge-'+a); b.className='badge '+view.phase;
+    b.innerHTML=(view.phase==='working'?'<i></i>':'')+esc(view.label);
+    document.getElementById('now-'+a).innerHTML=view.nowHTML;
+    const chrono=(ag.history||[]).slice();
+    setScroll('hist-'+a,agentHistoryHTML(chrono),chrono.length);
   });
   // links
   const lhtml=(d.links||[]).map(l=>{
@@ -551,12 +622,83 @@ function saveFold(){ try{localStorage.setItem('foldState',JSON.stringify(foldSta
 function isOpen(key,dflt){ return key in foldState ? !!foldState[key] : dflt; }
 function setOpen(key,open){ foldState[key]=!!open; saveFold(); }
 function toggleBox(id){ const open=!isOpen(id,true); setOpen(id,open); applyBoxFolds(); }
-function applyBoxFolds(){ for(const id of ['acctbox','boardbox','inboxbox']){ document.getElementById(id).classList.toggle('folded',!isOpen(id,true)); } }
+function applyBoxFolds(){ for(const id of ['econbox','acctbox','boardbox','inboxbox']){ document.getElementById(id).classList.toggle('folded',!isOpen(id,true)); } }
 // ---- ACCOUNT BALANCE: one card per venue (discovered from sensors' account_summary blocks) ----
 const _n2=(v)=>Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const usd=v=>v==null?'—':(v<0?'−':'')+'$'+_n2(v);
 const sgn=v=>v==null?'—':(v<0?'−':'+')+'$'+_n2(v);
 const tone=v=>v==null?'':(v<0?'neg':(v>0?'pos':''));
+function economicsHTML(e){
+  const c=e.costs||{}, p=e.performance||{}, r=e.recovery||{}, m=e.milestones||{};
+  const money=v=>typeof v==='number'&&Number.isFinite(v)?usd(v):'unknown';
+  const row=(label,value,note='')=>`<div class="ac"><span>${esc(label)}${note?' · '+esc(note):''}</span><b class="mono">${value}</b></div>`;
+  const start=p.window_start||c.tracking_started_at, end=p.window_end||e.fetched_at;
+  const span=start?`${start} → ${end||'unknown end'}`:'tracking period unavailable';
+  let out=`<div class="acct"><div class="ah"><span class="al">Can the loops make a profit?</span><span class="tag ${e.stale?'stale':''}">${esc(e.stale?'STALE':e.status||'UNKNOWN')}</span></div>`
+    +`<div class="an">${esc(e.summary||'Portfolio measurement unavailable. Unknown amounts are not zero.')}</div>`
+    +row('Subscriptions per month',money(c.monthly_subscription_usd),'user-stated overhead; partial cost coverage')
+    +row('Historical opening spend',money(c.historical_opening_estimate_usd),'approximate; not an audited invoice total')
+    +row('Subscriptions accrued since tracking began',money(c.accrued_subscription_usd),'estimated allocation, not a new payment')
+    +row('Opening spend + accrued subscriptions',money(c.total_cost_basis_estimate_usd),'cost basis before earnings credits')
+    +`<div class="ap">Qualified performance period: <span class="mono">${esc(span)}</span></div>`;
+  for(const [label,key] of [['Gross customer revenue','gross_revenue_usd'],['Refunds','refunds_usd'],['Net receipts','net_receipts_usd'],['Direct costs','direct_costs_usd'],['Contribution profit','contribution_profit_usd'],['Realized trading P&L','realized_trading_pnl_usd'],['Unrealized trading P&L','unrealized_trading_pnl_usd'],['Cash withdrawn','cash_withdrawn_usd']]){
+    out+=row(label,money(p[key]));
+  }
+  out+=row('Estimated cost recovery remaining',money(r.remaining_usd),'as of '+(r.as_of||'unknown cutoff')+'; requires qualified earnings')
+    +row('Monthly subscription coverage',typeof r.coverage_pct==='number'&&Number.isFinite(r.coverage_pct)?r.coverage_pct.toFixed(1)+'%':'unknown','matched monthly earnings only')
+    +`<div class="an">Monthly coverage period: ${esc(r.monthly_coverage_window_start||'unknown')} → ${esc(r.monthly_coverage_window_end||'unknown')}</div>`
+    +row('First monthly milestone',money(m.monthly_subscription_target_usd),'cover subscriptions')
+    +row('Monthly earned target',money(m.monthly_contribution_target_usd),'product contribution + realized trading P&L, before shared overhead')
+    +'<div class="an">Account balances and open-position marks are separate below. Historical spend is context, not a reason to increase risk or repeat an unproductive experiment.</div>';
+  const review=e.review_period||{}, experiments=Array.isArray(review.experiments)?review.experiments:[];
+  if(review.review_at||experiments.length){
+    out+=`<div class="ap">Loop readiness review: <span class="mono">${esc(review.review_at||'not scheduled')}</span></div>`;
+    out+=`<div class="an">${esc(review.success_definition||'Validate completed work reaching the judge. Customer profit is separate.')}</div>`;
+    experiments.forEach(x=>{
+      out+=row(x.experiment_id||'Unnamed experiment',esc(x.state||'unknown'),(x.owner||'unknown owner')+' · readiness only; not paid conversion');
+    });
+  }
+  if(e.error)out+=`<div class="ae">${esc(e.error)}</div>`;
+  if(e.source_path)out+=`<div class="an">Source: ${esc(e.source_path)}${e.fetched_at?' · '+esc(e.fetched_at):''}</div>`;
+  return out+'</div>';
+}
+function commercialLearningHTML(c){
+  const src=c.sources||{}, ac=c.acquisition||{}, iu=c.internal_usage||{}, last=iu.latest||{};
+  const val=v=>v==null||v===''?'unknown':String(v);
+  const sourceLabel=k=>{const x=src[k]||{};return `${x.status||'unavailable'}${x.stale?' · stale':''}${x.observed_at?' · '+x.observed_at:''}`;};
+  let out='<div class="acct"><div class="ah"><span class="al">Asset work & acquisition learning</span></div>'
+    +`<div class="an">${esc(c.meaning||'Learning and internal use are separate from customer revenue.')}</div>`;
+  const assignments=Array.isArray(c.assignments)?c.assignments:[];
+  assignments.forEach(a=>{
+    out+=`<div class="ap"><b>${esc(a.title||a.candidate_id||'Asset')}</b> · ${esc(val(a.owner))} · ${esc(val(a.state))}</div>`
+      +`<div class="an">Venue: ${esc(val(a.venue))} · Experiment: ${esc(val(a.experiment_id))}</div>`
+      +`<div class="an">Reason: ${esc(val(a.reason))}</div>`
+      +`<div class="an">Next evidence: ${esc(val(a.next_evidence))} · Review: ${esc(val(a.review_at))}</div>`
+      +`<div class="an">Result: ${esc(val(a.result))}${a.result_at?' · '+esc(a.result_at):''}</div>`;
+    if(a.next_action)out+=`<div class="an">Next action: ${esc(a.next_action)}</div>`;
+  });
+  if(!assignments.length)out+='<div class="an">No current assignment evidence available.</div>';
+  out+=`<div class="an">Assignment source: ${esc(sourceLabel('assignments'))}</div>`;
+  const counts=ac.counts_by_evidence_kind||{};
+  out+='<div class="ap">Acquisition index · how to attract customers, not a contact queue</div>';
+  out+=`<div class="an">${['hypothesis','internal_use','external_usage','customer_outcome'].map(k=>esc(k.replaceAll('_',' '))+': '+esc(val(counts[k]))).join(' · ')}</div>`;
+  (Array.isArray(ac.records)?ac.records:[]).slice(0,6).forEach(r=>{
+    out+=`<div class="an"><b>${esc(val(r.evidence_kind))}</b> · ${esc(val(r.venue))} / ${esc(val(r.channel))} · ${esc(val(r.buyer_problem))}<br>Next: ${esc(val(r.next_action))} · ${esc(val(r.observed_at))}</div>`;
+  });
+  out+=`<div class="an">Learning source: ${esc(sourceLabel('acquisition'))}</div>`;
+  out+='<div class="ap">Internal capability use · excluded from revenue</div>'
+    +`<div class="an">Calls: ${esc(val(iu.calls_total))} · Operating cost: ${iu.operating_cost_usd==null?'unknown':esc(usd(iu.operating_cost_usd))}</div>`
+    +`<div class="an">Latest: ${esc(val(last.capability))} for ${esc(val(last.consumer))} · ${esc(val(last.status))} · ${esc(val(last.latency_ms))} ms</div>`
+    +`<div class="an">Tools scanned: ${esc(val(last.tools_scanned))} · Findings: ${esc(val(last.findings_count))} · Input schemas: ${(last.coverage||{}).input_schemas_complete===true?'complete':(last.coverage||{}).input_schemas_complete===false?'incomplete':'unknown'}</div>`
+    +'<div class="an">Internal use tests utility; no-pattern findings do not prove safety.</div>'
+    +`<div class="an">Internal source: ${esc(sourceLabel('internal_usage'))}</div>`;
+  return out+'</div>';
+}
+function renderEconomics(top){
+  const e=top.economics||{};
+  document.getElementById('econsub').textContent=e.stale?'stale / unavailable — verify source':(e.status||'awaiting measurements');
+  document.getElementById('econlist').innerHTML=economicsHTML(e)+commercialLearningHTML(top.commercial_learning||{});
+}
 function acctCard(a){
   const p=a.pnl||{}, errs=a.errors||[], notes=a.notes||[];
   const comps=(a.components||[]).map(c=>`<div class="ac"><span>${esc(c.label)}${c.meaning?' · '+esc(c.meaning):''}</span><b class="mono">${usd(c.usd)}</b></div>`).join('');
@@ -622,7 +764,22 @@ function renderBrief(top){
     : '<div class="off" style="padding:10px 0;color:var(--muted)">No brief generated yet — the morning brief will appear here.</div>';
 }
 
-async function tick(){ try{ const r=await fetch('/api/state',{cache:'no-store'}); render(await r.json()); }catch(e){} }
+// A failed redraw must be visible: show what broke in a bar at the top instead of freezing on old data.
+function pageError(msg){
+  let el=document.getElementById('pageerr');
+  if(!msg){ if(el) el.remove(); return; }
+  if(!el){ el=document.createElement('div'); el.id='pageerr';
+    el.style.cssText='position:sticky;top:0;z-index:99;background:#5a1a1a;color:#ffd9d9;padding:8px 14px;font:12px/1.4 ui-monospace,monospace;border-bottom:1px solid #a33';
+    document.body.prepend(el); }
+  el.textContent='This page could not redraw, so what you see below is stale: '+msg;
+}
+async function tick(){
+  let d;
+  try{ const r=await fetch('/api/state',{cache:'no-store'}); if(!r.ok) throw new Error('state request returned HTTP '+r.status); d=await r.json(); }
+  catch(e){ pageError('cannot reach the server ('+(e&&e.message||e)+')'); return; }
+  try{ render(d); pageError(null); }
+  catch(e){ pageError((e&&e.message||e)+' at '+String((e&&e.stack)||'').split('\n')[1]); }
+}
 async function toggleMon(){ try{ await fetch('/api/monitor',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({on:!monOn})}); tick(); }catch(e){} }
 tick(); setInterval(tick, 4000);
 </script>
