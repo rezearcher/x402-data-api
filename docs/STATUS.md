@@ -1,29 +1,29 @@
-# Measured status (auto-generated 2026-11-22T12:20Z)
+# Measured status (auto-generated 2026-11-23T12:20Z)
 
-Source: `data/uptime_samples.jsonl`, 71840 samples from 2026-10-19T22:06:27.945628Z to 2026-11-22T12:15:01.624351Z, produced by `scripts/uptime_probe.py` hitting each free `/preview` path. Window is short; treat as a measurement, not an SLA.
+Source: `data/uptime_samples.jsonl`, 74144 samples from 2026-10-19T22:06:27.945628Z to 2026-11-23T12:15:01.872498Z, produced by `scripts/uptime_probe.py` hitting each free `/preview` path. Window is short; treat as a measurement, not an SLA.
 
 | endpoint | samples | success | p50 ms | p95 ms |
 |---|---|---|---|---|
-| /chain/gas-price/preview | 9693 | 99.6% | 302 | 3212 |
-| /chain/token-report/preview | 9693 | 98.7% | 2409 | 5298 |
-| /chain/token-security/preview | 9693 | 98.0% | 1417 | 4177 |
-| /crypto/funding/preview | 7031 | 96.2% | 3026 | 4068 |
-| /crypto/prices/preview | 9693 | 99.5% | 312 | 995 |
-| /defi/yields/preview | 7031 | 95.2% | 454 | 888 |
-| /gate/swap/preview | 9693 | 98.1% | 2507 | 5624 |
-| /scan/mcp/preview | 9313 | 99.2% | 184 | 799 |
+| /chain/gas-price/preview | 9981 | 99.6% | 298 | 3221 |
+| /chain/token-report/preview | 9981 | 98.7% | 2447 | 5272 |
+| /chain/token-security/preview | 9981 | 98.1% | 1414 | 4166 |
+| /crypto/funding/preview | 7319 | 95.8% | 3037 | 4050 |
+| /crypto/prices/preview | 9981 | 99.6% | 309 | 992 |
+| /defi/yields/preview | 7319 | 94.3% | 450 | 877 |
+| /gate/swap/preview | 9981 | 97.9% | 2541 | 5602 |
+| /scan/mcp/preview | 9601 | 99.1% | 181 | 790 |
 
 ## Data correctness (canary probes)
 
-Method: canary probes with proven negative controls (scripts/uptime_probe.py + canary_predicates.py); availability (HTTP 200) is NOT correctness. Point-in-time measurement, not an SLA. 'inconclusive' = the probe could not conclude (degrade-open), not a failure. Last checked: 2026-11-22T12:15:01.624351Z (fresh: True).
+Method: canary probes with proven negative controls (scripts/uptime_probe.py + canary_predicates.py); availability (HTTP 200) is NOT correctness. Point-in-time measurement, not an SLA. 'inconclusive' = the probe could not conclude (degrade-open), not a failure. Last checked: 2026-11-23T12:15:01.872498Z (fresh: True).
 
 | route | correctness | guards |
 |---|---|---|
 | /defi/yields | passing | Returns real numeric APY/TVL rows (not an empty 200 from an upstream geo-block) |
 | /crypto/prices | passing | Returns a live non-null USD price (guards the hollow-200 geo-block footgun) |
-| /crypto/funding | inconclusive | Multi-venue funding rows stay numeric when a venue geo-blocks to null |
+| /crypto/funding | passing | Multi-venue funding rows stay numeric when a venue geo-blocks to null |
 | /defi/yield-entry-verdict | passing | Entry verdict keeps its APY/prediction substance, not a hollow label |
-| /pm/markets | inconclusive | Markets stay tradeable — numeric outcomePrices in [0,1], clobTokenIds present (no hollow-200 or cents-normalization bug) |
+| /pm/markets | passing | Markets stay tradeable — numeric outcomePrices in [0,1], clobTokenIds present (no hollow-200 or cents-normalization bug) |
 | /gate/swap | passing | A structural honeypot still blocks and a known-good token still passes (no false-SAFE) |
 | /chain/token-report | passing | Honeypot screens AVOID, good token screens SAFE, DEX tax reads clean |
 | /chain/token-security | passing | Metadata/sim decode correct on a known-good token (no fabricated risk) |
